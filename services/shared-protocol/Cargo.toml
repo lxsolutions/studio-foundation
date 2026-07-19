@@ -1,0 +1,12 @@
+[package]
+name = "studio-protocol"
+version = "0.1.0"
+description = "Wire protocol: envelope, message bodies, versioning. Mirrored by studio_core/net/protocol.gd; golden fixtures in shared/protocol/fixtures keep both sides honest."
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+uuid = { workspace = true }

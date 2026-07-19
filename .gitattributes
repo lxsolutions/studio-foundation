@@ -1,0 +1,34 @@
+# Normalize line endings: LF everywhere except Windows-only script formats.
+* text=auto eol=lf
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Godot text formats (keep LF so --import churn stays diffable; see docs/runbooks)
+*.tscn text eol=lf
+*.tres text eol=lf
+*.import text eol=lf
+*.godot text eol=lf
+*.gd text eol=lf
+
+# Binary formats
+*.blend binary
+*.blend1 binary
+*.glb binary
+*.gltf text eol=lf
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.ktx2 binary
+*.basis binary
+*.wav binary
+*.ogg binary
+*.mp3 binary
+*.ttf binary
+*.otf binary
+*.woff2 binary
+*.exr binary
+*.hdr binary
+*.zip binary
+*.tpz binary

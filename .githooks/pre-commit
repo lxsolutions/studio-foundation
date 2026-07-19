@@ -1,0 +1,4 @@
+#!/bin/sh
+# Fast guardrails only — expensive checks live in CI. See tools/hooks/pre_commit.py.
+if command -v python >/dev/null 2>&1; then PY=python; else PY=python3; fi
+exec "$PY" "$(git rev-parse --show-toplevel)/tools/hooks/pre_commit.py"

@@ -1,0 +1,23 @@
+[package]
+name = "studio-control-api"
+version = "0.1.0"
+description = "HTTP control plane: health, status, account/session stubs, PostgreSQL proof endpoints"
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+studio-protocol = { path = "../shared-protocol" }
+axum = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+thiserror = { workspace = true }
+uuid = { workspace = true }
+rand = { workspace = true }
+
+[dev-dependencies]
+tower = { workspace = true }
+http-body-util = { workspace = true }

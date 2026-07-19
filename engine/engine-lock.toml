@@ -1,0 +1,59 @@
+# engine-lock.toml — single machine-readable source of truth for engine provenance.
+# Rules:
+#   * Never track a moving branch for production builds. Commits only.
+#   * Any change to this file requires an ADR update (docs/adr/0002) and a green
+#     engine-rebuild + smoke run (just engine-build && just export-browser-webgpu).
+#   * Checksums for built artifacts are appended by engine/scripts/build.py; empty
+#     checksum tables mean "no reproducible build recorded yet on this machine class".
+schema = 1
+updated = "2026-07-19"
+
+[godot.official]
+repo   = "https://github.com/godotengine/godot"
+tag    = "4.7.1-stable"
+commit = "a13da4feb8d8aefc283c3763d33a2f170a18d541"
+license = "MIT"
+role   = "Primary engine. Native editor + all native exports. All game projects must stay compatible with this version."
+
+[godot.webgpu_fork]
+repo    = "https://github.com/dwalter/godotwebgpu"
+branch  = "webgpu-4.6.2"           # informational; the commit below is what is built
+commit  = "f329e39ce8db7acaa5c9d6628a530fb769969228"  # 2026-05-13
+base    = "4.6.2-stable"           # fork lags official stable (4.7.1) by one minor
+license = "MIT"
+status  = "beta"
+role    = "Unofficial browser WebGPU export backend ONLY. Never the editor of record. See docs/adr/0002."
+notes   = "Fork is largely AI-generated (per its README). Treat rebases as untrusted input: full test + visual-regression pass required."
+
+[toolchain]
+# Emscripten pin comes from the fork's own CI (web_builds.yml EM_VERSION).
+emscripten = "4.0.11"
+scons      = "4.9.1"      # >=4.0 required by Godot; re-verify against godotengine docs at first engine build
+python     = "3.11"
+# Rust toolchain used for backend services (not for engine builds)
+rust       = "1.97.1"
+rust_host_windows = "x86_64-pc-windows-gnu"  # no MSVC Build Tools required; see docs/adr/0004
+
+[build.web_webgpu]
+# Flags for building browser export templates from the WebGPU fork.
+target_release = ["platform=web", "target=template_release", "dlink_enabled=no", "threads=yes"]
+target_debug   = ["platform=web", "target=template_debug",   "dlink_enabled=no", "threads=yes"]
+
+[build.editor_native]
+target = ["target=editor", "dev_build=no"]
+
+[patches]
+# Studio-specific engine patches, applied in order by engine/scripts/fetch.py.
+# Each entry: { file = "patches/NNNN-name.patch", sha256 = "..." }
+series = []
+
+[artifacts.export_templates]
+# Filled in by engine/scripts/build.py after a reproducible build.
+# e.g. web_webgpu_release = { file = "godot.web.template_release.wasm32.zip", sha256 = "..." }
+
+[installed.editor]
+# Provenance of the editor binary used for local verification during bootstrap
+# (winget GodotEngine.GodotEngine). doctor.py re-checks version string at runtime.
+version = "4.7.1.stable.official.a13da4feb"
+source  = "winget:GodotEngine.GodotEngine"
+export_templates_installed = ["web (official 4.7.1.stable, all variants)"]

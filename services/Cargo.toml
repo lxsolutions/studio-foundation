@@ -1,0 +1,38 @@
+[workspace]
+resolver = "2"
+members = [
+    "shared-protocol",
+    "control-api",
+    "dedicated-server",
+    "admin-cli",
+    "integration-tests",
+]
+
+# Pure-Rust dependency policy (no C toolchain required) — see ADR 0004.
+# Adding a dependency? Update docs/architecture/dependency-licenses.md in the same PR.
+[workspace.dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "sync", "signal", "io-util"] }
+axum = "0.8"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "postgres", "macros", "migrate", "uuid", "json", "time"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
+thiserror = "2"
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+tokio-tungstenite = "0.24"
+futures-util = "0.3"
+uuid = { version = "1", features = ["v4", "v7", "serde"] }
+rand = "0.8"
+# test-only
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
+rust-version = "1.85"
+
+[profile.release]
+lto = "thin"

@@ -1,0 +1,41 @@
+; Engine configuration file.
+; Generated from studio-foundation templates/godot-game.
+; Rendering: Mobile method as the modern cross-platform baseline (ADR 0001/0007);
+; web override uses gl_compatibility so official WebGL2 export always works.
+; The WebGPU fork export overrides the method at export time (ADR 0002).
+
+config_version=5
+
+[application]
+
+config/name="Studio Game Template"
+config/description="Game project generated from the studio-foundation template."
+run/main_scene="res://scenes/boot.tscn"
+config/features=PackedStringArray("4.7")
+config/icon="res://icon.svg"
+
+[autoload]
+
+Studio="*res://addons/studio_core/studio.gd"
+
+[debug]
+
+gdscript/warnings/enable=true
+gdscript/warnings/untyped_declaration=1
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/studio_core/plugin.cfg")
+
+[rendering]
+
+renderer/rendering_method="mobile"
+renderer/rendering_method.web="gl_compatibility"
+textures/vram_compression/import_etc2_astc=true

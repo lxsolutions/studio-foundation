@@ -1,0 +1,62 @@
+# --- OS / editors ---
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+.idea/
+.vscode/
+*.code-workspace
+
+# --- Environment / secrets (never commit) ---
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.keystore
+*.jks
+secrets/
+
+# --- Godot ---
+.godot/
+*.translation
+# Editor-local overrides
+override.cfg
+
+# --- Generated assets (source of truth is assets-source/ + Blender files) ---
+assets-generated/
+**/assets-generated/
+**/project/assets/generated/
+# Addon copies synced from shared/godot-addons (run: just godot-sync-addons)
+**/project/addons/studio_core/
+
+# --- Exports / build outputs ---
+exports/
+build/
+dist/
+*.pck
+*.wasm
+
+# --- Engine source cache (fetched by engine/scripts, never committed) ---
+engine/.cache/
+engine/artifacts/
+
+# --- Rust ---
+target/
+
+# --- Python ---
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+
+# --- Node / browser testing ---
+node_modules/
+test-results/
+playwright-report/
+
+# --- Test / tool scratch ---
+*.tmp
+*.log
+.pytest_cache/
+tests/artifacts/

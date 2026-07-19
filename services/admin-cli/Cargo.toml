@@ -1,0 +1,16 @@
+[package]
+name = "studio-admin-cli"
+version = "0.1.0"
+description = "Operator CLI: migrate, seed, health, status, kv probes (dev/localhost use)"
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+studio-protocol = { path = "../shared-protocol" }
+clap = { workspace = true }
+tokio = { workspace = true }
+sqlx = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }

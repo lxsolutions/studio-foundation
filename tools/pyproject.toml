@@ -1,0 +1,34 @@
+[project]
+name = "studio-tools"
+version = "0.1.0"
+description = "Studio Foundation tooling: asset pipeline, doctor, generator, studio-mcp, CI helpers"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = [
+    # Runtime tooling is deliberately stdlib-only (auditability + offline-first).
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.8",     # lint/format for tools/ (MIT)
+    "pyyaml>=6.0",   # CI workflow YAML validation only (MIT)
+]
+engine = [
+    "scons==4.9.1",  # Godot engine builds (MIT); heavy path only
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["pylib/studio_tools"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["blender"]  # bpy scripts run inside Blender's interpreter
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+ignore = ["E501"]

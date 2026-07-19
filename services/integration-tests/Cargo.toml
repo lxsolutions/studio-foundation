@@ -1,0 +1,22 @@
+[package]
+name = "studio-integration-tests"
+version = "0.1.0"
+description = "Cross-crate integration tests: real WebSocket client<->server, DB round trips"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+
+[dev-dependencies]
+studio-protocol = { path = "../shared-protocol" }
+studio-dedicated-server = { path = "../dedicated-server" }
+studio-control-api = { path = "../control-api" }
+tokio = { workspace = true }
+tokio-tungstenite = { workspace = true }
+futures-util = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+tower = { workspace = true }
+http-body-util = { workspace = true }
+axum = { workspace = true }

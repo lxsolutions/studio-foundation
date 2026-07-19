@@ -1,0 +1,40 @@
+# Local development infrastructure. Interactive Godot/Blender are NOT containerized.
+# Usage: just services-up | just observability-up | just services-down
+name: studio-foundation
+
+services:
+  postgres:
+    image: postgres:17-alpine # PostgreSQL License (permissive)
+    environment:
+      POSTGRES_DB: ${STUDIO_PG_DB:-studio}
+      POSTGRES_USER: ${STUDIO_PG_USER:-studio}
+      POSTGRES_PASSWORD: ${STUDIO_PG_PASSWORD:-studio_dev_password}
+    ports:
+      - "127.0.0.1:${STUDIO_PG_PORT:-5432}:5432" # localhost-only by design
+    volumes:
+      - studio_pg_data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${STUDIO_PG_USER:-studio} -d ${STUDIO_PG_DB:-studio}"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  # Optional tracing UI (Apache-2.0). OTLP on 4317/4318, UI on 16686.
+  jaeger:
+    image: jaegertracing/jaeger:2.4.0
+    profiles: ["observability"]
+    ports:
+      - "127.0.0.1:16686:16686"
+      - "127.0.0.1:4317:4317"
+      - "127.0.0.1:4318:4318"
+    restart: unless-stopped
+
+  # Object storage is intentionally ABSENT until a demonstrated requirement exists
+  # (GOAL.md principle 15). Reviewed candidate if needed: SeaweedFS (Apache-2.0).
+  # MinIO was rejected: AGPL relicense + community build feature removal.
+  # See docs/architecture/dependency-licenses.md.
+
+volumes:
+  studio_pg_data:
