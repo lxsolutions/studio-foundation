@@ -53,7 +53,7 @@ observability-up:
     {{COMPOSE}} --profile observability up -d
 
 db-migrate:
-    cargo run --manifest-path services/Cargo.toml -p studio-admin-cli -- migrate
+    {{PY}} tools/cargo_env.py run --manifest-path services/Cargo.toml -p studio-admin-cli -- migrate
 
 db-seed:
     {{PY}} tools/infra/db.py seed
@@ -77,10 +77,12 @@ db-psql *ARGS:
 test: test-rust test-python test-protocol test-godot
 
 test-rust:
-    cargo test --manifest-path services/Cargo.toml --workspace
+    {{PY}} tools/cargo_env.py test --manifest-path services/Cargo.toml --workspace
 
+# Python unit tests (currently the studio-mcp suite; add top-level test_*.py under
+# tools/ to grow this back into a broader discovery run)
 test-python:
-    uv run --project tools python -m unittest discover -s tools -p "test_*.py" -v
+    uv run --project tools python -m unittest discover -s tools/studio-mcp/tests -p "test_*.py" -v
 
 # Cross-language protocol golden-fixture checks (Rust side runs in test-rust too)
 test-protocol:
@@ -99,15 +101,15 @@ test-mcp:
 # Run the generated example game's own test suite (games/sandbox)
 test-generated:
     {{PY}} tools/godot/run_godot.py --game games/sandbox --tests
-    cargo test --manifest-path games/sandbox/server/Cargo.toml
+    {{PY}} tools/cargo_env.py test --manifest-path games/sandbox/server/Cargo.toml
 
 # ------------------------------------------------------------------ lint / format
 
 lint: lint-rust lint-python lint-workflows
 
 lint-rust:
-    cargo fmt --manifest-path services/Cargo.toml --all -- --check
-    cargo clippy --manifest-path services/Cargo.toml --workspace --all-targets -- -D warnings
+    {{PY}} tools/cargo_env.py fmt --manifest-path services/Cargo.toml --all -- --check
+    {{PY}} tools/cargo_env.py clippy --manifest-path services/Cargo.toml --workspace --all-targets -- -D warnings
 
 lint-python:
     uv run --project tools ruff check tools
@@ -125,7 +127,7 @@ fmt:
 build: build-rust godot-sync-addons
 
 build-rust:
-    cargo build --manifest-path services/Cargo.toml --workspace
+    {{PY}} tools/cargo_env.py build --manifest-path services/Cargo.toml --workspace
 
 # Copy shared/godot-addons/* into every game project (addons/ dirs are generated)
 godot-sync-addons:

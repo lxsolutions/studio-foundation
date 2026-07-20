@@ -1,0 +1,24 @@
+# Per-game server crate. Standalone workspace (detached from services/) so a
+# generated game builds independently; it consumes the shared foundation crates
+# by RELATIVE path during early development (consumption model 1 — see
+# docs/adr/0015). Stable games switch these to versioned git/registry deps.
+[package]
+name = "studio_game_template-server"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[workspace]
+
+[dependencies]
+studio-protocol = { path = "../../../services/shared-protocol" }
+studio-dedicated-server = { path = "../../../services/dedicated-server" }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+anyhow = "1"
+
+[dev-dependencies]
+tokio-tungstenite = "0.24"
+futures-util = "0.3"
+serde_json = "1"

@@ -119,6 +119,25 @@ def collect() -> list[Check]:
         )
     )
 
+    # The windows-gnu toolchain links through a MinGW GCC. Rust ships a
+    # self-contained gcc, but it cannot find the CRT startup objects
+    # (dllcrt2.o, crtbegin.o, -lkernel32) unless a real MinGW bin dir is on
+    # PATH. Probe for it so `cargo build` failures don't surprise contributors.
+    if cargo_ver and is_windows and rustc_vv and "pc-windows-gnu" in rustc_vv:
+        mingw_gcc = senv.which_any(["x86_64-w64-mingw32-gcc"])
+        if not mingw_gcc:
+            mingw_gcc = senv.find_mingw_gcc()
+        add(
+            Check(
+                "mingw-linker",
+                "required",
+                "ok" if mingw_gcc else "missing",
+                mingw_gcc or "x86_64-w64-mingw32-gcc not found",
+                "winget install BrechtSanders.WinLibs.POSIX.UCRT and add its "
+                "mingw64\\bin to PATH (cargo links via MinGW gcc on windows-gnu)",
+            )
+        )
+
     node = _version_of(["node", "--version"])
     add(
         Check(
@@ -293,15 +312,15 @@ def collect() -> list[Check]:
 
     # --- Browser testing ---
     browsers = senv.find_browsers()
-    pw = (senv.repo_root() / "tests" / "browser" / "node_modules" / "playwright").is_dir()
+    pw = (senv.repo_root() / "tests" / "browser" / "node_modules" / "playwright-core").is_dir()
     bt_state = "ok" if (node and browsers and pw) else ("warn" if (node and browsers) else "missing")
     add(
         Check(
             "browser-testing",
             "optional",
             bt_state,
-            f"browsers: {', '.join(browsers) or 'none'}; playwright installed: {'yes' if pw else 'no (npm ci in tests/browser)'}",
-            "cd tests/browser && npm ci  (uses installed Chrome/Edge; no browser downloads)",
+            f"browsers: {', '.join(browsers) or 'none'}; playwright-core installed: {'yes' if pw else 'no (npm ci in tests/browser)'}",
+            "cd tests/browser && npm ci  (playwright-core; drives installed Chrome/Edge, no browser downloads)",
         )
     )
 

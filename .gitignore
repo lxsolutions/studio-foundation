@@ -55,6 +55,10 @@ node_modules/
 test-results/
 playwright-report/
 
+# --- studio-mcp runtime state ---
+.mcp-run/
+.mcp-log/
+
 # --- Test / tool scratch ---
 *.tmp
 *.log

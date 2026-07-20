@@ -1,0 +1,69 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://studio-foundation/schemas/asset-meta.schema.json",
+  "title": "Asset sidecar metadata (<name>.meta.json beside every master asset)",
+  "type": "object",
+  "required": ["asset_id", "category", "license", "source", "creator", "provenance"],
+  "additionalProperties": false,
+  "properties": {
+    "asset_id": { "type": "string", "pattern": "^[a-z0-9_]+$" },
+    "category": { "enum": ["prop", "character", "environment", "fx", "audio", "ui"] },
+    "license": { "type": "string", "minLength": 2 },
+    "source": {
+      "type": "object",
+      "required": ["origin"],
+      "additionalProperties": false,
+      "properties": {
+        "origin": { "enum": ["original", "purchased", "free_library", "commissioned", "generated"] },
+        "url": { "type": "string" },
+        "attribution_required": { "type": "boolean" },
+        "attribution_text": { "type": "string" }
+      }
+    },
+    "creator": { "type": "string", "minLength": 1 },
+    "provenance": {
+      "type": "object",
+      "required": ["method", "commercial_use_allowed", "modified"],
+      "additionalProperties": false,
+      "properties": {
+        "method": { "enum": ["human", "ai_generated", "ai_assisted", "scanned", "procedural"] },
+        "commercial_use_allowed": { "type": "boolean" },
+        "modified": { "type": "boolean" },
+        "ai": {
+          "type": "object",
+          "required": ["system", "date", "human_review"],
+          "additionalProperties": false,
+          "properties": {
+            "system": { "type": "string" },
+            "date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+            "prompt_or_workflow_id": { "type": "string" },
+            "human_review": { "enum": ["pending", "approved", "rejected"] },
+            "reference_restrictions": { "type": "string" },
+            "model_terms": { "type": "string" }
+          }
+        }
+      }
+    },
+    "games": {
+      "description": "\"all\" or a list of game ids this asset may ship in",
+      "oneOf": [
+        { "const": "all" },
+        { "type": "array", "items": { "type": "string", "pattern": "^[a-z0-9_]+$" } }
+      ]
+    },
+    "lod_policy": { "enum": ["auto", "explicit", "none"], "default": "auto" },
+    "collision_policy": { "enum": ["auto", "explicit", "none"], "default": "explicit" },
+    "texture_policy": { "enum": ["full", "compressed", "low"], "default": "compressed" },
+    "animation_set": { "type": "string", "default": "none" },
+    "platform_overrides": { "type": "object" },
+    "budgets": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "triangles": { "type": "integer", "minimum": 1 },
+        "materials": { "type": "integer", "minimum": 1 },
+        "texture_max_px": { "type": "integer", "minimum": 16 }
+      }
+    }
+  }
+}

@@ -86,6 +86,36 @@ def find_cargo() -> str | None:
     return str(home) if home.is_file() else None
 
 
+def find_mingw_gcc() -> str | None:
+    """Locate a MinGW-w64 gcc even when its bin dir is not on PATH.
+
+    The rust x86_64-pc-windows-gnu toolchain links through MinGW gcc; without a
+    real MinGW installation the self-contained linker cannot find CRT objects.
+    """
+    found = which_any(["x86_64-w64-mingw32-gcc"])
+    # The rustup self-contained gcc cannot link real binaries (no CRT objects);
+    # never count it as a usable MinGW installation.
+    if found and "self-contained" not in found.replace("/", "\\"):
+        return found
+    if os.name == "nt":
+        localapp = os.environ.get("LOCALAPPDATA", "")
+        return _first_existing(
+            [
+                rf"{localapp}\Microsoft\WinGet\Packages\BrechtSanders.WinLibs*\mingw64\bin\x86_64-w64-mingw32-gcc.exe",
+                r"C:\mingw64\bin\x86_64-w64-mingw32-gcc.exe",
+                r"C:\msys64\mingw64\bin\x86_64-w64-mingw32-gcc.exe",
+                r"C:\msys64\ucrt64\bin\x86_64-w64-mingw32-gcc.exe",
+            ]
+        )
+    return None
+
+
+def mingw_bin_dir() -> str | None:
+    """Directory containing MinGW binutils, suitable for prepending to PATH."""
+    gcc = find_mingw_gcc()
+    return str(Path(gcc).parent) if gcc else None
+
+
 def find_just() -> str | None:
     found = which_any(["just"])
     if found:

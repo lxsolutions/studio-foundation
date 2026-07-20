@@ -1,0 +1,13 @@
+{
+  "name": "studio-browser-tests",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Browser smoke tests for Godot web exports, driven through installed Chrome/Edge (no browser downloads).",
+  "type": "module",
+  "scripts": {
+    "smoke": "node smoke.mjs"
+  },
+  "dependencies": {
+    "playwright-core": "^1.49.0"
+  }
+}
