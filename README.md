@@ -9,6 +9,16 @@ Gameplay: **GDScript** · Assets: **Blender → glTF** pipeline · Backend: **Ru
 (Tokio/Axum/SQLx) · Persistence: **PostgreSQL** · Infra: **Docker Compose** · Tasks:
 **just**.
 
+![Asha World running in a browser via the studio's own Godot WebGPU backend](templates/godot-game/project/captures/web-webgpu.png)
+
+> **Proof, not vaporware:** the image above is a real game rendering in a browser
+> through this repo's own **Godot WebGPU 4.7.1 export backend** — ported forward,
+> validated, and reproducible via `just engine-validate`. Beneath it, an
+> authoritative Rust world-simulation settles shared gameplay events
+> (mine → refine → build → battle → territory) into PostgreSQL. See
+> [docs/strategy/AI_NATIVE_PLATFORM.md](docs/strategy/AI_NATIVE_PLATFORM.md) for the
+> thesis and [BOOTSTRAP_REPORT.md](BOOTSTRAP_REPORT.md) for what verifiably works.
+
 Read [GOAL.md](GOAL.md) first. Decisions live in [docs/adr/](docs/adr/). What
 verifiably works today is in [BOOTSTRAP_REPORT.md](BOOTSTRAP_REPORT.md).
 
