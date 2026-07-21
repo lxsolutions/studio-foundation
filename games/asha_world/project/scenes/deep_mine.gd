@@ -248,14 +248,9 @@ func _on_territory() -> void:
 	if not _state["vehicle"]:
 		_log_line("build a vehicle before contesting the outpost")
 		return
-	_state["territory"] = true
-	_log_line("battle won — outpost captured, deeper mine unlocked")
-	_submit({
-		"TerritoryChanged": {
-			"sector": DEEP_SECTOR, "new_controller": FACTION, "idempotency_key": _key(),
-		},
-	})
-	_refresh_hud()
+	_log_line("deploying the vehicle to the outpost ...")
+	# The battle is fought in 3D, not auto-won: drive the vehicle to the outpost.
+	get_node("/root/Studio").router.go_to("res://scenes/battle_outpost.tscn")
 
 
 # --- hud ------------------------------------------------------------------
