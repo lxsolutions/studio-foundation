@@ -118,17 +118,18 @@ def cmd_build(lock: dict) -> int:
                 file=sys.stderr,
             )
             return 2
-        # Source emsdk_env.bat in a throwaway cmd and capture the resulting env.
-        print(f"[build] sourcing {bat}")
-        proc = subprocess.run(
-            f'"{bat}" >nul 2>&1 && set', shell=True, capture_output=True, text=True
-        )
-        for line in proc.stdout.splitlines():
-            if "=" in line:
-                key, _, value = line.partition("=")
-                build_env[key] = value
-        if not shutil.which("emcc", path=build_env.get("PATH")):
-            print("error: emsdk_env.bat sourced but emcc still not found", file=sys.stderr)
+        # emsdk_env.bat ultimately puts <root> and <root>/upstream/emscripten on
+        # PATH; do that directly instead of shelling out (robust across hosts).
+        root = bat.parent
+        em_dir = root / "upstream" / "emscripten"
+        if not (em_dir / "emcc.bat").is_file():
+            print(f"error: {em_dir} has no emcc.bat — activate emsdk {em_version} first", file=sys.stderr)
+            return 2
+        print(f"[build] using emsdk at {root}")
+        build_env["PATH"] = f"{em_dir};{root};" + build_env.get("PATH", "")
+        build_env["EMSDK"] = str(root)
+        if not shutil.which("emcc", path=build_env["PATH"]):
+            print("error: emcc still not found after PATH update", file=sys.stderr)
             return 2
     scons = [sys.executable, "-m", "SCons"]
     targets = lock["build"]["web_webgpu"]
@@ -137,13 +138,32 @@ def cmd_build(lock: dict) -> int:
     for profile in ("target_release", "target_debug"):
         flags = targets[profile]
         print(f"[build] scons {' '.join(flags)} -j{jobs}", flush=True)
-        proc = subprocess.run([*scons, *flags, f"-j{jobs}"], cwd=fork_dir)
+        proc = subprocess.run([*scons, *flags, f"-j{jobs}"], cwd=fork_dir, env=build_env)
         if proc.returncode != 0:
             print(f"[build] {profile} FAILED (exit {proc.returncode})", file=sys.stderr)
             rc = proc.returncode
             break
         print(f"[build] {profile} OK", flush=True)
+    if rc == 0:
+        _install_templates(fork_dir)
     return rc
+
+
+def _install_templates(fork_dir: Path) -> None:
+    """Copy built web template zips into engine/artifacts/templates for export.
+
+    scons names its output godot.web.template_{release,debug}.wasm32.zip, but
+    export_presets.cfg's web-webgpu preset (custom_template/release, .../debug)
+    points at ...webgpu.zip — rename on copy so the preset actually resolves."""
+    dest = ENGINE_DIR / "artifacts" / "templates"
+    dest.mkdir(parents=True, exist_ok=True)
+    zips = sorted((fork_dir / "bin").glob("godot.web.template_*.zip"))
+    for z in zips:
+        target = dest / z.name.replace(".wasm32.zip", ".webgpu.zip")
+        shutil.copy2(z, target)
+        print(f"[install] {z.name} -> {target.relative_to(REPO_ROOT)}", flush=True)
+    if not zips:
+        print("[install] WARNING: no template zips found under bin/", file=sys.stderr)
 
 
 def main() -> int:

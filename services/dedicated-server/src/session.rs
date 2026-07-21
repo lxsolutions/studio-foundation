@@ -1,11 +1,15 @@
 //! Per-connection session loop, transport-agnostic.
 
 use studio_protocol::{handshake_reply, Body, Envelope, ErrorCode, PROTOCOL_VERSION};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 use tokio::time::{timeout, Duration};
 
 use crate::transport::Transport;
 
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
+
+type SharedWorld = Arc<Mutex<studio_world_sim::WorldSim>>;
 
 #[derive(Debug, Default, PartialEq)]
 pub struct SessionSummary {
@@ -17,6 +21,7 @@ pub struct Session<T: Transport> {
     transport: T,
     server_name: String,
     next_seq: u64,
+    world: Option<SharedWorld>,
 }
 
 impl<T: Transport> Session<T> {
@@ -25,7 +30,14 @@ impl<T: Transport> Session<T> {
             transport,
             server_name: server_name.into(),
             next_seq: 0,
+            world: None,
         }
+    }
+
+    /// Attach a shared world simulation (ADR 0007) for `WorldEventSubmit`.
+    pub fn with_world(mut self, world: Option<SharedWorld>) -> Self {
+        self.world = world;
+        self
     }
 
     fn envelope(&mut self, body: Body) -> Envelope {
@@ -102,6 +114,12 @@ impl<T: Transport> Session<T> {
                         break;
                     }
                 }
+                Body::WorldEventSubmit { event_json } => {
+                    let result = self.settle_world_event(&event_json).await;
+                    if !self.send(result).await {
+                        break;
+                    }
+                }
                 Body::Bye {} => {
                     let _ = self.send(Body::Bye {}).await;
                     break;
@@ -118,6 +136,31 @@ impl<T: Transport> Session<T> {
         }
         self.transport.close().await;
         summary
+    }
+
+    /// Parse and settle one submitted world event; produce the result body.
+    async fn settle_world_event(&mut self, event_json: &str) -> Body {
+        let Some(world) = &self.world else {
+            return Body::Error {
+                code: ErrorCode::Unexpected,
+                message: "this server has no world simulation".into(),
+            };
+        };
+        let event: studio_world_sim::WorldEvent = match serde_json::from_str(event_json) {
+            Ok(event) => event,
+            Err(err) => {
+                return Body::WorldEventResult {
+                    applied: false,
+                    summary: format!("invalid world event json: {err}"),
+                }
+            }
+        };
+        let mut sim = world.lock().await;
+        let settlement = sim.settle(&event);
+        Body::WorldEventResult {
+            applied: settlement.applied,
+            summary: settlement.summary,
+        }
     }
 }
 

@@ -1,0 +1,8 @@
+{
+  "game.id": "asha_world",
+  "net.api_base_url": "http://127.0.0.1:8080",
+  "net.ws_url": "ws://127.0.0.1:8081",
+  "i18n.default_locale": "en",
+  "flags.show_health_screen": true,
+  "debug.fixed_seed": 0
+}

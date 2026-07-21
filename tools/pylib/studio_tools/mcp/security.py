@@ -107,12 +107,23 @@ def validate_readonly_sql(query: str) -> str:
     return statement
 
 
-def assert_local_database(url: str) -> None:
+def assert_local_database(url: str, *, extra_allowed_host: str | None = None) -> None:
+    """Refuse anything but this machine's own dev database.
+
+    extra_allowed_host lets a caller also allow the STUDIO_PG_HOST configured in
+    THIS machine's own .env (e.g. a remote Docker host's Tailscale address, when
+    STUDIO_INFRA_REMOTE is set — see infra/environments/README.md). That's still
+    local trust: the value comes from a gitignored local file, never from request
+    input, so this isn't a general remote-database allowance.
+    """
     match = re.match(r"^postgres(?:ql)?://[^@]*@([^/:]+)", url or "")
     host = match.group(1) if match else ""
-    if host not in ("127.0.0.1", "localhost", "::1"):
+    allowed = {"127.0.0.1", "localhost", "::1"}
+    if extra_allowed_host:
+        allowed.add(extra_allowed_host)
+    if host not in allowed:
         raise ToolArgError(
-            "studio-mcp only queries local development databases (127.0.0.1); "
+            f"studio-mcp only queries local development databases ({', '.join(sorted(allowed))}); "
             "production database access is disabled by design"
         )
 
@@ -121,9 +132,7 @@ REDACT_RE = re.compile(r"(?i)(password|secret|token|key|authorization)")
 
 
 def redact(args: dict) -> dict:
-    return {
-        key: ("<redacted>" if REDACT_RE.search(key) else value) for key, value in args.items()
-    }
+    return {key: ("<redacted>" if REDACT_RE.search(key) else value) for key, value in args.items()}
 
 
 def cap_output(text: str) -> str:

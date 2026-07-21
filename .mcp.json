@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "studio": {
+      "command": "uv",
+      "args": ["run", "--project", "tools", "python", "tools/studio-mcp/server.py"]
+    }
+  }
+}

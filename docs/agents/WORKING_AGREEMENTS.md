@@ -65,6 +65,10 @@ one if it applies to everyone.
 - Windows Rust host is `x86_64-pc-windows-gnu`; the workspace stays pure-Rust
   (no C-compiling crates) — see ADR 0004 before adding any dependency.
 - Local services bind 127.0.0.1 only. Tests bind port 0 (ephemeral), never
-  fixed ports, and pin `127.0.0.1` — not `localhost` — in URLs.
+  fixed ports, and pin `127.0.0.1` — not `localhost` — in URLs. Exception: when
+  `infra/compose.yaml` runs on a remote Docker host (`STUDIO_INFRA_REMOTE` set —
+  see `infra/environments/README.md`), it binds that host's own private
+  (Tailscale) interface instead, never `0.0.0.0` — still never the public
+  internet, just relocated from loopback to a private mesh.
 - Reusable task recipes live in `docs/agents/skills/` — check there before
   reconstructing a workflow from scratch.

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Local database operations over Docker Compose (dev/test only).
 
-  db.py seed | reset | backup | restore --file F | psql [...] | test-env -- CMD...
+db.py seed | reset | backup | restore --file F | psql [...] | test-env -- CMD...
 """
 
 from __future__ import annotations
@@ -22,10 +22,7 @@ BACKUPS = REPO / "infra" / "backups"
 
 
 def compose(*args: str) -> list[str]:
-    cmd = ["docker", "compose", "-f", str(REPO / "infra" / "compose.yaml")]
-    if (REPO / ".env").is_file():
-        cmd += ["--env-file", str(REPO / ".env")]
-    return cmd + list(args)
+    return senv.compose_argv(*args)
 
 
 def pg_env() -> tuple[str, str]:
@@ -33,8 +30,14 @@ def pg_env() -> tuple[str, str]:
     return values.get("STUDIO_PG_USER", "studio"), values.get("STUDIO_PG_DB", "studio")
 
 
-def run(cmd: list[str], *, stdin_text: str | None = None, stdout_path: Path | None = None,
-        timeout: int = 600, interactive: bool = False) -> int:
+def run(
+    cmd: list[str],
+    *,
+    stdin_text: str | None = None,
+    stdout_path: Path | None = None,
+    timeout: int = 600,
+    interactive: bool = False,
+) -> int:
     if interactive:
         return subprocess.call(cmd)
     stdout = open(stdout_path, "wb") if stdout_path else subprocess.PIPE
@@ -57,7 +60,9 @@ def run(cmd: list[str], *, stdin_text: str | None = None, stdout_path: Path | No
 def migrate() -> int:
     cargo = senv.find_cargo()
     if not cargo:
-        print("cargo not found — run scripts/bootstrap, or apply migrations via psql", file=sys.stderr)
+        print(
+            "cargo not found — run scripts/bootstrap, or apply migrations via psql", file=sys.stderr
+        )
         return 127
     return subprocess.call(
         [cargo, "run", "--quiet", "-p", "studio-admin-cli", "--", "migrate"],
@@ -107,7 +112,9 @@ def cmd_restore(file: str) -> int:
         raise SystemExit(f"backup not found: {file}")
     data = dump.read_bytes()
     proc = subprocess.run(
-        compose("exec", "-T", "postgres", "pg_restore", "-U", user, "-d", db, "--clean", "--if-exists"),
+        compose(
+            "exec", "-T", "postgres", "pg_restore", "-U", user, "-d", db, "--clean", "--if-exists"
+        ),
         input=data,
         capture_output=True,
     )
@@ -129,12 +136,23 @@ def cmd_test_env(command: list[str]) -> int:
     port = values.get("STUDIO_PG_PORT", "5432")
     password = values.get("STUDIO_PG_PASSWORD", "studio_dev_password")
     run(
-        compose("exec", "-T", "postgres", "psql", "-U", user, "-d", "postgres",
-                "-c", "CREATE DATABASE studio_test"),
+        compose(
+            "exec",
+            "-T",
+            "postgres",
+            "psql",
+            "-U",
+            user,
+            "-d",
+            "postgres",
+            "-c",
+            "CREATE DATABASE studio_test",
+        ),
     )  # exists-already error is fine
+    host = senv.pg_host()
     env = dict(os.environ)
-    env["DATABASE_URL"] = f"postgres://{user}:{password}@127.0.0.1:{port}/studio_test"
-    print(f"test env: DATABASE_URL -> studio_test on 127.0.0.1:{port}")
+    env["DATABASE_URL"] = f"postgres://{user}:{password}@{host}:{port}/studio_test"
+    print(f"test env: DATABASE_URL -> studio_test on {host}:{port}")
     return subprocess.call(command, env=env, cwd=str(REPO))
 
 
@@ -163,7 +181,9 @@ def main() -> int:
     if args.command == "psql":
         return cmd_psql(args.extra)
     if args.command == "test-env":
-        command = [c for c in args.cmd if c != "--"]
+        # Strip only the leading `--` (db.py's own separator) — a later `--` is the
+        # caller's own, e.g. `cargo test ... -- --ignored`, and must survive intact.
+        command = args.cmd[1:] if args.cmd[:1] == ["--"] else args.cmd
         if not command:
             raise SystemExit("usage: db.py test-env -- <command…>")
         return cmd_test_env(command)

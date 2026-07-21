@@ -17,6 +17,9 @@ Desktop.ini
 *.jks
 secrets/
 
+# --- DB dumps (just db-backup) ---
+infra/backups/
+
 # --- Godot ---
 .godot/
 *.translation

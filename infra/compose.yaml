@@ -1,5 +1,11 @@
 # Local development infrastructure. Interactive Godot/Blender are NOT containerized.
 # Usage: just services-up | just observability-up | just services-down
+#
+# Ports bind to STUDIO_PG_BIND_HOST / STUDIO_OBS_BIND_HOST (both default 127.0.0.1,
+# i.e. host-loopback-only). When this compose file runs on a remote Docker host via
+# STUDIO_INFRA_REMOTE (see infra/environments/README.md), set these to that host's
+# private (e.g. Tailscale) interface address instead — never 0.0.0.0 — so dev
+# services stay off the public internet either way.
 name: studio-foundation
 
 services:
@@ -10,7 +16,7 @@ services:
       POSTGRES_USER: ${STUDIO_PG_USER:-studio}
       POSTGRES_PASSWORD: ${STUDIO_PG_PASSWORD:-studio_dev_password}
     ports:
-      - "127.0.0.1:${STUDIO_PG_PORT:-5432}:5432" # localhost-only by design
+      - "${STUDIO_PG_BIND_HOST:-127.0.0.1}:${STUDIO_PG_PORT:-5432}:5432"
     volumes:
       - studio_pg_data:/var/lib/postgresql/data
       - ./postgres/init:/docker-entrypoint-initdb.d:ro
@@ -26,9 +32,9 @@ services:
     image: jaegertracing/jaeger:2.4.0
     profiles: ["observability"]
     ports:
-      - "127.0.0.1:16686:16686"
-      - "127.0.0.1:4317:4317"
-      - "127.0.0.1:4318:4318"
+      - "${STUDIO_OBS_BIND_HOST:-127.0.0.1}:16686:16686"
+      - "${STUDIO_OBS_BIND_HOST:-127.0.0.1}:4317:4317"
+      - "${STUDIO_OBS_BIND_HOST:-127.0.0.1}:4318:4318"
     restart: unless-stopped
 
   # Object storage is intentionally ABSENT until a demonstrated requirement exists

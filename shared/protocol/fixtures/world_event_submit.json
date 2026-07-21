@@ -1,0 +1,1 @@
+{"v":1,"seq":5,"type":"world_event_submit","event_json":"{\"ResourceExtracted\":{\"faction\":\"00000000-0000-0000-0000-000000000001\",\"sector\":\"00000000-0000-0000-0000-000000000002\",\"resource\":\"RawOre\",\"units\":100,\"idempotency_key\":\"00000000-0000-0000-0000-00000000000a\"}}"}

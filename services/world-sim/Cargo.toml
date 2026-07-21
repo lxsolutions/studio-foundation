@@ -1,0 +1,15 @@
+[package]
+name = "studio-world-sim"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Authoritative world simulation: factions, sectors, resources, contracts, settlement. The 'one world' half of ADR 0007 — clients see slices; this crate settles the shared reality."
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+rand = { workspace = true }

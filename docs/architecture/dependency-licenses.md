@@ -11,7 +11,7 @@ Exact resolved versions live in the lockfiles (`Cargo.lock`, `uv.lock`,
 | Component | Pin | License | Role | Notes |
 |---|---|---|---|---|
 | Godot Engine | 4.7.1-stable `a13da4feb…` | MIT | Primary engine | ADR 0001 |
-| godotwebgpu fork | `f329e39ce…` (base 4.6.2) | MIT | Browser WebGPU export backend | ADR 0002; beta; AI-generated |
+| Asha WebGPU backend (our fork `lxsolutions/godot-webgpu`, vendored from `dwalter/godotwebgpu`) | `webgpu-4.7.1` line (base 4.7.1; upstream tip `f329e39ce…`) | MIT | Browser WebGPU export backend | ADR 0002; beta; AI-generated; see NOTICE.md |
 | Godot export templates (web) | 4.7.1.stable official | MIT | WebGL2 browser export | installed via editor |
 | Blender | 5.2.0 LTS | GPL-2.0-or-later | Master asset tool (standalone process only) | ADR 0006 isolation note |
 | Emscripten | 4.0.11 | MIT/UIUC | Web engine builds | pinned from fork CI |

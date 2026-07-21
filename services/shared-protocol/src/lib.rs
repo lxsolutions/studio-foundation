@@ -50,6 +50,17 @@ pub enum Body {
     EchoAck {
         text: String,
     },
+    /// Client submits one canonical world event (ADR 0007) for settlement.
+    /// `event_json` is the serialized `WorldEvent` (world-sim crate owns the schema);
+    /// the protocol stays agnostic so event types evolve without a wire bump.
+    WorldEventSubmit {
+        event_json: String,
+    },
+    /// Server's settlement outcome for a submitted world event.
+    WorldEventResult {
+        applied: bool,
+        summary: String,
+    },
     /// Graceful close intent from either side.
     Bye {},
     Error {

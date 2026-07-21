@@ -8,6 +8,7 @@ const PROTOCOL_VERSION: int = 1
 
 const KNOWN_TYPES: PackedStringArray = [
 	"hello", "hello_ack", "ping", "pong", "echo", "echo_ack", "bye", "error",
+	"world_event_submit", "world_event_result",
 ]
 
 const ERROR_CODES: PackedStringArray = [
@@ -24,6 +25,14 @@ static func make_envelope(type: String, seq: int, body: Dictionary = {}) -> Dict
 static func hello(seq: int, client: String, build: String) -> Dictionary:
 	return make_envelope("hello", seq, {
 		"client": client, "build": build, "protocol": PROTOCOL_VERSION,
+	})
+
+
+## Submit one canonical world event (ADR 0007). event is a Dictionary matching
+## the world-sim WorldEvent schema; it is JSON-encoded here and settled server-side.
+static func world_event_submit(seq: int, event: Dictionary) -> Dictionary:
+	return make_envelope("world_event_submit", seq, {
+		"event_json": JSON.stringify(event),
 	})
 
 
@@ -62,6 +71,10 @@ static func _has_required_fields(type_name: String, envelope: Dictionary) -> boo
 			required = ["nonce"]
 		"echo", "echo_ack":
 			required = ["text"]
+		"world_event_submit":
+			required = ["event_json"]
+		"world_event_result":
+			required = ["applied", "summary"]
 		"error":
 			required = ["code", "message"]
 		"bye":

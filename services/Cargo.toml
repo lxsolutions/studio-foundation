@@ -6,6 +6,7 @@ members = [
     "dedicated-server",
     "admin-cli",
     "integration-tests",
+    "world-sim",
 ]
 
 # Pure-Rust dependency policy (no C toolchain required) — see ADR 0004.

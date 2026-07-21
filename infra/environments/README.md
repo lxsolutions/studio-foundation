@@ -13,3 +13,12 @@ never enter this repository** (only `*.example` files are committed).
 Variable names are identical across environments — promotion is a values change, not a
 code change. `just doctor` validates the development set; services fail fast on
 missing/invalid values at boot (see `services/*/src/config.rs`).
+
+Development's Docker Compose stack (`infra/compose.yaml`) defaults to the local
+Docker engine, loopback-bound. If the local machine can't run Docker itself (e.g.
+no virtualization support) but a Docker host is reachable over SSH, set
+`STUDIO_INFRA_REMOTE` (+ `STUDIO_PG_BIND_HOST`/`STUDIO_PG_HOST`) in `.env` — see
+the commented example there — to run it on that host instead. This is still a
+development-only config knob: it changes *where* the loopback-equivalent binding
+lives (that host's own private/Tailscale interface, never `0.0.0.0`), not the
+one-rule-above-the-line that secrets/config stay out of the repo.

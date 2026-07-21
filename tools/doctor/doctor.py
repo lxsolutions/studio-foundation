@@ -150,38 +150,62 @@ def collect() -> list[Check]:
     )
 
     # --- Docker ---
-    docker_client = _version_of(["docker", "--version"])
-    engine_ok = False
-    if docker_client:
+    remote = senv.infra_remote()
+    if remote:
+        ssh_ok = False
         try:
-            proc = senv.run(["docker", "info", "--format", "{{.ServerVersion}}"], timeout=20)
-            engine_ok = proc.returncode == 0 and bool(proc.stdout.strip())
+            proc = senv.run(["ssh", remote, "docker info --format {{.ServerVersion}}"], timeout=20)
+            ssh_ok = proc.returncode == 0 and bool(proc.stdout.strip())
         except Exception:
-            engine_ok = False
-    add(
-        Check(
-            "docker",
-            "manual",
-            "ok" if engine_ok else ("warn" if docker_client else "missing"),
-            (
-                f"client {docker_client}, engine {'running' if engine_ok else 'NOT RUNNING'}"
-                if docker_client
-                else "not installed"
-            ),
-            "install/start Docker Desktop (Windows/macOS) or docker engine (Linux)",
+            ssh_ok = False
+        add(
+            Check(
+                "docker",
+                "manual",
+                "ok" if ssh_ok else "warn",
+                f"STUDIO_INFRA_REMOTE={remote}: engine "
+                f"{'reachable' if ssh_ok else 'unreachable/NOT RUNNING'} over ssh "
+                "(local Docker engine not required)",
+                f"check `ssh {remote} docker info` and its Docker engine",
+            )
         )
-    )
+    else:
+        docker_client = _version_of(["docker", "--version"])
+        engine_ok = False
+        if docker_client:
+            try:
+                proc = senv.run(["docker", "info", "--format", "{{.ServerVersion}}"], timeout=20)
+                engine_ok = proc.returncode == 0 and bool(proc.stdout.strip())
+            except Exception:
+                engine_ok = False
+        add(
+            Check(
+                "docker",
+                "manual",
+                "ok" if engine_ok else ("warn" if docker_client else "missing"),
+                (
+                    f"client {docker_client}, engine {'running' if engine_ok else 'NOT RUNNING'}"
+                    if docker_client
+                    else "not installed"
+                ),
+                "install/start Docker Desktop (Windows/macOS) or docker engine (Linux), "
+                "or set STUDIO_INFRA_REMOTE to a Docker host reachable over SSH",
+            )
+        )
 
     # --- PostgreSQL (via compose) ---
+    pg_host = senv.pg_host()
     pg_port = int(senv.load_dotenv().get("STUDIO_PG_PORT", "5432") or 5432)
-    pg_up = senv.port_open("127.0.0.1", pg_port)
+    pg_up = senv.port_open(pg_host, pg_port)
     add(
         Check(
             "postgres",
             "optional",
             "ok" if pg_up else "missing",
-            f"127.0.0.1:{pg_port} {'accepting connections' if pg_up else 'not listening'}",
-            "just services-up (requires Docker engine running)",
+            f"{pg_host}:{pg_port} {'accepting connections' if pg_up else 'not listening'}"
+            + (f" (via remote Docker host '{remote}')" if remote else ""),
+            "just services-up (requires Docker engine running)"
+            + (f" on '{remote}'" if remote else ""),
         )
     )
 
@@ -283,7 +307,11 @@ def collect() -> list[Check]:
             "platform",
             android_state,
             f"sdk: {sdk or 'not found'}; java: {'yes' if java else 'no'} - "
-            + ("compile validation possible, signing NOT configured" if android_state == "ok" else "export unavailable"),
+            + (
+                "compile validation possible, signing NOT configured"
+                if android_state == "ok"
+                else "export unavailable"
+            ),
             "install Android Studio SDK + JDK 17; configure Godot editor Android settings",
         )
     )
@@ -313,7 +341,9 @@ def collect() -> list[Check]:
     # --- Browser testing ---
     browsers = senv.find_browsers()
     pw = (senv.repo_root() / "tests" / "browser" / "node_modules" / "playwright-core").is_dir()
-    bt_state = "ok" if (node and browsers and pw) else ("warn" if (node and browsers) else "missing")
+    bt_state = (
+        "ok" if (node and browsers and pw) else ("warn" if (node and browsers) else "missing")
+    )
     add(
         Check(
             "browser-testing",
@@ -329,7 +359,11 @@ def collect() -> list[Check]:
     mcp_ok = False
     try:
         proc = senv.run(
-            [sys.executable, str(senv.repo_root() / "tools" / "studio-mcp" / "server.py"), "--self-check"],
+            [
+                sys.executable,
+                str(senv.repo_root() / "tools" / "studio-mcp" / "server.py"),
+                "--self-check",
+            ],
             timeout=30,
         )
         mcp_ok = proc.returncode == 0
@@ -377,7 +411,9 @@ def collect() -> list[Check]:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--json", action="store_true")
-    parser.add_argument("--strict", action="store_true", help="exit 1 if any required check is missing")
+    parser.add_argument(
+        "--strict", action="store_true", help="exit 1 if any required check is missing"
+    )
     args = parser.parse_args()
 
     checks = collect()

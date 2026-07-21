@@ -209,6 +209,37 @@ def godot_templates_dir() -> Path | None:
     return Path.home() / ".local/share/godot/export_templates"
 
 
+def pg_host() -> str:
+    """Host to reach the dev/test Postgres container on (default: local loopback)."""
+    return load_dotenv().get("STUDIO_PG_HOST", "127.0.0.1") or "127.0.0.1"
+
+
+def infra_remote() -> str | None:
+    """SSH host alias running infra/compose.yaml, or None to run Docker locally.
+
+    Set STUDIO_INFRA_REMOTE (e.g. to `smeagol`) when the local machine can't run
+    Docker itself (no virtualization support) but a Docker host is reachable over
+    SSH. See infra/environments/README.md.
+    """
+    return load_dotenv().get("STUDIO_INFRA_REMOTE", "").strip() or None
+
+
+def infra_remote_dir() -> str:
+    """Remote path infra/ is synced to before each remote compose invocation."""
+    return load_dotenv().get("STUDIO_INFRA_REMOTE_DIR", "").strip() or "~/studio-foundation-infra"
+
+
+def compose_argv(*args: str) -> list[str]:
+    """Argv to invoke infra/compose.yaml's docker compose, local-or-remote-aware.
+
+    Single source of truth for "how do I run docker compose for this project" —
+    every caller (db.py, studio-mcp's tools.py, the justfile's COMPOSE var) routes
+    through tools/infra/compose.py so STUDIO_INFRA_REMOTE only has to be handled
+    in one place.
+    """
+    return [sys.executable, str(REPO_ROOT / "tools" / "infra" / "compose.py"), *args]
+
+
 def port_open(host: str, port: int, timeout: float = 1.0) -> bool:
     import socket
 

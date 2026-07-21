@@ -44,7 +44,9 @@ def _audit(tool: str, args: dict, exit_code: int, ms: int) -> None:
         fh.write(json.dumps(entry) + "\n")
 
 
-def _run(argv: list[str], timeout: int = security.DEFAULT_TIMEOUT, cwd: Path = REPO) -> tuple[int, str]:
+def _run(
+    argv: list[str], timeout: int = security.DEFAULT_TIMEOUT, cwd: Path = REPO
+) -> tuple[int, str]:
     try:
         proc = subprocess.run(
             argv,
@@ -67,18 +69,27 @@ def _py() -> str:
 
 
 def _compose_psql(statements: list[str], timeout: int = 30) -> tuple[int, str]:
-    argv = [
-        "docker", "compose", "-f", str(REPO / "infra" / "compose.yaml"),
-        "exec", "-T", "postgres",
-        "psql", "-U", "studio_ro", "-d", os.environ.get("STUDIO_PG_DB", "studio"),
-        "-v", "ON_ERROR_STOP=1", "-P", "pager=off",
-    ]
+    argv = senv.compose_argv(
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "studio_ro",
+        "-d",
+        os.environ.get("STUDIO_PG_DB", "studio"),
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-P",
+        "pager=off",
+    )
     for statement in statements:
         argv += ["-c", statement]
     return _run(argv, timeout=timeout)
 
 
 # --------------------------------------------------------------------- tools
+
 
 def tool_studio_get_status(args: dict) -> tuple[int, str]:
     return _run([_py(), str(REPO / "tools" / "doctor" / "doctor.py"), "--json"], timeout=90)
@@ -97,8 +108,12 @@ def tool_studio_list_projects(args: dict) -> tuple[int, str]:
 def tool_studio_create_game_from_template(args: dict) -> tuple[int, str]:
     return _run(
         [
-            _py(), str(REPO / "tools" / "build" / "new_game.py"),
-            "--name", args["name"], "--display-name", args.get("display_name", args["name"]),
+            _py(),
+            str(REPO / "tools" / "build" / "new_game.py"),
+            "--name",
+            args["name"],
+            "--display-name",
+            args.get("display_name", args["name"]),
         ],
         timeout=180,
     )
@@ -111,14 +126,26 @@ def _game_path(args: dict) -> str:
 
 def tool_godot_validate_project(args: dict) -> tuple[int, str]:
     return _run(
-        [_py(), str(REPO / "tools" / "godot" / "run_godot.py"), "--game", _game_path(args), "--import-only"],
+        [
+            _py(),
+            str(REPO / "tools" / "godot" / "run_godot.py"),
+            "--game",
+            _game_path(args),
+            "--import-only",
+        ],
         timeout=300,
     )
 
 
 def tool_godot_run_tests(args: dict) -> tuple[int, str]:
     return _run(
-        [_py(), str(REPO / "tools" / "godot" / "run_godot.py"), "--game", _game_path(args), "--tests"],
+        [
+            _py(),
+            str(REPO / "tools" / "godot" / "run_godot.py"),
+            "--game",
+            _game_path(args),
+            "--tests",
+        ],
         timeout=420,
     )
 
@@ -126,8 +153,12 @@ def tool_godot_run_tests(args: dict) -> tuple[int, str]:
 def tool_godot_export(args: dict) -> tuple[int, str]:
     return _run(
         [
-            _py(), str(REPO / "tools" / "godot" / "export_game.py"),
-            "--game", _game_path(args), "--preset", args["preset"],
+            _py(),
+            str(REPO / "tools" / "godot" / "export_game.py"),
+            "--game",
+            _game_path(args),
+            "--preset",
+            args["preset"],
         ],
         timeout=600,
     )
@@ -158,8 +189,11 @@ def tool_godot_collect_logs(args: dict) -> tuple[int, str]:
 def tool_godot_capture_screenshot(args: dict) -> tuple[int, str]:
     return _run(
         [
-            _py(), str(REPO / "tools" / "screenshots" / "visual_regression.py"),
-            "capture", "--game", _game_path(args),
+            _py(),
+            str(REPO / "tools" / "screenshots" / "visual_regression.py"),
+            "capture",
+            "--game",
+            _game_path(args),
         ],
         timeout=300,
     )
@@ -187,6 +221,66 @@ def tool_engine_build(args: dict) -> tuple[int, str]:
     )
 
 
+def tool_engine_classify_conflicts(args: dict) -> tuple[int, str]:
+    return _run(
+        [_py(), str(REPO / "engine" / "scripts" / "classify_conflicts.py"), "--json"],
+        timeout=300,
+    )
+
+
+def tool_engine_build_status(args: dict) -> tuple[int, str]:
+    """Report built template artifacts + whether they match the engine-lock pin."""
+    artifacts = REPO / "engine" / "artifacts" / "templates"
+    lock = senv.engine_lock()
+    pinned = lock.get("godot", {}).get("webgpu_fork", {})
+    zips = []
+    if artifacts.is_dir():
+        for z in sorted(artifacts.glob("*.zip")):
+            zips.append({"file": z.name, "bytes": z.stat().st_size})
+    return 0, json.dumps(
+        {
+            "pinned_branch": pinned.get("branch"),
+            "pinned_base": pinned.get("base"),
+            "pinned_commit": pinned.get("commit"),
+            "templates": zips,
+            "built": len(zips) > 0,
+        },
+        indent=2,
+    )
+
+
+def tool_godot_capture_web(args: dict) -> tuple[int, str]:
+    argv = [
+        _py(),
+        str(REPO / "tools" / "screenshots" / "capture_web.py"),
+        "--game",
+        _game_path(args),
+        "--preset",
+        args.get("preset", "web-webgl"),
+    ]
+    if args.get("out"):
+        argv += ["--out", args["out"]]
+    if args.get("wait"):
+        argv += ["--wait", str(args["wait"])]
+    return _run(argv, timeout=300)
+
+
+def tool_godot_compare_screenshots(args: dict) -> tuple[int, str]:
+    baseline = security.repo_relative_path(args["baseline"], must_exist=True, suffix=".png")
+    candidate = security.repo_relative_path(args["candidate"], must_exist=True, suffix=".png")
+    argv = [
+        _py(),
+        str(REPO / "tools" / "screenshots" / "compare_screenshots.py"),
+        str(baseline),
+        str(candidate),
+    ]
+    if args.get("max_diff_ratio") is not None:
+        argv += ["--max-diff-ratio", str(args["max_diff_ratio"])]
+    if args.get("channel_tolerance") is not None:
+        argv += ["--channel-tolerance", str(args["channel_tolerance"])]
+    return _run(argv, timeout=120)
+
+
 def _blend(args: dict) -> str:
     path = security.repo_relative_path(args["file"], must_exist=True, suffix=".blend")
     return str(path)
@@ -209,8 +303,12 @@ def tool_blender_export_asset(args: dict) -> tuple[int, str]:
 def tool_blender_render_preview(args: dict) -> tuple[int, str]:
     return _run(
         [
-            _py(), str(REPO / "tools" / "asset-pipeline" / "pipeline.py"),
-            "preview", _blend(args), "--frames", str(args.get("frames", 1)),
+            _py(),
+            str(REPO / "tools" / "asset-pipeline" / "pipeline.py"),
+            "preview",
+            _blend(args),
+            "--frames",
+            str(args.get("frames", 1)),
         ],
         timeout=600,
     )
@@ -229,7 +327,10 @@ def tool_asset_search_catalog(args: dict) -> tuple[int, str]:
     query = args.get("query", "").lower()
     hits = []
     for meta_path in REPO.rglob("*.meta.json"):
-        if any(part in ("assets-generated", "node_modules", "target", ".git") for part in meta_path.parts):
+        if any(
+            part in ("assets-generated", "node_modules", "target", ".git")
+            for part in meta_path.parts
+        ):
             continue
         try:
             meta = json.loads(meta_path.read_text(encoding="utf-8"))
@@ -239,47 +340,64 @@ def tool_asset_search_catalog(args: dict) -> tuple[int, str]:
             str(meta.get(field, "")) for field in ("asset_id", "category", "license", "creator")
         ).lower()
         if query in haystack:
-            hits.append({
-                "asset_id": meta.get("asset_id"),
-                "category": meta.get("category"),
-                "license": meta.get("license"),
-                "path": str(meta_path.relative_to(REPO)).replace("\\", "/"),
-            })
+            hits.append(
+                {
+                    "asset_id": meta.get("asset_id"),
+                    "category": meta.get("category"),
+                    "license": meta.get("license"),
+                    "path": str(meta_path.relative_to(REPO)).replace("\\", "/"),
+                }
+            )
     return 0, json.dumps(hits, indent=2)
 
 
 def tool_asset_cook_profile(args: dict) -> tuple[int, str]:
     return _run(
         [
-            _py(), str(REPO / "tools" / "asset-pipeline" / "pipeline.py"),
-            "cook", "--profile", args["profile"], "--game", _game_path(args),
+            _py(),
+            str(REPO / "tools" / "asset-pipeline" / "pipeline.py"),
+            "cook",
+            "--profile",
+            args["profile"],
+            "--game",
+            _game_path(args),
         ],
         timeout=1800,
     )
 
 
 def tool_postgres_schema_summary(args: dict) -> tuple[int, str]:
-    return _compose_psql([
-        "SET default_transaction_read_only = on",
-        r"\dn",
-        r"\dt platform.*",
-    ])
+    return _compose_psql(
+        [
+            "SET default_transaction_read_only = on",
+            r"\dn",
+            r"\dt platform.*",
+        ]
+    )
 
 
 def tool_postgres_migration_status(args: dict) -> tuple[int, str]:
     migrations_dir = REPO / "services" / "control-api" / "migrations"
     on_disk = sorted(p.name for p in migrations_dir.glob("*.sql"))
-    code, output = _compose_psql([
-        "SET default_transaction_read_only = on",
-        "SELECT version, description, success FROM _sqlx_migrations ORDER BY version",
-    ])
-    summary = {"on_disk": on_disk, "database": output if code == 0 else f"(db unavailable: {output.strip()})"}
+    code, output = _compose_psql(
+        [
+            "SET default_transaction_read_only = on",
+            "SELECT version, description, success FROM _sqlx_migrations ORDER BY version",
+        ]
+    )
+    summary = {
+        "on_disk": on_disk,
+        "database": output if code == 0 else f"(db unavailable: {output.strip()})",
+    }
     return 0, json.dumps(summary, indent=2)
 
 
 def tool_postgres_query_readonly(args: dict) -> tuple[int, str]:
     statement = security.validate_readonly_sql(args["query"])
-    security.assert_local_database(os.environ.get("DATABASE_URL", "postgres://studio@127.0.0.1/studio"))
+    security.assert_local_database(
+        os.environ.get("DATABASE_URL", "postgres://studio@127.0.0.1/studio"),
+        extra_allowed_host=senv.pg_host(),
+    )
     return _compose_psql(["SET default_transaction_read_only = on", statement])
 
 
@@ -297,7 +415,9 @@ def _pidfile(service: str) -> Path:
 
 def tool_server_start_local(args: dict) -> tuple[int, str]:
     service = args["service"]
-    package = {"control-api": "studio-control-api", "dedicated-server": "studio-dedicated-server"}[service]
+    package = {"control-api": "studio-control-api", "dedicated-server": "studio-dedicated-server"}[
+        service
+    ]
     RUN_DIR.mkdir(exist_ok=True)
     if _pidfile(service).is_file():
         return 1, f"{service} already started by studio-mcp (stop it first)"
@@ -413,6 +533,43 @@ REGISTRY: dict[str, dict] = {
         "description": "DISABLED: engine builds run only via `just engine-build` in a terminal",
         "schema": {"type": "object", "properties": {}},
     },
+    "engine_build_status": {
+        "fn": tool_engine_build_status,
+        "description": "Report built WebGPU template artifacts vs the engine-lock pin (read-only)",
+        "schema": {"type": "object", "properties": {}},
+    },
+    "engine_classify_conflicts": {
+        "fn": tool_engine_classify_conflicts,
+        "description": "Classify Godot-fork merge conflicts (mechanical/base-lag/fork-touched) as JSON",
+        "schema": {"type": "object", "properties": {}},
+    },
+    "godot_capture_web": {
+        "fn": tool_godot_capture_web,
+        "description": "Real-GPU browser screenshot of a web export via Playwright (CI capture path)",
+        "schema": {
+            "type": "object",
+            "properties": {
+                "game": GAME_ARG,
+                "preset": {"type": "string", "enum": ["web-webgl", "web-webgpu"]},
+                "out": {"type": "string", "maxLength": 200},
+                "wait": {"type": "integer", "minimum": 0, "maximum": 60000},
+            },
+        },
+    },
+    "godot_compare_screenshots": {
+        "fn": tool_godot_compare_screenshots,
+        "description": "Visual-regression gate: compare two PNGs with tolerance (exit 1 on divergence)",
+        "schema": {
+            "type": "object",
+            "required": ["baseline", "candidate"],
+            "properties": {
+                "baseline": {"type": "string", "maxLength": 400},
+                "candidate": {"type": "string", "maxLength": 400},
+                "max_diff_ratio": {"type": "number", "minimum": 0, "maximum": 1},
+                "channel_tolerance": {"type": "integer", "minimum": 0, "maximum": 255},
+            },
+        },
+    },
     "blender_validate_asset": {
         "fn": tool_blender_validate_asset,
         "description": "Validate a .blend master against studio conventions",
@@ -438,7 +595,11 @@ REGISTRY: dict[str, dict] = {
     "asset_get_metadata": {
         "fn": tool_asset_get_metadata,
         "description": "Read the .meta.json sidecar for an asset",
-        "schema": {"type": "object", "required": ["file"], "properties": {"file": {"type": "string"}}},
+        "schema": {
+            "type": "object",
+            "required": ["file"],
+            "properties": {"file": {"type": "string"}},
+        },
     },
     "asset_search_catalog": {
         "fn": tool_asset_search_catalog,
@@ -459,7 +620,13 @@ REGISTRY: dict[str, dict] = {
                 "game": GAME_ARG,
                 "profile": {
                     "type": "string",
-                    "enum": ["desktop_high", "browser_webgpu", "browser_webgl", "mobile_high", "mobile_low"],
+                    "enum": [
+                        "desktop_high",
+                        "browser_webgpu",
+                        "browser_webgl",
+                        "mobile_high",
+                        "mobile_low",
+                    ],
                 },
             },
         },
@@ -494,7 +661,9 @@ REGISTRY: dict[str, dict] = {
         "schema": {
             "type": "object",
             "required": ["service"],
-            "properties": {"service": {"type": "string", "enum": ["control-api", "dedicated-server"]}},
+            "properties": {
+                "service": {"type": "string", "enum": ["control-api", "dedicated-server"]}
+            },
         },
     },
     "server_stop_local": {
@@ -503,7 +672,9 @@ REGISTRY: dict[str, dict] = {
         "schema": {
             "type": "object",
             "required": ["service"],
-            "properties": {"service": {"type": "string", "enum": ["control-api", "dedicated-server"]}},
+            "properties": {
+                "service": {"type": "string", "enum": ["control-api", "dedicated-server"]}
+            },
         },
     },
     "ci_run_local": {

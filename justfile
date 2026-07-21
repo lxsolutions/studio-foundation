@@ -6,7 +6,9 @@ set windows-shell := ["powershell.exe", "-NoLogo", "-NoProfile", "-Command"]
 set shell := ["bash", "-cu"]
 
 PY := if os() == "windows" { "python" } else { "python3" }
-COMPOSE := "docker compose -f infra/compose.yaml --env-file .env"
+# Routes through tools/infra/compose.py, which runs Docker locally by default or,
+# with STUDIO_INFRA_REMOTE set in .env, over SSH on a remote Docker host.
+COMPOSE := PY + " tools/infra/compose.py"
 
 # Overridable variables: `just new-game NAME=my_game DISPLAY_NAME="My Game"`
 NAME := ""
@@ -183,6 +185,21 @@ run-browser-smoke *ARGS:
 demo-connectivity:
     {{PY}} tools/godot/demo_connectivity.py --game "{{GAME}}"
 
+# ------------------------------------------------------------------ screenshots / visual regression
+
+# Headless scene capture to PNG (SCENE is a res:// path; SIZE like 1280x720).
+# Only works with a real renderer attached — headless dummy renderer cannot rasterize.
+capture-scene SCENE SIZE="1280x720":
+    {{PY}} tools/screenshots/capture_scene.py --game "{{GAME}}" --scene "{{SCENE}}" --size "{{SIZE}}"
+
+# Real-GPU web screenshot via Playwright + system Chrome (works on CI agents)
+capture-web *ARGS:
+    {{PY}} tools/screenshots/capture_web.py {{ARGS}}
+
+# Visual regression gate: compare candidate PNG against a baseline (tolerant)
+compare-screenshots BASELINE CANDIDATE *ARGS:
+    {{PY}} tools/screenshots/compare_screenshots.py "{{BASELINE}}" "{{CANDIDATE}}" {{ARGS}}
+
 # ------------------------------------------------------------------ engine
 
 engine-versions:
@@ -199,6 +216,18 @@ engine-build *ARGS:
 # Start a rebase workspace for updating the fork pin (see runbook godot-fork-rebase)
 engine-rebase:
     {{PY}} engine/scripts/engine.py rebase
+
+# Triage fork merge conflicts (mechanical/base-lag/fork-touched); --apply-safe resolves safe ones
+engine-classify-conflicts *ARGS:
+    {{PY}} engine/scripts/classify_conflicts.py {{ARGS}}
+
+# ADR 0002 gate: WebGPU export -> browser capture -> compare vs WebGL baseline.
+# Cross-renderer compare uses a renderer-variance band (0.02) for AA/font/layout
+# deltas; same-renderer regression uses the strict default (0.001).
+engine-validate GAME="templates/godot-game":
+    {{PY}} tools/godot/export_game.py --game "{{GAME}}" --preset web-webgpu
+    {{PY}} tools/screenshots/capture_web.py --game "{{GAME}}" --preset web-webgpu --out captures/web-webgpu.png --wait 8000
+    {{PY}} tools/screenshots/compare_screenshots.py "{{GAME}}/project/captures/web-webgl.png" "{{GAME}}/project/captures/web-webgpu.png" --max-diff-ratio 0.02
 
 # ------------------------------------------------------------------ game generator
 

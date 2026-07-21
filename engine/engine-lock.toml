@@ -16,14 +16,15 @@ license = "MIT"
 role   = "Primary engine. Native editor + all native exports. All game projects must stay compatible with this version."
 
 [godot.webgpu_fork]
-repo    = "https://github.com/dwalter/godotwebgpu"
-branch  = "webgpu-4.6.2"           # informational; the commit below is what is built
-commit  = "f329e39ce8db7acaa5c9d6628a530fb769969228"  # 2026-05-13
-base    = "4.6.2-stable"           # fork lags official stable (4.7.1) by one minor
+repo    = "https://github.com/lxsolutions/godot-webgpu"   # OUR maintained fork (vendored backend)
+upstream = "https://github.com/dwalter/godotwebgpu"       # origin of the beta backend; fetch-only
+branch  = "webgpu-4.7.1"           # our maintained line (merge of official 4.7.1 onto the backend)
+commit  = "14f5effb72ae440a3aa575c801e4aae1a5da7fb8"  # merge + workflows-drop + 4.7.1 barrier & light_storage fixes; pushed to our fork
+base    = "4.7.1-stable"           # matches the editor of record (was 4.6.2 upstream)
 license = "MIT"
 status  = "beta"
-role    = "Unofficial browser WebGPU export backend ONLY. Never the editor of record. See docs/adr/0002."
-notes   = "Fork is largely AI-generated (per its README). Treat rebases as untrusted input: full test + visual-regression pass required."
+role    = "Studio-owned browser WebGPU export backend ONLY. Never the editor of record; official Godot is never forked. See docs/adr/0002 + docs/architecture/asha-platform-strategy.md."
+notes   = "Vendored from dwalter/godotwebgpu (largely AI-generated, MIT). We maintain the 4.7.1 port. Treat every upstream pull as untrusted input: full test + visual-regression pass required (ADR 0002 gate)."
 
 [toolchain]
 # Emscripten pin comes from the fork's own CI (web_builds.yml EM_VERSION).
