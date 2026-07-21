@@ -84,5 +84,13 @@ particular, Safari/iOS and WebGPU claims require real-device runs.
 
 ## License
 
-[MIT](LICENSE). Dependency licenses:
+**Platform (engine, tooling, infrastructure):** everything in this repository is
+licensed under **both the MIT License and CC BY 4.0 simultaneously** — see
+[LICENSE](LICENSE).
+
+**Games:** content under [`games/`](games/) is **proprietary** (all rights
+reserved) and is *not* covered by the platform's open license — see
+[games/LICENSE](games/LICENSE).
+
+Dependency licenses:
 [docs/architecture/dependency-licenses.md](docs/architecture/dependency-licenses.md).
