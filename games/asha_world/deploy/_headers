@@ -1,0 +1,8 @@
+# Cloudflare Pages `_headers` — cross-origin isolation for the threaded WebGPU build.
+# Deploy the web-webgpu export directory to Cloudflare Pages with this file at its root.
+# (Cloudflare Pages honors _headers; GitHub Pages and itch.io do not, which is why
+# they can't boot the threaded build.)
+/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: require-corp
+  Cache-Control: no-store
