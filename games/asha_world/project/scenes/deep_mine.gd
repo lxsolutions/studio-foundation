@@ -290,6 +290,12 @@ func _build_hud() -> void:
 	_log.position = Vector2(12, 480)
 	_log.scroll_following = true
 	layer.add_child(_log)
+
+	# Touch: virtual joystick drives the same move_* actions (self-hides on desktop).
+	var stick := StudioTouchStick.new()
+	stick.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	stick.position = Vector2(24, -216)
+	layer.add_child(stick)
 	_refresh_hud()
 
 

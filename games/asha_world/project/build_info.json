@@ -1,6 +1,6 @@
 {
-  "version": "0.1.0+ddb07573b975-dirty",
-  "git_commit": "ddb07573b975-dirty",
-  "built_at": "2026-07-21T22:43:29Z",
+  "version": "0.1.0+6b2127eda23e-dirty",
+  "git_commit": "6b2127eda23e-dirty",
+  "built_at": "2026-07-21T23:06:22Z",
   "channel": "web-webgpu"
 }
