@@ -26,6 +26,7 @@ func _ready() -> void:
 	version.modulate = Color(1, 1, 1, 0.5)
 	box.add_child(version)
 
+	_button(box, "The Deep", func() -> void: _studio.router.go_to("res://scenes/deep_mine.tscn"))
 	_button(box, "World Slice", func() -> void: _studio.router.go_to("res://scenes/world_slice.tscn"))
 	_button(box, "Play", func() -> void: _studio.router.go_to("res://scenes/game.tscn"))
 	_button(box, "Settings", func() -> void: _studio.router.go_to("res://scenes/settings_menu.tscn"))
