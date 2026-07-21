@@ -7,7 +7,7 @@ extends Control
 ## world-sim settles it into shared state. This client is a thin view — the
 ## server is authoritative.
 
-const SERVER_URL := "ws://127.0.0.1:8081"
+var SERVER_URL: String = AshaWorldConfig.ws_url()
 const FACTION := "00000000-0000-0000-0000-000000000001"
 const SECTOR := "00000000-0000-0000-0000-000000000002"
 const DEEP_SECTOR := "00000000-0000-0000-0000-000000000003"
