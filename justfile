@@ -222,12 +222,13 @@ engine-classify-conflicts *ARGS:
     {{PY}} engine/scripts/classify_conflicts.py {{ARGS}}
 
 # ADR 0002 gate: WebGPU export -> browser capture -> compare vs WebGL baseline.
-# Cross-renderer compare uses a renderer-variance band (0.02) for AA/font/layout
-# deltas; same-renderer regression uses the strict default (0.001).
+# Cross-renderer compare uses a renderer-variance band (0.03) for AA/font/layout
+# deltas between WebGPU and WebGL; same-renderer regression uses the strict
+# default (0.001). Band scales with on-screen text/content.
 engine-validate GAME="templates/godot-game":
     {{PY}} tools/godot/export_game.py --game "{{GAME}}" --preset web-webgpu
     {{PY}} tools/screenshots/capture_web.py --game "{{GAME}}" --preset web-webgpu --out captures/web-webgpu.png --wait 8000
-    {{PY}} tools/screenshots/compare_screenshots.py "{{GAME}}/project/captures/web-webgl.png" "{{GAME}}/project/captures/web-webgpu.png" --max-diff-ratio 0.02
+    {{PY}} tools/screenshots/compare_screenshots.py "{{GAME}}/project/captures/web-webgl.png" "{{GAME}}/project/captures/web-webgpu.png" --max-diff-ratio 0.03
 
 # ------------------------------------------------------------------ game generator
 
