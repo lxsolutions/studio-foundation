@@ -18,7 +18,7 @@ exactly the engine-maintenance treadmill we deliberately avoid.
   to console — no separate console codebase to build or maintain.
 - Our WebGPU/browser work does **not** transfer to consoles (they don't run
   browsers); console uses Godot's native Forward+/Mobile renderers, which our
-  projects already support. The distribution-layer moat (agent pipeline,
+  projects already support. The distribution layer (agent pipeline,
   world-sim, asset factory) is renderer-agnostic and carries over unchanged.
 
 ## The actual path (when a game justifies it)

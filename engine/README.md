@@ -1,15 +1,20 @@
 # Engine integration
 
-Official Godot remains the editor of record. This directory pins and builds the
-studio-owned WebGPU browser backend without vendoring either engine source tree
-into the repository. See ADR 0002 and ADR 0008 for the boundary.
+Official Godot is the editor and engine of record. Studio Foundation's browser
+WebGPU support is an in-repository integration: committed, checksum-pinned
+patches are applied to a locked official Godot commit in a disposable local
+worktree. No separate LX Solutions engine fork is required.
+
+See ADR 0002, ADR 0008, and NOTICE.md for the design boundary and source
+lineage.
 
 ## Source of truth
 
-`engine-lock.toml` records exact official/fork commits, toolchain versions, and
-build flags. `engine/.cache/` contains disposable Git clones and merge worktrees;
-`engine/artifacts/` contains reproducible build outputs. Neither is source of
-truth.
+`engine-lock.toml` records the official base commit, historical source lineage,
+toolchain versions, ordered patch files, patch checksums, and build flags.
+`engine/patches/` contains the reviewable integration. `engine/.cache/` contains
+disposable clones and worktrees; `engine/artifacts/` contains build outputs.
+Neither cache nor artifacts are source of truth.
 
 ## Commands
 
@@ -20,32 +25,26 @@ just engine-build
 just engine-rebase --dry-run --json
 ```
 
-- `engine-versions` compares pins with local cache availability.
-- `engine-fetch` checks out the exact official and fork commits.
-- `engine-build` builds release/debug WebGPU web templates from the fork pin.
-  `engine-build --workspace <name>` builds a candidate into
-  `engine/artifacts/candidates/<name>/templates` without replacing pinned artifacts.
-- `engine-rebase` prepares the next official-engine merge in an isolated
-  worktree under `engine/.cache/rebases/`.
+- `engine-versions` shows the lock pins, patch count, and local cache state.
+- `engine-fetch` fetches only official Godot, verifies every patch checksum, and
+  prepares `engine/.cache/studio-webgpu`.
+- `engine-build` builds WebGPU release/debug templates from that patched tree.
+  `engine-build --workspace <name>` builds an update candidate into
+  `engine/artifacts/candidates/<name>/templates`.
+- `engine-rebase` applies the locked patch series with three-way context to
+  another official Godot ref in an isolated candidate worktree.
 
-The current pins are already aligned, so the default rebase command reports
-`up_to_date` and creates nothing. For a future official release already fetched
-into `engine/.cache/godot-official`, pass its tag or commit:
+A candidate ref must already exist in `engine/.cache/godot-official`:
 
 ```sh
+git -C engine/.cache/godot-official fetch origin 4.8-stable
 just engine-rebase --official-ref 4.8-stable --dry-run --json
 just engine-rebase --official-ref 4.8-stable
 ```
 
-The command never resets, cleans, deletes, or checks out over the pinned fork
-tree. A divergent target gets its own branch and worktree. Merge conflicts are
-left intact as a successful `conflicts` preparation state for:
+The command never resets, cleans, or deletes an existing source tree. Conflicts
+remain in the candidate worktree for inspection. There is intentionally no
+automatic cleanup command.
 
-```sh
-python engine/scripts/classify_conflicts.py \
-  --fork-dir engine/.cache/rebases/godot-webgpu-4.8-stable --json
-```
-
-There is intentionally no automatic cleanup command: inspect and preserve the
-merge until the full validation gate in `docs/runbooks/godot-fork-rebase.md`
-passes and the new pin lands through review.
+The full validation and landing procedure is in
+`docs/runbooks/godot-webgpu-update.md`.

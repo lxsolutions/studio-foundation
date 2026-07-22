@@ -40,7 +40,7 @@ one if it applies to everyone.
 12. GDScript: typed, tab-indented, no game code in `studio_core`. Read
     `docs/architecture/gdscript-pitfalls.md` once — it is paid-for knowledge.
 13. Platform differences go behind `StudioPlatform` / render profiles /
-    `StudioTransport` — game code never sniffs OS names or fork-only APIs (ADR 0002).
+    `StudioTransport` — game code never sniffs OS names or backend-only APIs (ADR 0002).
 
 ## Finishing
 

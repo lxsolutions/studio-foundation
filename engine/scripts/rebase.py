@@ -1,4 +1,4 @@
-"""Safely prepare an isolated WebGPU-fork merge workspace."""
+"""Safely test Studio Foundation's WebGPU patch series on a Godot update."""
 
 from __future__ import annotations
 
@@ -9,8 +9,11 @@ import subprocess
 import sys
 from pathlib import Path
 
+from patch_series import PatchSeriesError, verified_patches
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
-CACHE_DIR = REPO_ROOT / "engine" / ".cache"
+ENGINE_DIR = REPO_ROOT / "engine"
+CACHE_DIR = ENGINE_DIR / ".cache"
 SAFE_NAME = re.compile(r"^[A-Za-z0-9._-]+$")
 
 
@@ -61,32 +64,8 @@ def _resolve_commit(repo: Path, ref: str, label: str) -> str:
     return proc.stdout.strip()
 
 
-def _has_commit(repo: Path, commit: str) -> bool:
-    return (
-        git_result(
-            ["cat-file", "-e", f"{commit}^{{commit}}"], repo, check=False
-        ).returncode
-        == 0
-    )
-
-
-def _is_ancestor(repo: Path, ancestor: str, descendant: str) -> bool:
-    return (
-        git_result(
-            ["merge-base", "--is-ancestor", ancestor, descendant], repo, check=False
-        ).returncode
-        == 0
-    )
-
-
-def _git_dir(workspace: Path) -> Path:
-    return Path(
-        git_result(["rev-parse", "--absolute-git-dir"], workspace).stdout.strip()
-    )
-
-
 def _existing_workspace_status(
-    workspace: Path, expected_branch: str
+    workspace: Path, expected_branch: str, base_commit: str, patch_count: int
 ) -> dict[str, object]:
     if not (workspace / ".git").exists():
         raise RebaseError(
@@ -97,6 +76,7 @@ def _existing_workspace_status(
         raise RebaseError(
             f"workspace branch does not match: expected {expected_branch}, found {branch}"
         )
+    target_commit = git_result(["rev-parse", "HEAD"], workspace).stdout.strip()
     conflicts = [
         line
         for line in git_result(
@@ -104,15 +84,16 @@ def _existing_workspace_status(
         ).stdout.splitlines()
         if line
     ]
-    merge_active = (_git_dir(workspace) / "MERGE_HEAD").is_file()
-    return {
-        "status": "conflicts"
-        if conflicts
-        else ("merge_ready" if merge_active else "workspace_exists"),
-        "workspace": str(workspace),
-        "branch": branch,
-        "conflicts": len(conflicts),
-    }
+    status = "conflicts" if conflicts else "workspace_exists"
+    return _result(
+        status,
+        base_commit,
+        target_commit,
+        workspace,
+        branch,
+        patch_count,
+        len(conflicts),
+    )
 
 
 def prepare_rebase(
@@ -123,62 +104,67 @@ def prepare_rebase(
     workspace_name: str = "",
     dry_run: bool = False,
     cache_dir: Path = CACHE_DIR,
+    engine_dir: Path = ENGINE_DIR,
 ) -> dict[str, object]:
-    """Prepare a dedicated worktree merging an official Godot ref into the fork.
-
-    The pinned fork checkout remains untouched. Merge conflicts are an expected,
-    successful preparation result and are left in the dedicated worktree for
-    classify_conflicts.py and human/agent review.
-    """
+    """Prepare an official-Godot worktree and three-way apply the locked patches."""
     official_dir = cache_dir / "godot-official"
-    fork_dir = cache_dir / "godot-webgpu"
-    for path, label in ((official_dir, "official"), (fork_dir, "WebGPU fork")):
-        if not (path / ".git").is_dir():
-            raise RebaseError(
-                f"{label} source is not fetched at {path}; run engine-fetch"
-            )
+    if not (official_dir / ".git").is_dir():
+        raise RebaseError(
+            f"official source is not fetched at {official_dir}; run engine-fetch"
+        )
 
+    try:
+        patches = verified_patches(lock, engine_dir)
+    except PatchSeriesError as exc:
+        raise RebaseError(str(exc)) from exc
+
+    base_commit = str(lock["godot"]["webgpu"]["base_commit"])
     official_ref = official_ref or str(lock["godot"]["official"]["commit"])
     target_commit = _resolve_commit(official_dir, official_ref, "official")
-    fork_commit = _resolve_commit(
-        fork_dir, str(lock["godot"]["webgpu_fork"]["commit"]), "fork pin"
-    )
     suffix = (
         re.sub(r"[^A-Za-z0-9._-]+", "-", official_ref).strip("-.")[:48]
         or target_commit[:12]
     )
-    workspace_name = workspace_name or f"godot-webgpu-{suffix}"
-    branch = branch or f"studio-webgpu-merge-{suffix}"
+    workspace_name = workspace_name or f"studio-webgpu-{suffix}"
+    branch = branch or f"studio-webgpu-port-{suffix}"
     if (
         git_result(
-            ["check-ref-format", "--branch", branch], fork_dir, check=False
+            ["check-ref-format", "--branch", branch], official_dir, check=False
         ).returncode
         != 0
     ):
         raise RebaseError(f"invalid Git branch name: {branch}")
 
     workspace = rebase_workspace(workspace_name, cache_dir)
-    rebases_root = workspace.parent
     if workspace.exists():
-        return _existing_workspace_status(workspace, branch)
-
-    target_in_fork = _has_commit(fork_dir, target_commit)
-    if target_in_fork and _is_ancestor(fork_dir, target_commit, fork_commit):
-        return _result("up_to_date", target_commit, fork_commit, workspace, branch, 0)
+        return _existing_workspace_status(workspace, branch, base_commit, len(patches))
+    if target_commit == base_commit:
+        return _result(
+            "up_to_date",
+            base_commit,
+            target_commit,
+            workspace,
+            branch,
+            len(patches),
+            0,
+        )
     if dry_run:
-        result = _result("planned", target_commit, fork_commit, workspace, branch, None)
-        result["fetch_official_into_fork"] = not target_in_fork
-        return result
+        return _result(
+            "planned",
+            base_commit,
+            target_commit,
+            workspace,
+            branch,
+            len(patches),
+            None,
+        )
 
-    rebases_root.mkdir(parents=True, exist_ok=True)
-    if not target_in_fork:
-        git_result(["fetch", "--no-tags", str(official_dir), target_commit], fork_dir)
-    if _is_ancestor(fork_dir, target_commit, fork_commit):
-        return _result("up_to_date", target_commit, fork_commit, workspace, branch, 0)
-
+    workspace.parent.mkdir(parents=True, exist_ok=True)
     branch_exists = (
         git_result(
-            ["show-ref", "--verify", f"refs/heads/{branch}"], fork_dir, check=False
+            ["show-ref", "--verify", f"refs/heads/{branch}"],
+            official_dir,
+            check=False,
         ).returncode
         == 0
     )
@@ -187,45 +173,68 @@ def prepare_rebase(
             f"branch already exists without the expected workspace: {branch}; "
             "inspect it before choosing a different --branch"
         )
-    git_result(["worktree", "add", "-b", branch, str(workspace), fork_commit], fork_dir)
-    merge = git_result(
-        ["merge", "--no-commit", "--no-ff", target_commit], workspace, check=False
+    git_result(
+        ["worktree", "add", "-b", branch, str(workspace), target_commit],
+        official_dir,
     )
-    conflicts = [
-        line
-        for line in git_result(
-            ["diff", "--name-only", "--diff-filter=U"], workspace
-        ).stdout.splitlines()
-        if line
-    ]
-    if merge.returncode not in (0, 1) or (merge.returncode == 1 and not conflicts):
-        raise RebaseError(
-            "merge preparation failed: " + (merge.stdout + merge.stderr).strip()
+
+    for patch in patches:
+        applied = git_result(
+            ["apply", "--3way", "--index", str(patch.path)],
+            workspace,
+            check=False,
         )
+        if applied.returncode == 0:
+            continue
+        conflicts = [
+            line
+            for line in git_result(
+                ["diff", "--name-only", "--diff-filter=U"], workspace
+            ).stdout.splitlines()
+            if line
+        ]
+        if conflicts:
+            result = _result(
+                "conflicts",
+                base_commit,
+                target_commit,
+                workspace,
+                branch,
+                len(patches),
+                len(conflicts),
+            )
+            result["failed_patch"] = patch.relative
+            return result
+        detail = (applied.stdout + applied.stderr).strip()
+        raise RebaseError(f"failed to apply {patch.relative}: {detail}")
+
     return _result(
-        "conflicts" if conflicts else "merge_ready",
+        "patches_applied",
+        base_commit,
         target_commit,
-        fork_commit,
         workspace,
         branch,
-        len(conflicts),
+        len(patches),
+        0,
     )
 
 
 def _result(
     status: str,
-    official_commit: str,
-    fork_commit: str,
+    base_commit: str,
+    target_commit: str,
     workspace: Path,
     branch: str,
+    patch_count: int,
     conflicts: int | None,
 ) -> dict[str, object]:
     return {
         "status": status,
-        "official_commit": official_commit,
-        "fork_commit": fork_commit,
+        "base_commit": base_commit,
+        "official_commit": target_commit,
         "workspace": str(workspace),
         "branch": branch,
+        "patches": patch_count,
         "conflicts": conflicts,
     }
 
@@ -250,20 +259,21 @@ def cmd_rebase(lock: dict, args: argparse.Namespace) -> int:
     print(f"[rebase] workspace: {result['workspace']}")
     if status == "conflicts":
         print(
-            f"[rebase] {result['conflicts']} conflict(s) require classification and review"
+            f"[rebase] {result['conflicts']} conflict(s) while applying "
+            f"{result.get('failed_patch')}"
         )
         print(
             "[rebase] next: python engine/scripts/classify_conflicts.py "
-            f'--fork-dir "{result["workspace"]}"'
+            f'--source-dir "{result["workspace"]}"'
         )
-    elif status == "merge_ready":
+    elif status == "patches_applied":
         print(
-            "[rebase] clean merge prepared but not committed; inspect, build, and validate first"
+            "[rebase] patch series applied; inspect, build, and validate the candidate"
         )
     elif status == "up_to_date":
         print(
-            "[rebase] fork pin already contains the selected official commit; no workspace created"
+            "[rebase] lock already targets this official commit; no workspace created"
         )
     elif status == "planned":
-        print("[rebase] dry run only; no repository or worktree state changed")
+        print("[rebase] dry run only; no branch or worktree state changed")
     return 0

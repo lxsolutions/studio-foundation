@@ -1,8 +1,8 @@
 # Bootstrap Report — what verifiably works, and on which machine
 
-Last verified: 2026-07-21, Windows 10 AMD64 (local dev machine "Awesom-o").
-Current claims below are backed by commands run on this date; historical
-milestones retain their original verification dates.
+Source model updated: 2026-07-22. Latest full runtime verification: 2026-07-21,
+Windows 10 AMD64 (local dev machine "Awesom-o"). Historical milestones retain
+their original verification dates.
 ## Environment (just doctor)
 
 | Tool | Status |
@@ -15,10 +15,23 @@ milestones retain their original verification dates.
 | Docker client 29.6.1 (local) | Still BLOCKED locally — "Virtualization support not detected": VT-x/AMD-V disabled in BIOS/UEFI; needs firmware toggle + reboot (user action). Worked around, not fixed (see below). |
 | Docker via <remote-docker-host> (STUDIO_INFRA_REMOTE) | OK — `just services-up`/`db-migrate`/`test-db` all run infra/compose.yaml on <remote-docker-host> (Linux, Tailscale) over SSH; see below |
 | PostgreSQL <remote-docker-host>:5432 (<remote-docker-host>, via compose) | OK — accepting connections, migrations applied, DB-backed integration tests pass (see below) |
-| WebGPU fork export templates | BUILT and installed from the maintained 4.7.1-aligned fork; export, browser boot, rendering, and visual comparison pass |
+| Studio WebGPU export templates | Historical 4.7.1 build/export/render evidence is green; local patch reconstruction applies cleanly, with a fresh full rebuild still required |
 | Android SDK | not installed |
 | Playwright (playwright-core, system Chrome) | OK — installed + smoke passing (see below) |
 | studio-mcp config | present; server self-check passes |
+## Standalone engine source update (2026-07-22)
+
+- `engine-fetch` no longer fetches a separate LX Solutions engine repository.
+  It checks out the locked official Godot commit, verifies the ordered local
+  patch SHA-256 values, and prepares `engine/.cache/studio-webgpu`.
+- The scoped patch series reconstructs the browser integration and required
+  SPIR-V/Tint sources without carrying unrelated historical branch changes.
+- All three patches apply cleanly to a fresh official 4.7.1 worktree. Unit tests
+  cover checksum tampering, path traversal, reusable source preparation,
+  conflict preservation, and candidate artifact isolation.
+- A fresh release/debug template build and browser capture from this new source
+  preparation path remain required before its evidence replaces the historical
+  validated-tree build below.
 
 ## Test evidence (`just ci-local` — green, exit 0)
 
@@ -107,8 +120,8 @@ This is the milestone the rebase was for.
   renderer/display conflicts were **hand-unioned** (fork's WebGPU API traits and
   staging-buffer logic preserved alongside official's raytracing, `RSE::` enum
   refactor, and subpass changes; `mesh_storage` keeps the fork's `bone_offset`).
-  The work moved to our own fork **`lxsolutions/godot-webgpu`** (ADR 0008) on
-  branch `webgpu-4.7.1`.
+  The resulting validated tree was later converted into the scoped patch series
+  committed in this repository (ADR 0002/0008).
 - **Two compile errors fixed post-merge:** `command_pipeline_barrier` gained a
   7th `AccelerationStructureBarrier` arg in 4.7.1 (`f973478852`); `light_storage`
   lost the fork's `is_force_omni_dual_paraboloid` getter + one `RS::`→`RSE::`
@@ -130,8 +143,9 @@ This is the milestone the rebase was for.
   its default 0.001 threshold is for same-renderer regression, cross-renderer
   comparison uses the 0.02 renderer-variance band.
 
-**WebGPU is now an evidence-backed browser path** alongside WebGL — the
-studio's core differentiator is real and reproducible via `just engine-validate`.
+**WebGPU has evidence-backed 4.7.1 browser results** alongside WebGL. A fresh
+full rebuild from the committed patch series is required before treating the new
+standalone source-preparation path as release evidence.
 
 ## Remote Docker via <remote-docker-host> (verified 2026-07-20, third session)
 

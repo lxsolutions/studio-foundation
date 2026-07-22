@@ -1,53 +1,52 @@
-# Studio Foundation — Goal
+# Studio Foundation - Goal
 
-This repository is the shared platform for a small open-source game studio that ships
-multiple first-class games from **one shared project per game** across:
+Studio Foundation is the shared, public Godot platform for a small game studio
+shipping multiple first-class games from one shared project per game across:
 
-- Web browsers (WebGPU preferred, WebGL 2 fallback)
-- Native iOS and Android
-- Windows, Linux, macOS
+- Web browsers, with WebGPU preferred and WebGL 2 as the maintained fallback
+- iOS and Android
+- Windows, Linux, and macOS
 - Dedicated multiplayer servers
 
-## Intended games (not built here)
+This repository contains platform capabilities rather than a single game's
+mechanics: Godot integration, shared addons, asset processing, backend services,
+tooling, tests, CI, documentation, and agent operating agreements.
 
-1. Diablo-style action RPG
-2. Persistent social MMO (WoW / Puzzle Pirates style)
-3. Combined-arms multiplayer (Battlefield 1942 / original Battlefront II style)
-4. Smaller browser-first and mobile games
+## Scope boundary
 
-This repo contains **no game mechanics**. It contains the engine integration, shared
-Godot addon, asset pipeline, backend services, tooling, tests, CI, documentation, and
-AI-agent operating system that every game reuses.
+Godot is the only client runtime standardized by this public repository.
+Babylon.js, Capacitor, or other runtimes chosen by individual private products
+do not become Studio Foundation dependencies unless a future public ADR
+explicitly changes that decision.
 
 ## Non-negotiable principles
 
-1. Free and open-source first; commercial-use-compatible licensing (MIT/Apache-2.0/BSD/ISC/Zlib preferred).
-2. No required proprietary cloud or paid backend platform. Every hosted service has a local/self-hosted equivalent.
-3. Local development works offline once dependencies are cached.
-4. One shared game project per game — never separate browser and mobile codebases.
-5. Shared source assets, gameplay systems, data formats, network protocol, and backend services.
-6. Runtime **quality profiles** (not forks) absorb platform differences; rendering/platform differences stay behind interfaces.
-7. Generated files and build outputs are never the source of truth.
-8. AI agents work through tests, acceptance criteria, documented commands, and pull requests.
-9. Optimize for a small human team multiplied by Codex, Claude Code, and Kimi Code.
-10. Simple, maintainable foundations. No Kubernetes, microservices, Redis, or message queues until a demonstrated requirement exists (record the demonstration in an ADR).
+1. Prefer free and open-source, commercial-use-compatible dependencies.
+2. Require no proprietary cloud or paid backend platform.
+3. Keep local development usable offline after dependencies are cached.
+4. Maintain one shared Godot project per game, not separate browser/mobile clients.
+5. Share source assets, systems, data formats, protocols, and backend services.
+6. Absorb platform differences through runtime quality profiles and interfaces.
+7. Keep generated files and build outputs out of the source-of-truth role.
+8. Give humans and agents documented commands, acceptance criteria, and tests.
+9. Optimize for a small human team working with coding agents.
+10. Add infrastructure only after a demonstrated requirement and an ADR.
 
 ## Architecture in one paragraph
 
-Official **Godot 4.x** is the engine; gameplay is **GDScript** (C++/GDExtension only for
-measured hotspots; no C# in shared client code because browser support must remain
-possible). Browser builds use the pinned, isolated **godotwebgpu fork** as an unofficial
-WebGPU export backend with official **WebGL 2 Compatibility** export as the fallback.
-**Blender** is the master asset source, driven headlessly into glTF/GLB by a
-deterministic pipeline. The backend is a **Rust** workspace (Tokio/Axum/SQLx) with
-**PostgreSQL** as the source of truth and a transport abstraction (WebSocket baseline;
-WebTransport/QUIC later) for server-authoritative networking. Local infrastructure runs
-in **Docker Compose**. `just` is the task-runner front door for humans, agents, and CI.
+Official Godot 4.7.1 is the pinned editor and engine; gameplay uses GDScript,
+with native extensions reserved for measured hotspots. Browser WebGPU templates
+are built from official Godot plus a checksum-pinned patch series committed in
+`engine/patches/`; official WebGL 2 templates remain the fallback. Blender is
+the master asset source and exports deterministic glTF/GLB. Rust services provide
+authoritative simulation and networking with PostgreSQL as durable state.
+Docker Compose runs local infrastructure, and `just` is the command front door
+for humans, agents, and CI.
 
 ## Where to go next
 
-- `README.md` — quickstart and repo map
-- `docs/adr/` — every material decision and why
-- `docs/agents/WORKING_AGREEMENTS.md` — how agents (and humans) work here
-- `engine/engine-lock.toml` — exact engine/toolchain pins
-- `BOOTSTRAP_REPORT.md` — what verifiably works on which platform today
+- [README.md](README.md) - quickstart and repository map
+- [docs/adr/](docs/adr/) - material decisions and rationale
+- [docs/agents/WORKING_AGREEMENTS.md](docs/agents/WORKING_AGREEMENTS.md) - contribution workflow
+- [engine/engine-lock.toml](engine/engine-lock.toml) - exact source and toolchain pins
+- [BOOTSTRAP_REPORT.md](BOOTSTRAP_REPORT.md) - current verified evidence

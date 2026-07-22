@@ -189,7 +189,7 @@ asset-report:
 export-browser-webgl:
     {{PY}} tools/godot/export_game.py --game "{{GAME}}" --preset web-webgl
 
-# WebGPU export — requires fork templates built via `just engine-build`
+# WebGPU export — requires patched templates built via `just engine-build`
 export-browser-webgpu:
     {{PY}} tools/godot/export_game.py --game "{{GAME}}" --preset web-webgpu
 
@@ -231,7 +231,7 @@ compare-screenshots BASELINE CANDIDATE *ARGS:
 engine-versions:
     {{PY}} engine/scripts/engine.py versions
 
-# Fetch pinned official+fork sources into engine/.cache and apply patch series
+# Fetch pinned official Godot and apply the verified local patch series
 engine-fetch:
     {{PY}} engine/scripts/engine.py fetch
 
@@ -239,11 +239,11 @@ engine-fetch:
 engine-build *ARGS:
     {{PY}} engine/scripts/engine.py build {{ARGS}}
 
-# Start a rebase workspace for updating the fork pin (see runbook godot-fork-rebase)
+# Test the patch series on another official ref (see godot-webgpu-update runbook)
 engine-rebase *ARGS:
     {{PY}} engine/scripts/engine.py rebase {{ARGS}}
 
-# Triage fork merge conflicts (mechanical/base-lag/fork-touched); --apply-safe resolves safe ones
+# Classify patch-application conflicts for manual review
 engine-classify-conflicts *ARGS:
     {{PY}} engine/scripts/classify_conflicts.py {{ARGS}}
 

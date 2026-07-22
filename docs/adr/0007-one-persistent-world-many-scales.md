@@ -72,10 +72,10 @@ reality at different scales**:
 
 ## Alternatives rejected
 
-- Combining Godot + Bevy + PlayCanvas + Babylon.js + Three.js into a custom
-  engine: these are alternative architectures (scene graphs, renderers, asset
-  pipelines), not composable modules. We borrow designs/algorithms from them,
-  never their runtimes. (See ADR 0002 and `docs/architecture/asha-platform-strategy.md`.)
+- Combining multiple client engines into one runtime: their scene graphs,
+  renderers, asset pipelines, and platform layers are alternative architectures,
+  not interchangeable modules. See ADR 0002 and
+  `docs/architecture/asha-platform-strategy.md`.
 - A launcher of separate games: fails the "same chain of events" test — a tank
   must be traceable from the miner who dug its iron to the FPS player who drove
   it.

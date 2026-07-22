@@ -42,7 +42,7 @@ def check_readiness(preset: str) -> str | None:
         artifacts = REPO / "engine" / "artifacts" / "templates"
         if not artifacts.is_dir() or not any(artifacts.glob("*web*.zip")):
             return (
-                "WebGPU fork export templates are not built on this machine.\n"
+                "Studio WebGPU export templates are not built on this machine.\n"
                 "Fix: just engine-fetch && just engine-build   (hours; needs scons + emsdk "
                 f"{lock['toolchain']['emscripten']} — see engine/README.md).\n"
                 "Until then, use the always-green fallback: just export-browser-webgl"

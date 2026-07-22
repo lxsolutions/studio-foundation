@@ -1,68 +1,46 @@
-# Asha Platform Strategy: Godot Distribution, Not a New Engine
+# Studio Foundation: a Godot distribution, not a new engine
 
-Source: external technical review (ChatGPT synthesis, 2026-07-20). Ratified here as
-studio strategy. Related: ADR 0002 (WebGPU fork isolation), ADR 0007 (one world).
+Related: ADR 0002 (WebGPU patch series), ADR 0007 (authoritative world), and
+ADR 0008 (distribution boundary).
 
-## Verdict
+## Decision
 
-**Do not build a new engine by combining Godot, Bevy, PlayCanvas, Babylon.js, and
-Three.js.** They are alternative architectures — each has its own scene graph,
-renderer, material system, asset pipeline, and platform layer — not composable
-modules. Combining them yields duplicated subsystems and permanent integration
-debugging.
+Studio Foundation builds around official Godot instead of combining several
+client engines into a custom runtime. Scene graphs, renderers, material systems,
+asset pipelines, and platform layers do not become simpler when multiple engines
+are embedded together.
 
-Instead we build an **Asha Godot Distribution**: official Godot as the upstream
-foundation, plus the layers that differentiate the studio.
+## What the repository owns
 
-## What we own (the differentiating layers)
-
-```
-Official Godot (pinned, ADR 0002)
-├── Small maintained WebGPU patch set (engine/patches, engine-lock.toml)
-├── Asha editor plugins + studio_core addon (shared/godot-addons/)
-├── GDScript game framework (quality profiles, not forks)
-├── Rust simulation + authoritative servers (services/)
-├── Blender asset cooker (tools/blender, tools/asset-pipeline)
-├── Nakama + PostgreSQL authority (backend/, infra/)
-├── Automated, agent-readable testing (just recipes, tests/)
-└── Cross-platform build/export system (tools/godot)
+```text
+Official Godot (pinned)
+  + scoped WebGPU patch series and WebGL fallback
+  + studio_core shared addon and Godot project template
+  + GDScript platform services and quality profiles
+  + Rust simulation and authoritative servers
+  + Blender-to-GLB validation and cooking
+  + PostgreSQL and optional Nakama infrastructure
+  + agent-readable tests, exports, benchmarks, and release checks
 ```
 
-## What we borrow from other engines (designs, not runtimes)
+The repository borrows engineering ideas from the broader game-development
+ecosystem, but it does not add another client runtime merely to adopt those
+ideas.
 
-- **Bevy**: data-oriented ECS concepts, batched simulation, parallel scheduling,
-  render-extraction and GPU-driven rendering ideas → implemented in **Rust
-  beneath Godot**, never by embedding Bevy.
-- **PlayCanvas**: browser startup optimization, WebGPU/WebGL capability profiles,
-  asset streaming/compression, browser profiling, glTF pipeline discipline.
-- **Babylon.js**: WebGPU compatibility testing matrices, material abstraction,
-  capability detection, shader portability, WebXR patterns.
-- **Three.js**: a *reference renderer* only — small browser experiments, WebGPU
-  control cases, asset previews, internal visualization. Never spliced into Godot.
+## Where agents should spend effort
 
-## Where AI agents spend effort
+1. Browser build, shader, startup, resource-lifetime, compatibility, and visual
+   validation work for the Godot WebGPU integration
+2. Rust simulation, spatial, interest-management, replay, and authority systems
+3. Reusable Godot services for sessions, settings, input, networking,
+   accessibility, diagnostics, and content loading
+4. Deterministic Blender and Godot asset validation
+5. Small commands that build, test, export, capture, compare, and report evidence
 
-1. Production-grade Godot WebGPU support (browser builds, shader translation,
-   pipeline caching, startup time, cross-browser + cross-OS testing, WebGL
-   fallback, resource-lifetime validation, visual regression, GPU benchmarks).
-2. Rust simulation framework (entity storage, spatial indexing, pathfinding,
-   interest management, snapshot interpolation, procedural generation, replays,
-   authoritative servers) exposed to Godot through narrow APIs.
-3. Studio-wide Godot framework addons (accounts/sessions, settings, saves,
-   graphics profiles, input, telemetry, asset manifests, streaming, i18n, a11y,
-   debugging, automated captures).
-4. Blender production pipeline (validators, LOD/collision generation, GLB export,
-   skeleton/animation checks, texture compression, budget reports, provenance).
-5. Agent-readable testing infrastructure (`just test`, `just export-webgpu`,
-   `just export-webgl`, `just benchmark`, `just capture-scene`,
-   `just compare-screenshots`, `just simulate-clients COUNT=100`,
-   `just validate-assets`).
+## Custom-engine threshold
 
-## When a truly custom engine would make sense
-
-Only after: (1) one or two serious shipped games, (2) the same Godot limitation
-repeatedly blocks multiple products, (3) a dedicated human engine architect is on
-staff, (4) the limitation cannot be fixed via module, Rust library, editor plugin,
-or renderer patch, and (5) we accept maintaining browser/mobile/desktop/console
-backends for years (console SDKs are private/NDA — Godot already has licensed
-third-party console paths). None of these hold today.
+Reconsider the boundary only after shipped games demonstrate the same blocking
+Godot limitation repeatedly, narrower extensions cannot solve it, experienced
+engine maintainers are available, and the team accepts years of responsibility
+for browser, mobile, desktop, and console integration. Those conditions do not
+hold today.

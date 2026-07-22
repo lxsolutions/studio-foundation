@@ -29,7 +29,7 @@ scriptable editor.
 ## Consequences
 
 - All game projects must open and pass tests in the pinned official editor. The WebGPU
-  fork (ADR 0002) is an export backend, never the editor of record.
+  Studio patch series (ADR 0002) is an export backend, never the editor of record.
 - Engine upgrades are deliberate: bump `engine-lock.toml`, run full test + export +
   visual-regression suites, record results, then merge.
 - Godot's Mobile renderer feature set is the common modern baseline across platforms
