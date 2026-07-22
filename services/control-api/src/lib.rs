@@ -66,11 +66,9 @@ impl IntoResponse for AppError {
                 Json(json!({"error": "no database configured (set DATABASE_URL)"})),
             )
                 .into_response(),
-            AppError::NotFound => (
-                StatusCode::NOT_FOUND,
-                Json(json!({"error": "not found"})),
-            )
-                .into_response(),
+            AppError::NotFound => {
+                (StatusCode::NOT_FOUND, Json(json!({"error": "not found"}))).into_response()
+            }
             AppError::Db(err) => {
                 tracing::error!(error = %err, "database error");
                 (
@@ -93,7 +91,10 @@ async fn healthz() -> &'static str {
 
 async fn readyz(State(state): State<Arc<AppState>>) -> Response {
     match &state.pool {
-        Some(pool) => match sqlx::query_scalar::<_, i32>("SELECT 1").fetch_one(pool).await {
+        Some(pool) => match sqlx::query_scalar::<_, i32>("SELECT 1")
+            .fetch_one(pool)
+            .await
+        {
             Ok(_) => (StatusCode::OK, "ready").into_response(),
             Err(err) => {
                 tracing::warn!(error = %err, "readyz: database unreachable");
@@ -107,7 +108,10 @@ async fn readyz(State(state): State<Arc<AppState>>) -> Response {
 async fn status(State(state): State<Arc<AppState>>) -> Json<Value> {
     let db = match &state.pool {
         None => "unconfigured",
-        Some(pool) => match sqlx::query_scalar::<_, i32>("SELECT 1").fetch_one(pool).await {
+        Some(pool) => match sqlx::query_scalar::<_, i32>("SELECT 1")
+            .fetch_one(pool)
+            .await
+        {
             Ok(_) => "ok",
             Err(_) => "unavailable",
         },
@@ -125,11 +129,10 @@ async fn kv_get(
     Path(key): Path<String>,
 ) -> Result<Json<Value>, AppError> {
     let pool = pool_of(&state)?;
-    let value: Value =
-        sqlx::query_scalar("SELECT v FROM platform.kv_demo WHERE k = $1")
-            .bind(&key)
-            .fetch_one(pool)
-            .await?;
+    let value: Value = sqlx::query_scalar("SELECT v FROM platform.kv_demo WHERE k = $1")
+        .bind(&key)
+        .fetch_one(pool)
+        .await?;
     Ok(Json(json!({ "key": key, "value": value })))
 }
 
@@ -169,7 +172,9 @@ async fn bootstrap_check(State(state): State<Arc<AppState>>) -> Result<Json<Valu
             .await?;
     tx.commit().await?;
     let ok = wrote == read;
-    Ok(Json(json!({ "roundtrip_ok": ok, "wrote": wrote, "read": read })))
+    Ok(Json(
+        json!({ "roundtrip_ok": ok, "wrote": wrote, "read": read }),
+    ))
 }
 
 /// Minimal account/session stub: creates a guest account + session row.
@@ -178,18 +183,16 @@ async fn guest_session(State(state): State<Arc<AppState>>) -> Result<Json<Value>
     let suffix: u32 = rand::random::<u32>() % 1_000_000;
     let name = format!("guest_{suffix:06}");
     let mut tx = pool.begin().await?;
-    let account_id: uuid::Uuid = sqlx::query_scalar(
-        "INSERT INTO platform.account (display_name) VALUES ($1) RETURNING id",
-    )
-    .bind(&name)
-    .fetch_one(&mut *tx)
-    .await?;
-    let session_id: uuid::Uuid = sqlx::query_scalar(
-        "INSERT INTO platform.session (account_id) VALUES ($1) RETURNING id",
-    )
-    .bind(account_id)
-    .fetch_one(&mut *tx)
-    .await?;
+    let account_id: uuid::Uuid =
+        sqlx::query_scalar("INSERT INTO platform.account (display_name) VALUES ($1) RETURNING id")
+            .bind(&name)
+            .fetch_one(&mut *tx)
+            .await?;
+    let session_id: uuid::Uuid =
+        sqlx::query_scalar("INSERT INTO platform.session (account_id) VALUES ($1) RETURNING id")
+            .bind(account_id)
+            .fetch_one(&mut *tx)
+            .await?;
     sqlx::query(
         "INSERT INTO platform.audit_log (actor, action, detail)
          VALUES ($1, 'guest_session_created', $2)",

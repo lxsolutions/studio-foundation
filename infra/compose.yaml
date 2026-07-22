@@ -37,6 +37,38 @@ services:
       - "${STUDIO_OBS_BIND_HOST:-127.0.0.1}:4318:4318"
     restart: unless-stopped
 
+  # Nakama (Apache-2.0) — identity, social graph, parties, matchmaking, and the
+  # authoritative RPC layer the world-sim graduates to (ADR 0007/0005). Its TS
+  # runtime module lives in infra/nakama/src and is mounted build/ here.
+  # Enable with the `nakama` profile: just nakama-up (see justfile).
+  nakama:
+    image: registry.heroiclabs.com/heroiclabs/nakama:3.22.0 # Apache-2.0
+    profiles: ["nakama"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NAKAMA_DATABASE_ADDRESS: "${STUDIO_PG_USER:-studio}:${STUDIO_PG_PASSWORD:-studio_dev_password}@postgres:5432/${STUDIO_PG_DB:-studio}"
+    entrypoint:
+      - "/bin/sh"
+      - "-ec"
+      - >-
+        /nakama/nakama migrate up --database.address "$${NAKAMA_DATABASE_ADDRESS}" &&
+        exec /nakama/nakama --config /nakama/data/local.yml
+    ports:
+      - "${STUDIO_NAKAMA_BIND_HOST:-127.0.0.1}:7349:7349"   # gRPC API
+      - "${STUDIO_NAKAMA_BIND_HOST:-127.0.0.1}:7350:7350"   # HTTP/WebSocket API
+      - "${STUDIO_NAKAMA_BIND_HOST:-127.0.0.1}:7351:7351"   # developer console
+    volumes:
+      - ./nakama/build:/nakama/data/modules:ro
+      - ./nakama/local.yml:/nakama/data/local.yml:ro
+    healthcheck:
+      test: ["CMD", "/nakama/nakama", "healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
   # Object storage is intentionally ABSENT until a demonstrated requirement exists
   # (GOAL.md principle 15). Reviewed candidate if needed: SeaweedFS (Apache-2.0).
   # MinIO was rejected: AGPL relicense + community build feature removal.

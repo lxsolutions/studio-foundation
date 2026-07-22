@@ -28,8 +28,9 @@ verifiably works today is in [BOOTSTRAP_REPORT.md](BOOTSTRAP_REPORT.md).
 git clone <this-repo> && cd studio-foundation
 just doctor        # what's installed, what's missing, what's required vs optional
 just bootstrap     # installs user-scope tools it safely can; prints manual steps
-just services-up   # PostgreSQL (+ optional observability profile) via Docker Compose
-just test          # Rust + Python + Godot headless + protocol tests
+just services-up   # PostgreSQL via Docker Compose
+just nakama-up     # optional identity/social authority + its PostgreSQL dependency
+just test          # Rust + Python + protocol + Nakama + Godot headless tests
 ```
 
 No `just`? Bootstrap directly: `powershell scripts/bootstrap.ps1` (Windows) or
@@ -43,12 +44,13 @@ No `just`? Bootstrap directly: `powershell scripts/bootstrap.ps1` (Windows) or
 | `just test` / `just lint` | All fast tests / all linters |
 | `just test-rust` `just test-godot` `just test-python` | Narrow suites |
 | `just services-up` / `services-down` / `db-reset` / `db-seed` / `db-backup` | Local infra |
+| `just nakama-build` / `nakama-test` / `nakama-up` | Optional Nakama runtime module and service |
 | `just asset-validate FILE` / `asset-export FILE` / `asset-cook PROFILE` | Blender pipeline |
 | `just godot-sync-addons` | Copy shared addon into game projects (run after addon edits) |
 | `just export-browser-webgl [GAME]` | WebGL2 browser export (works with stock templates) |
 | `just export-browser-webgpu [GAME]` | WebGPU export (needs fork templates: `just engine-build`) |
 | `just run-browser-smoke` | Serve export + Playwright console-error smoke (Chrome/Edge) |
-| `just new-game NAME=my_game DISPLAY_NAME="My Game"` | Generate a game from the template |
+| `just NAME=my_game DISPLAY_NAME="My Game" new-game` | Generate a game from the template |
 | `just engine-fetch` / `engine-build` | Reproduce engine artifacts from engine-lock.toml |
 | `just ci-local` | Run the same checks CI runs |
 
@@ -62,7 +64,7 @@ No `just`? Bootstrap directly: `powershell scripts/bootstrap.ps1` (Windows) or
 | `templates/godot-game/` | The game template: Godot project, server crate, asset dirs, docs, tests. |
 | `services/` | Rust workspace: `shared-protocol`, `control-api`, `dedicated-server`, `admin-cli`, `integration-tests`. |
 | `tools/` | Asset pipeline, Blender scripts, doctor, generator, benchmark, release, screenshots, `studio-mcp`. |
-| `infra/` | Docker Compose, Postgres init/seed, observability profile, environment models. |
+| `infra/` | Docker Compose, Postgres init/seed, Nakama runtime, observability profile, environment models. |
 | `tests/` | Browser (Playwright), integration, performance, protocol, visual regression. |
 | `docs/` | Architecture, ADRs, agents, pipeline, browser/mobile, networking, performance, security, runbooks. |
 | `games/` | Generated game projects (e.g. `games/sandbox`, the living example). |

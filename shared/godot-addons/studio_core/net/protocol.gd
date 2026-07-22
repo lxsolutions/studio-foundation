@@ -43,7 +43,10 @@ static func encode(envelope: Dictionary) -> String:
 ## Returns { ok: bool, envelope: Dictionary, error: String }.
 ## Mirrors Rust decode(): rejects wrong version, unknown type, missing fields.
 static func decode(text: String) -> Dictionary:
-	var parsed: Variant = JSON.parse_string(text)
+	var json: JSON = JSON.new()
+	if json.parse(text) != OK:
+		return {"ok": false, "envelope": {}, "error": "malformed"}
+	var parsed: Variant = json.data
 	if not (parsed is Dictionary):
 		return {"ok": false, "envelope": {}, "error": "malformed"}
 	var envelope: Dictionary = parsed

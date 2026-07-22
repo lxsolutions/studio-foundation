@@ -46,7 +46,10 @@ pub fn loopback_pair(buffer: usize) -> (LoopbackTransport, LoopbackTransport) {
 
 impl Transport for LoopbackTransport {
     async fn send(&mut self, envelope: Envelope) -> Result<(), TransportError> {
-        self.tx.send(envelope).await.map_err(|_| TransportError::Closed)
+        self.tx
+            .send(envelope)
+            .await
+            .map_err(|_| TransportError::Closed)
     }
 
     async fn recv(&mut self) -> Option<Result<Envelope, TransportError>> {

@@ -20,7 +20,13 @@ class PathValidation(unittest.TestCase):
                 security.repo_relative_path(bad)
 
     def test_rejects_absolute_and_home(self):
-        for bad in ["/etc/passwd", "C:/Windows/system32", "C:\\Windows", "~/x", "\\\\server\\share"]:
+        for bad in [
+            "/etc/passwd",
+            "C:/Windows/system32",
+            "C:\\Windows",
+            "~/x",
+            "\\\\server\\share",
+        ]:
             with self.assertRaises(ToolArgError, msg=bad):
                 security.repo_relative_path(bad)
 
@@ -81,7 +87,9 @@ class ArgSchemaValidation(unittest.TestCase):
 class SqlGuard(unittest.TestCase):
     def test_select_and_explain_allowed(self):
         self.assertTrue(security.validate_readonly_sql("SELECT 1"))
-        self.assertTrue(security.validate_readonly_sql("  explain select * from platform.account  "))
+        self.assertTrue(
+            security.validate_readonly_sql("  explain select * from platform.account  ")
+        )
         self.assertTrue(security.validate_readonly_sql("WITH x AS (SELECT 1) SELECT * FROM x"))
 
     def test_writes_rejected(self):
@@ -122,7 +130,9 @@ class OutputAndRedaction(unittest.TestCase):
         self.assertIn("truncated", capped)
 
     def test_redaction(self):
-        redacted = security.redact({"query": "SELECT 1", "db_password": "hunter2", "api_token": "t"})
+        redacted = security.redact(
+            {"query": "SELECT 1", "db_password": "hunter2", "api_token": "t"}
+        )
         self.assertEqual(redacted["query"], "SELECT 1")
         self.assertEqual(redacted["db_password"], "<redacted>")
         self.assertEqual(redacted["api_token"], "<redacted>")
@@ -164,9 +174,7 @@ class RegistryBoundaries(unittest.TestCase):
 
 class TimeoutBehaviour(unittest.TestCase):
     def test_run_timeout_enforced(self):
-        code, output = tools._run(
-            [sys.executable, "-c", "import time; time.sleep(5)"], timeout=1
-        )
+        code, output = tools._run([sys.executable, "-c", "import time; time.sleep(5)"], timeout=1)
         self.assertEqual(code, 124)
         self.assertIn("timed out", output)
 

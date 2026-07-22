@@ -13,7 +13,11 @@ mod http;
 static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("../control-api/migrations");
 
 #[derive(Parser)]
-#[command(name = "studio-admin", version, about = "Studio Foundation operator commands")]
+#[command(
+    name = "studio-admin",
+    version,
+    about = "Studio Foundation operator commands"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -61,9 +65,7 @@ fn find_repo_root() -> Result<PathBuf> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    tracing_subscriber::fmt()
-        .with_env_filter("warn")
-        .init();
+    tracing_subscriber::fmt().with_env_filter("warn").init();
     let cli = Cli::parse();
 
     match cli.command {
@@ -74,12 +76,11 @@ async fn main() -> Result<()> {
         }
         Command::MigrateStatus => {
             let pool = PgPoolOptions::new().connect(&database_url()?).await?;
-            let applied: Vec<(i64,)> = sqlx::query_as(
-                "SELECT version FROM _sqlx_migrations ORDER BY version",
-            )
-            .fetch_all(&pool)
-            .await
-            .unwrap_or_default();
+            let applied: Vec<(i64,)> =
+                sqlx::query_as("SELECT version FROM _sqlx_migrations ORDER BY version")
+                    .fetch_all(&pool)
+                    .await
+                    .unwrap_or_default();
             let applied_set: std::collections::HashSet<i64> =
                 applied.iter().map(|(v,)| *v).collect();
             for migration in MIGRATOR.iter() {
@@ -88,7 +89,10 @@ async fn main() -> Result<()> {
                 } else {
                     "PENDING"
                 };
-                println!("{:>4} {:<40} {}", migration.version, migration.description, state);
+                println!(
+                    "{:>4} {:<40} {}",
+                    migration.version, migration.description, state
+                );
             }
         }
         Command::Seed => {

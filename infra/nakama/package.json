@@ -1,0 +1,14 @@
+{
+  "name": "asha-nakama-module",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Nakama TS runtime module: identity + world-event RPC seam (ADR 0007).",
+  "type": "commonjs",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node tests/runtime.test.cjs"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.0"
+  }
+}

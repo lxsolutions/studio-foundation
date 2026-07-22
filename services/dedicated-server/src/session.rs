@@ -1,7 +1,7 @@
 //! Per-connection session loop, transport-agnostic.
 
-use studio_protocol::{handshake_reply, Body, Envelope, ErrorCode, PROTOCOL_VERSION};
 use std::sync::Arc;
+use studio_protocol::{handshake_reply, Body, Envelope, ErrorCode, PROTOCOL_VERSION};
 use tokio::sync::Mutex;
 use tokio::time::{timeout, Duration};
 
@@ -188,7 +188,9 @@ mod tests {
 
         client.send(hello(PROTOCOL_VERSION)).await.unwrap();
         let ack = client.recv().await.unwrap().unwrap();
-        assert!(matches!(ack.body, Body::HelloAck { protocol, .. } if protocol == PROTOCOL_VERSION));
+        assert!(
+            matches!(ack.body, Body::HelloAck { protocol, .. } if protocol == PROTOCOL_VERSION)
+        );
 
         client
             .send(Envelope {

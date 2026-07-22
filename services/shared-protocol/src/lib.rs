@@ -151,10 +151,7 @@ mod tests {
 
     #[test]
     fn rejects_malformed() {
-        assert!(matches!(
-            decode(b"{nope"),
-            Err(ProtocolError::Malformed(_))
-        ));
+        assert!(matches!(decode(b"{nope"), Err(ProtocolError::Malformed(_))));
     }
 
     /// Every golden fixture must decode, re-encode, and match as JSON values.
@@ -186,7 +183,10 @@ mod tests {
             }
             checked += 1;
         }
-        assert!(checked >= 5, "expected fixtures in {dir:?}, found {checked}");
+        assert!(
+            checked >= 5,
+            "expected fixtures in {dir:?}, found {checked}"
+        );
     }
 
     #[test]

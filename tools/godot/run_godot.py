@@ -65,9 +65,7 @@ def script_errors(output: str) -> list[str]:
 
 
 def stage_import(project: Path, timeout: int) -> int:
-    code, output = run_godot(
-        ["--headless", "--path", str(project), "--import"], project, timeout
-    )
+    code, output = run_godot(["--headless", "--path", str(project), "--import"], project, timeout)
     problems = script_errors(output)
     if problems:
         print("import stage found script errors:", file=sys.stderr)
@@ -111,9 +109,7 @@ def main() -> int:
     project = project_dir(args.game)
 
     # Keep the generated addon copy fresh so results reflect shared sources.
-    sync = senv.run(
-        [sys.executable, str(Path(__file__).with_name("sync_addons.py"))], timeout=60
-    )
+    sync = senv.run([sys.executable, str(Path(__file__).with_name("sync_addons.py"))], timeout=60)
     if sync.returncode != 0:
         print(sync.stdout + sync.stderr, file=sys.stderr)
         return sync.returncode

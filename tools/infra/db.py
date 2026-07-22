@@ -10,7 +10,7 @@ import argparse
 import os
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pylib"))
@@ -94,7 +94,7 @@ def cmd_reset() -> int:
 def cmd_backup() -> int:
     user, db = pg_env()
     BACKUPS.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    stamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
     out = BACKUPS / f"{db}_{stamp}.dump"
     code = run(
         compose("exec", "-T", "postgres", "pg_dump", "-U", user, "-d", db, "-Fc"),

@@ -6,11 +6,12 @@ set windows-shell := ["powershell.exe", "-NoLogo", "-NoProfile", "-Command"]
 set shell := ["bash", "-cu"]
 
 PY := if os() == "windows" { "python" } else { "python3" }
+NPM := if os() == "windows" { "npm.cmd" } else { "npm" }
 # Routes through tools/infra/compose.py, which runs Docker locally by default or,
 # with STUDIO_INFRA_REMOTE set in .env, over SSH on a remote Docker host.
 COMPOSE := PY + " tools/infra/compose.py"
 
-# Overridable variables: `just new-game NAME=my_game DISPLAY_NAME="My Game"`
+# Overridable variables: `just NAME=my_game DISPLAY_NAME="My Game" new-game`
 NAME := ""
 DISPLAY_NAME := ""
 GAME := "templates/godot-game"
@@ -54,6 +55,16 @@ services-logs:
 observability-up:
     {{COMPOSE}} --profile observability up -d
 
+# Nakama identity/social authority (profile: nakama). Builds the TS module first.
+nakama-build:
+    {{NPM}} --prefix infra/nakama run build
+
+nakama-test:
+    {{NPM}} --prefix infra/nakama test
+
+nakama-up: nakama-build
+    {{COMPOSE}} --profile nakama up -d --wait nakama
+
 db-migrate:
     {{PY}} tools/cargo_env.py run --manifest-path services/Cargo.toml -p studio-admin-cli -- migrate
 
@@ -76,7 +87,7 @@ db-psql *ARGS:
 # ------------------------------------------------------------------ test
 
 # Fast suite: Rust + Python + protocol + Godot headless (needs Docker only for test-db)
-test: test-rust test-python test-protocol test-godot
+test: test-rust test-python test-protocol nakama-test test-godot
 
 test-rust:
     {{PY}} tools/cargo_env.py test --manifest-path services/Cargo.toml --workspace
@@ -85,6 +96,7 @@ test-rust:
 # tools/ to grow this back into a broader discovery run)
 test-python:
     uv run --project tools python -m unittest discover -s tools/studio-mcp/tests -p "test_*.py" -v
+    uv run --project tools python -m unittest discover -s tools/infra/tests -p "test_*.py" -v
 
 # Cross-language protocol golden-fixture checks (Rust side runs in test-rust too)
 test-protocol:
@@ -100,10 +112,9 @@ test-db:
 test-mcp:
     uv run --project tools python -m unittest discover -s tools/studio-mcp/tests -v
 
-# Run the generated example game's own test suite (games/sandbox)
+# Generate a temporary game and run its Godot + Rust suites.
 test-generated:
-    {{PY}} tools/godot/run_godot.py --game games/sandbox --tests
-    {{PY}} tools/cargo_env.py test --manifest-path games/sandbox/server/Cargo.toml
+    {{PY}} tools/build/test_generated.py
 
 # ------------------------------------------------------------------ lint / format
 
@@ -232,7 +243,7 @@ engine-validate GAME="templates/godot-game":
 
 # ------------------------------------------------------------------ game generator
 
-# Usage: just new-game NAME=my_game DISPLAY_NAME="My Game"
+# Usage: `just NAME=my_game DISPLAY_NAME="My Game" new-game`
 new-game:
     {{PY}} tools/build/new_game.py --name "{{NAME}}" --display-name "{{DISPLAY_NAME}}"
 
@@ -260,6 +271,9 @@ audit:
 attribution:
     uv run --project tools python tools/release/attribution.py
 
+release-validate *ARGS:
+    {{PY}} tools/release/release_validate.py {{ARGS}}
+
 # ------------------------------------------------------------------ benchmarks / visual
 
 benchmark-scene:
@@ -273,5 +287,5 @@ visual-compare:
 
 # ------------------------------------------------------------------ housekeeping
 
-clean:
-    {{PY}} tools/build/clean.py
+clean *ARGS:
+    {{PY}} tools/build/clean.py {{ARGS}}

@@ -5,11 +5,12 @@
 
 Local (default): runs `docker compose -f infra/compose.yaml --env-file .env <args>` here.
 
-Remote (STUDIO_INFRA_REMOTE=<ssh host alias> set in .env): syncs infra/compose.yaml +
-infra/postgres/ + .env to STUDIO_INFRA_REMOTE_DIR on that host (scp — small, static
-files; no rsync dependency), then runs the same compose command over ssh there. Use
-this when the local Docker engine can't run (e.g. no virtualization support) but a
-Docker host is reachable over SSH/Tailscale. See infra/environments/README.md.
+Remote (STUDIO_INFRA_REMOTE=<ssh host alias> set in .env): syncs infra/compose.yaml,
+the Postgres bootstrap files, the committed Nakama runtime bundle/config, and .env to
+STUDIO_INFRA_REMOTE_DIR on that host (scp — small, static files; no rsync dependency),
+then runs the same compose command over ssh there. Use this when the local Docker
+engine cannot run but a Docker host is reachable over SSH/Tailscale. See
+infra/environments/README.md.
 """
 
 from __future__ import annotations
@@ -38,7 +39,8 @@ def _remote_expr(path: str) -> str:
 
 
 def _sync(remote: str, remote_dir: str) -> int:
-    mkdir = subprocess.call(["ssh", remote, f"mkdir -p {_remote_expr(remote_dir)}"])
+    remote_nakama_dir = f"{remote_dir.rstrip('/')}/nakama"
+    mkdir = subprocess.call(["ssh", remote, f"mkdir -p {_remote_expr(remote_nakama_dir)}"])
     if mkdir != 0:
         return mkdir
     copy_infra = subprocess.call(
@@ -53,6 +55,18 @@ def _sync(remote: str, remote_dir: str) -> int:
     )
     if copy_infra != 0:
         return copy_infra
+    copy_nakama = subprocess.call(
+        [
+            "scp",
+            "-r",
+            "-q",
+            str(REPO / "infra" / "nakama" / "build"),
+            str(REPO / "infra" / "nakama" / "local.yml"),
+            f"{remote}:{remote_nakama_dir}/",
+        ]
+    )
+    if copy_nakama != 0:
+        return copy_nakama
     env_file = REPO / ".env"
     if env_file.is_file():
         return subprocess.call(["scp", "-q", str(env_file), f"{remote}:{remote_dir}/.env"])

@@ -18,7 +18,6 @@ import argparse
 import hashlib
 import json
 import re
-import subprocess
 import sys
 from pathlib import Path
 
@@ -32,7 +31,9 @@ GENERATED = REPO / "assets-generated"
 CACHE_PATH = GENERATED / ".cache.json"
 REPORTS = GENERATED / "reports"
 PROFILES = ["desktop_high", "browser_webgpu", "browser_webgl", "mobile_high", "mobile_low"]
-RESULT_RE = re.compile(r"^(ASSET_VALIDATE_RESULT|EXPORT_RESULT|PREVIEW_RESULT|MAKE_SAMPLE_RESULT) (.+)$")
+RESULT_RE = re.compile(
+    r"^(ASSET_VALIDATE_RESULT|EXPORT_RESULT|PREVIEW_RESULT|MAKE_SAMPLE_RESULT) (.+)$"
+)
 
 
 def blender_bin() -> str:
@@ -59,8 +60,7 @@ def run_blender(blend: Path | None, script: str, extra: list[str], timeout: int 
     if not result:
         tail = ((proc.stdout or "") + (proc.stderr or ""))[-2500:]
         raise SystemExit(
-            f"Blender produced no result marker (script {script}).\n"
-            f"--- output tail ---\n{tail}"
+            f"Blender produced no result marker (script {script}).\n--- output tail ---\n{tail}"
         )
     result["_exit"] = proc.returncode
     return result
@@ -138,7 +138,6 @@ def cmd_validate(blend: Path) -> int:
     REPORTS.mkdir(parents=True, exist_ok=True)
     report_path = REPORTS / f"{meta['asset_id']}.validate.json"
     report_path.write_text(json.dumps(result, indent=2), encoding="utf-8")
-    failed = [c for c in result.get("checks", []) if c["level"] == "error"]
     for check in result.get("checks", []):
         if check["level"] != "ok":
             print(f"  [{check['level'].upper()}] {check['id']}: {check['msg']}")
@@ -225,7 +224,9 @@ def cmd_preview(blend: Path, frames: int) -> int:
     meta = load_meta(blend)
     out_path = GENERATED / "previews" / f"{meta['asset_id']}.png"
     result = run_blender(blend, "render_preview.py", [f"--out={out_path}", f"--frames={frames}"])
-    print(f"preview {blend.name}: {'OK' if result.get('ok') else 'FAILED'} -> {result.get('files')}")
+    print(
+        f"preview {blend.name}: {'OK' if result.get('ok') else 'FAILED'} -> {result.get('files')}"
+    )
     return 0 if result.get("ok") else 1
 
 
@@ -237,14 +238,16 @@ def cmd_report() -> int:
             data = json.load(fh)
         errors = [c for c in data.get("checks", []) if c["level"] == "error"]
         warns = [c for c in data.get("checks", []) if c["level"] == "warn"]
-        summary.append({
-            "asset": report_path.name.replace(".validate.json", ""),
-            "ok": data.get("ok", False),
-            "triangles": data.get("triangles"),
-            "materials": data.get("materials"),
-            "errors": len(errors),
-            "warnings": len(warns),
-        })
+        summary.append(
+            {
+                "asset": report_path.name.replace(".validate.json", ""),
+                "ok": data.get("ok", False),
+                "triangles": data.get("triangles"),
+                "materials": data.get("materials"),
+                "errors": len(errors),
+                "warnings": len(warns),
+            }
+        )
         print(
             f"{report_path.name.replace('.validate.json', ''):<24} "
             f"{'OK  ' if data.get('ok') else 'FAIL'} tris={data.get('triangles')} "

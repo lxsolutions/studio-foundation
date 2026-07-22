@@ -15,7 +15,7 @@ import argparse
 import json
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pylib"))
@@ -77,7 +77,7 @@ def stamp_build_info(project: Path, preset: str) -> None:
     info = {
         "version": f"{version}+{sha}",
         "git_commit": sha,
-        "built_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "built_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "channel": preset,
     }
     (project / "build_info.json").write_text(json.dumps(info, indent=2), encoding="utf-8")
@@ -97,8 +97,9 @@ def expected_outputs(project: Path, preset: str) -> list[Path]:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--game", default="templates/godot-game")
-    parser.add_argument("--preset", required=True,
-                        choices=["web-webgl", "web-webgpu", "android", "ios"])
+    parser.add_argument(
+        "--preset", required=True, choices=["web-webgl", "web-webgpu", "android", "ios"]
+    )
     parser.add_argument("--debug", action="store_true", help="export debug build")
     args = parser.parse_args()
     senv.load_dotenv()
@@ -129,14 +130,12 @@ def main() -> int:
 
     mode = "--export-debug" if args.debug else "--export-release"
     try:
-        proc = senv.run(
-            [godot, "--headless", "--path", str(project), "--import"], timeout=300
-        )
+        proc = senv.run([godot, "--headless", "--path", str(project), "--import"], timeout=300)
         proc = senv.run(
             [godot, "--headless", "--path", str(project), mode, args.preset], timeout=900
         )
-    except subprocess.TimeoutExpired:
-        raise SystemExit("godot export timed out")
+    except subprocess.TimeoutExpired as error:
+        raise SystemExit("godot export timed out") from error
     output_text = (proc.stdout or "") + (proc.stderr or "")
 
     missing = [p for p in expected_outputs(project, args.preset) if not p.exists()]
@@ -152,7 +151,9 @@ def main() -> int:
             size = output.stat().st_size
             total += size
             print(f"  {output.relative_to(project)}  {size / 1024:.0f} KiB")
-    print(f"export '{args.preset}' OK -> {project / 'exports' / args.preset}  (total {total / 1048576:.1f} MiB)")
+    print(
+        f"export '{args.preset}' OK -> {project / 'exports' / args.preset}  (total {total / 1048576:.1f} MiB)"
+    )
     return 0
 
 

@@ -54,3 +54,17 @@ func test_close_propagates() -> void:
 	assert_false(client.is_open())
 	assert_false(server.is_open())
 	assert_eq(reasons.size(), 1)
+
+
+func test_pair_does_not_form_refcount_cycle() -> void:
+	var refs: Array[WeakRef] = _make_unowned_pair()
+	assert_eq(refs[0].get_ref(), null, "client leaked through peer cycle")
+	assert_eq(refs[1].get_ref(), null, "server leaked through peer cycle")
+
+
+func _make_unowned_pair() -> Array[WeakRef]:
+	var pair: Array = StudioLoopbackTransport.make_pair()
+	return [
+		weakref(pair[0] as StudioLoopbackTransport),
+		weakref(pair[1] as StudioLoopbackTransport),
+	]

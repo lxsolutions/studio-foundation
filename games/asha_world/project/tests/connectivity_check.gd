@@ -4,7 +4,8 @@ extends SceneTree
 ##   godot --headless --path project --script res://tests/connectivity_check.gd
 ## Env: STUDIO_API_BASE (default http://127.0.0.1:8080),
 ##      STUDIO_WS_URL (default ws://127.0.0.1:8081)
-## Prints one CONNECTIVITY_RESULT json line and exits 0 on full success.
+## Prints one CONNECTIVITY_RESULT JSON line and exits 0 only when the API,
+## PostgreSQL round trip, and WebSocket handshake all succeed.
 
 const TIMEOUT_MS: int = 8000
 
@@ -44,7 +45,11 @@ func _initialize() -> void:
 	result["session"] = str(handshake.get("session", ""))
 
 	print("CONNECTIVITY_RESULT " + JSON.stringify(result))
-	var ok: bool = bool(result["api_health"]) and bool(result["ws_handshake"])
+	var ok: bool = (
+		bool(result["api_health"])
+		and bool(result["db_roundtrip"])
+		and bool(result["ws_handshake"])
+	)
 	quit(0 if ok else 1)
 
 

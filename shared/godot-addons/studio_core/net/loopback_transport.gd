@@ -7,15 +7,15 @@ extends StudioTransport
 ##   var server: StudioLoopbackTransport = pair[1]
 
 var _out_queue: Array[Dictionary] = []
-var _peer: StudioLoopbackTransport = null
+var _peer_ref: WeakRef = null
 var _open: bool = false
 
 
 static func make_pair() -> Array:
 	var a: StudioLoopbackTransport = StudioLoopbackTransport.new()
 	var b: StudioLoopbackTransport = StudioLoopbackTransport.new()
-	a._peer = b
-	b._peer = a
+	a._peer_ref = weakref(b)
+	b._peer_ref = weakref(a)
 	a._open = true
 	b._open = true
 	return [a, b]
@@ -27,7 +27,8 @@ func connect_to(_url: String) -> Error:
 
 
 func send_envelope(envelope: Dictionary) -> Error:
-	if not _open or _peer == null:
+	var peer: StudioLoopbackTransport = _peer()
+	if not _open or peer == null:
 		return ERR_CONNECTION_ERROR
 	if not envelope.has("seq"):
 		envelope["seq"] = seq()
@@ -35,7 +36,7 @@ func send_envelope(envelope: Dictionary) -> Error:
 	var decoded: Dictionary = StudioProtocol.decode(StudioProtocol.encode(envelope))
 	if not bool(decoded.get("ok", false)):
 		return ERR_INVALID_DATA
-	_peer._out_queue.append(decoded["envelope"])
+	peer._out_queue.append(decoded["envelope"])
 	return OK
 
 
@@ -49,9 +50,18 @@ func close(reason: String = "client closing") -> void:
 	if _open:
 		_open = false
 		disconnected.emit(reason)
-		if _peer != null and _peer._open:
-			_peer._open = false
-			_peer.disconnected.emit("peer closed")
+		var peer: StudioLoopbackTransport = _peer()
+		_peer_ref = null
+		if peer != null and peer._open:
+			peer._open = false
+			peer._peer_ref = null
+			peer.disconnected.emit("peer closed")
+
+
+func _peer() -> StudioLoopbackTransport:
+	if _peer_ref == null:
+		return null
+	return _peer_ref.get_ref() as StudioLoopbackTransport
 
 
 func is_open() -> bool:

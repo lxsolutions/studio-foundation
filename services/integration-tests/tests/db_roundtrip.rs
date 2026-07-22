@@ -18,7 +18,10 @@ fn database_url() -> Option<String> {
 async fn migrations_apply_and_bootstrap_check_roundtrips() {
     let url = database_url().expect("DATABASE_URL required for -- --ignored tests");
     let pool = connect_pool(&url).await.expect("db reachable");
-    MIGRATOR.run(&pool).await.expect("migrations apply from empty or current state");
+    MIGRATOR
+        .run(&pool)
+        .await
+        .expect("migrations apply from empty or current state");
 
     let app = build_router(AppState {
         pool: Some(pool.clone()),

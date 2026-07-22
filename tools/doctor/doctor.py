@@ -142,10 +142,10 @@ def collect() -> list[Check]:
     add(
         Check(
             "node",
-            "optional",
+            "required",
             "ok" if node else "missing",
             node or "not found",
-            "Node 22 LTS — only needed for Playwright browser smoke tests",
+            "Node 22 LTS — Nakama module builds/tests and Playwright browser smoke tests",
         )
     )
 

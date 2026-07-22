@@ -68,7 +68,12 @@ impl WorldState {
     }
 
     /// Consume units if available. Returns true on success (and deducts).
-    pub fn consume_stockpile(&mut self, faction: FactionId, resource: Resource, units: u64) -> bool {
+    pub fn consume_stockpile(
+        &mut self,
+        faction: FactionId,
+        resource: Resource,
+        units: u64,
+    ) -> bool {
         let Some(stock) = self
             .stockpiles
             .get_mut(&faction)

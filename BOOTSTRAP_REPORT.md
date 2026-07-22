@@ -11,7 +11,7 @@ Nothing below is claimed without a recorded command run on this date.
 | Rust cargo 1.97.1 `x86_64-pc-windows-gnu` | OK — links via WinLibs MinGW (see fix below) |
 | Godot 4.7.1.stable.official.a13da4feb (winget) + official web export templates | OK |
 | Blender 5.2.0 | OK (manual) |
-| Node 22.20.0 | OK (optional) |
+| Node 22.20.0 | OK (required for Nakama runtime builds/tests) |
 | Docker client 29.6.1 (local) | Still BLOCKED locally — "Virtualization support not detected": VT-x/AMD-V disabled in BIOS/UEFI; needs firmware toggle + reboot (user action). Worked around, not fixed (see below). |
 | Docker via <remote-docker-host> (STUDIO_INFRA_REMOTE) | OK — `just services-up`/`db-migrate`/`test-db` all run infra/compose.yaml on <remote-docker-host> (Linux, Tailscale) over SSH; see below |
 | PostgreSQL <remote-docker-host>:5432 (<remote-docker-host>, via compose) | OK — accepting connections, migrations applied, DB-backed integration tests pass (see below) |

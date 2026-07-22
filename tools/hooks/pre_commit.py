@@ -24,14 +24,27 @@ SECRET_PATTERNS = [
     (re.compile(r"\bAKIA[0-9A-Z]{16}\b"), "AWS access key id"),
     (re.compile(r"\bsk-[A-Za-z0-9]{20,}T3BlbkFJ[A-Za-z0-9]{20,}\b"), "OpenAI API key"),
     (re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{10,}\b"), "Slack token"),
-    (re.compile(r"(?i)\b(?:api[_-]?key|secret|password|token)\b\s*[:=]\s*['\"][^'\"\s]{16,}['\"]"), "hardcoded credential"),
+    (
+        re.compile(
+            r"(?i)\b(?:api[_-]?key|secret|password|token)\b\s*[:=]\s*['\"][^'\"\s]{16,}['\"]"
+        ),
+        "hardcoded credential",
+    ),
 ]
 SECRET_EXEMPT_SUFFIXES = (".example", ".md")
-SECRET_EXEMPT_VALUES = ("studio_dev_password", "studio_test_password", "studio_dev_readonly", "changeme", "placeholder")
+SECRET_EXEMPT_VALUES = (
+    "studio_dev_password",
+    "studio_test_password",
+    "studio_dev_readonly",
+    "changeme",
+    "placeholder",
+)
 
 
 def sh(args: list[str]) -> str:
-    return subprocess.run(args, capture_output=True, text=True, encoding="utf-8", errors="replace").stdout
+    return subprocess.run(
+        args, capture_output=True, text=True, encoding="utf-8", errors="replace"
+    ).stdout
 
 
 def main() -> int:
@@ -59,7 +72,9 @@ def main() -> int:
             if not MIGRATION_RE.match(name):
                 problems.append(f"{path}: migration name must be NNNN_snake_case.sql")
             if state == "M":
-                problems.append(f"{path}: never edit an applied migration — add a new one (ADR 0005)")
+                problems.append(
+                    f"{path}: never edit an applied migration — add a new one (ADR 0005)"
+                )
 
         # size guard
         try:
@@ -79,9 +94,10 @@ def main() -> int:
             meta = Path(path).with_suffix("")  # crate_a.blend -> crate_a
             meta_json = str(meta) + ".meta.json"
             staged = {p for _, p in entries}
-            if meta_json.replace("\\", "/") not in {s.replace("\\", "/") for s in staged} and not Path(
-                meta_json
-            ).is_file():
+            if (
+                meta_json.replace("\\", "/") not in {s.replace("\\", "/") for s in staged}
+                and not Path(meta_json).is_file()
+            ):
                 problems.append(f"{path}: master asset requires sidecar {meta_json} (ADR 0006)")
 
         # secret scan on text-ish staged content

@@ -86,7 +86,9 @@ pub fn settle(state: &mut WorldState, event: &WorldEvent) -> Settlement {
                 };
             }
             Settlement {
-                summary: format!("faction {faction:?} factory produced {item} ({refined_units} alloy)"),
+                summary: format!(
+                    "faction {faction:?} factory produced {item} ({refined_units} alloy)"
+                ),
                 applied: true,
             }
         }

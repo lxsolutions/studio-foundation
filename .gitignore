@@ -36,8 +36,15 @@ assets-generated/
 # --- Exports / build outputs ---
 exports/
 build/
+# Tool source lives under this otherwise generated-output name.
+!tools/build/
+!tools/build/*.py
 dist/
 *.pck
+# Nakama runtime module is committed (compose mounts it read-only; don't force a
+# build step just to start the service)
+!infra/nakama/build/
+!infra/nakama/build/index.js
 *.wasm
 
 # --- Engine source cache (fetched by engine/scripts, never committed) ---

@@ -1,0 +1,13 @@
+# Nakama dev config (local, loopback-bound via compose port mapping).
+# Production values live outside this repo (infra/environments).
+name: nakama
+data_dir: /nakama/data
+
+logger:
+  level: INFO
+
+runtime:
+  js_entrypoint: index.js
+
+socket:
+  server_key: defaultkey # dev only — override in any non-local environment

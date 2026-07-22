@@ -22,3 +22,6 @@ the commented example there — to run it on that host instead. This is still a
 development-only config knob: it changes *where* the loopback-equivalent binding
 lives (that host's own private/Tailscale interface, never `0.0.0.0`), not the
 one-rule-above-the-line that secrets/config stay out of the repo.
+The remote wrapper syncs the committed Nakama runtime bundle and local config with
+the Postgres bootstrap files. When enabling that profile remotely, also set
+`STUDIO_NAKAMA_BIND_HOST` to the host's private mesh address.
