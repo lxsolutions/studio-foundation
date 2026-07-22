@@ -26,6 +26,10 @@ production. No ORM — SQLx with SQL migrations.
   writes from another owner.
 - Migrations are versioned, forward-only files (`NNNN_description.sql`); naming is
   enforced by the pre-commit hook. Never edit an applied migration — add a new one.
+- Each owner keeps its SQLx history in its own schema (`platform._sqlx_migrations`,
+  `game_<id>._sqlx_migrations`). A game runner creates its schema, sets that schema
+  as the migration connection's exclusive `search_path`, then runs its embedded
+  migrator. Unrelated owners may therefore each have a `0001` without collision.
 - Dev seed data: `infra/postgres/seed.sql` via `just db-seed`; reset via `just
   db-reset`; logical backup/restore via `just db-backup` / `just db-restore`.
 

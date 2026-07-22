@@ -24,6 +24,9 @@ def load_script(name: str, path: Path):
 
 run_all = load_script("studio_ci_run_all", REPO / "scripts" / "ci" / "run_all.py")
 secret_scan = load_script("studio_ci_secret_scan", REPO / "tools" / "ci" / "secret_scan.py")
+workflow_validation = load_script(
+    "studio_ci_workflow_validation", REPO / "tools" / "ci" / "validate_workflows.py"
+)
 
 
 class CiRunnerTests(unittest.TestCase):
@@ -51,7 +54,17 @@ class CiRunnerTests(unittest.TestCase):
         self.assertEqual(self.run_silently("nightly", runner), 0)
         self.assertEqual(
             called,
-            ["test", "lint", "secret-scan", "test-db", "audit", "attribution"],
+            [
+                "test",
+                "lint",
+                "secret-scan",
+                "test-generated",
+                "test-db",
+                "release-validate",
+                "audit",
+                "sbom",
+                "attribution",
+            ],
         )
 
     def test_stage_stops_and_propagates_failure(self) -> None:
@@ -104,6 +117,44 @@ class SecretScanTests(unittest.TestCase):
         self.assertEqual(secret_scan.path_problem(Path(".env")), "environment file")
         self.assertEqual(secret_scan.path_problem(Path(".env.local")), "environment file")
         self.assertIsNone(secret_scan.path_problem(Path(".env.example")))
+
+
+class WorkflowPolicyTests(unittest.TestCase):
+    def validate_text(self, content: str, name: str = "policy.yml") -> list[str]:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / name
+            path.write_text(content, encoding="utf-8")
+            return workflow_validation.validate_file(path)
+
+    def test_current_studio_workflow_satisfies_policy(self) -> None:
+        workflow = REPO / ".github" / "workflows" / "validate.yml"
+        self.assertEqual(workflow_validation.validate_file(workflow), [])
+
+    def test_untrusted_pull_request_cannot_use_self_hosted_runner(self) -> None:
+        problems = self.validate_text(
+            """on:
+  pull_request:
+jobs:
+  unsafe:
+    runs-on: [self-hosted, windows]
+    steps:
+      - run: echo unsafe
+"""
+        )
+        self.assertTrue(any("not restricted to trusted pushes" in item for item in problems))
+
+    def test_external_actions_require_immutable_commit_pin(self) -> None:
+        problems = self.validate_text(
+            """on:
+  push:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+"""
+        )
+        self.assertTrue(any("not pinned to a full commit" in item for item in problems))
 
 
 if __name__ == "__main__":

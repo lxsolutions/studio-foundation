@@ -2,54 +2,63 @@
 
 - Status: Accepted
 - Date: 2026-07-19
+- Last amended: 2026-07-21
 
 ## Context
 
-Official Godot's browser export today is WebGL 2 ("Compatibility" renderer). The
-community fork `dwalter/godotwebgpu` (MIT, self-described **beta**, largely
-AI-generated per its README) adds a WebGPU backend claiming large FPS gains and support
-for the Mobile renderer + compute shaders in browsers. It is based on Godot
-**4.6.2-stable** while official stable is **4.7.1** — the fork lags upstream.
+Official Godot's browser export is WebGL 2 (Compatibility renderer). The
+community `dwalter/godotwebgpu` fork (MIT, self-described beta, and largely
+AI-generated per its README) adds a WebGPU backend for the Mobile renderer and
+compute-capable browser workloads.
 
-Risks: beta quality, single-maintainer bus factor, AI-generated code provenance,
-version lag, and the possibility that official Godot ships its own WebGPU backend.
+The upstream fork originally lagged at Godot 4.6.2 while the editor of record
+was 4.7.1. The studio completed and validated a 4.7.1 port in its maintained
+`lxsolutions/godot-webgpu` fork. Persistent risks remain: beta quality, a small
+maintainer surface, AI-generated code provenance, recurring version lag, and
+the possibility that official Godot ships its own WebGPU backend.
 
 ## Decision
 
 1. The fork is an **unofficial browser export backend only**. Games are authored,
    tested, and natively exported with official Godot (ADR 0001).
-2. Exact fork commit, base version, Emscripten version, SCons version, build flags, and
-   patch checksums are pinned in `engine/engine-lock.toml`. **Never track a branch.**
-3. Studio changes to the engine live as an explicit patch series in `engine/patches/`
-   applied by `engine/scripts/fetch.py`. No direct pushes to a mutable fork branch.
-4. Game code must not call fork-only APIs directly. Anything fork-specific is wrapped
-   behind `studio_core` platform interfaces (`StudioPlatform`, render profiles), so a
-   WebGL-only or official-WebGPU future needs no game changes.
-5. **WebGL 2 Compatibility export is a maintained, always-green fallback.** Browser CI
-   runs both exports; WebGPU may be red without blocking releases, WebGL may not.
-6. Because the fork is based on 4.6.2: shared code (`studio_core`) and template
-   projects avoid 4.7-only APIs until the fork rebases. CI's fork-export job is the
-   enforcement point.
+2. Exact fork commit, base version, Emscripten version, SCons version, build
+   flags, and patch checksums are pinned in `engine/engine-lock.toml`. Production
+   builds never track a moving branch.
+3. Studio engine changes live in the maintained backend fork or an explicit
+   `engine/patches/` series. Official Godot remains an unmodified upstream.
+4. Game code must not call fork-only APIs directly. Fork behavior stays behind
+   `studio_core` platform interfaces and runtime quality profiles.
+5. WebGL 2 is the maintained, always-green fallback. WebGPU may be red without
+   blocking a release; WebGL may not.
+6. The maintained fork line must match the editor-of-record minor before WebGPU
+   can be claimed as green. Future updates use an isolated `engine-rebase`
+   worktree, conflict classification, candidate build, browser smoke, visual
+   comparison, and benchmark gate.
 
-## Rebase procedure (summary; full runbook in docs/runbooks/godot-fork-rebase.md)
+## Rebase procedure
 
-fetch both pins → apply patch series → build editor + web templates → run headless test
-suite + WebGPU smoke scene + visual regression vs WebGL baseline → update lock file
-checksums → land as a reviewed PR.
+Fetch both pins → prepare an isolated candidate worktree → classify and resolve
+conflicts → build candidate templates without replacing pinned artifacts → run
+headless tests, WebGPU smoke, visual regression, and benchmarks → update exact
+pins and checksums → land as a reviewed PR.
+
+The authoritative procedure is `docs/runbooks/godot-fork-rebase.md`.
 
 ## Switch / abandon triggers
 
-- **Adopt official WebGPU** the moment godotengine/godot ships a WebGPU web backend
-  that passes our smoke + visual + performance suites — the fork is then dropped.
-- **Abandon the fork** if: rebases fall >2 minors behind official, upstream-breaking
-  regressions stay unfixed >90 days, or maintenance stops. Fallback is WebGL 2 export,
-  which is why it must stay green.
+- **Adopt official WebGPU** when godotengine/godot ships a WebGPU web backend
+  that passes the studio smoke, visual, and performance suites.
+- **Abandon the fork** if rebases fall more than two minor releases behind,
+  upstream-breaking regressions remain unfixed for more than 90 days, or
+  maintenance stops. WebGL remains the shipping fallback.
 
 ## Consequences
 
-- Browser WebGPU is a *quality tier*, not a platform requirement; shipping never
-  depends on the fork.
-- Engine rebuilds are reproducible from `engine-lock.toml` alone (fetch → patch →
-  build → checksum), and never require committing the engine tree to this repo.
-- We must not claim WebGPU production-readiness without recorded test results
-  (BOOTSTRAP_REPORT.md tracks current evidence).
+- Browser WebGPU is a quality tier, not a platform requirement.
+- Engine sources and rebase worktrees remain disposable cache state; exact pins,
+  patches, build flags, and evidence remain the source of truth.
+- Candidate templates are installed under
+  `engine/artifacts/candidates/<workspace>/templates`; they do not replace
+  pinned artifacts during evaluation.
+- WebGPU production-readiness is never claimed without recorded browser and
+  visual evidence in `BOOTSTRAP_REPORT.md`.

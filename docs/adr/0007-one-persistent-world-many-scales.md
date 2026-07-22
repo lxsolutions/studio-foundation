@@ -47,6 +47,17 @@ reality at different scales**:
 6. **Players move between scales freely** — character, organization,
    possessions, reputation, and history follow them across all modes.
 
+## Current implementation
+
+- Godot and other real-time clients submit the canonical externally tagged event
+  JSON over the shared WebSocket protocol.
+- Authenticated public submissions enter through Nakama's `asha_world_event` RPC,
+  which forwards to a bearer-protected private adapter on the Asha Rust server.
+- The adapter settles through the same shared `WorldSim` using a row-locked
+  PostgreSQL transaction. Every first-seen canonical event and its resulting
+  snapshot commit atomically; the append-only ledger is the traceable history and
+  database idempotency authority. Process memory changes only after commit.
+
 ## Consequences
 
 - `shared/protocol/` must define the canonical world-event schema; it becomes

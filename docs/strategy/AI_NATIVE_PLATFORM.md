@@ -109,8 +109,10 @@ on, the way Unity became the default for the last.
    WorldEvents, idempotent settle, bounded-impact economy) + dedicated-server
    `run_server_with` + protocol `WorldEventSubmit`/`WorldEventResult` (Rust,
    GDScript mirror, golden fixtures) + a `world_slice` client loop driving the
-   events over WebSocket. Remaining: run the server for live play, PostgreSQL
-   persistence (ADR 0005), and real 3D gameplay.
+   events over WebSocket. Nakama now authenticates public RPC callers and forwards
+   canonical events to a private Rust adapter; first-seen results commit an append-only
+   event ledger and recovery snapshot atomically before acknowledgement, with database-backed idempotency and a live replay probe.
+   Remaining: deploy the full path for live play and build real 3D gameplay.
 3. Prove the agent flywheel on it: agents drive iteration via studio-mcp +
    godot-fork-webgpu skill (build, test, capture, compare, fix) with a human only
    steering. Measure agent-landed vs human-landed changes.
@@ -120,7 +122,7 @@ on, the way Unity became the default for the last.
 - `just engine-validate` as CI gate (visual regression as code).
 - studio-mcp engine lifecycle complete (classify, build status, capture, compare).
 - Mobile export evidence (Android first; iOS needs macOS hardware).
-- Nakama + PostgreSQL authority live behind the world-sim.
+- Nakama social/matchmaking plus the Rust/PostgreSQL authority path deployed live.
 
 ### Phase 3 — Open the world
 - The Deep + Plato's Plaza as two scales of the same world, browser-native.

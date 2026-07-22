@@ -49,12 +49,19 @@ services:
         condition: service_healthy
     environment:
       NAKAMA_DATABASE_ADDRESS: "${STUDIO_PG_USER:-studio}:${STUDIO_PG_PASSWORD:-studio_dev_password}@postgres:5432/${STUDIO_PG_DB:-studio}"
+      ASHA_AUTHORITY_URL: "${ASHA_AUTHORITY_URL:-http://host.docker.internal:8082/internal/v1/world-events}"
+      ASHA_AUTHORITY_TOKEN: "${ASHA_AUTHORITY_TOKEN:-}"
     entrypoint:
       - "/bin/sh"
       - "-ec"
       - >-
         /nakama/nakama migrate up --database.address "$${NAKAMA_DATABASE_ADDRESS}" &&
         exec /nakama/nakama --config /nakama/data/local.yml
+        --database.address "$${NAKAMA_DATABASE_ADDRESS}"
+        --runtime.env "ASHA_AUTHORITY_URL=$${ASHA_AUTHORITY_URL}"
+        --runtime.env "ASHA_AUTHORITY_TOKEN=$${ASHA_AUTHORITY_TOKEN}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "${STUDIO_NAKAMA_BIND_HOST:-127.0.0.1}:7349:7349"   # gRPC API
       - "${STUDIO_NAKAMA_BIND_HOST:-127.0.0.1}:7350:7350"   # HTTP/WebSocket API

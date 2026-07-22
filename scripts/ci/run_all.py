@@ -14,7 +14,8 @@ REPO = Path(__file__).resolve().parents[2]
 PR_RECIPES: tuple[str, ...] = ("test", "lint", "secret-scan")
 STAGE_RECIPES: dict[str, tuple[str, ...]] = {
     "pr": PR_RECIPES,
-    "nightly": PR_RECIPES + ("test-db", "audit", "attribution"),
+    "nightly": PR_RECIPES
+    + ("test-generated", "test-db", "release-validate", "audit", "sbom", "attribution"),
 }
 
 RecipeRunner = Callable[[str], int]

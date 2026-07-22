@@ -26,9 +26,10 @@ func _ready() -> void:
 	version.modulate = Color(1, 1, 1, 0.5)
 	box.add_child(version)
 
-	_button(box, "The Deep", func() -> void: _studio.router.go_to("res://scenes/deep_mine.tscn"))
+	_button(box, "The Deep", func() -> void: _studio.router.go_to("res://scenes/the_deep.tscn"))
 	_button(box, "Battle (needs vehicle)", func() -> void: _studio.router.go_to("res://scenes/battle_outpost.tscn"))
 	_button(box, "World Slice", func() -> void: _studio.router.go_to("res://scenes/world_slice.tscn"))
+	_button(box, "Old Deep Mine (3D)", func() -> void: _studio.router.go_to("res://scenes/deep_mine.tscn"))
 	_button(box, "Play", func() -> void: _studio.router.go_to("res://scenes/game.tscn"))
 	_button(box, "Settings", func() -> void: _studio.router.go_to("res://scenes/settings_menu.tscn"))
 	if OS.is_debug_build() and _studio.flags.is_enabled("show_health_screen", true):

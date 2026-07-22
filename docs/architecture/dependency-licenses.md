@@ -30,7 +30,7 @@ Exact resolved versions live in the lockfiles (`Cargo.lock`, `uv.lock`,
 | Docker Engine/Compose | any current | Apache-2.0 | Local infrastructure |
 | Git | ≥2.40 | GPL-2.0 (tool) | VCS (standalone tool) |
 
-## Rust workspace (services/) — direct dependencies
+## Rust backends (services/ and games/*/server) — direct dependencies
 
 Pure-Rust policy (no C compilation) per ADR 0004. All verified permissive:
 
@@ -48,8 +48,9 @@ Pure-Rust policy (no C compilation) per ADR 0004. All verified permissive:
 | uuid (v7) | MIT OR Apache-2.0 | Identifiers |
 | rand | MIT OR Apache-2.0 | Seeds/nonces (non-crypto uses documented) |
 
-Full transitive audit: `just sbom` (cargo-sbom/cargo-license output under
-`build/sbom/`), `just audit` (cargo-audit RustSec).
+Full transitive inventory: `just sbom` writes SPDX 2.3 under `build/sbom/`.
+`just audit` queries OSV for exact Cargo, PyPI, and npm lockfile versions and
+fails closed on network or response errors.
 
 ## Python tooling (tools/) — direct dependencies
 
@@ -65,8 +66,22 @@ Full transitive audit: `just sbom` (cargo-sbom/cargo-license output under
 |---|---|---|---|
 | postgres | 17-alpine | PostgreSQL License | default |
 | jaegertracing/jaeger | 2.x | Apache-2.0 | `observability` (optional) |
-| registry.heroiclabs.com/heroiclabs/nakama | 3.22.0 | Apache-2.0 | `nakama` (optional identity/social/matchmaking authority); active upstream, self-hostable; custom auth/match services rejected as premature duplication |
+| registry.heroiclabs.com/heroiclabs/nakama | 3.22.0 | Apache-2.0 | `nakama` (public identity/social/matchmaking and RPC boundary); active upstream, self-hostable; world events forward to the private Rust authority adapter |
 | (object storage) | — | — | **Not included.** MinIO moved to AGPL + feature-gutted community builds; if a demonstrated need arises, SeaweedFS (Apache-2.0) is the reviewed candidate — see ADR 0013. |
+
+## GitHub Actions
+
+| Component | Immutable pin | License | Role / maintenance review |
+|---|---|---|---|
+| actions/checkout | `34e114876b0b11c390a56381ad16ebd13914f8d5` (v4.3.1) | MIT | Official GitHub action; active; checkout on hosted and trusted self-hosted jobs |
+| actions/setup-python | `a309ff8b426b58ec0e2a45f0f869d46889d02405` (v6.2.0) | MIT | Official GitHub action; active; hosted PR policy runner only |
+| actions/upload-artifact | `ea165f8d65b6e75b540449e92b4886f43607fa02` (v4.6.2) | MIT | Official GitHub action; active; failure-only visual evidence upload |
+
+Full commit pins are mandatory because release tags are mutable references. Raw
+ad-hoc download/setup scripts were rejected: they duplicate maintained runner
+integration and create a larger bootstrap verification surface. Newer Node 24
+action majors are adopted on self-hosted jobs only after the runner version is
+verified; hosted jobs may adopt them independently.
 
 ## Browser testing
 

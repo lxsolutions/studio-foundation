@@ -70,5 +70,9 @@ one if it applies to everyone.
   see `infra/environments/README.md`), it binds that host's own private
   (Tailscale) interface instead, never `0.0.0.0` — still never the public
   internet, just relocated from loopback to a private mesh.
+- GitHub pull requests are untrusted input: they run policy checks only on
+  ephemeral hosted runners. Persistent self-hosted runners execute trusted
+  `main` pushes, schedules, or explicit dispatches only. External actions are
+  pinned to full commit SHAs; `tools/ci/validate_workflows.py` enforces this.
 - Reusable task recipes live in `docs/agents/skills/` — check there before
   reconstructing a workflow from scratch.

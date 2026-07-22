@@ -128,14 +128,9 @@ def cmd_psql(extra: list[str]) -> int:
     return run(compose("exec", "postgres", "psql", "-U", user, "-d", db, *extra), interactive=True)
 
 
-def cmd_test_env(command: list[str]) -> int:
-    """Ensure studio_test DB exists on the dev container, run CMD with
-    DATABASE_URL pointed at it (used by `just test-db`)."""
-    user, _ = pg_env()
-    values = senv.load_dotenv()
-    port = values.get("STUDIO_PG_PORT", "5432")
-    password = values.get("STUDIO_PG_PASSWORD", "studio_dev_password")
-    run(
+def ensure_test_database(user: str) -> int:
+    """Create studio_test only when absent, without treating normal reuse as an error."""
+    check = subprocess.run(
         compose(
             "exec",
             "-T",
@@ -145,10 +140,44 @@ def cmd_test_env(command: list[str]) -> int:
             user,
             "-d",
             "postgres",
+            "-tAc",
+            "SELECT 1 FROM pg_database WHERE datname = 'studio_test'",
+        ),
+        capture_output=True,
+    )
+    if check.returncode != 0:
+        sys.stderr.write((check.stderr or b"").decode(errors="replace"))
+        return check.returncode
+    if check.stdout.strip() == b"1":
+        return 0
+    return run(
+        compose(
+            "exec",
+            "-T",
+            "postgres",
+            "psql",
+            "-U",
+            user,
+            "-d",
+            "postgres",
+            "-v",
+            "ON_ERROR_STOP=1",
             "-c",
             "CREATE DATABASE studio_test",
-        ),
-    )  # exists-already error is fine
+        )
+    )
+
+
+def cmd_test_env(command: list[str]) -> int:
+    """Ensure studio_test DB exists on the dev container, run CMD with
+    DATABASE_URL pointed at it (used by `just test-db`)."""
+    user, _ = pg_env()
+    values = senv.load_dotenv()
+    port = values.get("STUDIO_PG_PORT", "5432")
+    password = values.get("STUDIO_PG_PASSWORD", "studio_dev_password")
+    database_code = ensure_test_database(user)
+    if database_code != 0:
+        return database_code
     host = senv.pg_host()
     env = dict(os.environ)
     env["DATABASE_URL"] = f"postgres://{user}:{password}@{host}:{port}/studio_test"

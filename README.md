@@ -29,8 +29,9 @@ git clone <this-repo> && cd studio-foundation
 just doctor        # what's installed, what's missing, what's required vs optional
 just bootstrap     # installs user-scope tools it safely can; prints manual steps
 just services-up   # PostgreSQL via Docker Compose
-just nakama-up     # optional identity/social authority + its PostgreSQL dependency
+just nakama-up     # optional public identity/RPC service + PostgreSQL dependency
 just test          # Rust + Python + protocol + Nakama + Godot headless tests
+# optional live authority proof: run `just asha-server`, then `just nakama-probe`
 ```
 
 No `just`? Bootstrap directly: `powershell scripts/bootstrap.ps1` (Windows) or
@@ -44,7 +45,8 @@ No `just`? Bootstrap directly: `powershell scripts/bootstrap.ps1` (Windows) or
 | `just test` / `just lint` | All fast tests / all linters |
 | `just test-rust` `just test-godot` `just test-python` | Narrow suites |
 | `just services-up` / `services-down` / `db-reset` / `db-seed` / `db-backup` | Local infra |
-| `just nakama-build` / `nakama-test` / `nakama-up` | Optional Nakama runtime module and service |
+| `just nakama-build` / `nakama-test` / `nakama-up` | Nakama public identity/RPC runtime and service |
+| `just asha-server` / `nakama-probe` | Run the private Rust authority and prove auth -> settlement -> idempotent replay |
 | `just asset-validate FILE` / `asset-export FILE` / `asset-cook PROFILE` | Blender pipeline |
 | `just godot-sync-addons` | Copy shared addon into game projects (run after addon edits) |
 | `just export-browser-webgl [GAME]` | WebGL2 browser export (works with stock templates) |
@@ -52,6 +54,11 @@ No `just`? Bootstrap directly: `powershell scripts/bootstrap.ps1` (Windows) or
 | `just run-browser-smoke` | Serve export + Playwright console-error smoke (Chrome/Edge) |
 | `just NAME=my_game DISPLAY_NAME="My Game" new-game` | Generate a game from the template |
 | `just engine-fetch` / `engine-build` | Reproduce engine artifacts from engine-lock.toml |
+| `just engine-rebase --dry-run --json` | Inspect or prepare an isolated WebGPU-fork update worktree |
+| `just benchmark-scene` | Run the finite Godot scene benchmark and emit structured metrics |
+| `just visual-baseline` / `visual-compare` | Capture browser-rendered visual baselines and enforce pixel tolerances |
+| `just release-validate --allow-dirty` / `sbom` / `audit` | Validate release policy, generate inventory, and query OSV |
+| `just demo-connectivity` | Prove Godot → API → PostgreSQL and Godot → game-server connectivity |
 | `just ci-local` | Run the same checks CI runs |
 
 ## Repository map
@@ -62,9 +69,9 @@ No `just`? Bootstrap directly: `powershell scripts/bootstrap.ps1` (Windows) or
 | `shared/godot-addons/studio_core/` | Reusable Godot addon: boot, logging, config, platform detection, render profiles, input, scenes, save, session, net transport, API client, i18n, a11y, audio/graphics settings, flags, manifests, seeded RNG, replay, dev console, perf overlay. |
 | `shared/protocol/` · `shared/schemas/` · `shared/test-fixtures/` | Cross-language protocol spec + golden fixtures; JSON schemas (asset metadata, provenance). |
 | `templates/godot-game/` | The game template: Godot project, server crate, asset dirs, docs, tests. |
-| `services/` | Rust workspace: `shared-protocol`, `control-api`, `dedicated-server`, `admin-cli`, `integration-tests`. |
+| `services/` | Rust workspace: `shared-protocol`, `control-api`, `dedicated-server`, `admin-cli`, `integration-tests`, `world-sim`. |
 | `tools/` | Asset pipeline, Blender scripts, doctor, generator, benchmark, release, screenshots, `studio-mcp`. |
-| `infra/` | Docker Compose, Postgres init/seed, Nakama runtime, observability profile, environment models. |
+| `infra/` | Docker Compose, Postgres init/seed, [Nakama authority bridge](infra/nakama/README.md), observability profile, environment models. |
 | `tests/` | Browser (Playwright), integration, performance, protocol, visual regression. |
 | `docs/` | Architecture, ADRs, agents, pipeline, browser/mobile, networking, performance, security, runbooks. |
 | `games/` | Generated game projects (e.g. `games/sandbox`, the living example). |

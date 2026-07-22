@@ -55,15 +55,24 @@ services-logs:
 observability-up:
     {{COMPOSE}} --profile observability up -d
 
-# Nakama identity/social authority (profile: nakama). Builds the TS module first.
+# Nakama public identity/RPC service (profile: nakama). Builds the TS module first.
 nakama-build:
     {{NPM}} --prefix infra/nakama run build
 
 nakama-test:
     {{NPM}} --prefix infra/nakama test
+    {{PY}} -m unittest discover -s infra/nakama/tests -p "test_*.py" -v
 
 nakama-up: nakama-build
     {{COMPOSE}} --profile nakama up -d --wait nakama
+
+# Asha's private Rust authority adapter (requires DATABASE_URL + ASHA_AUTHORITY_TOKEN).
+asha-server:
+    {{PY}} tools/cargo_env.py run --manifest-path games/asha_world/server/Cargo.toml
+
+# Live contract: device auth -> Nakama -> Rust settlement -> idempotent replay.
+nakama-probe *ARGS:
+    {{PY}} infra/nakama/live_probe.py {{ARGS}}
 
 db-migrate:
     {{PY}} tools/cargo_env.py run --manifest-path services/Cargo.toml -p studio-admin-cli -- migrate
@@ -91,6 +100,7 @@ test: test-rust test-python test-protocol nakama-test test-godot
 
 test-rust:
     {{PY}} tools/cargo_env.py test --manifest-path services/Cargo.toml --workspace
+    {{PY}} tools/cargo_env.py test --manifest-path games/asha_world/server/Cargo.toml
 
 # Python unit tests (currently the studio-mcp suite; add top-level test_*.py under
 # tools/ to grow this back into a broader discovery run)
@@ -107,7 +117,8 @@ test-godot:
 
 # DB-backed integration tests (requires `just services-up`)
 test-db:
-    {{PY}} tools/infra/db.py test-env -- cargo test --manifest-path services/Cargo.toml -p studio-integration-tests -- --ignored
+    {{PY}} tools/infra/db.py test-env -- {{PY}} tools/cargo_env.py test --manifest-path services/Cargo.toml -p studio-integration-tests -- --ignored
+    {{PY}} tools/infra/db.py test-env -- {{PY}} tools/cargo_env.py test --manifest-path games/asha_world/server/Cargo.toml -- --ignored
 
 test-mcp:
     uv run --project tools python -m unittest discover -s tools/studio-mcp/tests -v
@@ -123,17 +134,20 @@ lint: lint-rust lint-python lint-workflows
 lint-rust:
     {{PY}} tools/cargo_env.py fmt --manifest-path services/Cargo.toml --all -- --check
     {{PY}} tools/cargo_env.py clippy --manifest-path services/Cargo.toml --workspace --all-targets -- -D warnings
+    {{PY}} tools/cargo_env.py fmt --manifest-path games/asha_world/server/Cargo.toml -- --check
+    {{PY}} tools/cargo_env.py clippy --manifest-path games/asha_world/server/Cargo.toml --all-targets -- -D warnings
 
 lint-python:
-    uv run --project tools ruff check tools
-    uv run --project tools ruff format --check tools
+    uv run --project tools ruff check tools infra/nakama/live_probe.py infra/nakama/tests/test_live_probe.py
+    uv run --project tools ruff format --check tools infra/nakama/live_probe.py infra/nakama/tests/test_live_probe.py
 
 lint-workflows:
     uv run --project tools python tools/ci/validate_workflows.py
 
 fmt:
     cargo fmt --manifest-path services/Cargo.toml --all
-    uv run --project tools ruff format tools
+    cargo fmt --manifest-path games/asha_world/server/Cargo.toml
+    uv run --project tools ruff format tools infra/nakama/live_probe.py infra/nakama/tests/test_live_probe.py
 
 # ------------------------------------------------------------------ build
 
@@ -141,6 +155,7 @@ build: build-rust godot-sync-addons
 
 build-rust:
     {{PY}} tools/cargo_env.py build --manifest-path services/Cargo.toml --workspace
+    {{PY}} tools/cargo_env.py build --manifest-path games/asha_world/server/Cargo.toml
 
 # Copy shared/godot-addons/* into every game project (addons/ dirs are generated)
 godot-sync-addons:
@@ -220,13 +235,13 @@ engine-versions:
 engine-fetch:
     {{PY}} engine/scripts/engine.py fetch
 
-# Build editor/export templates from pinned sources (long; requires scons+emsdk)
+# Build templates from the pin or --workspace candidate (long; requires scons+emsdk)
 engine-build *ARGS:
     {{PY}} engine/scripts/engine.py build {{ARGS}}
 
 # Start a rebase workspace for updating the fork pin (see runbook godot-fork-rebase)
-engine-rebase:
-    {{PY}} engine/scripts/engine.py rebase
+engine-rebase *ARGS:
+    {{PY}} engine/scripts/engine.py rebase {{ARGS}}
 
 # Triage fork merge conflicts (mechanical/base-lag/fork-touched); --apply-safe resolves safe ones
 engine-classify-conflicts *ARGS:

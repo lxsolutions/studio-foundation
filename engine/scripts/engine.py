@@ -6,8 +6,8 @@ out-of-tree in engine/.cache (gitignored, never committed).
 
   python engine/scripts/engine.py versions   # print locked pins and local cache state
   python engine/scripts/engine.py fetch      # clone pinned official + fork sources
-  python engine/scripts/engine.py build      # (not yet implemented) scons template build
-  python engine/scripts/engine.py rebase     # (not yet implemented) fork rebase workspace
+  python engine/scripts/engine.py build      # build pinned WebGPU export templates
+  python engine/scripts/engine.py rebase     # prepare an isolated fork-merge workspace
 """
 
 from __future__ import annotations
@@ -19,6 +19,8 @@ import subprocess
 import sys
 import tomllib
 from pathlib import Path
+
+from rebase import RebaseError, cmd_rebase, rebase_workspace
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ENGINE_DIR = REPO_ROOT / "engine"
@@ -54,11 +56,17 @@ def cmd_versions(lock: dict) -> int:
     official = lock["godot"]["official"]
     fork = lock["godot"]["webgpu_fork"]
     toolchain = lock["toolchain"]
-    print(f"official godot : {official['tag']} @ {official['commit'][:12]}  ({official['repo']})")
-    print(f"webgpu fork    : base {fork['base']} @ {fork['commit'][:12]}  status={fork['status']}")
+    print(
+        f"official godot : {official['tag']} @ {official['commit'][:12]}  ({official['repo']})"
+    )
+    print(
+        f"webgpu fork    : base {fork['base']} @ {fork['commit'][:12]}  status={fork['status']}"
+    )
     print(f"                 ({fork['repo']})")
-    print(f"toolchain      : emscripten {toolchain['emscripten']}, scons {toolchain['scons']}, "
-          f"python {toolchain['python']}, rust {toolchain['rust']}")
+    print(
+        f"toolchain      : emscripten {toolchain['emscripten']}, scons {toolchain['scons']}, "
+        f"python {toolchain['python']}, rust {toolchain['rust']}"
+    )
     for name, key in (("official", "godot-official"), ("webgpu fork", "godot-webgpu")):
         dest = CACHE_DIR / key
         state = "cached" if (dest / ".git").is_dir() else "not fetched"
@@ -96,15 +104,28 @@ def _find_emsdk_env_bat(expected: str) -> Path | None:
     return None
 
 
-def cmd_build(lock: dict) -> int:
-    """Build web export templates from the pinned WebGPU fork.
+def artifact_destination(
+    source_dir: Path | None, engine_dir: Path = ENGINE_DIR
+) -> Path:
+    """Keep candidate templates separate from artifacts produced by the pinned fork."""
+    if source_dir:
+        return engine_dir / "artifacts" / "candidates" / source_dir.name / "templates"
+    return engine_dir / "artifacts" / "templates"
+
+
+def cmd_build(lock: dict, source_dir: Path | None = None) -> int:
+    """Build web export templates from the pinned fork or a candidate worktree.
 
     Requires: scons (tools venv `engine` group) and emsdk with the pinned
     emscripten already installed + activated (emsdk install X && emsdk activate X).
     """
-    fork_dir = CACHE_DIR / "godot-webgpu"
+    fork_dir = source_dir or CACHE_DIR / "godot-webgpu"
+    artifact_dir = artifact_destination(source_dir)
     if not (fork_dir / "SConstruct").is_file():
-        print("error: fork sources not fetched — run: just engine-fetch", file=sys.stderr)
+        print(
+            "error: engine source is not ready; fetch pins or prepare the selected workspace",
+            file=sys.stderr,
+        )
         return 2
     em_version = lock["toolchain"]["emscripten"]
     build_env = os.environ.copy()
@@ -123,7 +144,10 @@ def cmd_build(lock: dict) -> int:
         root = bat.parent
         em_dir = root / "upstream" / "emscripten"
         if not (em_dir / "emcc.bat").is_file():
-            print(f"error: {em_dir} has no emcc.bat — activate emsdk {em_version} first", file=sys.stderr)
+            print(
+                f"error: {em_dir} has no emcc.bat — activate emsdk {em_version} first",
+                file=sys.stderr,
+            )
             return 2
         print(f"[build] using emsdk at {root}")
         build_env["PATH"] = f"{em_dir};{root};" + build_env.get("PATH", "")
@@ -138,24 +162,26 @@ def cmd_build(lock: dict) -> int:
     for profile in ("target_release", "target_debug"):
         flags = targets[profile]
         print(f"[build] scons {' '.join(flags)} -j{jobs}", flush=True)
-        proc = subprocess.run([*scons, *flags, f"-j{jobs}"], cwd=fork_dir, env=build_env)
+        proc = subprocess.run(
+            [*scons, *flags, f"-j{jobs}"], cwd=fork_dir, env=build_env
+        )
         if proc.returncode != 0:
             print(f"[build] {profile} FAILED (exit {proc.returncode})", file=sys.stderr)
             rc = proc.returncode
             break
         print(f"[build] {profile} OK", flush=True)
     if rc == 0:
-        _install_templates(fork_dir)
+        _install_templates(fork_dir, artifact_dir)
     return rc
 
 
-def _install_templates(fork_dir: Path) -> None:
-    """Copy built web template zips into engine/artifacts/templates for export.
+def _install_templates(fork_dir: Path, dest: Path | None = None) -> None:
+    """Copy built web template zips into the selected artifact destination.
 
     scons names its output godot.web.template_{release,debug}.wasm32.zip, but
     export_presets.cfg's web-webgpu preset (custom_template/release, .../debug)
     points at ...webgpu.zip — rename on copy so the preset actually resolves."""
-    dest = ENGINE_DIR / "artifacts" / "templates"
+    dest = dest or ENGINE_DIR / "artifacts" / "templates"
     dest.mkdir(parents=True, exist_ok=True)
     zips = sorted((fork_dir / "bin").glob("godot.web.template_*.zip"))
     for z in zips:
@@ -167,21 +193,39 @@ def _install_templates(fork_dir: Path) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("command", choices=["versions", "fetch", "build", "rebase"])
-    args, _rest = parser.parse_known_args()
+    parser.add_argument(
+        "--official-ref", default="", help="official commit/tag (default: lock pin)"
+    )
+    parser.add_argument("--branch", default="", help="dedicated merge branch name")
+    parser.add_argument(
+        "--workspace", default="", help="directory name under engine/.cache/rebases"
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="report the plan without changing Git state",
+    )
+    parser.add_argument(
+        "--json", action="store_true", help="machine-readable rebase result"
+    )
+    args = parser.parse_args()
     lock = load_lock()
     if args.command == "versions":
         return cmd_versions(lock)
     if args.command == "fetch":
         return cmd_fetch(lock)
     if args.command == "build":
-        return cmd_build(lock)
-    print(
-        "error: 'engine rebase' is not implemented yet — see docs/runbooks/godot-fork-rebase.",
-        file=sys.stderr,
-    )
-    return 2
+        try:
+            source_dir = rebase_workspace(args.workspace) if args.workspace else None
+        except RebaseError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        return cmd_build(lock, source_dir)
+    return cmd_rebase(lock, args)
 
 
 if __name__ == "__main__":

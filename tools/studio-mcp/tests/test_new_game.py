@@ -47,6 +47,7 @@ class NewGameTests(unittest.TestCase):
             project = (destination / "project" / "project.godot").read_text(encoding="utf-8")
             config = (destination / "project" / "studio.config.json").read_text(encoding="utf-8")
             cargo = (destination / "server" / "Cargo.toml").read_text(encoding="utf-8")
+            server_main = (destination / "server" / "src" / "main.rs").read_text(encoding="utf-8")
             migration = (destination / "server" / "migrations" / "0001_game_init.sql").read_text(
                 encoding="utf-8"
             )
@@ -56,6 +57,8 @@ class NewGameTests(unittest.TestCase):
             self.assertIn('"game.id": "orbit_runner"', config)
             self.assertIn('name = "orbit_runner-server"', cargo)
             self.assertIn("game_orbit_runner", migration)
+            self.assertIn("SET search_path TO game_orbit_runner", server_main)
+            self.assertIn("migrate_game_schema", server_main)
             self.assertIn('"git_commit": "unknown"', build_info)
             self.assertTrue(
                 (destination / "project" / "addons" / "studio_core" / "studio.gd").is_file()

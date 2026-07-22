@@ -38,6 +38,31 @@ pub enum WorldEvent {
     },
 }
 
+impl WorldEvent {
+    /// Stable machine name stored in the PostgreSQL event ledger.
+    pub const fn kind(&self) -> &'static str {
+        match self {
+            Self::ResourceExtracted { .. } => "ResourceExtracted",
+            Self::FactoryCompleted { .. } => "FactoryCompleted",
+            Self::TerritoryChanged { .. } => "TerritoryChanged",
+        }
+    }
+
+    /// Caller-supplied key that makes settlement safe to retry.
+    pub const fn idempotency_key(&self) -> Uuid {
+        match self {
+            Self::ResourceExtracted {
+                idempotency_key, ..
+            }
+            | Self::FactoryCompleted {
+                idempotency_key, ..
+            }
+            | Self::TerritoryChanged {
+                idempotency_key, ..
+            } => *idempotency_key,
+        }
+    }
+}
 /// Validate and settle one event into `state`.
 pub fn settle(state: &mut WorldState, event: &WorldEvent) -> Settlement {
     match event {

@@ -48,15 +48,19 @@ Goal: a stranger plays a real game from a link, built mostly by agents.
 
 Goal: the pipeline is a product; the rebase flywheel is proven.
 
-- [ ] `engine-validate` as CI gate on every push (workflow written; needs the
-      `workflow` token scope to push — see memory).
+- [ ] `engine-validate` as CI gate on every push. The workflow is hardened in
+      the current worktree (trusted pushes only on self-hosted hardware, exact
+      engine rebuild first); publishing that workflow is still required before
+      this can be marked enforced.
 - [ ] WebGPU rebase flywheel survives the next two Godot releases (runbook +
       classifier make it mostly mechanical).
 - [ ] Mobile export evidence (Android .apk on a device/emulator; iOS needs macOS).
 - [ ] Self-verifying Blender asset factory: headless generate → validate →
       budget → cook → into a live scene, agent-driven.
 - [ ] Nakama live authority: identity/social/matchmaking; world-sim graduates
-      from in-process to the production RPC layer (in progress).
+      from in-process to the production RPC layer. Authenticated event RPCs now
+      settle through the private Rust adapter with an atomic event-ledger/snapshot
+      replay probe; social/matchmaking and deployment remain.
 - [ ] Console-style proof: Steam Deck native run (no NDA; validates controller +
       performance model console cert demands).
 

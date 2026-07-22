@@ -70,6 +70,19 @@ mod tests {
     }
 
     #[test]
+    fn event_identity_is_stable_for_the_durable_ledger() {
+        let key = uuid::Uuid::from_u128(9);
+        let event = WorldEvent::ResourceExtracted {
+            faction: FactionId(uuid::Uuid::from_u128(1)),
+            sector: SectorId(uuid::Uuid::from_u128(2)),
+            resource: crate::state::Resource::RawOre,
+            units: 100,
+            idempotency_key: key,
+        };
+        assert_eq!(event.kind(), "ResourceExtracted");
+        assert_eq!(event.idempotency_key(), key);
+    }
+    #[test]
     fn snapshot_roundtrip_preserves_state() {
         use crate::state::Resource;
         let mut sim = WorldSim::default();

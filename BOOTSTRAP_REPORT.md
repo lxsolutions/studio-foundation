@@ -1,8 +1,8 @@
 # Bootstrap Report — what verifiably works, and on which machine
 
-Last verified: 2026-07-20, Windows 10 AMD64 (local dev machine "Awesom-o").
-Nothing below is claimed without a recorded command run on this date.
-
+Last verified: 2026-07-21, Windows 10 AMD64 (local dev machine "Awesom-o").
+Current claims below are backed by commands run on this date; historical
+milestones retain their original verification dates.
 ## Environment (just doctor)
 
 | Tool | Status |
@@ -15,23 +15,29 @@ Nothing below is claimed without a recorded command run on this date.
 | Docker client 29.6.1 (local) | Still BLOCKED locally — "Virtualization support not detected": VT-x/AMD-V disabled in BIOS/UEFI; needs firmware toggle + reboot (user action). Worked around, not fixed (see below). |
 | Docker via <remote-docker-host> (STUDIO_INFRA_REMOTE) | OK — `just services-up`/`db-migrate`/`test-db` all run infra/compose.yaml on <remote-docker-host> (Linux, Tailscale) over SSH; see below |
 | PostgreSQL <remote-docker-host>:5432 (<remote-docker-host>, via compose) | OK — accepting connections, migrations applied, DB-backed integration tests pass (see below) |
-| WebGPU fork export templates | BUILT (release+debug, scons 4.9.1 + emsdk 4.0.11, ~30 min) and installed; export runs — but see version gap below |
+| WebGPU fork export templates | BUILT and installed from the maintained 4.7.1-aligned fork; export, browser boot, rendering, and visual comparison pass |
 | Android SDK | not installed |
 | Playwright (playwright-core, system Chrome) | OK — installed + smoke passing (see below) |
-| studio-mcp config | missing (server self-check passes) |
+| studio-mcp config | present; server self-check passes |
 
-## Test evidence (just test — green, exit 0)
+## Test evidence (`just ci-local` — green, exit 0)
 
-- **Rust workspace** (`services/`): full `cargo test --workspace` passes, including
-  websocket handshake/echo and stale-protocol rejection. DB round-trip tests are
-  present but `ignored` (require live PostgreSQL).
-- **Python/studio-mcp**: 34 tests pass (protocol surface, path/SQL/timeout
-  security, registry boundaries).
-- **Protocol golden fixtures**: `tools/asset-pipeline/check_fixtures.py` passes.
-- **Godot headless** (template project): 8 files, 24 test methods, 129 asserts,
-  0 failures. Godot prints expected ERROR/WARNING lines for negative-path tests
-  (newer-schema save rejection, JSON garbage rejection) plus known engine-exit
-  resource-leak warnings — none are failures.
+- **Rust backends**: all service-workspace and standalone Asha-server unit,
+  integration-without-DB, WebSocket, protocol, world-sim, authority-adapter,
+  and doc tests pass. Three live-PostgreSQL tests remain explicitly
+  ignored in the fast suite and have separate live evidence below.
+- **Python tooling/MCP**: 82 tests pass across security, protocol, CI, generator,
+  release, connectivity, benchmark/visual, cleanup, and engine-rebase behavior;
+  5 additional infrastructure tests pass (2 remote-compose, 3 database lifecycle).
+- **Nakama authority bridge**: TypeScript build plus 6 Node runtime tests and 3
+  Python live-probe contract tests pass, including authenticated forwarding,
+  fail-closed behavior, idempotent replay, and ES5 artifact compatibility.
+- **Protocol fixtures**: all 9 cross-language golden fixtures pass.
+- **Godot headless**: 8 files, 25 test methods, 137 assertions, 0 failures.
+  The intentional newer-save-schema warning remains; malformed JSON and
+  RefCounted lifecycle checks no longer emit engine errors or leak warnings.
+- **Quality gates**: Cargo fmt/Clippy, Ruff check/format, workflow validation,
+  and reviewable-file secret scanning pass (345 files).
 
 ## Fixes applied on 2026-07-20
 
@@ -150,9 +156,10 @@ over SSH:
 - Verified this date: `just services-up` (postgres pulled + healthy on <remote-docker-host>),
   `just doctor` (docker + postgres checks both green, correctly labeled
   "via remote Docker host '<remote-docker-host>'"), `just db-migrate` (migrations applied),
-  `just test-db` — **`db_roundtrip.rs`'s 2 tests, previously `ignored` for lack of
-  a live database, now run and pass** (`guest_session_creates_account_session_audit`,
-  `migrations_apply_and_bootstrap_check_roundtrips`), `just db-backup` (pg_dump via
+  `just test-db` — **3 previously ignored live tests now run and pass**: the two
+  platform round trips (`guest_session_creates_account_session_audit`,
+  `migrations_apply_and_bootstrap_check_roundtrips`) plus Asha's atomic event-ledger/
+  snapshot recovery test. `just db-backup` (pg_dump via
   ssh, 9 KiB), and a full `services-down` → `services-up` cycle (volume persists).
 - Found and fixed in passing: `tools/infra/db.py`'s `test-env` subcommand stripped
   *every* `--` from its argv, not just its own leading separator — this ate the
@@ -177,14 +184,45 @@ over SSH:
   "committed" but that never actually existed — `just doctor` now reports
   `studio-mcp: config present, self-check pass`.
 
+## Hardening verified 2026-07-21
+
+- Restored the local PR-equivalent CI orchestrator, workflow validation,
+  reviewable-file secret scanning, robust cleanup, and generated-game tests.
+- Hardened GitHub Actions around the self-hosted trust boundary: PR policy
+  checks run on hosted Ubuntu, trusted pushes run `ci-local`, engine validation
+  rebuilds exact pins first, and scheduled/manual runs execute nightly DB and
+  release gates. External actions are pinned to immutable commits.
+- Added and tested the Nakama identity/RPC profile plus a bearer-protected Rust
+  authority adapter. First-seen RPC events now commit an append-only ledger row and
+  recovery snapshot in one row-locked PostgreSQL transaction before acknowledgement;
+  rejected events consume durable idempotency keys and stale process memory repairs
+  from the database. The repeatable live probe is ready, while an explicitly
+  started/deployed stack remains required for live Nakama evidence.
+- Restored release validation, exact-lock inventory, SPDX 2.3 SBOM generation,
+  attribution generation, and fail-closed OSV auditing. The live audit checked
+  217 resolved third-party packages and found no advisories.
+- Isolated every game's SQLx migration history inside its owned schema after a
+  live test exposed the database-global version collision. Asha now has forward-only
+  event-ledger migrations, and newly generated games inherit schema-local migration
+  startup. The generated Godot/Rust gate passes with isolated CI user data.
+- Committed the template server lockfile; generated identities are rewritten
+  inside it and the template builds successfully with `cargo --locked`.
+- Restored the end-to-end Godot → control API → PostgreSQL → game-server
+  connectivity proof and made the database round trip mandatory.
+- Added a finite headless scene benchmark with Godot's native benchmark JSON;
+  a real template run returned structured scene and engine timings.
+- Added browser-rendered visual baseline/candidate orchestration and verified a
+  real Chrome capture plus zero-difference identity comparison.
+- Implemented `engine-rebase`: current pins report `up_to_date`; divergent
+  releases are prepared in isolated, resumable worktrees with conflict
+  classification. Candidate builds use separate artifact directories.
+
 ## Honest gaps (not yet evidenced)
 
 - Docker Desktop / local virtualization — still genuinely blocked on firmware
   (VT-x/AMD-V disabled in BIOS/UEFI); the <remote-docker-host> path above is a workaround for
   development, not a fix. A container workload that must run locally (not
   dev-database-shaped) still needs the BIOS toggle + reboot.
-- WebGPU **rendering** — blocked on the editor/fork version gap above
-  (templates built + export runs; runtime pack-format mismatch). No WebGPU claim.
 - Android/iOS exports — no SDK / no macOS.
 - Safari/iOS anything — requires real hardware, per policy.
 
