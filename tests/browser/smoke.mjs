@@ -27,6 +27,7 @@ const FATAL_PATTERNS = [
   /unhandled rejection/i,
   /wasm.*(fail|error)/i,
   /webgl.*(not supported|context creation failed|unavailable)/i,
+  /webgpu.*(not supported|context creation failed|unavailable|fail|error)/i,
   /failed to (load|fetch)/i,
   /\babort\(/i,
   /RuntimeError/,
@@ -62,8 +63,25 @@ async function main() {
     await Promise.race([waitForServer(TARGET_URL, 20000), serverExited]);
 
     // 2. Drive installed Chrome or Edge.
-    const browser = await chromium.launch({ channel: "chrome" }).catch(() => chromium.launch({ channel: "msedge" }));
+    const browserArgs = PRESET === "web-webgpu"
+      ? ["--enable-unsafe-webgpu", "--ignore-gpu-blocklist"]
+      : [];
+    const browser = await chromium
+      .launch({ channel: "chrome", args: browserArgs })
+      .catch(() => chromium.launch({ channel: "msedge", args: browserArgs }));
     const page = await browser.newPage();
+
+    if (PRESET === "web-webgpu") {
+      // Start the adapter probe before Godot requests its device. On Windows,
+      // a second request after the engine starts can return null because Chrome
+      // does not support multiple GPU adapters simultaneously.
+      await page.addInitScript(() => {
+        const gpu = navigator.gpu;
+        globalThis.__studioWebgpuAdapterProbe = gpu
+          ? gpu.requestAdapter().then((adapter) => Boolean(adapter)).catch(() => false)
+          : Promise.resolve(false);
+      });
+    }
 
     const consoleErrors = [];
     page.on("console", (msg) => {
@@ -73,7 +91,7 @@ async function main() {
 
     await page.goto(TARGET_URL, { waitUntil: "domcontentloaded", timeout: TIMEOUT_MS });
 
-    // Godot renders into a <canvas>; wait for it to exist and have a GL context size.
+    // Godot renders into a <canvas>; wait for it to exist and have a real backing size.
     await page.waitForSelector("canvas", { timeout: TIMEOUT_MS });
     await page.waitForFunction(
       () => {
@@ -83,10 +101,35 @@ async function main() {
       { timeout: TIMEOUT_MS }
     );
 
+    let webgpuEvidence = null;
+    if (PRESET === "web-webgpu") {
+      webgpuEvidence = await page.evaluate(async () => {
+        const gpu = navigator.gpu;
+        const adapter = await globalThis.__studioWebgpuAdapterProbe;
+        const canvas = document.querySelector("canvas");
+        let canvasContext = null;
+        try {
+          canvasContext = canvas?.getContext("webgpu") ?? null;
+        } catch {
+          // A canvas already bound to another renderer cannot return WebGPU.
+        }
+        return {
+          navigatorGpu: Boolean(gpu),
+          adapter,
+          canvasContext: Boolean(canvasContext),
+        };
+      });
+    }
+
     // Let the main loop tick a few frames so lazy errors surface.
     await page.waitForTimeout(3000);
 
     await browser.close();
+
+    if (webgpuEvidence && !Object.values(webgpuEvidence).every(Boolean)) {
+      console.error(`smoke FAILED — incomplete WebGPU proof: ${JSON.stringify(webgpuEvidence)}`);
+      return 1;
+    }
 
     const fatal = consoleErrors.filter((line) => FATAL_PATTERNS.some((p) => p.test(line)));
     if (fatal.length > 0) {
@@ -98,7 +141,13 @@ async function main() {
       console.log(`smoke passed with ${consoleErrors.length} non-fatal console error(s):`);
       for (const line of consoleErrors.slice(0, 10)) console.log(`  ${line}`);
     }
-    console.log(`smoke OK — ${TARGET_URL} rendered a live Godot canvas (${GAME}, ${PRESET})`);
+    if (webgpuEvidence) {
+      console.log("WebGPU proof OK — navigator.gpu, GPU adapter, and active canvas context verified");
+    }
+    const renderProof = webgpuEvidence
+      ? "rendered a live Godot canvas with an active WebGPU context"
+      : "rendered a live Godot canvas";
+    console.log(`smoke OK — ${TARGET_URL} ${renderProof} (${GAME}, ${PRESET})`);
     return 0;
   } finally {
     server.kill();
