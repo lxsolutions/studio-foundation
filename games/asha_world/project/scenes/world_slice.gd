@@ -7,7 +7,7 @@ extends Control
 ## world-sim settles it into shared state. This client is a thin view — the
 ## server is authoritative.
 
-var SERVER_URL: String = AshaWorldConfig.ws_url()
+var SERVER_URL: String = ""
 const FACTION := "00000000-0000-0000-0000-000000000001"
 const SECTOR := "00000000-0000-0000-0000-000000000002"
 const DEEP_SECTOR := "00000000-0000-0000-0000-000000000003"
@@ -28,6 +28,7 @@ var _state := {
 
 func _ready() -> void:
 	_build_ui()
+	SERVER_URL = AshaWorldConfig.ws_url()
 	_transport = StudioWsTransport.new()
 	_transport.connected.connect(_on_connected)
 	_transport.envelope_received.connect(_on_envelope)

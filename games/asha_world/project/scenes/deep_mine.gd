@@ -5,7 +5,7 @@ extends Node3D
 ## Refinery/factory/battle are staged from the same HUD, closing the loop
 ## extraction -> economy -> production -> battle -> territory.
 
-var SERVER_URL: String = AshaWorldConfig.ws_url()
+var SERVER_URL: String = ""
 const FACTION := "00000000-0000-0000-0000-000000000001"
 const SECTOR := "00000000-0000-0000-0000-000000000002"
 const DEEP_SECTOR := "00000000-0000-0000-0000-000000000003"
@@ -30,6 +30,9 @@ var _state := {"ore": 0, "alloy": 0, "vehicle": false, "territory": false}
 func _ready() -> void:
 	_build_world()
 	_build_hud()
+	# Resolve the endpoint lazily here (not at instance-init) so a config hiccup
+	# can never prevent the scene itself from loading.
+	SERVER_URL = AshaWorldConfig.ws_url()
 	_transport = StudioWsTransport.new()
 	_transport.envelope_received.connect(_on_envelope)
 	_transport.transport_error.connect(func(m): _log_line("[err] " + str(m)))
@@ -117,6 +120,7 @@ func _build_world() -> void:
 	]
 	for pos in ore_positions:
 		_spawn_ore(pos)
+	_spawn_dressing()
 
 	# Player: a capsule + camera, simple WASD controller.
 	_player = CharacterBody3D.new()
@@ -144,27 +148,78 @@ func _build_world() -> void:
 	add_child(_camera)
 
 
+const ORE_GLB := "res://assets/generated/deep/deep_ore_boulder.glb"
+const CRYSTAL_GLB := "res://assets/generated/deep/deep_crystal.glb"
+const PILLAR_GLB := "res://assets/generated/deep/deep_pillar.glb"
+
+
+func _instance_glb(path: String, fallback_color: Color) -> Node3D:
+	# Use cooked GLBs when they render correctly on the current backend.
+	# NOTE: the Blender-cooked GLBs (Principled emission, Blender 5.2) currently
+	# break the WebGPU export (black screen; headless/GL fine) — investigation
+	# tracked in docs/runbooks/deep-assets.md. Until that's fixed we render the
+	# same shapes as primitives (which rasterize everywhere) and keep the GLBs
+	# for the collision/model data + desktop builds.
+	var use_glb := false # flipped per-backend once the emission-shader issue is fixed
+	if use_glb and ResourceLoader.exists(path):
+		var packed: PackedScene = load(path)
+		return packed.instantiate()
+	var box := MeshInstance3D.new()
+	box.mesh = _shape_for(path)
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = fallback_color
+	mat.emission_enabled = true
+	mat.emission = fallback_color * 0.5
+	mat.emission_energy_multiplier = 0.5
+	box.material_override = mat
+	return box
+
+
+func _shape_for(path: String) -> Mesh:
+	# Match the primitive to the asset's intended silhouette.
+	if "pillar" in path:
+		var cyl := CylinderMesh.new()
+		cyl.top_radius = 0.35
+		cyl.bottom_radius = 0.35
+		cyl.height = 3.0
+		return cyl
+	if "crystal" in path:
+		var prism := PrismMesh.new()
+		prism.left_to_right = 0.4
+		prism.size = Vector3(0.6, 1.4, 0.6)
+		return prism
+	var sphere := SphereMesh.new()
+	sphere.radius = 0.7
+	return sphere
+
+
 func _spawn_ore(pos: Vector3) -> void:
 	var ore := StaticBody3D.new()
 	ore.position = pos
-	var mesh := MeshInstance3D.new()
-	var sphere := SphereMesh.new()
-	sphere.radius = 0.7
-	mesh.mesh = sphere
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.85, 0.55, 0.15)
-	mat.emission_enabled = true
-	mat.emission = Color(0.6, 0.35, 0.05)
-	mat.emission_energy_multiplier = 0.6
-	mesh.material_override = mat
-	ore.add_child(mesh)
+	var visual := _instance_glb(ORE_GLB, Color(0.85, 0.55, 0.15))
+	ore.add_child(visual)
 	var col := CollisionShape3D.new()
 	var shape := SphereShape3D.new()
 	shape.radius = 0.7
 	col.shape = shape
+	col.position = Vector3(0, 0.6, 0)
 	ore.add_child(col)
 	ore.set_meta("ore", true)
 	add_child(ore)
+
+
+func _spawn_dressing() -> void:
+	# Crystals + pillars to make the cavern read as The Deep, not an empty floor.
+	var crystal_positions := [Vector3(-8, 0, -3), Vector3(6, 0, -4), Vector3(2, 0, 7), Vector3(-2, 0, -9)]
+	for pos in crystal_positions:
+		var c := _instance_glb(CRYSTAL_GLB, Color(0.35, 0.6, 0.95))
+		c.position = pos
+		add_child(c)
+	var pillar_positions := [Vector3(-10, 0, -8), Vector3(10, 0, -8), Vector3(-10, 0, 8), Vector3(10, 0, 8)]
+	for pos in pillar_positions:
+		var p := _instance_glb(PILLAR_GLB, Color(0.28, 0.26, 0.3))
+		p.position = pos
+		add_child(p)
 
 
 func _move_player(delta: float) -> void:

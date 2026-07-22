@@ -4,7 +4,7 @@ extends Node3D
 ## the outpost with it to win; winning flips the sector (TerritoryChanged),
 ## unlocking the deeper mine. Server world-sim is authoritative.
 
-var SERVER_URL: String = AshaWorldConfig.ws_url()
+var SERVER_URL: String = ""
 const FACTION := "00000000-0000-0000-0000-000000000001"
 const DEEP_SECTOR := "00000000-0000-0000-0000-000000000003"
 const OUTPOST_POS := Vector3(0, 0, -14)
@@ -24,6 +24,7 @@ var _won := false
 func _ready() -> void:
 	_build_world()
 	_build_hud()
+	SERVER_URL = AshaWorldConfig.ws_url()
 	_transport = StudioWsTransport.new()
 	_transport.envelope_received.connect(_on_envelope)
 	_transport.transport_error.connect(func(m): _log_line("[err] " + str(m)))
