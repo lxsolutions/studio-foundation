@@ -1,30 +1,53 @@
-//! Dedicated server library: bindable server loop reused by main.rs and tests.
+//! Dedicated server library: bindable transport and neutral application hooks.
 
 pub mod session;
 pub mod transport;
 
+use std::future::Future;
 use std::net::SocketAddr;
+use std::pin::Pin;
+use std::sync::Arc;
 
 use session::Session;
 use tokio::net::TcpListener;
 use tokio::task::JoinHandle;
 use transport::WsTransport;
 
-/// Bind `addr` (use port 0 for tests) and serve WebSocket sessions until aborted.
-/// Returns the actual bound address and the accept-loop task handle.
+/// Neutral result returned by a game-owned application handler.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ApplicationOutcome {
+    pub accepted: bool,
+    pub summary: String,
+}
+
+pub type ApplicationFuture<'a> = Pin<Box<dyn Future<Output = ApplicationOutcome> + Send + 'a>>;
+
+/// Optional extension point for game-owned payloads.
+///
+/// Foundation does not define the payload schema or assume any gameplay concept.
+pub trait ApplicationHandler: Send + Sync {
+    fn handle<'a>(&'a self, payload_json: &'a str) -> ApplicationFuture<'a>;
+}
+
+pub type SharedApplicationHandler = Arc<dyn ApplicationHandler>;
+
+/// Bind addr (use port 0 for tests) and serve WebSocket sessions until aborted.
 pub async fn run_server(addr: SocketAddr) -> anyhow::Result<(SocketAddr, JoinHandle<()>)> {
     run_server_with(addr, None).await
 }
 
-/// Serve with an optional shared world simulation (ADR 0007). When `world` is
-/// provided, sessions accept `WorldEventSubmit` and settle events into it.
+/// Serve with an optional game-owned application handler.
 pub async fn run_server_with(
     addr: SocketAddr,
-    world: Option<std::sync::Arc<tokio::sync::Mutex<studio_world_sim::WorldSim>>>,
+    application: Option<SharedApplicationHandler>,
 ) -> anyhow::Result<(SocketAddr, JoinHandle<()>)> {
     let listener = TcpListener::bind(addr).await?;
     let local = listener.local_addr()?;
-    tracing::info!(addr = %local, world = world.is_some(), "dedicated-server listening (ws)");
+    tracing::info!(
+        addr = %local,
+        application = application.is_some(),
+        "dedicated-server listening (ws)"
+    );
 
     let handle = tokio::spawn(async move {
         loop {
@@ -35,13 +58,13 @@ pub async fn run_server_with(
                     continue;
                 }
             };
-            let world = world.clone();
+            let application = application.clone();
             tokio::spawn(async move {
                 match tokio_tungstenite::accept_async(stream).await {
                     Ok(ws) => {
                         tracing::debug!(%peer, "websocket accepted");
                         let summary = Session::new(WsTransport::new(ws), "studio-dedicated")
-                            .with_world(world)
+                            .with_application_handler(application)
                             .run()
                             .await;
                         tracing::debug!(%peer, ?summary, "session finished");

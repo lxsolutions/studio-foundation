@@ -1,6 +1,6 @@
 class_name StudioRenderProfiles
 extends RefCounted
-## Runtime quality profiles (ADR 0007). Platform differences are absorbed HERE —
+## Runtime quality profiles. Platform differences are absorbed here —
 ## games query budgets (`budget("particle_budget")`) instead of sniffing platforms.
 
 const PROFILES_PATH: String = "res://addons/studio_core/profiles.json"

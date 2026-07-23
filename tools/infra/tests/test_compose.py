@@ -14,7 +14,7 @@ SPEC.loader.exec_module(compose)
 
 
 class RemoteSyncTests(unittest.TestCase):
-    def test_sync_copies_nakama_runtime_without_node_modules(self) -> None:
+    def test_sync_copies_generic_infra_and_nakama_bundle(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             repo = Path(temp_dir)
             with (
@@ -24,7 +24,10 @@ class RemoteSyncTests(unittest.TestCase):
                 self.assertEqual(compose._sync("dev-host", "~/studio-infra"), 0)
 
         calls = [entry.args[0] for entry in call.call_args_list]
-        self.assertEqual(calls[0], ["ssh", "dev-host", "mkdir -p ~/studio-infra/nakama"])
+        self.assertEqual(
+            calls[0],
+            ["ssh", "dev-host", "mkdir -p ~/studio-infra/nakama"],
+        )
         self.assertEqual(
             calls[1],
             [
@@ -52,7 +55,10 @@ class RemoteSyncTests(unittest.TestCase):
     def test_sync_copies_optional_env_after_static_files(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             repo = Path(temp_dir)
-            (repo / ".env").write_text("STUDIO_PG_HOST=127.0.0.1\n", encoding="utf-8")
+            (repo / ".env").write_text(
+                "STUDIO_PG_HOST=127.0.0.1\n",
+                encoding="utf-8",
+            )
             with (
                 mock.patch.object(compose, "REPO", repo),
                 mock.patch.object(compose.subprocess, "call", return_value=0) as call,

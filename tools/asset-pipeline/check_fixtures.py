@@ -36,8 +36,8 @@ def main() -> int:
             problems.append(f"{path.name}: missing envelope fields {missing}")
         if path.name.startswith("invalid_"):
             continue
-        if data.get("v") != 1:
-            problems.append(f"{path.name}: valid fixtures must use protocol v1")
+        if data.get("v") != 2:
+            problems.append(f"{path.name}: valid fixtures must use protocol v2")
     if problems:
         for problem in problems:
             print(f"FIXTURE ERROR: {problem}", file=sys.stderr)

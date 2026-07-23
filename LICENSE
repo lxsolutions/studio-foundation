@@ -1,18 +1,16 @@
 ================================================================================
-ASHA STUDIO PLATFORM — ENGINE & TOOLING LICENSE
+STUDIO FOUNDATION — ENGINE & TOOLING LICENSE
 ================================================================================
 
-Everything in this repository is licensed under both the MIT License and
-CC BY 4.0 simultaneously.
+Foundation code, tooling, templates, documentation, and infrastructure in this
+repository are licensed under both the MIT License and CC BY 4.0 simultaneously.
 
 SCOPE — IMPORTANT:
-  * The statement above applies to the ENGINE, PLATFORM, TOOLING, and all
-    supporting infrastructure in this repository (engine/, services/, tools/,
-    shared/, templates/, docs/, infra/, scripts/, and tests/).
-  * It does NOT apply to GAMES built on the platform. Content under `games/`
-    (including `games/asha_world` and any future game) is licensed separately
-    by its own LICENSE file in that game's directory and is NOT covered by the
-    dual MIT + CC BY 4.0 grant above.
+  * This grant applies to engine/, services/, tools/, shared/, templates/,
+    docs/, infra/, scripts/, and tests/.
+  * Generated or external projects placed under `games/` are consumers, not
+    automatically part of the Foundation distribution. Each game declares its
+    own license; see games/LICENSE for the default boundary.
 
 Both license texts follow. Where the two differ, the recipient may rely on
 either license; attribution under CC BY 4.0 is satisfied by retaining the

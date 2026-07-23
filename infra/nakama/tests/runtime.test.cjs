@@ -20,36 +20,27 @@ function loadRpcs() {
   return { logger, rpcs };
 }
 
-function canonicalEvent(key = "00000000-0000-0000-0000-00000000000a") {
-  return {
-    ResourceExtracted: {
-      faction: "00000000-0000-0000-0000-000000000001",
-      sector: "00000000-0000-0000-0000-000000000002",
-      resource: "RawOre",
-      units: 100,
-      idempotency_key: key,
-    },
-  };
-}
-
-function authorityContext() {
+function applicationContext() {
   return {
     userId: "user-42",
     env: {
-      ASHA_AUTHORITY_URL: "http://authority:8082/internal/v1/world-events",
-      ASHA_AUTHORITY_TOKEN: "test-token",
+      STUDIO_APPLICATION_URL: "http://application:8082/requests",
+      STUDIO_APPLICATION_TOKEN: "test-token",
     },
   };
 }
 
-test("InitModule registers the public RPC seam", () => {
+test("InitModule registers only the neutral public RPC seam", () => {
   const { rpcs } = loadRpcs();
-  assert.deepEqual([...rpcs.keys()], ["asha_identify", "asha_world_event"]);
+  assert.deepEqual([...rpcs.keys()], [
+    "studio_identify",
+    "studio_application_request",
+  ]);
 });
 
 test("identify returns authenticated and anonymous identities", () => {
   const { logger, rpcs } = loadRpcs();
-  const identify = rpcs.get("asha_identify");
+  const identify = rpcs.get("studio_identify");
   assert.deepEqual(JSON.parse(identify({ userId: "user-42" }, logger, {}, "")), {
     ok: true,
     userId: "user-42",
@@ -60,28 +51,24 @@ test("identify returns authenticated and anonymous identities", () => {
   });
 });
 
-test("world-event RPC rejects unauthenticated and malformed submissions", () => {
+test("application RPC rejects unauthenticated or malformed submissions", () => {
   const { logger, rpcs } = loadRpcs();
-  const submit = rpcs.get("asha_world_event");
+  const submit = rpcs.get("studio_application_request");
 
-  assert.deepEqual(JSON.parse(submit({}, logger, {}, JSON.stringify(canonicalEvent()))), {
-    applied: false,
+  assert.deepEqual(JSON.parse(submit({}, logger, {}, "{}")), {
+    accepted: false,
     summary: "authentication required",
   });
-  assert.deepEqual(JSON.parse(submit(authorityContext(), logger, {}, "{")), {
-    applied: false,
+  assert.deepEqual(JSON.parse(submit(applicationContext(), logger, {}, "{")), {
+    accepted: false,
     summary: "invalid json",
-  });
-  assert.deepEqual(JSON.parse(submit(authorityContext(), logger, {}, JSON.stringify({}))), {
-    applied: false,
-    summary: "expected one canonical world event",
   });
 });
 
-test("world-event RPC forwards the actor and canonical event to Rust authority", () => {
+test("application RPC forwards an opaque payload with authenticated actor", () => {
   const { logger, rpcs } = loadRpcs();
-  const submit = rpcs.get("asha_world_event");
-  const event = canonicalEvent();
+  const submit = rpcs.get("studio_application_request");
+  const payload = { kind: "example.increment", value: 1 };
   let request;
   const nk = {
     httpRequest(...args) {
@@ -89,69 +76,72 @@ test("world-event RPC forwards the actor and canonical event to Rust authority",
       return {
         code: 200,
         headers: {},
-        body: JSON.stringify({ applied: true, summary: "faction banked 100 RawOre" }),
+        body: JSON.stringify({ accepted: true, summary: "accepted" }),
       };
     },
   };
 
-  assert.deepEqual(JSON.parse(submit(authorityContext(), logger, nk, JSON.stringify(event))), {
-    applied: true,
-    summary: "faction banked 100 RawOre",
-  });
-  assert.equal(request[0], "http://authority:8082/internal/v1/world-events");
+  assert.deepEqual(
+    JSON.parse(submit(applicationContext(), logger, nk, JSON.stringify(payload))),
+    { accepted: true, summary: "accepted" },
+  );
+  assert.equal(request[0], "http://application:8082/requests");
   assert.equal(request[1], "post");
   assert.equal(request[2].Authorization, "Bearer test-token");
-  assert.deepEqual(JSON.parse(request[3]), { actor_user_id: "user-42", event });
+  assert.deepEqual(JSON.parse(request[3]), {
+    actor_user_id: "user-42",
+    payload,
+  });
   assert.equal(request[4], 5000);
   assert.equal(request[5], false);
 });
 
-test("world-event RPC fails closed when authority is unavailable or malformed", () => {
+test("application RPC fails closed for configuration, transport, status, or shape", () => {
   const { logger, rpcs } = loadRpcs();
-  const submit = rpcs.get("asha_world_event");
-  const payload = JSON.stringify(canonicalEvent());
+  const submit = rpcs.get("studio_application_request");
+  const payload = JSON.stringify({ example: true });
 
-  assert.deepEqual(JSON.parse(submit({ userId: "user-42", env: {} }, logger, {}, payload)), {
-    applied: false,
-    summary: "authority unavailable",
-  });
+  assert.deepEqual(
+    JSON.parse(submit({ userId: "user-42", env: {} }, logger, {}, payload)),
+    { accepted: false, summary: "application backend unavailable" },
+  );
   assert.deepEqual(
     JSON.parse(
       submit(
-        authorityContext(),
+        applicationContext(),
         logger,
         { httpRequest() { throw new Error("offline"); } },
         payload,
       ),
     ),
-    { applied: false, summary: "authority unavailable" },
+    { accepted: false, summary: "application backend unavailable" },
   );
   assert.deepEqual(
     JSON.parse(
       submit(
-        authorityContext(),
+        applicationContext(),
         logger,
         { httpRequest() { return { code: 503, headers: {}, body: "" }; } },
         payload,
       ),
     ),
-    { applied: false, summary: "authority rejected request" },
+    { accepted: false, summary: "application backend rejected request" },
   );
   assert.deepEqual(
     JSON.parse(
       submit(
-        authorityContext(),
+        applicationContext(),
         logger,
         { httpRequest() { return { code: 200, headers: {}, body: "{}" }; } },
         payload,
       ),
     ),
-    { applied: false, summary: "malformed authority response" },
+    { accepted: false, summary: "malformed application backend response" },
   );
 });
 
 test("compiled runtime remains ES5-compatible", () => {
   const bundle = fs.readFileSync(path.join(__dirname, "..", "build", "index.js"), "utf8");
-  assert.doesNotMatch(bundle, /\?\?|=>|`/);
+  assert.doesNotMatch(bundle, /\?\?|=>|\x60/);
   assert.doesNotMatch(bundle, /\b(?:const|let)\b/);
 });

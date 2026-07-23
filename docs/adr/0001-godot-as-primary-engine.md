@@ -33,7 +33,7 @@ scriptable editor.
 - Engine upgrades are deliberate: bump `engine-lock.toml`, run full test + export +
   visual-regression suites, record results, then merge.
 - Godot's Mobile renderer feature set is the common modern baseline across platforms
-  (revisit with benchmarks; see ADR 0007 quality profiles).
+  (revisit only when cross-platform benchmarks justify it).
 - We accept Godot's constraints (GDScript performance ceilings → ADR 0003 hotspot
   policy; export template management → `engine/` scripts).
 

@@ -1,23 +1,29 @@
 # Studio Foundation - Goal
 
-Studio Foundation is the shared, public Godot platform for a small game studio
-shipping multiple first-class games from one shared project per game across:
+Studio Foundation is a public, reusable Godot toolkit for teams shipping games
+across:
 
 - Web browsers, with WebGPU preferred and WebGL 2 as the maintained fallback
 - iOS and Android
 - Windows, Linux, and macOS
-- Dedicated multiplayer servers
+- Optional dedicated multiplayer servers
 
-This repository contains platform capabilities rather than a single game's
-mechanics: Godot integration, shared addons, asset processing, backend services,
-tooling, tests, CI, documentation, and agent operating agreements.
+This repository contains universal capabilities rather than any one game's
+content or mechanics: Godot integration, shared addons, asset processing,
+mechanics-neutral transport and service scaffolding, tooling, tests, CI
+guidance, documentation, and agent operating agreements.
 
 ## Scope boundary
 
-Godot is the only client runtime standardized by this public repository.
-Babylon.js, Capacitor, or other runtimes chosen by individual private products
-do not become Studio Foundation dependencies unless a future public ADR
-explicitly changes that decision.
+Official Godot is the only client runtime standardized here. Product code,
+gameplay schemas, product-specific identity policy, and production deployments
+live in consuming repositories. Babylon.js, Capacitor, or any other runtime
+selected by a product does not become a Studio Foundation dependency unless a
+future public ADR explicitly changes that decision.
+
+The optional Rust server establishes sessions and can forward opaque
+application payloads to a handler supplied by a game. Foundation does not define
+the payload schema or gameplay semantics.
 
 ## Non-negotiable principles
 
@@ -25,23 +31,26 @@ explicitly changes that decision.
 2. Require no proprietary cloud or paid backend platform.
 3. Keep local development usable offline after dependencies are cached.
 4. Maintain one shared Godot project per game, not separate browser/mobile clients.
-5. Share source assets, systems, data formats, protocols, and backend services.
+5. Share only genuinely reusable systems, data formats, protocols, and backend seams.
 6. Absorb platform differences through runtime quality profiles and interfaces.
 7. Keep generated files and build outputs out of the source-of-truth role.
 8. Give humans and agents documented commands, acceptance criteria, and tests.
-9. Optimize for a small human team working with coding agents.
-10. Add infrastructure only after a demonstrated requirement and an ADR.
+9. Optimize for small teams working with coding agents.
+10. Add infrastructure only after a demonstrated, product-independent requirement and an ADR.
+11. Keep product content, mechanics, business rules, and deployment credentials outside this repository.
 
 ## Architecture in one paragraph
 
-Official Godot 4.7.1 is the pinned editor and engine; gameplay uses GDScript,
+Official Godot 4.7.1 is the pinned editor and engine; projects use GDScript,
 with native extensions reserved for measured hotspots. Browser WebGPU templates
 are built from official Godot plus a checksum-pinned patch series committed in
 `engine/patches/`; official WebGL 2 templates remain the fallback. Blender is
-the master asset source and exports deterministic glTF/GLB. Rust services provide
-authoritative simulation and networking with PostgreSQL as durable state.
-Docker Compose runs local infrastructure, and `just` is the command front door
-for humans, agents, and CI.
+the master asset source and exports deterministic glTF/GLB. Generic Rust
+services provide API, WebSocket session, protocol, and persistence scaffolding;
+games opt into and extend those seams. Docker Compose runs optional local
+PostgreSQL, a mechanics-neutral Nakama bridge, and observability
+infrastructure, and `just` is the command front door for humans, agents, and
+CI.
 
 ## Where to go next
 

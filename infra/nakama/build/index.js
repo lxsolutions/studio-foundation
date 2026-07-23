@@ -1,65 +1,69 @@
 "use strict";
-// Nakama owns public identity and the RPC boundary. Canonical world events are
-// forwarded to the private Asha authority adapter, which settles through the Rust
-// WorldSim and persists to PostgreSQL before acknowledging an applied event.
+// Optional, mechanics-neutral Nakama bridge.
+//
+// Nakama owns public identity and RPC authentication. The application RPC
+// forwards an opaque JSON value to a consumer-configured backend. Foundation
+// does not interpret the payload or define its domain schema.
+function rejected(summary) {
+    return JSON.stringify({ accepted: false, summary: summary });
+}
 function rpcIdentify(ctx, logger, nk, payload) {
-    var _a;
-    var userId = (_a = ctx.userId) !== null && _a !== void 0 ? _a : "anonymous";
-    logger.info("asha_identify: %s", userId);
+    var userId = ctx.userId || "anonymous";
+    logger.info("studio_identify: %s", userId);
     return JSON.stringify({ ok: true, userId: userId });
 }
-function rpcWorldEvent(ctx, logger, nk, payload) {
+function rpcApplicationRequest(ctx, logger, nk, rawPayload) {
     if (!ctx.userId) {
-        return JSON.stringify({ applied: false, summary: "authentication required" });
+        return rejected("authentication required");
     }
-    var event;
+    var payload;
     try {
-        event = JSON.parse(payload || "");
+        payload = JSON.parse(rawPayload || "");
     }
     catch (_a) {
-        return JSON.stringify({ applied: false, summary: "invalid json" });
+        return rejected("invalid json");
     }
-    if (!event || typeof event !== "object" || Object.keys(event).length !== 1) {
-        return JSON.stringify({ applied: false, summary: "expected one canonical world event" });
+    var applicationUrl = ctx.env && ctx.env.STUDIO_APPLICATION_URL;
+    var applicationToken = ctx.env && ctx.env.STUDIO_APPLICATION_TOKEN;
+    if (!applicationUrl || !applicationToken) {
+        logger.error("studio_application_request: backend is not configured");
+        return rejected("application backend unavailable");
     }
-    var authorityUrl = ctx.env && ctx.env.ASHA_AUTHORITY_URL;
-    var authorityToken = ctx.env && ctx.env.ASHA_AUTHORITY_TOKEN;
-    if (!authorityUrl || !authorityToken) {
-        logger.error("asha_world_event: authority is not configured");
-        return JSON.stringify({ applied: false, summary: "authority unavailable" });
-    }
-    var body = JSON.stringify({ actor_user_id: ctx.userId, event: event });
+    var body = JSON.stringify({ actor_user_id: ctx.userId, payload: payload });
     var response;
     try {
-        response = nk.httpRequest(authorityUrl, "post", {
+        response = nk.httpRequest(applicationUrl, "post", {
             "Content-Type": "application/json",
             Accept: "application/json",
-            Authorization: "Bearer ".concat(authorityToken),
+            Authorization: "Bearer " + applicationToken,
         }, body, 5000, false);
     }
     catch (error) {
-        logger.error("asha_world_event: authority request failed: %s", String(error));
-        return JSON.stringify({ applied: false, summary: "authority unavailable" });
+        logger.error("studio_application_request: backend request failed: %s", String(error));
+        return rejected("application backend unavailable");
     }
     if (response.code < 200 || response.code >= 300) {
-        logger.error("asha_world_event: authority rejected request with HTTP %d", response.code);
-        return JSON.stringify({ applied: false, summary: "authority rejected request" });
+        logger.error("studio_application_request: backend rejected request with HTTP %d", response.code);
+        return rejected("application backend rejected request");
     }
     try {
         var result = JSON.parse(response.body);
-        if (typeof result.applied !== "boolean" || typeof result.summary !== "string") {
+        if (typeof result.accepted !== "boolean" || typeof result.summary !== "string") {
             throw new Error("unexpected response shape");
         }
-        logger.info("asha_world_event: user=%s applied=%s", ctx.userId, result.applied);
-        return JSON.stringify({ applied: result.applied, summary: result.summary });
+        logger.info("studio_application_request: user=%s accepted=%s", ctx.userId, result.accepted);
+        return JSON.stringify({
+            accepted: result.accepted,
+            summary: result.summary,
+        });
     }
     catch (error) {
-        logger.error("asha_world_event: malformed authority response: %s", String(error));
-        return JSON.stringify({ applied: false, summary: "malformed authority response" });
+        logger.error("studio_application_request: malformed backend response: %s", String(error));
+        return rejected("malformed application backend response");
     }
 }
 function InitModule(ctx, logger, nk, initializer) {
-    initializer.registerRpc("asha_identify", rpcIdentify);
-    initializer.registerRpc("asha_world_event", rpcWorldEvent);
-    logger.info("asha nakama module initialized (asha_identify, asha_world_event)");
+    initializer.registerRpc("studio_identify", rpcIdentify);
+    initializer.registerRpc("studio_application_request", rpcApplicationRequest);
+    logger.info("studio foundation nakama module initialized (studio_identify, studio_application_request)");
 }

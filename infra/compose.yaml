@@ -1,11 +1,9 @@
-# Local development infrastructure. Interactive Godot/Blender are NOT containerized.
-# Usage: just services-up | just observability-up | just services-down
+# Optional local development infrastructure. Interactive Godot and Blender are
+# not containerized.
 #
-# Ports bind to STUDIO_PG_BIND_HOST / STUDIO_OBS_BIND_HOST (both default 127.0.0.1,
-# i.e. host-loopback-only). When this compose file runs on a remote Docker host via
-# STUDIO_INFRA_REMOTE (see infra/environments/README.md), set these to that host's
-# private (e.g. Tailscale) interface address instead — never 0.0.0.0 — so dev
-# services stay off the public internet either way.
+# Ports bind to STUDIO_*_BIND_HOST values that default to 127.0.0.1. For a
+# remote Docker host, bind only to a private interface. Never publish these
+# development defaults directly to the internet.
 name: studio-foundation
 
 services:
@@ -27,20 +25,7 @@ services:
       retries: 20
     restart: unless-stopped
 
-  # Optional tracing UI (Apache-2.0). OTLP on 4317/4318, UI on 16686.
-  jaeger:
-    image: jaegertracing/jaeger:2.4.0
-    profiles: ["observability"]
-    ports:
-      - "${STUDIO_OBS_BIND_HOST:-127.0.0.1}:16686:16686"
-      - "${STUDIO_OBS_BIND_HOST:-127.0.0.1}:4317:4317"
-      - "${STUDIO_OBS_BIND_HOST:-127.0.0.1}:4318:4318"
-    restart: unless-stopped
-
-  # Nakama (Apache-2.0) — identity, social graph, parties, matchmaking, and the
-  # authoritative RPC layer the world-sim graduates to (ADR 0007/0005). Its TS
-  # runtime module lives in infra/nakama/src and is mounted build/ here.
-  # Enable with the `nakama` profile: just nakama-up (see justfile).
+  # Optional mechanics-neutral identity and authenticated application RPC bridge.
   nakama:
     image: registry.heroiclabs.com/heroiclabs/nakama:3.22.0 # Apache-2.0
     profiles: ["nakama"]
@@ -49,8 +34,8 @@ services:
         condition: service_healthy
     environment:
       NAKAMA_DATABASE_ADDRESS: "${STUDIO_PG_USER:-studio}:${STUDIO_PG_PASSWORD:-studio_dev_password}@postgres:5432/${STUDIO_PG_DB:-studio}"
-      ASHA_AUTHORITY_URL: "${ASHA_AUTHORITY_URL:-http://host.docker.internal:8082/internal/v1/world-events}"
-      ASHA_AUTHORITY_TOKEN: "${ASHA_AUTHORITY_TOKEN:-}"
+      STUDIO_APPLICATION_URL: "${STUDIO_APPLICATION_URL:-http://host.docker.internal:8082/application-requests}"
+      STUDIO_APPLICATION_TOKEN: "${STUDIO_APPLICATION_TOKEN:-}"
     entrypoint:
       - "/bin/sh"
       - "-ec"
@@ -58,14 +43,14 @@ services:
         /nakama/nakama migrate up --database.address "$${NAKAMA_DATABASE_ADDRESS}" &&
         exec /nakama/nakama --config /nakama/data/local.yml
         --database.address "$${NAKAMA_DATABASE_ADDRESS}"
-        --runtime.env "ASHA_AUTHORITY_URL=$${ASHA_AUTHORITY_URL}"
-        --runtime.env "ASHA_AUTHORITY_TOKEN=$${ASHA_AUTHORITY_TOKEN}"
+        --runtime.env "STUDIO_APPLICATION_URL=$${STUDIO_APPLICATION_URL}"
+        --runtime.env "STUDIO_APPLICATION_TOKEN=$${STUDIO_APPLICATION_TOKEN}"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
-      - "${STUDIO_NAKAMA_BIND_HOST:-127.0.0.1}:7349:7349"   # gRPC API
-      - "${STUDIO_NAKAMA_BIND_HOST:-127.0.0.1}:7350:7350"   # HTTP/WebSocket API
-      - "${STUDIO_NAKAMA_BIND_HOST:-127.0.0.1}:7351:7351"   # developer console
+      - "${STUDIO_NAKAMA_BIND_HOST:-127.0.0.1}:7349:7349"
+      - "${STUDIO_NAKAMA_BIND_HOST:-127.0.0.1}:7350:7350"
+      - "${STUDIO_NAKAMA_BIND_HOST:-127.0.0.1}:7351:7351"
     volumes:
       - ./nakama/build:/nakama/data/modules:ro
       - ./nakama/local.yml:/nakama/data/local.yml:ro
@@ -76,10 +61,18 @@ services:
       retries: 5
     restart: unless-stopped
 
-  # Object storage is intentionally ABSENT until a demonstrated requirement exists
-  # (GOAL.md principle 15). Reviewed candidate if needed: SeaweedFS (Apache-2.0).
-  # MinIO was rejected: AGPL relicense + community build feature removal.
-  # See docs/architecture/dependency-licenses.md.
+  # Optional tracing UI (Apache-2.0). OTLP on 4317/4318, UI on 16686.
+  jaeger:
+    image: jaegertracing/jaeger:2.4.0
+    profiles: ["observability"]
+    ports:
+      - "${STUDIO_OBS_BIND_HOST:-127.0.0.1}:16686:16686"
+      - "${STUDIO_OBS_BIND_HOST:-127.0.0.1}:4317:4317"
+      - "${STUDIO_OBS_BIND_HOST:-127.0.0.1}:4318:4318"
+    restart: unless-stopped
+
+  # Object storage and product APIs are intentionally absent. Consumers add
+  # only the services their requirements justify.
 
 volumes:
   studio_pg_data:

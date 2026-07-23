@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prove device auth -> Nakama RPC -> Rust WorldSim -> idempotent replay."""
+"""Probe Nakama device authentication and the optional neutral application RPC."""
 
 from __future__ import annotations
 
@@ -70,7 +70,7 @@ def rpc(
     base_url: str,
     session_token: str,
     rpc_id: str,
-    payload: dict[str, Any],
+    payload: Any,
     timeout: float,
 ) -> dict[str, Any]:
     result = request_json(
@@ -91,45 +91,45 @@ def rpc(
     return decoded
 
 
-def expect(condition: bool, message: str) -> None:
-    if not condition:
-        raise ProbeError(message)
+def run(
+    base_url: str,
+    server_key: str,
+    timeout: float,
+    application_payload: Any | None = None,
+) -> None:
+    session = authenticate(
+        base_url,
+        server_key,
+        f"studio-foundation-probe-{uuid.uuid4().hex}",
+        timeout,
+    )
 
-
-def run(base_url: str, server_key: str, timeout: float) -> None:
-    run_id = uuid.uuid4()
-    session = authenticate(base_url, server_key, f"asha-probe-{run_id.hex}", timeout)
-
-    identity = rpc(base_url, session, "asha_identify", {}, timeout)
-    expect(identity.get("ok") is True, "asha_identify did not report ok=true")
+    identity = rpc(base_url, session, "studio_identify", {}, timeout)
+    if identity.get("ok") is not True:
+        raise ProbeError("studio_identify did not report ok=true")
     user_id = identity.get("userId")
-    expect(
-        isinstance(user_id, str) and user_id != "anonymous",
-        "identity was not authenticated",
-    )
-
-    event = {
-        "ResourceExtracted": {
-            "faction": str(uuid.uuid4()),
-            "sector": str(uuid.uuid4()),
-            "resource": "RawOre",
-            "units": 100,
-            "idempotency_key": str(uuid.uuid4()),
-        }
-    }
-    first = rpc(base_url, session, "asha_world_event", event, timeout)
-    expect(first.get("applied") is True, f"first settlement was not applied: {first}")
-
-    replay = rpc(base_url, session, "asha_world_event", event, timeout)
-    expect(replay.get("applied") is False, f"replay was applied twice: {replay}")
-    expect(
-        "duplicate" in str(replay.get("summary", "")).lower(),
-        "replay was not idempotent",
-    )
-
+    if not isinstance(user_id, str) or user_id == "anonymous":
+        raise ProbeError("identity was not authenticated")
     print(f"[nakama-probe] identity ok: {user_id}")
-    print(f"[nakama-probe] settlement ok: {first['summary']}")
-    print(f"[nakama-probe] replay ok: {replay['summary']}")
+
+    if application_payload is None:
+        return
+
+    result = rpc(
+        base_url,
+        session,
+        "studio_application_request",
+        application_payload,
+        timeout,
+    )
+    if not isinstance(result.get("accepted"), bool) or not isinstance(
+        result.get("summary"), str
+    ):
+        raise ProbeError("application RPC returned an invalid result contract")
+    print(
+        "[nakama-probe] application response: "
+        f"accepted={result['accepted']} summary={result['summary']}"
+    )
 
 
 def main() -> int:
@@ -139,13 +139,23 @@ def main() -> int:
         default=os.environ.get("STUDIO_NAKAMA_URL", "http://127.0.0.1:7350"),
     )
     parser.add_argument(
-        "--server-key", default=os.environ.get("STUDIO_NAKAMA_SERVER_KEY", "defaultkey")
+        "--server-key",
+        default=os.environ.get("STUDIO_NAKAMA_SERVER_KEY", "defaultkey"),
     )
     parser.add_argument("--timeout", type=float, default=10.0)
+    parser.add_argument(
+        "--application-json",
+        help="optionally send this JSON value through studio_application_request",
+    )
     args = parser.parse_args()
     try:
-        run(args.base_url.rstrip("/"), args.server_key, args.timeout)
-    except ProbeError as error:
+        payload = (
+            json.loads(args.application_json)
+            if args.application_json is not None
+            else None
+        )
+        run(args.base_url.rstrip("/"), args.server_key, args.timeout, payload)
+    except (json.JSONDecodeError, ProbeError) as error:
         print(f"[nakama-probe] FAIL: {error}", file=sys.stderr)
         return 1
     return 0

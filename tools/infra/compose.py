@@ -1,16 +1,10 @@
 #!/usr/bin/env python3
-"""docker compose front door for infra/compose.yaml — local or remote (SSH) Docker host.
+"""Run infra/compose.yaml against a local or optional remote Docker host.
 
-  compose.py <docker-compose-args...>
-
-Local (default): runs `docker compose -f infra/compose.yaml --env-file .env <args>` here.
-
-Remote (STUDIO_INFRA_REMOTE=<ssh host alias> set in .env): syncs infra/compose.yaml,
-the Postgres bootstrap files, the committed Nakama runtime bundle/config, and .env to
-STUDIO_INFRA_REMOTE_DIR on that host (scp — small, static files; no rsync dependency),
-then runs the same compose command over ssh there. Use this when the local Docker
-engine cannot run but a Docker host is reachable over SSH/Tailscale. See
-infra/environments/README.md.
+Local mode uses the current Docker engine. With STUDIO_INFRA_REMOTE set, the
+wrapper copies the generic Compose file, PostgreSQL bootstrap files, optional
+Nakama runtime bundle/config, and ignored local .env to the configured host
+before invoking Docker Compose over SSH.
 """
 
 from __future__ import annotations
@@ -28,9 +22,7 @@ REPO = senv.repo_root()
 
 
 def _remote_expr(path: str) -> str:
-    """Shell-quote `path` for the remote command line without breaking a leading
-    ~/ expansion (shlex.quote would wrap the whole thing in single quotes, which
-    suppresses tilde expansion too — that bug once left a literal `~` dir behind)."""
+    """Quote a remote path while preserving a leading tilde expansion."""
     if path == "~":
         return "~"
     if path.startswith("~/"):
@@ -43,6 +35,7 @@ def _sync(remote: str, remote_dir: str) -> int:
     mkdir = subprocess.call(["ssh", remote, f"mkdir -p {_remote_expr(remote_nakama_dir)}"])
     if mkdir != 0:
         return mkdir
+
     copy_infra = subprocess.call(
         [
             "scp",
@@ -55,6 +48,7 @@ def _sync(remote: str, remote_dir: str) -> int:
     )
     if copy_infra != 0:
         return copy_infra
+
     copy_nakama = subprocess.call(
         [
             "scp",
@@ -67,6 +61,7 @@ def _sync(remote: str, remote_dir: str) -> int:
     )
     if copy_nakama != 0:
         return copy_nakama
+
     env_file = REPO / ".env"
     if env_file.is_file():
         return subprocess.call(["scp", "-q", str(env_file), f"{remote}:{remote_dir}/.env"])
@@ -78,10 +73,11 @@ def _run_remote(remote: str, args: list[str]) -> int:
     sync_code = _sync(remote, remote_dir)
     if sync_code != 0:
         print(
-            f"compose.py: sync to {remote}:{remote_dir} failed (exit {sync_code})", file=sys.stderr
+            f"compose.py: sync to {remote}:{remote_dir} failed (exit {sync_code})",
+            file=sys.stderr,
         )
         return sync_code
-    quoted_args = " ".join(shlex.quote(a) for a in args)
+    quoted_args = " ".join(shlex.quote(arg) for arg in args)
     remote_cmd = (
         f"cd {_remote_expr(remote_dir)} && "
         f"docker compose -f compose.yaml --env-file .env {quoted_args}"

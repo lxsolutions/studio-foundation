@@ -25,8 +25,8 @@ Exact resolved versions live in the lockfiles (`Cargo.lock`, `uv.lock`,
 | just | 1.57.0 | CC0-1.0 | Task runner |
 | uv | ≥0.8 | MIT OR Apache-2.0 | Python env manager |
 | Python | 3.11 | PSF-2.0 | Tooling/pipeline scripts |
-| Node.js | 22 LTS | MIT | Nakama runtime build/test and browser test harness |
-| TypeScript | 6.x (npm lockfile) | Apache-2.0 | Build the Nakama JavaScript runtime module |
+| Node.js | 22 LTS | MIT | Optional Nakama module build/test and browser test harness |
+| TypeScript | 6.x (npm lockfile) | Apache-2.0 | Build the optional mechanics-neutral Nakama runtime module |
 | Docker Engine/Compose | any current | Apache-2.0 | Local infrastructure |
 | Git | ≥2.40 | GPL-2.0 (tool) | VCS (standalone tool) |
 
@@ -66,7 +66,7 @@ fails closed on network or response errors.
 |---|---|---|---|
 | postgres | 17-alpine | PostgreSQL License | default |
 | jaegertracing/jaeger | 2.x | Apache-2.0 | `observability` (optional) |
-| registry.heroiclabs.com/heroiclabs/nakama | 3.22.0 | Apache-2.0 | `nakama` (public identity/social/matchmaking and RPC boundary); active upstream, self-hostable; world events forward to the private Rust authority adapter |
+| registry.heroiclabs.com/heroiclabs/nakama | 3.22.0 | Apache-2.0 | Optional self-hosted identity/social/matchmaking service; Foundation module forwards only opaque application payloads |
 | (object storage) | — | — | **Not included.** MinIO moved to AGPL + feature-gutted community builds; if a demonstrated need arises, SeaweedFS (Apache-2.0) is the reviewed candidate — see ADR 0013. |
 
 ## GitHub Actions

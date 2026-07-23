@@ -3,7 +3,7 @@
 - Status: Accepted
 - Date: 2026-07-20
 - Last amended: 2026-07-22
-- Constrains: engine strategy, `engine/engine-lock.toml`, ADR 0002, ADR 0007
+- Constrains: engine strategy, `engine/engine-lock.toml`, ADR 0002
 
 ## Context
 
@@ -21,7 +21,7 @@ boundary.
    the clean upstream editor and engine; patched source trees exist only as
    reproducible build inputs for browser templates.
 3. Own the distribution layer around Godot: shared addons, editor and asset
-   tooling, Rust simulation and authority, infrastructure, agent-readable
+   tooling, optional backend scaffolding, infrastructure, agent-readable
    commands, validation, and release evidence.
 4. Keep the integration replaceable. If official Godot supplies a suitable
    WebGPU backend, remove the local patches without changing game architecture.

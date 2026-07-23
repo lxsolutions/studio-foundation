@@ -1,251 +1,86 @@
-# Bootstrap Report — what verifiably works, and on which machine
+# Studio Foundation verification report
 
-Source model updated: 2026-07-22. Latest full runtime verification: 2026-07-21,
-Windows 10 AMD64 (local dev machine "Awesom-o"). Historical milestones retain
-their original verification dates.
-## Environment (just doctor)
+Last updated: 2026-07-22
 
-| Tool | Status |
+This report separates verified repository behavior from work still in progress.
+It is not a product roadmap.
+
+## Public scope
+
+Studio Foundation is a mechanics-neutral Godot toolkit. The public release
+surface contains:
+
+- official Godot pinning and a checksummed WebGPU patch series
+- shared Godot addons and a neutral project template
+- asset, export, browser, release, and agent tooling
+- a versioned handshake/transport protocol with an opaque application hook
+- optional Rust API, session, persistence, and administration scaffolding
+- optional PostgreSQL, Nakama, and tracing development infrastructure
+
+Game content, domain schemas, business rules, identity policy, and production
+deployment configuration belong in consuming repositories. ADR 0014 records
+this boundary.
+
+## Verified in this change
+
+| Area | Evidence |
 |---|---|
-| Windows 10 AMD64, Python 3.11.3, Git 2.40, just 1.57, uv 0.8.22 | OK (required) |
-| Rust cargo 1.97.1 `x86_64-pc-windows-gnu` | OK — links via WinLibs MinGW (see fix below) |
-| Godot 4.7.1.stable.official.a13da4feb (winget) + official web export templates | OK |
-| Blender 5.2.0 | OK (manual) |
-| Node 22.20.0 | OK (required for Nakama runtime builds/tests) |
-| Docker client 29.6.1 (local) | Still BLOCKED locally — "Virtualization support not detected": VT-x/AMD-V disabled in BIOS/UEFI; needs firmware toggle + reboot (user action). Worked around, not fixed (see below). |
-| Docker via <remote-docker-host> (STUDIO_INFRA_REMOTE) | OK — `just services-up`/`db-migrate`/`test-db` all run infra/compose.yaml on <remote-docker-host> (Linux, Tailscale) over SSH; see below |
-| PostgreSQL <remote-docker-host>:5432 (<remote-docker-host>, via compose) | OK — accepting connections, migrations applied, DB-backed integration tests pass (see below) |
-| Studio WebGPU export templates | Historical 4.7.1 build/export/render evidence is green; local patch reconstruction applies cleanly, with a fresh full rebuild still required |
-| Android SDK | not installed |
-| Playwright (playwright-core, system Chrome) | OK — installed + smoke passing (see below) |
-| studio-mcp config | present; server self-check passes |
-## Standalone engine source update (2026-07-22)
+| Official engine source | Godot 4.7.1 stable commit `a13da4feb8d8aefc283c3763d33a2f170a18d541` is the sole active upstream pin |
+| WebGPU source preparation | Patch checksums, path containment, reusable-source preparation, candidate isolation, dry-run, resume, and conflict handling pass the engine-tool tests |
+| Shared protocol v2 | Nine golden fixtures pass Rust, GDScript, and fixture-set validation |
+| Godot template | Godot 4.7.1 imports cleanly; 25 test methods and 137 assertions pass |
+| Rust service workspace | 16 fast tests pass; two PostgreSQL integration tests remain explicitly ignored without a live database |
+| Generated server template | Standalone server test passes against the regenerated lockfile |
+| Optional Nakama bridge | Six ES5 runtime tests and four Python probe tests pass |
+| Infrastructure tools | Five local/remote Compose and database lifecycle tests pass |
+| Workflow policy | Representative generic workflow passes trigger, immutable-action-pin, and self-hosted trust-boundary validation |
+| Python tooling | Engine, release, security, generator, CI, connectivity, benchmark, and MCP unit suites pass after the generic workflow was installed |
+| Browser capture guard | WebGPU capture requires `navigator.gpu`, a usable adapter, and an active WebGPU canvas context before accepting evidence |
 
-- `engine-fetch` no longer fetches a separate LX Solutions engine repository.
-  It checks out the locked official Godot commit, verifies the ordered local
-  patch SHA-256 values, and prepares `engine/.cache/studio-webgpu`.
-- The scoped patch series reconstructs the browser integration and required
-  SPIR-V/Tint sources without carrying unrelated historical branch changes.
-- All three patches apply cleanly to a fresh official 4.7.1 worktree. Unit tests
-  cover checksum tampering, path traversal, reusable source preparation,
-  conflict preservation, and candidate artifact isolation.
-- A fresh release/debug template build and browser capture from this new source
-  preparation path remain required before its evidence replaces the historical
-  validated-tree build below.
+## Engine lineage and responsibility
 
-## Test evidence (`just ci-local` — green, exit 0)
+Official Godot is upstream. Studio Foundation does not depend on a separate LX
+Solutions engine fork. The local patch series retains required historical
+attribution in [NOTICE.md](NOTICE.md), while this repository owns the 4.7.1
+forward port, patch curation, build orchestration, fallback, and validation
+surface it ships.
 
-- **Rust backends**: all service-workspace and standalone Asha-server unit,
-  integration-without-DB, WebSocket, protocol, world-sim, authority-adapter,
-  and doc tests pass. Three live-PostgreSQL tests remain explicitly
-  ignored in the fast suite and have separate live evidence below.
-- **Python tooling/MCP**: 82 tests pass across security, protocol, CI, generator,
-  release, connectivity, benchmark/visual, cleanup, and engine-rebase behavior;
-  5 additional infrastructure tests pass (2 remote-compose, 3 database lifecycle).
-- **Nakama authority bridge**: TypeScript build plus 6 Node runtime tests and 3
-  Python live-probe contract tests pass, including authenticated forwarding,
-  fail-closed behavior, idempotent replay, and ES5 artifact compatibility.
-- **Protocol fixtures**: all 9 cross-language golden fixtures pass.
-- **Godot headless**: 8 files, 25 test methods, 137 assertions, 0 failures.
-  The intentional newer-save-schema warning remains; malformed JSON and
-  RefCounted lifecycle checks no longer emit engine errors or leak warnings.
-- **Quality gates**: Cargo fmt/Clippy, Ruff check/format, workflow validation,
-  and reviewable-file secret scanning pass (345 files).
+## External consuming proof
 
-## Fixes applied on 2026-07-20
+OSWT is maintained in a separate game repository and is not embedded into the
+Foundation tree. Its integration branch currently passes 55 headless gameplay
+checks and includes a runtime proof panel. Publishing it as current WebGPU
+evidence remains gated on fresh locked templates, strict browser validation,
+and a clean provenance record.
 
-1. **windows-gnu link failure** — `ld: cannot find dllcrt2.o / -lkernel32` broke
-   every cargo build. Root cause: rustup's self-contained MinGW gcc lacks CRT
-   objects; a real MinGW (WinLibs UCRT, installed via winget) must be on PATH.
-   Fixes:
-   - `tools/pylib/studio_tools/env.py`: `find_mingw_gcc()` / `mingw_bin_dir()`
-     discovery (PATH → winget WinLibs → MSYS2), explicitly ignoring rustup's
-     self-contained gcc.
-   - `tools/cargo_env.py`: wrapper that injects the MinGW bin dir into PATH for
-     any cargo invocation.
-   - `justfile`: `test-rust`, `build-rust`, `lint-rust`, `db-migrate`,
-     `test-generated` now route cargo through the wrapper.
-   - `tools/doctor/doctor.py`: new **required** `mingw-linker` check so the
-     failure is diagnosed before a build, not during one.
-2. **`test-python` ran zero tests** (unittest discovery found nothing at
-   `tools/` top level) — recipe now targets `tools/studio-mcp/tests`, matching
-   `test-mcp`.
-3. **studio-mcp INVALID_PARAMS bug** — `params.arguments: []` was coerced to
-   `{}` by `or {}` and never rejected. Fixed in
-   `tools/pylib/studio_tools/mcp/server_core.py`; the existing
-   `test_tools_call_bad_params_shape` now passes.
+## Not yet claimed
 
-## Browser export + smoke (verified 2026-07-20, second session)
+The following require additional evidence before a public claim is upgraded:
 
-- `just export-browser-webgl` — template project exported: index.html 5 KiB,
-  index.wasm 38.6 MiB, index.pck 113 KiB (37.8 MiB total).
-- `just run-browser-smoke` — **PASS**: playwright-core drove system Chrome,
-  Godot canvas rendered live at 127.0.0.1:8060, zero fatal console errors.
-  Tooling created today: `tests/browser/package.json` + `smoke.mjs` (spawns
-  `serve_web.py`, waits for canvas with non-zero GL size, pattern-matches fatal
-  console errors) and the `tools/godot/run_browser_smoke.py` wrapper the
-  justfile always referenced. doctor's browser-testing check now looks for
-  `playwright-core` and its fix text is accurate.
-- `just engine-versions` / `just engine-fetch` / `just engine-build` —
-  implemented `engine/scripts/engine.py`. Fetched pinned official Godot 4.7.1
-  (a13da4feb) and the dwalter/godotwebgpu fork (f329e39, base 4.6.2) into
-  `engine/.cache`; installed scons 4.9.1 (uv `engine` group) + emsdk 4.0.11;
-  build auto-locates emsdk and installs templates as `*.webgpu.zip` into
-  `engine/artifacts/templates/`. Agent screenshot/visual-regression commands
-  added: `just capture-web` (real-GPU Playwright screenshot of a web export —
-  headless Godot's dummy renderer cannot rasterize, so browsers are the CI
-  capture path) and `just compare-screenshots` (pure-Python PNG diff with
-  tolerance; validated with a 0-diff self-compare).
+- fresh release and debug WebGPU template archives from the current lock
+- WebGPU browser capture from those exact archives
+- OSWT redeployment from a clean Foundation and OSWT commit pair
+- Safari/iOS WebGPU behavior
+- native Android and iOS device runs
+- database-backed integration tests against a live disposable PostgreSQL stack
+- console support beyond the documented licensed-provider path
 
-## WebGPU engine build + export (verified 2026-07-20, fourth session)
+## Reproduce the fast evidence
 
-- `just engine-build` compiled BOTH web templates cleanly (release + debug,
-  ~9.4 MB zips / 35 MB wasm each, EXIT=0) and installed them.
-- `just export-browser-webgpu` runs and produces a 34.2 MiB export.
-- **Blocker — engine version gap (exactly what ADR 0002 warns about):** the
-  fork is based on Godot **4.6.2** (reads .pck format **v3**), while our editor
-  of record is **4.7.1** (writes .pck format **v4**). The exported WebGPU build
-  fails at runtime with `Pack version unsupported: 4` / `Cannot open resource
-  pack 'index.pck'`. Chrome reports `navigator.gpu present: true`, so WebGPU
-  itself is available — this is purely a pack-format/editor-version mismatch.
-- Only a `webgpu-4.6.2` branch exists upstream; there is no 4.7-based fork
-  line. Chosen resolution: **rebase (merge) the fork onto 4.7.1** per ADR 0002.
+```sh
+just test
+just lint
+just test-generated
+just release-validate --allow-dirty
+```
 
-## WebGPU 4.7.1 port — RENDERING CONFIRMED (verified 2026-07-20, fifth session)
+Engine evidence uses the longer sequence:
 
-This is the milestone the rebase was for.
+```sh
+just engine-fetch
+just engine-build
+just engine-validate
+```
 
-- **Rebase complete.** All 119 conflicts resolved and merged onto official
-  4.7.1 (merge `f5f31a4f78`). 54 mechanical + 49 base-lag took official; the
-  renderer/display conflicts were **hand-unioned** (fork's WebGPU API traits and
-  staging-buffer logic preserved alongside official's raytracing, `RSE::` enum
-  refactor, and subpass changes; `mesh_storage` keeps the fork's `bone_offset`).
-  The resulting validated tree was later converted into the scoped patch series
-  committed in this repository (ADR 0002/0008).
-- **Two compile errors fixed post-merge:** `command_pipeline_barrier` gained a
-  7th `AccelerationStructureBarrier` arg in 4.7.1 (`f973478852`); `light_storage`
-  lost the fork's `is_force_omni_dual_paraboloid` getter + one `RS::`→`RSE::`
-  (`14f5effb72`). engine-lock pinned to `14f5effb72`.
-- **Build green.** `just engine-build` compiled release + debug web templates
-  from the merged 4.7.1 tree (EXIT=0) and installed them.
-- **Export + boot green.** `just export-browser-webgpu` produced a 36.1 MiB
-  export that **boots past the old `Pack version unsupported: 4`** — the version
-  gap is closed.
-- **Rendering confirmed.** `just capture-web --preset web-webgpu` produced a
-  real 1280x720 screenshot showing the full menu with version string
-  `web-webgpu … godot 4.7.1-stable (custom_build)` — proof the WebGPU backend
-  rasterizes the actual game, not a blank canvas.
-  (`templates/godot-game/project/captures/web-webgpu.png`.)
-- **Visual-regression gate.** `compare_screenshots` vs the WebGL baseline:
-  11,129/921,600 px differ (1.21%) — renderer-level AA/font/layout variance
-  between WebGPU and WebGL, not a failure. Passes at the renderer-variance
-  tolerance (`--max-diff-ratio 0.02`). `just engine-validate` encodes this gate;
-  its default 0.001 threshold is for same-renderer regression, cross-renderer
-  comparison uses the 0.02 renderer-variance band.
-
-**WebGPU has evidence-backed 4.7.1 browser results** alongside WebGL. A fresh
-full rebuild from the committed patch series is required before treating the new
-standalone source-preparation path as release evidence.
-
-## Remote Docker via <remote-docker-host> (verified 2026-07-20, third session)
-
-Local Docker Desktop remains firmware-blocked (see above); rather than wait on a
-BIOS toggle + reboot, `infra/compose.yaml` now also runs unmodified on **<remote-docker-host>**
-(a Linux box on the owner's Tailscale mesh, already used for platosplaza CI/claims)
-over SSH:
-
-- New `STUDIO_INFRA_REMOTE`/`STUDIO_INFRA_REMOTE_DIR`/`STUDIO_PG_BIND_HOST`/
-  `STUDIO_PG_HOST` vars (`.env.example`) and `tools/infra/compose.py`: when
-  `STUDIO_INFRA_REMOTE` is set, it scp's `infra/compose.yaml` + `infra/postgres/` +
-  `.env` to that host and runs `docker compose` there over ssh instead of locally;
-  unset, behavior is byte-identical to before. `tools/infra/db.py` and the
-  justfile's `COMPOSE` var both route through it, so every `services-*`/`db-*`
-  recipe works unchanged either way.
-- `infra/compose.yaml`'s postgres/jaeger ports now bind `${STUDIO_PG_BIND_HOST:-127.0.0.1}`
-  / `${STUDIO_OBS_BIND_HOST:-127.0.0.1}` instead of a hardcoded `127.0.0.1`, so a
-  remote host can bind its own Tailscale address (<remote-docker-host>) instead of its
-  loopback — confirmed reachable from Awesom-o over Tailscale only (<remote-docker-host>'s ufw
-  is default-deny-incoming with an explicit tailscale0-only allow rule; the
-  container port binds to that interface specifically, never `0.0.0.0`).
-- Verified this date: `just services-up` (postgres pulled + healthy on <remote-docker-host>),
-  `just doctor` (docker + postgres checks both green, correctly labeled
-  "via remote Docker host '<remote-docker-host>'"), `just db-migrate` (migrations applied),
-  `just test-db` — **3 previously ignored live tests now run and pass**: the two
-  platform round trips (`guest_session_creates_account_session_audit`,
-  `migrations_apply_and_bootstrap_check_roundtrips`) plus Asha's atomic event-ledger/
-  snapshot recovery test. `just db-backup` (pg_dump via
-  ssh, 9 KiB), and a full `services-down` → `services-up` cycle (volume persists).
-- Found and fixed in passing: `tools/infra/db.py`'s `test-env` subcommand stripped
-  *every* `--` from its argv, not just its own leading separator — this ate the
-  `--` that tells `cargo test ... -- --ignored` to forward `--ignored` to the test
-  binary. Unreachable before (Docker was fully blocked), so `just test-db` had
-  never actually been run against a live database until now.
-- Known follow-up, not yet needed: <remote-docker-host> already has something listening on
-  127.0.0.1:4317 (unrelated to this project), which would collide with
-  `observability-up`'s jaeger service if that profile is ever brought up there.
-- **Follow-up fix (verified 2026-07-20, same session):** the <remote-docker-host> change had
-  silently broken studio-mcp's database tools. `tools.py`'s `_compose_psql`
-  called `docker compose` directly (bypassing `compose.py`'s remote routing —
-  would have hit the dead local engine), and `security.py`'s
-  `assert_local_database` hardcoded `127.0.0.1`/`localhost`/`::1`, so a
-  correctly-configured remote query would have been refused outright as
-  "not a local database." Fixed both (the security check now also trusts this
-  machine's own configured `STUDIO_PG_HOST` — not a general remote allowance;
-  still refuses arbitrary hosts, per the existing `test_remote_database_refused`
-  test, which still passes). Verified: `just test-mcp` 34/34 green, plus a live
-  `tool_postgres_query_readonly` call against <remote-docker-host>'s Postgres, exit 0. Also
-  created the `.mcp.json` `docs/agents/mcp/README.md` already documented as
-  "committed" but that never actually existed — `just doctor` now reports
-  `studio-mcp: config present, self-check pass`.
-
-## Hardening verified 2026-07-21
-
-- Restored the local PR-equivalent CI orchestrator, workflow validation,
-  reviewable-file secret scanning, robust cleanup, and generated-game tests.
-- Hardened GitHub Actions around the self-hosted trust boundary: PR policy
-  checks run on hosted Ubuntu, trusted pushes run `ci-local`, engine validation
-  rebuilds exact pins first, and scheduled/manual runs execute nightly DB and
-  release gates. External actions are pinned to immutable commits.
-- Added and tested the Nakama identity/RPC profile plus a bearer-protected Rust
-  authority adapter. First-seen RPC events now commit an append-only ledger row and
-  recovery snapshot in one row-locked PostgreSQL transaction before acknowledgement;
-  rejected events consume durable idempotency keys and stale process memory repairs
-  from the database. The repeatable live probe is ready, while an explicitly
-  started/deployed stack remains required for live Nakama evidence.
-- Restored release validation, exact-lock inventory, SPDX 2.3 SBOM generation,
-  attribution generation, and fail-closed OSV auditing. The live audit checked
-  217 resolved third-party packages and found no advisories.
-- Isolated every game's SQLx migration history inside its owned schema after a
-  live test exposed the database-global version collision. Asha now has forward-only
-  event-ledger migrations, and newly generated games inherit schema-local migration
-  startup. The generated Godot/Rust gate passes with isolated CI user data.
-- Committed the template server lockfile; generated identities are rewritten
-  inside it and the template builds successfully with `cargo --locked`.
-- Restored the end-to-end Godot → control API → PostgreSQL → game-server
-  connectivity proof and made the database round trip mandatory.
-- Added a finite headless scene benchmark with Godot's native benchmark JSON;
-  a real template run returned structured scene and engine timings.
-- Added browser-rendered visual baseline/candidate orchestration and verified a
-  real Chrome capture plus zero-difference identity comparison.
-- Implemented `engine-rebase`: current pins report `up_to_date`; divergent
-  releases are prepared in isolated, resumable worktrees with conflict
-  classification. Candidate builds use separate artifact directories.
-
-## Honest gaps (not yet evidenced)
-
-- Docker Desktop / local virtualization — still genuinely blocked on firmware
-  (VT-x/AMD-V disabled in BIOS/UEFI); the <remote-docker-host> path above is a workaround for
-  development, not a fix. A container workload that must run locally (not
-  dev-database-shaped) still needs the BIOS toggle + reboot.
-- Android/iOS exports — no SDK / no macOS.
-- Safari/iOS anything — requires real hardware, per policy.
-
-## Strategy docs added 2026-07-20
-
-- `docs/adr/0007-one-persistent-world-many-scales.md` — the studio's defining
-  thesis: one world simulation, many gameplay scales; design laws included.
-- `docs/architecture/asha-platform-strategy.md` — Godot distribution (not a
-  merged multi-engine) decision; what we own vs. borrow.
-- `docs/architecture/vertical-slice.md` — the closed-loop campaign sector
-  (extraction → economy → production → strategy → battle → territory) as the
-  first milestone.
+A WebGPU screenshot is accepted only when the strict runtime probe confirms the
+WebGPU API, adapter, and canvas context.
