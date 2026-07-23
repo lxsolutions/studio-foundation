@@ -229,19 +229,22 @@ def tool_engine_classify_conflicts(args: dict) -> tuple[int, str]:
 
 
 def tool_engine_build_status(args: dict) -> tuple[int, str]:
-    """Report built template artifacts + whether they match the engine-lock pin."""
+    """Report built templates and the locked in-repository WebGPU patch source."""
     artifacts = REPO / "engine" / "artifacts" / "templates"
     lock = senv.engine_lock()
-    pinned = lock.get("godot", {}).get("webgpu_fork", {})
+    integration = lock.get("godot", {}).get("webgpu", {})
+    patches = lock.get("patches", {}).get("series", [])
     zips = []
     if artifacts.is_dir():
-        for z in sorted(artifacts.glob("*.zip")):
-            zips.append({"file": z.name, "bytes": z.stat().st_size})
+        for archive in sorted(artifacts.glob("*.zip")):
+            zips.append({"file": archive.name, "bytes": archive.stat().st_size})
     return 0, json.dumps(
         {
-            "pinned_branch": pinned.get("branch"),
-            "pinned_base": pinned.get("base"),
-            "pinned_commit": pinned.get("commit"),
+            "source": "official Godot + Studio Foundation patch series",
+            "pinned_base": integration.get("base"),
+            "pinned_base_commit": integration.get("base_commit"),
+            "historical_tree_commit": integration.get("historical_tree_commit"),
+            "patches": [entry.get("file") for entry in patches],
             "templates": zips,
             "built": len(zips) > 0,
         },
@@ -540,7 +543,7 @@ REGISTRY: dict[str, dict] = {
     },
     "engine_classify_conflicts": {
         "fn": tool_engine_classify_conflicts,
-        "description": "Classify Godot-fork merge conflicts (mechanical/base-lag/fork-touched) as JSON",
+        "description": "Classify WebGPU patch-application conflicts for manual review as JSON",
         "schema": {"type": "object", "properties": {}},
     },
     "godot_capture_web": {

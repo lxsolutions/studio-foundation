@@ -1,33 +1,34 @@
-# engine-lock.toml — single machine-readable source of truth for engine provenance.
+# engine-lock.toml - single machine-readable source of truth for engine provenance.
 # Rules:
 #   * Never track a moving branch for production builds. Commits only.
 #   * Any change to this file requires an ADR update (docs/adr/0002) and a green
 #     engine-rebuild + smoke run (just engine-build && just export-browser-webgpu).
-#   * Checksums for built artifacts are appended by engine/scripts/build.py; empty
+#   * Patch checksums are verified before source preparation.
+#   * Built artifact checksums are recorded after validation; empty
 #     checksum tables mean "no reproducible build recorded yet on this machine class".
-schema = 1
-updated = "2026-07-19"
+schema = 2
+updated = "2026-07-22"
 
 [godot.official]
 repo   = "https://github.com/godotengine/godot"
 tag    = "4.7.1-stable"
 commit = "a13da4feb8d8aefc283c3763d33a2f170a18d541"
 license = "MIT"
-role   = "Primary engine. Native editor + all native exports. All game projects must stay compatible with this version."
+role   = "Sole engine upstream. Native editor + all native exports. All game projects must stay compatible with this version."
 
-[godot.webgpu_fork]
-repo    = "https://github.com/lxsolutions/godot-webgpu"   # OUR maintained fork (vendored backend)
-upstream = "https://github.com/dwalter/godotwebgpu"       # origin of the beta backend; fetch-only
-branch  = "webgpu-4.7.1"           # our maintained line (merge of official 4.7.1 onto the backend)
-commit  = "14f5effb72ae440a3aa575c801e4aae1a5da7fb8"  # merge + workflows-drop + 4.7.1 barrier & light_storage fixes; pushed to our fork
-base    = "4.7.1-stable"           # matches the editor of record (was 4.6.2 upstream)
+[godot.webgpu]
+base = "4.7.1-stable"
+base_commit = "a13da4feb8d8aefc283c3763d33a2f170a18d541"
+historical_tree_commit = "14f5effb72ae440a3aa575c801e4aae1a5da7fb8"
+source_lineage_repo = "https://github.com/dwalter/godotwebgpu"
+source_lineage_commit = "f329e39ce8db7acaa5c9d6628a530fb769969228"
 license = "MIT"
-status  = "beta"
-role    = "Studio-owned browser WebGPU export backend ONLY. Never the editor of record; official Godot is never forked. See docs/adr/0002 + docs/architecture/asha-platform-strategy.md."
-notes   = "Vendored from dwalter/godotwebgpu (largely AI-generated, MIT). We maintain the 4.7.1 port. Treat every upstream pull as untrusted input: full test + visual-regression pass required (ADR 0002 gate)."
+status = "beta"
+role = "Browser WebGPU export integration reconstructed from official Godot plus Studio Foundation's committed patch series. Official Godot remains the editor of record."
+notes = "The WebGPU backend originated in dwalter/godotwebgpu. Studio Foundation owns the 4.7.1 port, scoped patch set, build tooling, browser validation, and release evidence; the historical repository is source lineage only and is not fetched by engine-fetch."
 
 [toolchain]
-# Emscripten pin comes from the fork's own CI (web_builds.yml EM_VERSION).
+# Emscripten pin comes from the original backend integration CI.
 emscripten = "4.0.11"
 scons      = "4.9.1"      # >=4.0 required by Godot; re-verify against godotengine docs at first engine build
 python     = "3.11"
@@ -36,7 +37,7 @@ rust       = "1.97.1"
 rust_host_windows = "x86_64-pc-windows-gnu"  # no MSVC Build Tools required; see docs/adr/0004
 
 [build.web_webgpu]
-# Flags for building browser export templates from the WebGPU fork.
+# Flags for building browser export templates from the patched source tree.
 target_release = ["platform=web", "target=template_release", "dlink_enabled=no", "threads=yes"]
 target_debug   = ["platform=web", "target=template_debug",   "dlink_enabled=no", "threads=yes"]
 
@@ -44,12 +45,16 @@ target_debug   = ["platform=web", "target=template_debug",   "dlink_enabled=no",
 target = ["target=editor", "dev_build=no"]
 
 [patches]
-# Studio-specific engine patches, applied in order by engine/scripts/fetch.py.
-# Each entry: { file = "patches/NNNN-name.patch", sha256 = "..." }
-series = []
+# Complete Studio Foundation WebGPU integration, applied in order to official Godot.
+# Third-party license files are included inside their corresponding source patches.
+series = [
+  { file = "patches/0001-studio-webgpu-engine.patch", sha256 = "e41e90b309f0e4ecad5fbb534eee19166027a3689f28a867947955873976a83a" },
+  { file = "patches/0002-studio-webgpu-spirv.patch", sha256 = "34430a24647d5c90a66647067f11cb80057ee368da5afc4bed37e01945eac888" },
+  { file = "patches/0003-studio-webgpu-tint.patch", sha256 = "cd299a648de80465b131834581cf6f53a3208c4100acf1257e4fe031198e370e" },
+]
 
 [artifacts.export_templates]
-# Filled in by engine/scripts/build.py after a reproducible build.
+# Filled in after a reproducible build from engine/scripts/engine.py.
 # e.g. web_webgpu_release = { file = "godot.web.template_release.wasm32.zip", sha256 = "..." }
 
 [installed.editor]

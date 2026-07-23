@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import re
 import subprocess
 import sys
@@ -120,13 +121,50 @@ def validate_engine_lock(root: Path) -> list[str]:
     with path.open("rb") as handle:
         lock = tomllib.load(handle)
     problems = []
-    for name in ("official", "webgpu_fork"):
-        entry = lock.get("godot", {}).get(name, {})
-        commit = str(entry.get("commit", ""))
-        if not re.fullmatch(r"[0-9a-f]{40}", commit):
-            problems.append(f"engine pin godot.{name}.commit must be a full SHA-1")
+    official = lock.get("godot", {}).get("official", {})
+    integration = lock.get("godot", {}).get("webgpu", {})
+
+    for label, value in (
+        ("godot.official.commit", official.get("commit")),
+        ("godot.webgpu.base_commit", integration.get("base_commit")),
+        ("godot.webgpu.source_lineage_commit", integration.get("source_lineage_commit")),
+        (
+            "godot.webgpu.historical_tree_commit",
+            integration.get("historical_tree_commit"),
+        ),
+    ):
+        if not re.fullmatch(r"[0-9a-f]{40}", str(value or "")):
+            problems.append(f"engine pin {label} must be a full SHA-1")
+    if integration.get("base_commit") != official.get("commit"):
+        problems.append("godot.webgpu.base_commit must match godot.official.commit")
+    for label, entry in (("godot.official", official), ("godot.webgpu", integration)):
         if not entry.get("license"):
-            problems.append(f"engine pin godot.{name}.license is missing")
+            problems.append(f"engine pin {label}.license is missing")
+
+    patch_root = (root / "engine" / "patches").resolve()
+    series = lock.get("patches", {}).get("series", [])
+    if not series:
+        problems.append("engine patch series must not be empty")
+    for index, entry in enumerate(series, start=1):
+        relative = str(entry.get("file", "")).replace("\\", "/")
+        raw_expected = str(entry.get("sha256", ""))
+        expected = raw_expected.lower()
+        patch = (root / "engine" / relative).resolve()
+        if not patch.is_relative_to(patch_root):
+            problems.append(f"engine patch {index} escapes engine/patches")
+            continue
+        if not patch.is_file():
+            problems.append(f"engine patch is missing: {relative}")
+            continue
+        if raw_expected != expected or not re.fullmatch(r"[0-9a-f]{64}", expected):
+            problems.append(f"engine patch {relative} requires a lowercase SHA-256")
+            continue
+        with patch.open("rb") as handle:
+            actual = hashlib.file_digest(handle, "sha256").hexdigest()
+        if actual != expected:
+            problems.append(
+                f"engine patch checksum mismatch for {relative}: expected {expected}, got {actual}"
+            )
     return problems
 
 

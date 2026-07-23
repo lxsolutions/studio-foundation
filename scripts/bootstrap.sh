@@ -41,7 +41,7 @@ note 'Blender LTS: https://www.blender.org/download/ (or distro package); set BL
 note 'Docker engine + compose plugin (distro packages; Linux may need group setup)'
 note 'Android SDK + JDK 17 — only for Android export validation'
 if [ "$(uname)" = "Darwin" ]; then note 'Xcode — required for iOS compile/signing'; else note 'iOS builds require macOS + Xcode'; fi
-note 'Engine builds (WebGPU fork) additionally need Emscripten (see engine/README.md)'
+note 'WebGPU template builds additionally need Emscripten (see engine/README.md)'
 
 printf '\n== Bootstrap done. Manual requirements remaining ==%b\n' "$MANUAL"
 echo

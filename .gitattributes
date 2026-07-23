@@ -32,3 +32,6 @@
 *.hdr binary
 *.zip binary
 *.tpz binary
+
+# Third-party source snapshots preserve upstream whitespace inside patch payloads.
+engine/patches/*.patch -whitespace

@@ -203,6 +203,21 @@ class AuditTests(unittest.TestCase):
 
 
 class ValidationTests(unittest.TestCase):
+    def test_engine_lock_and_patch_checksums_validate(self) -> None:
+        self.assertEqual(validator.validate_engine_lock(REPO), [])
+
+    def test_engine_inventory_retains_source_lineage_without_lx_fork(self) -> None:
+        components = release.engine_components(REPO)
+        by_name = {component.name: component for component in components}
+        self.assertEqual(
+            by_name["Godot WebGPU source lineage"].source,
+            "https://github.com/dwalter/godotwebgpu",
+        )
+        self.assertNotIn(
+            "lxsolutions/godot-webgpu",
+            {component.source for component in components},
+        )
+
     def test_license_expression_parser_and_policy(self) -> None:
         self.assertEqual(
             validator.license_ids("(MIT OR Apache-2.0) AND Unicode-3.0"),

@@ -1,21 +1,15 @@
 ================================================================================
-GAMES — LICENSE (distinct from the platform)
+GENERATED AND EXTERNAL GAMES — DEFAULT LICENSE BOUNDARY
 ================================================================================
 
-Copyright (c) 2026 Studio Foundation contributors. All rights reserved.
+The `games/` directory is a local output and integration area. Game projects
+placed here are consumers of Studio Foundation; they are not automatically part
+of the Foundation distribution.
 
-The content under `games/` — including `games/asha_world` and any future game —
-is a GAME built ON the Asha platform. It is NOT part of the platform's engine,
-tooling, or infrastructure, and it is NOT covered by the platform's dual
-MIT + CC BY 4.0 license (see the repository root LICENSE).
+Each game must declare its own license. Unless a game directory includes a
+LICENSE file that grants additional rights, its content is all rights reserved
+by its respective copyright holders.
 
-Unless a specific game directory states otherwise in its own LICENSE file:
-  * You may not copy, modify, redistribute, sell, or create derivative works of
-    the game content (code, scenes, art, audio, story, and assets) without
-    explicit written permission from the copyright holders.
-  * The platform itself (engine/, services/, tools/, shared/, templates/)
-    remains open under the root LICENSE; this restriction applies only to the
-    games built on it.
-
-Individual games may choose their own license by placing a LICENSE file in
-their directory, which then supersedes this default for that game.
+Studio Foundation code under `engine/`, `services/`, `tools/`, `shared/`,
+`templates/`, `docs/`, `infra/`, `scripts/`, and `tests/` remains
+licensed under the repository root LICENSE.

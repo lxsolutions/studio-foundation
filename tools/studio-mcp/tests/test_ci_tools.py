@@ -126,9 +126,43 @@ class WorkflowPolicyTests(unittest.TestCase):
             path.write_text(content, encoding="utf-8")
             return workflow_validation.validate_file(path)
 
-    def test_current_studio_workflow_satisfies_policy(self) -> None:
-        workflow = REPO / ".github" / "workflows" / "validate.yml"
-        self.assertEqual(workflow_validation.validate_file(workflow), [])
+    def test_representative_studio_workflow_satisfies_policy(self) -> None:
+        problems = self.validate_text(
+            """on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pr-policy:
+    runs-on: ubuntu-latest
+    steps:
+      - run: python tools/ci/validate_workflows.py
+      - run: python tools/ci/secret_scan.py
+  trusted-ci:
+    if: github.event_name == 'push'
+    runs-on: [self-hosted, windows]
+    steps:
+      - run: npm.cmd ci --prefix infra/nakama
+      - run: npm.cmd ci --prefix tests/browser
+      - run: just ci-local
+      - run: python scripts/ci/run_all.py --stage nightly
+  engine-validate:
+    if: github.event_name == 'push'
+    needs: trusted-ci
+    runs-on: [self-hosted, windows]
+    steps:
+      - run: npm.cmd ci --prefix tests/browser
+      - run: just engine-fetch
+      - run: just engine-build
+      - run: just engine-validate
+""",
+            name="validate.yml",
+        )
+        self.assertEqual(problems, [])
 
     def test_untrusted_pull_request_cannot_use_self_hosted_runner(self) -> None:
         problems = self.validate_text(

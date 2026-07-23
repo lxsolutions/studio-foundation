@@ -82,7 +82,7 @@ $manual += 'Docker Desktop — start it before `just services-up` (winget instal
 $manual += 'Blender LTS — GUI/MSI installer may elevate: winget install BlenderFoundation.Blender'
 $manual += 'Android Studio + SDK + JDK 17 — only for Android export validation'
 $manual += 'iOS builds require a macOS machine with Xcode (not possible on Windows)'
-$manual += 'Engine builds (WebGPU fork) additionally need Emscripten (see engine/README.md)'
+$manual += 'WebGPU template builds additionally need Emscripten (see engine/README.md)'
 
 Write-Host "`n== Bootstrap done. Manual requirements remaining ==" -ForegroundColor Yellow
 $manual | ForEach-Object { Write-Host " * $_" }

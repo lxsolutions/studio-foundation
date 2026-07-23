@@ -1,27 +1,27 @@
 # Environment configuration model
 
-Four environments, one rule: **configuration comes from environment variables; secrets
-never enter this repository** (only `*.example` files are committed).
+Four environments, one rule: **configuration comes from environment variables;
+secrets never enter this repository**. Only `*.example` files are committed.
 
 | Environment | Source of config | Notes |
 |---|---|---|
-| development | `.env` (copied from `.env.example`) | Localhost-only defaults; Docker Compose services bound to 127.0.0.1 |
-| test | `test.env.example` → CI job env | Throwaway DB container per run; ports shifted to avoid collisions |
-| staging | Deploy-time secret store (host env / systemd env file) | Never in repo. Same variable names as development |
-| production | Deploy-time secret store | Never in repo. TLS terminates in front of services (ADR 0004) |
+| development | `.env` copied from `.env.example` | Localhost-only defaults; Docker Compose services bind to 127.0.0.1 |
+| test | `test.env.example` or CI job environment | Throwaway database container per run |
+| staging | Deploy-time secret store | Never in this repository |
+| production | Deploy-time secret store | Never in this repository; TLS terminates in front of services |
 
-Variable names are identical across environments — promotion is a values change, not a
-code change. `just doctor` validates the development set; services fail fast on
-missing/invalid values at boot (see `services/*/src/config.rs`).
+Variable names stay consistent across environments. Promotion changes values,
+not source code. `just doctor` validates the development toolchain; services
+fail fast on missing or invalid configuration.
 
-Development's Docker Compose stack (`infra/compose.yaml`) defaults to the local
-Docker engine, loopback-bound. If the local machine can't run Docker itself (e.g.
-no virtualization support) but a Docker host is reachable over SSH, set
-`STUDIO_INFRA_REMOTE` (+ `STUDIO_PG_BIND_HOST`/`STUDIO_PG_HOST`) in `.env` — see
-the commented example there — to run it on that host instead. This is still a
-development-only config knob: it changes *where* the loopback-equivalent binding
-lives (that host's own private/Tailscale interface, never `0.0.0.0`), not the
-one-rule-above-the-line that secrets/config stay out of the repo.
-The remote wrapper syncs the committed Nakama runtime bundle and local config with
-the Postgres bootstrap files. When enabling that profile remotely, also set
-`STUDIO_NAKAMA_BIND_HOST` to the host's private mesh address.
+The optional development stack in `infra/compose.yaml` uses the local Docker
+engine by default. If Docker runs on another host reachable over SSH, set
+`STUDIO_INFRA_REMOTE`, `STUDIO_PG_BIND_HOST`, and `STUDIO_PG_HOST` in
+`.env`. Bind remote development services to a private interface, never
+`0.0.0.0`.
+
+The remote wrapper copies the generic Compose/PostgreSQL files and the compiled
+mechanics-neutral Nakama bridge. When enabling Nakama remotely, also set
+`STUDIO_NAKAMA_BIND_HOST` to the host's private address. A consuming
+deployment owns its backend URL, token, TLS, network policy, and secret
+rotation.

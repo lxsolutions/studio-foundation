@@ -1346,9 +1346,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "futures-util",
- "serde_json",
  "studio-protocol",
- "studio-world-sim",
  "thiserror 2.0.19",
  "tokio",
  "tokio-tungstenite",
@@ -1358,16 +1356,6 @@ dependencies = [
 
 [[package]]
 name = "studio-protocol"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "thiserror 2.0.19",
- "uuid",
-]
-
-[[package]]
-name = "studio-world-sim"
 version = "0.1.0"
 dependencies = [
  "serde",

@@ -1,36 +1,43 @@
-# Runbook: Mobile export (Android first; iOS needs macOS)
+# Runbook: Mobile export
 
-## Mobile-web already works (no SDK needed)
+## Mobile browser
 
-The fastest "mobile" target is the **browser build on a phone/tablet** — the
-WebGPU/WebGL export runs in mobile Chrome/Safari, and the slice now has touch
-controls (`StudioTouchStick` on the Deep + Battle HUDs, feeding the same
-`move_*` actions desktop uses, self-hiding on non-touch). Host the export
-(`docs/runbooks/public-hosting.md`) and it plays on a phone from a link.
+A hosted WebGPU/WebGL export can run on compatible phones and tablets without a
+native SDK. Responsive layout, touch input, browser support, and performance
+must be verified by each consuming game on real devices.
 
-## Native Android (.apk/.aab)
+See [public hosting](public-hosting.md) for export and HTTP requirements.
 
-Requires the Android SDK + JDK 17 + Godot editor Android config. `just doctor`
-reports `android (platform) sdk: not found` until then.
+## Native Android
 
-1. **JDK 17.** Godot's Android build targets JDK 17 (JDK 21 is installed here;
-   point Godot at a 17 install — winget `EclipseAdoptium.Temurin.17.JDK`).
-2. **Android SDK.** Install Android Studio (winget `Google.AndroidStudio`) or
-   the command-line SDK, then `sdkmanager "platform-tools" "platforms;android-34"
-   "build-tools;34.0.0" "ndk;26.1.10909125"` (Godot 4.x needs the NDK).
-3. **Godot editor settings.** Editor → Editor Settings → Export → Android: set
-   `adb`, `jarsigner`, debug keystore, and the SDK path.
-4. **Export templates.** The official 4.7.1 templates include Android
-   (`just doctor` confirms they're installed).
-5. **Export:** `just export-android GAME=games/asha_world` →
-   `games/asha_world/project/exports/android/asha_world.apk`.
+Requires the Android SDK, JDK 17, and Godot Android editor configuration.
+`just doctor` reports readiness.
 
-Evidence bar for BOOTSTRAP_REPORT.md: the .apk installs and the slice reaches
-the menu on a real device or emulator (screenshot). Until the SDK is installed,
-Android remains "documented, not evidenced."
+1. Install JDK 17.
+2. Install Android Studio or command-line SDK components required by the pinned
+   Godot release.
+3. Configure Godot's Android SDK, ADB, jarsigner, and debug keystore paths.
+4. Install the matching official Godot export templates.
+5. Export a mechanics-neutral baseline:
+
+   ```sh
+   just export-android GAME=templates/godot-game
+   ```
+
+A consuming game should override identifiers, icons, signing, permissions, and
+store metadata in its own repository.
+
+Evidence requires installing the artifact and reaching the first interactive
+scene on a real device or emulator.
 
 ## Native iOS
 
-Requires macOS + Xcode (this machine is Windows). `just doctor` reports iOS as
-`na` here. On a Mac: `just export-ios` after the same template install; the
-slice's touch controls already cover the input model.
+Requires macOS, Xcode, Apple signing, and the matching export templates. Run:
+
+```sh
+just export-ios GAME=templates/godot-game
+```
+
+Each consuming game owns its bundle identifier, entitlements, signing team,
+privacy declarations, and store configuration. Claim iOS readiness only after a
+real-device run.

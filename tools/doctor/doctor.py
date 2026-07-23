@@ -246,15 +246,15 @@ def collect() -> list[Check]:
         )
     )
 
-    # --- WebGPU fork templates (built artifacts) ---
-    fork_zip = senv.repo_root() / "engine" / "artifacts" / "templates"
-    fork_built = fork_zip.is_dir() and any(fork_zip.glob("*web*webgpu*.zip"))
+    # --- Studio WebGPU templates (built artifacts) ---
+    webgpu_dir = senv.repo_root() / "engine" / "artifacts" / "templates"
+    webgpu_built = webgpu_dir.is_dir() and any(webgpu_dir.glob("*web*webgpu*.zip"))
     add(
         Check(
             "webgpu-engine",
             "optional",
-            "ok" if fork_built else "missing",
-            "fork export templates built" if fork_built else "fork templates NOT built",
+            "ok" if webgpu_built else "missing",
+            "patched export templates built" if webgpu_built else "patched templates NOT built",
             "just engine-fetch && just engine-build (hours; needs scons+emsdk — see engine/README.md)",
         )
     )

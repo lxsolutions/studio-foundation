@@ -1,51 +1,60 @@
-# Studio wire protocol v1
+# Studio wire protocol v2
 
-One protocol for every game and transport. Implementations:
-Rust `services/shared-protocol` · GDScript `studio_core/net/protocol.gd`.
-Both must pass the golden fixtures in `fixtures/` (CI-enforced).
+This is a mechanics-neutral baseline for Foundation's optional WebSocket
+session service. Implementations:
+
+- Rust: `services/shared-protocol`
+- GDScript: `shared/godot-addons/studio_core/net/protocol.gd`
+
+Both implementations must pass the golden fixtures in `fixtures/`.
 
 ## Envelope
 
-JSON object (UTF-8). Binary/delta encodings will version through this same envelope
-(`v` bump) when profiling demands it — not before.
+Messages are UTF-8 JSON objects. Binary or delta encodings require a future
+version bump backed by measured need.
 
 | Field | Type | Rule |
 |---|---|---|
-| `v` | u16 | protocol version; receivers reject mismatches with `error(version_mismatch)` |
+| `v` | u16 | protocol version; receivers reject mismatches |
 | `seq` | u64 | per-sender, monotonically increasing from 1 |
-| `type` | string | message discriminator (snake_case) |
-| ...body | — | flattened, per-type fields |
+| `type` | string | snake_case message discriminator |
+| body fields | message-specific | flattened into the envelope |
 
-No timestamps in the envelope: simulation time is server-authoritative state, and
-deterministic replay must not depend on wall clocks.
+Foundation envelopes omit timestamps so the transport does not impose a clock
+model. An application can carry its own timing or revision data inside its
+opaque payload.
 
 ## Messages
 
-| type | direction | fields | semantics |
+| Type | Direction | Fields | Semantics |
 |---|---|---|---|
-| `hello` | client→server | `client`, `build`, `protocol` | first message on any transport |
-| `hello_ack` | server→client | `server`, `protocol`, `session` (uuid) | connection accepted |
-| `ping` / `pong` | both | `nonce` | liveness/RTT |
-| `echo` / `echo_ack` | both | `text` | bootstrap round-trip demo only |
-| `bye` | both | — | graceful close intent |
-| `error` | both | `code`, `message` | codes: `version_mismatch`, `malformed`, `unexpected`, `internal` |
+| `hello` | client → server | `client`, `build`, `protocol` | first message |
+| `hello_ack` | server → client | `server`, `protocol`, `session` | connection accepted |
+| `ping` / `pong` | both | `nonce` | liveness and RTT |
+| `echo` / `echo_ack` | both | `text` | bootstrap round-trip only |
+| `application_request` | client → server | `payload_json` | optional opaque JSON |
+| `application_result` | server → client | `accepted`, `summary` | neutral handler outcome |
+| `bye` | both | none | graceful close intent |
+| `error` | both | `code`, `message` | protocol or session failure |
 
 ## Handshake
 
-1. Client connects (WebSocket baseline; WebTransport/QUIC later — same envelope).
-2. Client sends `hello`. Anything else → `error(unexpected)` + close.
-3. Version match → `hello_ack` with a server-generated session id; mismatch →
-   `error(version_mismatch)` + close.
+1. Client connects.
+2. Client sends `hello`; any other first message receives
+   `error(unexpected)` and closes.
+3. A matching version receives `hello_ack`; a mismatch receives
+   `error(version_mismatch)` and closes.
 
-## Versioning rules
+## Application boundary
 
-- Additive optional fields: allowed within a version (receivers ignore unknowns).
-- Renames/removals/semantic changes: bump `PROTOCOL_VERSION`, add fixtures for both
-  versions, note the migration in an ADR. Never silently change a serialized format.
-- Fixtures named `invalid_*.json` must be **rejected** by both implementations.
+`application_request.payload_json` is an opaque string to Foundation. A
+consuming game may register a handler, use only the connection messages, or
+replace this protocol entirely. Foundation does not validate, store, settle, or
+interpret the application payload.
 
-## Future (interfaces reserved, not implemented — see docs/networking/)
+## Versioning
 
-Server-authoritative simulation, client prediction + reconciliation, snapshot
-interpolation, interest management, delta compression, deterministic replay. These
-build on `Envelope` + per-game message enums; do not invent parallel protocols.
+- Additive optional fields may remain within a version.
+- Renames, removals, or semantic changes require a version bump, updated
+  fixtures, and an ADR migration note.
+- Files named `invalid_*.json` must be rejected by both implementations.

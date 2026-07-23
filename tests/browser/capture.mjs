@@ -6,7 +6,7 @@
 //     [--out captures/web-main.png] [--wait 6000] [--size 1280x720]
 
 import { spawn } from "node:child_process";
-import { mkdir } from "node:fs/promises";
+import { access, mkdir } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { chromium } from "playwright-core";
@@ -51,7 +51,13 @@ async function main() {
     await page.goto(URL_, { waitUntil: "domcontentloaded", timeout: 45000 });
     await page.waitForSelector("canvas", { timeout: 45000 });
     await page.waitForTimeout(WAIT_MS); // let Godot boot + render frames
-    const outAbs = path.resolve(REPO_ROOT, GAME, "project", OUT);
+    const gameRoot = path.resolve(REPO_ROOT, GAME);
+    const nestedProject = path.join(gameRoot, "project", "project.godot");
+    const projectRoot = await access(nestedProject).then(
+      () => path.join(gameRoot, "project"),
+      () => gameRoot,
+    );
+    const outAbs = path.resolve(projectRoot, OUT);
     await mkdir(path.dirname(outAbs), { recursive: true });
     await page.screenshot({ path: outAbs });
     await browser.close();

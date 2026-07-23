@@ -1,52 +1,62 @@
-# Nakama authority bridge
+# Optional Nakama bridge
 
-Nakama owns the public identity/RPC boundary. `asha_world_event` does not settle
-game state in TypeScript: it forwards one canonical event to the private HTTP
-adapter in `games/asha_world/server`. The Rust server settles with `WorldSim` and
-writes the canonical event ledger row and PostgreSQL snapshot atomically before
-returning a result.
+This module provides reusable identity and authenticated RPC plumbing without
+defining a game's domain model.
 
-The bridge fails closed. World-event RPCs return `applied: false` when the caller
-is unauthenticated, the bridge URL/token is absent, the authority cannot be
-reached, persistence fails, or the response contract is malformed.
+It registers two RPCs:
 
-## Local live proof
+- `studio_identify` returns the authenticated Nakama user id.
+- `studio_application_request` forwards an opaque JSON payload to a
+  consumer-configured HTTP endpoint.
 
-Copy `.env.example` to the ignored `.env`, set
-`ASHA_AUTHORITY_TOKEN` to a random development value, then run:
+The bridge adds `actor_user_id` to the forwarded request:
 
-```text
-just services-up
-just asha-server
+```json
+{
+  "actor_user_id": "nakama-user-id",
+  "payload": { "consumer": "owns this schema" }
+}
 ```
 
-Keep the Asha server running. In another terminal:
+The backend returns the neutral contract:
 
-```text
+```json
+{ "accepted": true, "summary": "consumer-defined explanation" }
+```
+
+Foundation validates only that `accepted` is boolean and `summary` is a
+string. It does not inspect the payload or assign gameplay meaning to either
+field.
+
+## Local use
+
+Copy `.env.example` to the ignored `.env`, then:
+
+```sh
+just services-up
 just nakama-up
 just nakama-probe
 ```
 
-The probe creates a unique device account, verifies `asha_identify`, submits a
-unique `ResourceExtracted` event, and submits the same event again. It passes only
-when the first settlement is applied and Rust reports the replay as a duplicate.
+The default probe verifies device authentication and `studio_identify`.
+To exercise application forwarding, configure `STUDIO_APPLICATION_URL` and
+`STUDIO_APPLICATION_TOKEN`, run a consumer-owned backend that implements the
+contract above, and pass an arbitrary JSON value:
 
-`ASHA_AUTHORITY_URL` is evaluated inside the Nakama container. The example uses
-`host.docker.internal`, which Compose maps to the Docker host. On a remote or
-native-Linux deployment, set both `ASHA_AUTHORITY_ADDR` and
-`ASHA_AUTHORITY_URL` to a firewall-protected private interface reachable from
-Nakama; never publish this adapter to the public internet.
+```sh
+just nakama-probe --application-json '{"kind":"consumer.example"}'
+```
 
-## Tests
+`STUDIO_APPLICATION_URL` is evaluated inside the Nakama container. The local
+example uses `host.docker.internal`; production network policy, TLS, secrets,
+and endpoint ownership belong to the consuming deployment.
 
-`just nakama-test` compiles the runtime to ES5, exercises forwarding and
-fail-closed behavior with a fake Nakama runtime, and tests the live-probe response
-contract. The Asha server's Rust suite separately verifies bearer authentication,
-real settlement, atomic ledger/snapshot persistence, stale-memory recovery, and
-idempotent replay.
+## Failure behavior
 
-Runtime configuration follows Nakama's documented `runtime.env` context, and the
-bridge uses the synchronous TypeScript `nk.httpRequest` API:
+The application RPC fails closed when the caller is unauthenticated, JSON is
+invalid, configuration is absent, the backend is unavailable, HTTP status is
+not successful, or the response contract is malformed.
 
-- <https://heroiclabs.com/docs/nakama/server-framework/introduction/runtime-context/>
-- <https://heroiclabs.com/docs/nakama/server-framework/typescript-runtime/function-reference/#httprequest>
+`just nakama-test` compiles the runtime to ES5 and exercises registration,
+identity, opaque forwarding, authentication, failure handling, and the probe
+contract.

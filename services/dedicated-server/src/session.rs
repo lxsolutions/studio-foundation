@@ -1,15 +1,12 @@
 //! Per-connection session loop, transport-agnostic.
 
-use std::sync::Arc;
 use studio_protocol::{handshake_reply, Body, Envelope, ErrorCode, PROTOCOL_VERSION};
-use tokio::sync::Mutex;
 use tokio::time::{timeout, Duration};
 
 use crate::transport::Transport;
+use crate::SharedApplicationHandler;
 
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
-
-type SharedWorld = Arc<Mutex<studio_world_sim::WorldSim>>;
 
 #[derive(Debug, Default, PartialEq)]
 pub struct SessionSummary {
@@ -21,7 +18,7 @@ pub struct Session<T: Transport> {
     transport: T,
     server_name: String,
     next_seq: u64,
-    world: Option<SharedWorld>,
+    application: Option<SharedApplicationHandler>,
 }
 
 impl<T: Transport> Session<T> {
@@ -30,13 +27,16 @@ impl<T: Transport> Session<T> {
             transport,
             server_name: server_name.into(),
             next_seq: 0,
-            world: None,
+            application: None,
         }
     }
 
-    /// Attach a shared world simulation (ADR 0007) for `WorldEventSubmit`.
-    pub fn with_world(mut self, world: Option<SharedWorld>) -> Self {
-        self.world = world;
+    /// Attach a game-owned handler for opaque application requests.
+    pub fn with_application_handler(
+        mut self,
+        application: Option<SharedApplicationHandler>,
+    ) -> Self {
+        self.application = application;
         self
     }
 
@@ -114,8 +114,8 @@ impl<T: Transport> Session<T> {
                         break;
                     }
                 }
-                Body::WorldEventSubmit { event_json } => {
-                    let result = self.settle_world_event(&event_json).await;
+                Body::ApplicationRequest { payload_json } => {
+                    let result = self.handle_application(&payload_json).await;
                     if !self.send(result).await {
                         break;
                     }
@@ -138,28 +138,17 @@ impl<T: Transport> Session<T> {
         summary
     }
 
-    /// Parse and settle one submitted world event; produce the result body.
-    async fn settle_world_event(&mut self, event_json: &str) -> Body {
-        let Some(world) = &self.world else {
+    async fn handle_application(&mut self, payload_json: &str) -> Body {
+        let Some(application) = &self.application else {
             return Body::Error {
                 code: ErrorCode::Unexpected,
-                message: "this server has no world simulation".into(),
+                message: "this server has no application handler".into(),
             };
         };
-        let event: studio_world_sim::WorldEvent = match serde_json::from_str(event_json) {
-            Ok(event) => event,
-            Err(err) => {
-                return Body::WorldEventResult {
-                    applied: false,
-                    summary: format!("invalid world event json: {err}"),
-                }
-            }
-        };
-        let mut sim = world.lock().await;
-        let settlement = sim.settle(&event);
-        Body::WorldEventResult {
-            applied: settlement.applied,
-            summary: settlement.summary,
+        let outcome = application.handle(payload_json).await;
+        Body::ApplicationResult {
+            accepted: outcome.accepted,
+            summary: outcome.summary,
         }
     }
 }
@@ -168,6 +157,8 @@ impl<T: Transport> Session<T> {
 mod tests {
     use super::*;
     use crate::transport::{loopback_pair, Transport};
+    use crate::{ApplicationFuture, ApplicationHandler, ApplicationOutcome};
+    use std::sync::Arc;
 
     fn hello(protocol: u16) -> Envelope {
         Envelope {
@@ -179,6 +170,60 @@ mod tests {
                 protocol,
             },
         }
+    }
+
+    struct AcceptingHandler;
+
+    impl ApplicationHandler for AcceptingHandler {
+        fn handle<'a>(&'a self, payload_json: &'a str) -> ApplicationFuture<'a> {
+            Box::pin(async move {
+                ApplicationOutcome {
+                    accepted: true,
+                    summary: format!("accepted {payload_json}"),
+                }
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn game_owned_application_handler_is_optional_and_schema_neutral() {
+        let (server_side, mut client) = loopback_pair(16);
+        let session = tokio::spawn(
+            Session::new(server_side, "unit")
+                .with_application_handler(Some(Arc::new(AcceptingHandler)))
+                .run(),
+        );
+
+        client.send(hello(PROTOCOL_VERSION)).await.unwrap();
+        let _ack = client.recv().await.unwrap().unwrap();
+        client
+            .send(Envelope {
+                v: PROTOCOL_VERSION,
+                seq: 2,
+                body: Body::ApplicationRequest {
+                    payload_json: r#"{"kind":"example.increment","value":1}"#.into(),
+                },
+            })
+            .await
+            .unwrap();
+        let result = client.recv().await.unwrap().unwrap();
+        assert!(matches!(
+            result.body,
+            Body::ApplicationResult {
+                accepted: true,
+                summary
+            } if summary.contains("example.increment")
+        ));
+        client
+            .send(Envelope {
+                v: PROTOCOL_VERSION,
+                seq: 3,
+                body: Body::Bye {},
+            })
+            .await
+            .unwrap();
+        let _bye = client.recv().await.unwrap().unwrap();
+        assert_eq!(session.await.unwrap().messages_handled, 2);
     }
 
     #[tokio::test]

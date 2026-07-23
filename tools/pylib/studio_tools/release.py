@@ -261,24 +261,26 @@ def engine_components(root: Path) -> list[Component]:
         raise InventoryError(f"missing engine lockfile: {lock_path}")
     with lock_path.open("rb") as handle:
         lock = tomllib.load(handle)
-    components = []
-    for key, name in (
-        ("official", "Godot Engine"),
-        ("webgpu_fork", "Asha WebGPU backend"),
-    ):
-        entry = lock["godot"][key]
-        version = str(entry.get("tag") or entry.get("commit"))
-        components.append(
-            Component(
-                "Generic",
-                name,
-                version,
-                str(entry.get("license") or NOASSERTION),
-                str(entry.get("repo") or NOASSERTION),
-                local=False,
-            )
-        )
-    return components
+    official = lock["godot"]["official"]
+    integration = lock["godot"]["webgpu"]
+    return [
+        Component(
+            "Generic",
+            "Godot Engine",
+            str(official.get("tag") or official["commit"]),
+            str(official.get("license") or NOASSERTION),
+            str(official.get("repo") or NOASSERTION),
+            local=False,
+        ),
+        Component(
+            "Generic",
+            "Godot WebGPU source lineage",
+            str(integration["source_lineage_commit"]),
+            str(integration.get("license") or NOASSERTION),
+            str(integration.get("source_lineage_repo") or NOASSERTION),
+            local=False,
+        ),
+    ]
 
 
 def collect_inventory(

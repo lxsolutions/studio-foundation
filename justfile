@@ -55,7 +55,7 @@ services-logs:
 observability-up:
     {{COMPOSE}} --profile observability up -d
 
-# Nakama public identity/RPC service (profile: nakama). Builds the TS module first.
+# Optional mechanics-neutral Nakama identity and application RPC bridge.
 nakama-build:
     {{NPM}} --prefix infra/nakama run build
 
@@ -66,11 +66,6 @@ nakama-test:
 nakama-up: nakama-build
     {{COMPOSE}} --profile nakama up -d --wait nakama
 
-# Asha's private Rust authority adapter (requires DATABASE_URL + ASHA_AUTHORITY_TOKEN).
-asha-server:
-    {{PY}} tools/cargo_env.py run --manifest-path games/asha_world/server/Cargo.toml
-
-# Live contract: device auth -> Nakama -> Rust settlement -> idempotent replay.
 nakama-probe *ARGS:
     {{PY}} infra/nakama/live_probe.py {{ARGS}}
 
@@ -100,7 +95,6 @@ test: test-rust test-python test-protocol nakama-test test-godot
 
 test-rust:
     {{PY}} tools/cargo_env.py test --manifest-path services/Cargo.toml --workspace
-    {{PY}} tools/cargo_env.py test --manifest-path games/asha_world/server/Cargo.toml
 
 # Python unit tests (currently the studio-mcp suite; add top-level test_*.py under
 # tools/ to grow this back into a broader discovery run)
@@ -118,7 +112,6 @@ test-godot:
 # DB-backed integration tests (requires `just services-up`)
 test-db:
     {{PY}} tools/infra/db.py test-env -- {{PY}} tools/cargo_env.py test --manifest-path services/Cargo.toml -p studio-integration-tests -- --ignored
-    {{PY}} tools/infra/db.py test-env -- {{PY}} tools/cargo_env.py test --manifest-path games/asha_world/server/Cargo.toml -- --ignored
 
 test-mcp:
     uv run --project tools python -m unittest discover -s tools/studio-mcp/tests -v
@@ -134,8 +127,6 @@ lint: lint-rust lint-python lint-workflows
 lint-rust:
     {{PY}} tools/cargo_env.py fmt --manifest-path services/Cargo.toml --all -- --check
     {{PY}} tools/cargo_env.py clippy --manifest-path services/Cargo.toml --workspace --all-targets -- -D warnings
-    {{PY}} tools/cargo_env.py fmt --manifest-path games/asha_world/server/Cargo.toml -- --check
-    {{PY}} tools/cargo_env.py clippy --manifest-path games/asha_world/server/Cargo.toml --all-targets -- -D warnings
 
 lint-python:
     uv run --project tools ruff check tools infra/nakama/live_probe.py infra/nakama/tests/test_live_probe.py
@@ -146,7 +137,6 @@ lint-workflows:
 
 fmt:
     cargo fmt --manifest-path services/Cargo.toml --all
-    cargo fmt --manifest-path games/asha_world/server/Cargo.toml
     uv run --project tools ruff format tools infra/nakama/live_probe.py infra/nakama/tests/test_live_probe.py
 
 # ------------------------------------------------------------------ build
@@ -155,7 +145,6 @@ build: build-rust godot-sync-addons
 
 build-rust:
     {{PY}} tools/cargo_env.py build --manifest-path services/Cargo.toml --workspace
-    {{PY}} tools/cargo_env.py build --manifest-path games/asha_world/server/Cargo.toml
 
 # Copy shared/godot-addons/* into every game project (addons/ dirs are generated)
 godot-sync-addons:
@@ -189,7 +178,7 @@ asset-report:
 export-browser-webgl:
     {{PY}} tools/godot/export_game.py --game "{{GAME}}" --preset web-webgl
 
-# WebGPU export — requires fork templates built via `just engine-build`
+# WebGPU export — requires patched templates built via `just engine-build`
 export-browser-webgpu:
     {{PY}} tools/godot/export_game.py --game "{{GAME}}" --preset web-webgpu
 
@@ -231,7 +220,7 @@ compare-screenshots BASELINE CANDIDATE *ARGS:
 engine-versions:
     {{PY}} engine/scripts/engine.py versions
 
-# Fetch pinned official+fork sources into engine/.cache and apply patch series
+# Fetch pinned official Godot and apply the verified local patch series
 engine-fetch:
     {{PY}} engine/scripts/engine.py fetch
 
@@ -239,11 +228,11 @@ engine-fetch:
 engine-build *ARGS:
     {{PY}} engine/scripts/engine.py build {{ARGS}}
 
-# Start a rebase workspace for updating the fork pin (see runbook godot-fork-rebase)
+# Test the patch series on another official ref (see godot-webgpu-update runbook)
 engine-rebase *ARGS:
     {{PY}} engine/scripts/engine.py rebase {{ARGS}}
 
-# Triage fork merge conflicts (mechanical/base-lag/fork-touched); --apply-safe resolves safe ones
+# Classify patch-application conflicts for manual review
 engine-classify-conflicts *ARGS:
     {{PY}} engine/scripts/classify_conflicts.py {{ARGS}}
 

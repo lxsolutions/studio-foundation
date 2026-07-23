@@ -1,4 +1,4 @@
-//! Studio wire protocol v1.
+//! Studio wire protocol v2.
 //!
 //! Canonical spec: `shared/protocol/PROTOCOL.md`. The GDScript mirror is
 //! `shared/godot-addons/studio_core/net/protocol.gd`. Any change here MUST:
@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 /// Bump only with an ADR note; the server rejects mismatched clients.
-pub const PROTOCOL_VERSION: u16 = 1;
+pub const PROTOCOL_VERSION: u16 = 2;
 
 /// Transport-agnostic message envelope. `seq` is per-sender, monotonically
 /// increasing from 1. Timestamps are deliberately absent (determinism/replay).
@@ -50,15 +50,15 @@ pub enum Body {
     EchoAck {
         text: String,
     },
-    /// Client submits one canonical world event (ADR 0007) for settlement.
-    /// `event_json` is the serialized `WorldEvent` (world-sim crate owns the schema);
-    /// the protocol stays agnostic so event types evolve without a wire bump.
-    WorldEventSubmit {
-        event_json: String,
+    /// Optional application-defined request. Foundation transports opaque JSON;
+    /// each game owns its payload schema and handler.
+    ApplicationRequest {
+        payload_json: String,
     },
-    /// Server's settlement outcome for a submitted world event.
-    WorldEventResult {
-        applied: bool,
+    /// Application handler outcome. Accepted has no gameplay semantics beyond
+    /// the game-owned handler accepting or rejecting its own payload.
+    ApplicationResult {
+        accepted: bool,
         summary: String,
     },
     /// Graceful close intent from either side.
