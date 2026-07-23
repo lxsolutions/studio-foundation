@@ -28,7 +28,7 @@ license files required by the patched source are carried in the corresponding
 patches.
 
 The historical source repository is an attribution and engineering reference only.
-Studio Foundation owns the current 4.7.1 integration, patch curation, build
+Studio Foundation maintains the current 4.7.1 integration, patch curation, build
 tooling, browser validation, and release evidence.
 
 ## Godot Engine

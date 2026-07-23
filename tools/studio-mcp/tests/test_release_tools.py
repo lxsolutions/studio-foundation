@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import subprocess
@@ -205,6 +206,47 @@ class AuditTests(unittest.TestCase):
 class ValidationTests(unittest.TestCase):
     def test_engine_lock_and_patch_checksums_validate(self) -> None:
         self.assertEqual(validator.validate_engine_lock(REPO), [])
+
+    def test_engine_artifact_records_verify_local_bytes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            artifact_dir = root / "engine" / "artifacts" / "templates"
+            artifact_dir.mkdir(parents=True)
+            records = {}
+            for key, filename in validator.EXPECTED_ENGINE_ARTIFACTS.items():
+                payload = f"{key}-template".encode()
+                (artifact_dir / filename).write_bytes(payload)
+                records[key] = {
+                    "file": filename,
+                    "bytes": len(payload),
+                    "sha256": hashlib.sha256(payload).hexdigest(),
+                }
+
+            self.assertEqual(
+                validator.validate_engine_artifacts(root, records),
+                [],
+            )
+
+            records["web_webgpu_release"]["bytes"] += 1
+            self.assertTrue(
+                any(
+                    "size mismatch" in problem
+                    for problem in validator.validate_engine_artifacts(root, records)
+                )
+            )
+
+    def test_engine_artifact_records_require_complete_pair(self) -> None:
+        records = {
+            "web_webgpu_release": {
+                "file": "godot.web.template_release.webgpu.zip",
+                "bytes": 1,
+                "sha256": "a" * 64,
+            }
+        }
+        self.assertIn(
+            "engine artifact record is missing: web_webgpu_debug",
+            validator.validate_engine_artifacts(Path("unused"), records),
+        )
 
     def test_engine_inventory_retains_source_lineage_without_lx_fork(self) -> None:
         components = release.engine_components(REPO)

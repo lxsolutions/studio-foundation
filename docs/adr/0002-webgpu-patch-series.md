@@ -36,6 +36,8 @@ and release evidence.
    without blocking a release; WebGL may not.
 8. A Godot update is accepted only after the patches apply, templates build,
    browser smoke passes, visual comparison passes, and evidence is recorded.
+9. Accepted release/debug templates have byte counts and SHA-256 values in
+   `engine-lock.toml`; proof consumers must verify both before export.
 
 ## Update procedure
 

@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import os
 import subprocess
 import sys
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
+from unittest import mock
 
 REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO / "engine" / "scripts"))
@@ -193,6 +196,118 @@ class EngineRebaseTests(unittest.TestCase):
                     cache_dir=cache,
                     engine_dir=engine_dir,
                 )
+
+
+class EngineBuildToolchainTests(unittest.TestCase):
+    def test_records_complete_template_pair_deterministically(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            lock_path = root / "engine-lock.toml"
+            lock_path.write_text(
+                '[artifacts.export_templates]\n# empty\n\n[installed.editor]\nversion = "test"\n',
+                encoding="utf-8",
+            )
+            artifact_dir = root / "templates"
+            artifact_dir.mkdir()
+            release = artifact_dir / engine_tool.TEMPLATE_ARTIFACTS["web_webgpu_release"]
+            debug = artifact_dir / engine_tool.TEMPLATE_ARTIFACTS["web_webgpu_debug"]
+            release.write_bytes(b"release-template")
+            debug.write_bytes(b"debug-template")
+
+            records = engine_tool.record_artifacts(
+                lock_path=lock_path,
+                artifact_dir=artifact_dir,
+            )
+            first = lock_path.read_text(encoding="utf-8")
+            parsed = tomllib.loads(first)["artifacts"]["export_templates"]
+
+            self.assertEqual(parsed, records)
+            self.assertEqual(records["web_webgpu_release"]["bytes"], len(b"release-template"))
+            self.assertEqual(
+                records["web_webgpu_debug"]["sha256"],
+                hashlib.sha256(b"debug-template").hexdigest(),
+            )
+            engine_tool.record_artifacts(
+                lock_path=lock_path,
+                artifact_dir=artifact_dir,
+            )
+            self.assertEqual(lock_path.read_text(encoding="utf-8"), first)
+
+    def test_refuses_to_record_partial_template_pair(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            lock_path = root / "engine-lock.toml"
+            original = (
+                '[artifacts.export_templates]\n# empty\n\n[installed.editor]\nversion = "test"\n'
+            )
+            lock_path.write_text(original, encoding="utf-8")
+            artifact_dir = root / "templates"
+            artifact_dir.mkdir()
+            (artifact_dir / engine_tool.TEMPLATE_ARTIFACTS["web_webgpu_release"]).write_bytes(
+                b"release-template"
+            )
+
+            with self.assertRaisesRegex(FileNotFoundError, "debug"):
+                engine_tool.record_artifacts(
+                    lock_path=lock_path,
+                    artifact_dir=artifact_dir,
+                )
+            self.assertEqual(lock_path.read_text(encoding="utf-8"), original)
+
+    def test_explicit_emsdk_is_authoritative(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            explicit = root / "workspace-emsdk"
+            home = root / "home"
+            (explicit / "upstream" / "emscripten").mkdir(parents=True)
+            (explicit / "emsdk_env.bat").write_text("", encoding="utf-8")
+            (explicit / "upstream" / "emscripten" / "emscripten-version.txt").write_text(
+                '"4.0.11"\n', encoding="utf-8"
+            )
+            home_sdk = home / "emsdk"
+            (home_sdk / "upstream" / "emscripten").mkdir(parents=True)
+            (home_sdk / "emsdk_env.bat").write_text("", encoding="utf-8")
+            (home_sdk / "upstream" / "emscripten" / "emscripten-version.txt").write_text(
+                '"4.0.11"\n', encoding="utf-8"
+            )
+
+            with (
+                mock.patch.dict(os.environ, {"EMSDK": str(explicit)}),
+                mock.patch.object(engine_tool.Path, "home", return_value=home),
+            ):
+                self.assertEqual(
+                    engine_tool._find_emsdk_env_bat("4.0.11"),
+                    explicit / "emsdk_env.bat",
+                )
+
+    def test_explicit_emsdk_must_match_locked_version(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            explicit = Path(temp_dir) / "workspace-emsdk"
+            (explicit / "upstream" / "emscripten").mkdir(parents=True)
+            (explicit / "emsdk_env.bat").write_text("", encoding="utf-8")
+            (explicit / "upstream" / "emscripten" / "emscripten-version.txt").write_text(
+                '"4.0.10"\n', encoding="utf-8"
+            )
+
+            with mock.patch.dict(os.environ, {"EMSDK": str(explicit)}):
+                self.assertIsNone(engine_tool._find_emsdk_env_bat("4.0.11"))
+
+    def test_invalid_explicit_emsdk_does_not_fall_back(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            home = root / "home"
+            home_sdk = home / "emsdk"
+            (home_sdk / "upstream" / "emscripten").mkdir(parents=True)
+            (home_sdk / "emsdk_env.bat").write_text("", encoding="utf-8")
+            (home_sdk / "upstream" / "emscripten" / "emscripten-version.txt").write_text(
+                '"4.0.11"\n', encoding="utf-8"
+            )
+
+            with (
+                mock.patch.dict(os.environ, {"EMSDK": str(root / "missing")}),
+                mock.patch.object(engine_tool.Path, "home", return_value=home),
+            ):
+                self.assertIsNone(engine_tool._find_emsdk_env_bat("4.0.11"))
 
 
 class PatchSeriesTests(unittest.TestCase):

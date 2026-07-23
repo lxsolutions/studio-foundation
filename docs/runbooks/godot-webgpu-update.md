@@ -84,7 +84,8 @@ visual tolerance, and leave WebGL green.
 
 1. Regenerate the scoped patch series against the new official base. Do not add
    unrelated changes from a historical branch.
-2. Recalculate every patch SHA-256 and update `engine/engine-lock.toml`.
+2. Recalculate every patch SHA-256, record the accepted release/debug
+   template byte counts and SHA-256 values, and update `engine/engine-lock.toml`.
 3. Update ADR 0002, NOTICE.md, and BOOTSTRAP_REPORT.md with the new base,
    lineage, commands, and measured evidence.
 4. Run `just release-validate --allow-dirty` and `just ci-local`.

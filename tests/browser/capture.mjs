@@ -46,10 +46,42 @@ async function main() {
   );
   try {
     await waitForServer(URL_, 20000);
-    const browser = await chromium.launch({ channel: "chrome" }).catch(() => chromium.launch({ channel: "msedge" }));
+    const browserArgs = PRESET === "web-webgpu"
+      ? ["--enable-unsafe-webgpu", "--ignore-gpu-blocklist"]
+      : [];
+    const browser = await chromium
+      .launch({ channel: "chrome", args: browserArgs })
+      .catch(() => chromium.launch({ channel: "msedge", args: browserArgs }));
     const page = await browser.newPage({ viewport: { width: W, height: H } });
+    if (PRESET === "web-webgpu") {
+      await page.addInitScript(() => {
+        const gpu = navigator.gpu;
+        globalThis.__studioWebgpuAdapterProbe = gpu
+          ? gpu.requestAdapter().then((adapter) => Boolean(adapter)).catch(() => false)
+          : Promise.resolve(false);
+      });
+    }
     await page.goto(URL_, { waitUntil: "domcontentloaded", timeout: 45000 });
     await page.waitForSelector("canvas", { timeout: 45000 });
+    if (PRESET === "web-webgpu") {
+      const evidence = await page.evaluate(async () => {
+        const canvas = document.querySelector("canvas");
+        let canvasContext = null;
+        try {
+          canvasContext = canvas?.getContext("webgpu") ?? null;
+        } catch {
+          // A canvas bound to another renderer cannot return WebGPU.
+        }
+        return {
+          navigatorGpu: Boolean(navigator.gpu),
+          adapter: await globalThis.__studioWebgpuAdapterProbe,
+          canvasContext: Boolean(canvasContext),
+        };
+      });
+      if (!Object.values(evidence).every(Boolean)) {
+        throw new Error("incomplete WebGPU proof: " + JSON.stringify(evidence));
+      }
+    }
     await page.waitForTimeout(WAIT_MS); // let Godot boot + render frames
     const gameRoot = path.resolve(REPO_ROOT, GAME);
     const nestedProject = path.join(gameRoot, "project", "project.godot");

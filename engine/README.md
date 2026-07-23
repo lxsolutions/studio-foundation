@@ -22,6 +22,7 @@ Neither cache nor artifacts are source of truth.
 just engine-versions
 just engine-fetch
 just engine-build
+just engine-record-artifacts
 just engine-rebase --dry-run --json
 ```
 
@@ -31,6 +32,11 @@ just engine-rebase --dry-run --json
 - `engine-build` builds WebGPU release/debug templates from that patched tree.
   `engine-build --workspace <name>` builds an update candidate into
   `engine/artifacts/candidates/<name>/templates`.
+  When `EMSDK` is set, that exact SDK root is authoritative and its
+  `.emscripten` configuration is passed to every SCons child; the builder
+  does not silently fall back to a different user-level SDK.
+- `engine-record-artifacts` accepts only a complete release/debug pair and
+  records each filename, byte count, and SHA-256 in `engine-lock.toml`.
 - `engine-rebase` applies the locked patch series with three-way context to
   another official Godot ref in an isolated candidate worktree.
 

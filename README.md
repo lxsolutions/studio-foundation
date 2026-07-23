@@ -1,126 +1,143 @@
 # Studio Foundation
 
-A Godot-first, open-source foundation for building, testing, exporting, and
-operating games across web, mobile, desktop, and dedicated servers.
+Reproducible Godot 4.7.1 browser builds, a mechanics-neutral project template,
+and the tests needed to verify both.
 
-Client: pinned official **Godot 4.7.1** and **GDScript**. Browser: official
-**WebGL 2** fallback plus the repository's beta **WebGPU integration**. Assets:
-**Blender to glTF/GLB**. Optional backend scaffolding: **Rust**
-(Tokio/Axum/SQLx) and **PostgreSQL**. Infrastructure: **Docker Compose**. Task
-runner: **just**.
+Studio Foundation is an open-source toolkit built around
+[official Godot](https://github.com/godotengine/godot). Its distinctive
+component is a beta WebGPU export path maintained as checksum-pinned patches
+against Godot 4.7.1. WebGL 2 remains the fallback. No separate LX Solutions
+engine fork is fetched or required.
 
-![Godot 4.7.1 rendering through the Studio Foundation WebGPU integration](templates/godot-game/project/captures/web-webgpu.png)
+> **Status:** WebGPU support is beta. The repository records verified behavior
+> and known gaps in [BOOTSTRAP_REPORT.md](BOOTSTRAP_REPORT.md); it does not claim
+> untested browser, device, or production support.
 
-The WebGPU source is self-contained and reproducible:
-`engine-fetch` checks out official Godot at the locked commit, verifies the
-committed patch checksums, and applies the patches into a disposable local
-worktree. Studio Foundation completed the 4.7.1 forward port from earlier
-MIT-licensed WebGPU work and owns its maintenance, patch curation, build,
-fallback, and validation system. Historical source attribution is documented in
-[NOTICE.md](NOTICE.md); the detailed engineering boundary is in
-[WebGPU integration provenance](docs/architecture/webgpu-integration.md).
+![Godot 4.7.1 template rendered through the WebGPU integration](templates/godot-game/project/captures/web-webgpu.png)
 
-Read [GOAL.md](GOAL.md) first. Decisions live in [docs/adr/](docs/adr/).
-Evidence for current platform claims lives in
-[BOOTSTRAP_REPORT.md](BOOTSTRAP_REPORT.md).
+## What is verifiable
 
-## Universal scope
+| Capability | Evidence in this repository |
+|---|---|
+| Official engine base | Godot 4.7.1 stable is pinned by full commit in [engine-lock.toml](engine/engine-lock.toml) |
+| WebGPU source | Three ordered patches are stored in [engine/patches/](engine/patches/) and checked by SHA-256 before application |
+| Source preparation | `engine-fetch` clones official Godot only and creates a disposable patched worktree |
+| Export templates | Release and debug archives are recorded by filename, byte count, and SHA-256 in the engine lock |
+| Runtime verification | Browser smoke tests require `navigator.gpu`, a usable adapter, and an active WebGPU canvas context |
+| Fallback | The same template project has an official WebGL 2 export preset |
+| Template behavior | Headless GDScript tests cover the shared addon and neutral starter project |
+| Optional services | Rust and Nakama components are independently tested and are not required for client-only use |
 
-Studio Foundation standardizes reusable engine integration, Godot addons,
-project generation, asset processing, transport contracts, export pipelines,
-browser validation, release evidence, and optional service scaffolding.
+Exact test counts, artifact state, and unverified areas are listed in the
+[verification report](BOOTSTRAP_REPORT.md).
 
-It does not contain or prescribe a particular game's content, mechanics,
-domain schema, persistent-state semantics, product-specific identity policy, or
-production deployment. Those decisions belong in consuming game repositories. The optional dedicated server handles
-connection lifecycle and opaque application payloads through a game-supplied
-handler; Foundation does not interpret the payload.
+## Quick start
 
-Alternative client engines used by individual products are likewise outside
-this repository's architecture and dependency graph.
-
-## Independent game proof
-
-[OSWT on Asha Arena](https://ashaarena.com/games/oswt) is a separate, playable
-3D game repository consuming Studio Foundation rather than a Foundation starter
-scene. Its integration branch adds Studio Core, the locked Godot 4.7.1 WebGPU
-export path, 55 headless gameplay checks, browser validation, and an in-game
-engine-proof panel. Publication is accepted only with a
-[machine-readable build record](https://ashaarena.com/games/oswt/play/build-provenance.json)
-covering exact source, patch, template, export, and verification hashes. This is
-team-authored use-case evidence, not a claim of unrelated third-party adoption.
-
-## Quickstart
+Prerequisites are reported by `just doctor`. The fast repository checks require
+Python 3.11; Godot and the engine toolchain are needed only for their respective
+suites.
 
 ```sh
-git clone <this-repo> && cd studio-foundation
+git clone https://github.com/lxsolutions/studio-foundation.git
+cd studio-foundation
 just doctor
 just bootstrap
-just services-up
 just test
 ```
 
-No `just`? Bootstrap directly with `powershell scripts/bootstrap.ps1` on
-Windows or `sh scripts/bootstrap.sh` on Linux, macOS, or WSL2.
+Without `just`, run `powershell scripts/bootstrap.ps1` on Windows or
+`sh scripts/bootstrap.sh` on Linux, macOS, or WSL2.
 
-## Everyday commands
+## Reproduce the WebGPU path
+
+```sh
+just engine-versions
+just engine-fetch
+just engine-build
+just engine-validate
+just engine-record-artifacts
+just release-validate --allow-dirty
+```
+
+The pipeline is deliberately split:
+
+```text
+official Godot commit
+        |
+        v
+verified local patch series
+        |
+        v
+release + debug WebGPU templates
+        |
+        v
+Godot export -> browser runtime probe -> visual evidence
+```
+
+`engine-build` requires the Emscripten version pinned in
+[engine-lock.toml](engine/engine-lock.toml). The complete update procedure is in
+[the WebGPU runbook](docs/runbooks/godot-webgpu-update.md).
+
+## Included components
+
+- A neutral Godot 4.7.1 project template and reusable `studio_core` addon.
+- WebGPU export tooling with an official WebGL 2 fallback.
+- Browser smoke, screenshot, visual-regression, benchmark, and release checks.
+- Blender-to-glTF validation and export tools.
+- Optional Rust API/session scaffolding and PostgreSQL development setup.
+- An optional Nakama adapter that forwards opaque application payloads without
+  defining game mechanics.
+
+The optional backend is scaffolding, not a required architecture. A consuming
+game owns its content, rules, schemas, identity policy, persistence semantics,
+and deployment.
+
+## Source and attribution
+
+Official Godot is the sole active engine upstream. The WebGPU backend has
+MIT-licensed historical lineage from `dwalter/godotwebgpu`; Studio Foundation
+maintains the current Godot 4.7.1 patch series, build tooling, and validation
+surface in this repository. The lineage repository is never cloned by the
+build.
+
+See [NOTICE.md](NOTICE.md) and
+[WebGPU integration provenance](docs/architecture/webgpu-integration.md) for
+the exact source boundary and commit pins.
+
+## Repository layout
+
+| Path | Purpose |
+|---|---|
+| `engine/` | Official Godot pin, WebGPU patches, build commands, and artifact records |
+| `templates/godot-game/` | Mechanics-neutral Godot client and optional server template |
+| `shared/godot-addons/studio_core/` | Reusable Godot services and platform interfaces |
+| `services/` | Optional Rust protocol, session, API, and persistence scaffolding |
+| `infra/` | Optional local PostgreSQL, Nakama, and tracing services |
+| `tools/` | Engine, asset, export, browser, release, and repository tooling |
+| `tests/` | Cross-language, browser, integration, performance, and visual checks |
+| `docs/` | Decisions, architecture notes, and runbooks |
+
+## Common commands
 
 | Command | Purpose |
 |---|---|
-| `just doctor` | Report required, optional, and platform-specific tooling |
 | `just test` / `just lint` | Run the fast test and lint suites |
-| `just test-rust` / `test-godot` / `test-python` | Run a narrow suite |
-| `just services-up` / `services-down` / `db-reset` / `db-seed` / `db-backup` | Operate the optional local PostgreSQL stack |
-| `just nakama-build` / `nakama-test` / `nakama-up` / `nakama-probe` | Build, test, run, and probe the optional neutral Nakama bridge |
-| `just asset-validate FILE` / `asset-export FILE` / `asset-cook PROFILE` | Operate the Blender asset pipeline |
-| `just godot-sync-addons` | Copy the shared addon into generated game projects |
-| `just export-browser-webgl [GAME]` | Export the WebGL 2 fallback with official templates |
-| `just export-browser-webgpu [GAME]` | Export WebGPU using locally built patched templates |
-| `just run-browser-smoke` | Serve an export and run the browser console/canvas smoke test |
-| `just NAME=my_game DISPLAY_NAME="My Game" new-game` | Generate a Godot game from the template |
-| `just engine-fetch` / `engine-build` | Prepare and build the locked WebGPU integration |
-| `just engine-rebase --dry-run --json` | Test the patch series against another official Godot ref |
-| `just benchmark-scene` | Run the finite Godot scene benchmark |
-| `just visual-baseline` / `visual-compare` | Capture and compare browser-rendered baselines |
-| `just release-validate --allow-dirty` / `sbom` / `audit` | Validate release inputs and dependency policy |
-| `just demo-connectivity` | Prove Godot-to-API/PostgreSQL and server connectivity |
-| `just ci-local` | Run the same checks used by CI |
+| `just test-godot` / `test-rust` / `test-python` | Run one implementation suite |
+| `just NAME=my_game DISPLAY_NAME="My Game" new-game` | Generate a neutral Godot project |
+| `just export-browser-webgl [GAME]` | Export with official WebGL 2 templates |
+| `just export-browser-webgpu [GAME]` | Export with the locally built WebGPU templates |
+| `just run-browser-smoke` | Check browser boot, console output, canvas, and renderer |
+| `just ci-local` | Run the full local acceptance suite |
 
-## Repository map
+Run `just` to list every supported command.
 
-| Path | Contents |
-|---|---|
-| `engine/` | Official Godot pin, checksummed WebGPU patches, source preparation, build tooling, and artifact metadata |
-| `shared/godot-addons/studio_core/` | Reusable Godot services, platform interfaces, settings, networking, accessibility, and diagnostics |
-| `shared/protocol/`, `shared/schemas/`, `shared/test-fixtures/` | Cross-language contracts, schemas, and golden fixtures |
-| `templates/godot-game/` | Mechanics-neutral Godot project and optional server templates |
-| `services/` | Generic Rust API, transport, protocol, persistence, and administration scaffolding |
-| `tools/` | Asset, Godot, release, infrastructure, benchmark, screenshot, and MCP tooling |
-| `infra/` | Optional PostgreSQL, Nakama bridge, and observability development infrastructure |
-| `tests/` | Browser, integration, performance, protocol, and visual regression tests |
-| `docs/` | Architecture, ADRs, workflows, platform guidance, security, and runbooks |
-| `games/` | Local output location for generated or separately licensed game projects |
+## Contributing and license
 
-## Platform status
-
-Godot is the editor and client runtime of record. WebGL 2 is the release-safe
-browser fallback. The WebGPU integration is beta and is considered green only
-when its build, browser smoke, and visual comparison evidence is current.
-See [BOOTSTRAP_REPORT.md](BOOTSTRAP_REPORT.md) for the evidence-backed matrix;
-Safari/iOS and other hardware-specific claims require real-device verification.
-
-## For AI agents
-
-Start with [AGENTS.md](AGENTS.md) or [CLAUDE.md](CLAUDE.md), then follow
-[docs/agents/WORKING_AGREEMENTS.md](docs/agents/WORKING_AGREEMENTS.md).
-Reusable skills and MCP setup live under [docs/agents/](docs/agents/).
-
-## License
+Material engine changes require tests, updated evidence, and the relevant ADR.
+Contributor workflow is documented in
+[WORKING_AGREEMENTS.md](docs/agents/WORKING_AGREEMENTS.md).
 
 Foundation code, tooling, templates, documentation, and infrastructure are
-dual-licensed under MIT and CC BY 4.0; see [LICENSE](LICENSE). Generated or
-external game projects choose their own licenses; the default local
-`games/` policy is documented in [games/LICENSE](games/LICENSE).
-
-Dependency attribution and review:
-[docs/architecture/dependency-licenses.md](docs/architecture/dependency-licenses.md).
+dual-licensed under MIT and CC BY 4.0; see [LICENSE](LICENSE). Third-party
+attribution is in [NOTICE.md](NOTICE.md) and
+[dependency-licenses.md](docs/architecture/dependency-licenses.md).
