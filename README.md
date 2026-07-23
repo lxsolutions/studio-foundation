@@ -30,6 +30,19 @@ engine fork is fetched or required.
 
 Exact test counts, artifact state, and unverified areas are listed in the
 [verification report](BOOTSTRAP_REPORT.md).
+## Independent game proof
+
+The separate [OSWT integration branch](https://github.com/lxsolutions/OSWT/tree/studio-foundation-webgpu-demo)
+is a playable consumer of this repository, rebased onto Devon Rowkowski's
+current `f6f8fe9` game update. At OSWT commit `a93d550` and Foundation commit
+`61a92fa`, it passes 103/103 headless checks, exports with the locked WebGPU
+template, and passes the strict live-browser WebGPU probe. The workflow emits a
+machine-readable record containing both source commits, patch and template
+hashes, exported artifact hashes, and verification results.
+
+A public deployment is not claimed yet; the source and reproduction path are
+published before the hosted URL.
+
 
 ## Quick start
 

@@ -31,7 +31,7 @@ consumer.
 | Generated server template | The standalone server test passes against its regenerated lockfile |
 | Optional Nakama bridge | Six ES5 runtime tests and four Python probe tests pass |
 | Infrastructure tools | Five local/remote Compose and database lifecycle tests pass |
-| Browser capture guard | WebGPU evidence requires `navigator.gpu`, a usable adapter, and an active WebGPU canvas context |
+| OSWT browser proof | Clean Foundation `61a92fa` and OSWT `a93d550` commits export with the locked template; Chrome reports `navigator.gpu`, an adapter, and an active WebGPU canvas context |
 
 ## Engine lineage
 
@@ -42,16 +42,18 @@ build commands, fallback, and validation live in this repository.
 
 ## External game proof
 
-OSWT remains a separate game repository. Its current integration candidate
-passes 55 headless gameplay checks and includes a runtime renderer/provenance
-panel. It will be listed as deployed WebGPU evidence only after export from
-clean Foundation and OSWT commits passes the strict browser probe and publishes
-a matching provenance record.
+The separate [OSWT integration branch](https://github.com/lxsolutions/OSWT/tree/studio-foundation-webgpu-demo)
+is rebased onto Devon Rowkowski's `f6f8fe9` update. It passes 103/103 headless
+gameplay and proof checks, exports from clean Foundation and OSWT commits using
+the locked WebGPU template, and passes the strict Chrome WebGPU probe. Its
+generated provenance records both source commits, patch/template hashes,
+exported artifact hashes, and verification results. A hosted deployment is not
+claimed yet.
 
 ## Not yet claimed
 
-- A current browser capture produced from the exact locked template archives
-- A clean OSWT WebGPU deployment and published provenance record
+- A published OSWT browser capture produced from the exact locked templates
+- A public OSWT deployment with a hosted provenance record
 - Safari/iOS WebGPU behavior
 - Native Android and iOS device runs
 - Database-backed integration tests against a live disposable PostgreSQL stack
