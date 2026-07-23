@@ -53,8 +53,8 @@ series = [
   { file = "patches/0003-studio-webgpu-tint.patch", sha256 = "cd299a648de80465b131834581cf6f53a3208c4100acf1257e4fe031198e370e" },
   { file = "patches/0004-godot-4.7.1-webgpu-interfaces.patch", sha256 = "635e1318287b22202d7c0f840279756abd0887bfe63eddffa3a8ffcc908dd6cb" },
   { file = "patches/0005-webgpu-shell-capability-gate.patch", sha256 = "1d46c4a3b1eeab439c036238af8eed522025a8526b3979b351ab9a0a67bbf9fa" },
-  { file = "patches/0006-webgpu-single-thread-stdio.patch", sha256 = "4f41c1977251a6eaa176608e1208fa7d8838f13397d607026b48f24d6afd82f0" },
-  { file = "patches/0007-tint-storage-buffer-access.patch", sha256 = "6f5a0d4d59b9dda75172f827e90687875a7814a6caacb59de5a36104927344a2" },
+  { file = "patches/0006-webgpu-single-thread-stdio.patch", sha256 = "da1e4e44e414e888dce40ba6201240fdf5dfd0997913b127412cf82eca69b006" },
+  { file = "patches/0007-tint-storage-buffer-access.patch", sha256 = "708809d830b4559faadf62c11ed68a774dfb1897ddebbd04febf54089207baea" },
 ]
 
 [artifacts.export_templates]
