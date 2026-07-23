@@ -1,0 +1,12 @@
+diff --git a/drivers/webgpu/rendering_device_driver_webgpu.cpp b/drivers/webgpu/rendering_device_driver_webgpu.cpp
+index 6bdaf02..fd7d3ca 100644
+--- a/drivers/webgpu/rendering_device_driver_webgpu.cpp
++++ b/drivers/webgpu/rendering_device_driver_webgpu.cpp
+@@ -38,6 +38,7 @@
+ 
+ #include <webgpu/webgpu.h>
+ #include <emscripten/emscripten.h>
++#include <cstdio>
+ #include <cstdlib>
+ #include <cstring>
+ #include <vector>

@@ -72,14 +72,38 @@ async function main() {
     const page = await browser.newPage();
 
     if (PRESET === "web-webgpu") {
-      // Start the adapter probe before Godot requests its device. On Windows,
-      // a second request after the engine starts can return null because Chrome
-      // does not support multiple GPU adapters simultaneously.
       await page.addInitScript(() => {
-        const gpu = navigator.gpu;
-        globalThis.__studioWebgpuAdapterProbe = gpu
-          ? gpu.requestAdapter().then((adapter) => Boolean(adapter)).catch(() => false)
-          : Promise.resolve(false);
+        const evidence = {
+          adapterRequests: 0,
+          deviceRequests: 0,
+          requestedContexts: [],
+          webgpuCanvasContexts: 0,
+        };
+        globalThis.__studioWebgpuEvidence = evidence;
+
+        const originalGetContext = HTMLCanvasElement.prototype.getContext;
+        HTMLCanvasElement.prototype.getContext = function (type, ...contextArgs) {
+          evidence.requestedContexts.push(String(type));
+          const context = originalGetContext.call(this, type, ...contextArgs);
+          if (type === "webgpu" && context) evidence.webgpuCanvasContexts += 1;
+          return context;
+        };
+
+        if (navigator.gpu) {
+          const originalRequestAdapter = navigator.gpu.requestAdapter.bind(navigator.gpu);
+          navigator.gpu.requestAdapter = async function (...adapterArgs) {
+            evidence.adapterRequests += 1;
+            const adapter = await originalRequestAdapter(...adapterArgs);
+            if (adapter) {
+              const originalRequestDevice = adapter.requestDevice.bind(adapter);
+              adapter.requestDevice = async function (...deviceArgs) {
+                evidence.deviceRequests += 1;
+                return originalRequestDevice(...deviceArgs);
+              };
+            }
+            return adapter;
+          };
+        }
       });
     }
 
@@ -98,33 +122,42 @@ async function main() {
         const c = document.querySelector("canvas");
         return c && c.width > 0 && c.height > 0;
       },
+      undefined,
       { timeout: TIMEOUT_MS }
     );
 
     let webgpuEvidence = null;
     if (PRESET === "web-webgpu") {
-      webgpuEvidence = await page.evaluate(async () => {
-        const gpu = navigator.gpu;
-        const adapter = await globalThis.__studioWebgpuAdapterProbe;
-        const canvas = document.querySelector("canvas");
-        let canvasContext = null;
-        try {
-          canvasContext = canvas?.getContext("webgpu") ?? null;
-        } catch {
-          // A canvas already bound to another renderer cannot return WebGPU.
-        }
-        return {
-          navigatorGpu: Boolean(gpu),
-          adapter,
-          canvasContext: Boolean(canvasContext),
-        };
-      });
+      await page.waitForFunction(
+        () => globalThis.__studioWebgpuEvidence?.deviceRequests > 0,
+        undefined,
+        { timeout: TIMEOUT_MS }
+      );
+      webgpuEvidence = await page.evaluate(() => ({
+        navigatorGpu: Boolean(navigator.gpu),
+        ...globalThis.__studioWebgpuEvidence,
+      }));
     }
 
     // Let the main loop tick a few frames so lazy errors surface.
     await page.waitForTimeout(3000);
 
     await browser.close();
+
+    if (webgpuEvidence) {
+      const requestedGl = webgpuEvidence.requestedContexts.some(
+        (type) => type === "webgl" || type === "webgl2"
+      );
+      const complete = webgpuEvidence.navigatorGpu
+        && webgpuEvidence.adapterRequests > 0
+        && webgpuEvidence.deviceRequests > 0
+        && webgpuEvidence.webgpuCanvasContexts > 0
+        && !requestedGl;
+      if (!complete) {
+        console.error(`smoke FAILED: incomplete WebGPU proof: ${JSON.stringify(webgpuEvidence)}`);
+        return 1;
+      }
+    }
 
     if (webgpuEvidence && !Object.values(webgpuEvidence).every(Boolean)) {
       console.error(`smoke FAILED — incomplete WebGPU proof: ${JSON.stringify(webgpuEvidence)}`);

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 from datetime import UTC, datetime
@@ -94,6 +95,47 @@ def expected_outputs(project: Path, preset: str) -> list[Path]:
     return []
 
 
+def configure_web_renderer(export_html: Path, preset: str) -> None:
+    """Bind the generated shell and engine CLI to the preset's real renderer.
+
+    Exports use the official editor with Studio's custom runtime templates. The
+    official editor does not know Studio's WebGPU-only HTML configuration field,
+    so make that handoff explicit after export and preserve all existing args.
+    """
+    if preset not in {"web-webgl", "web-webgpu"}:
+        return
+    source = export_html.read_text(encoding="utf-8")
+    match = re.search(r"const GODOT_CONFIG = (\{[^\n]+\});", source)
+    if not match:
+        raise RuntimeError(f"generated Godot config not found in {export_html}")
+    config = json.loads(match.group(1))
+    args = config.get("args", [])
+    if not isinstance(args, list) or not all(isinstance(arg, str) for arg in args):
+        raise RuntimeError(f"generated Godot args are invalid in {export_html}")
+
+    if preset == "web-webgpu":
+        renderer_args = [
+            "--rendering-method",
+            "mobile",
+            "--rendering-driver",
+            "webgpu",
+        ]
+        config["renderingDriver"] = "webgpu"
+    else:
+        renderer_args = [
+            "--rendering-method",
+            "gl_compatibility",
+            "--rendering-driver",
+            "opengl3",
+        ]
+        config["renderingDriver"] = "opengl3"
+
+    config["args"] = [*args, *renderer_args]
+    serialized = json.dumps(config, separators=(",", ":"), sort_keys=True)
+    updated = source[: match.start(1)] + serialized + source[match.end(1) :]
+    export_html.write_text(updated, encoding="utf-8")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--game", default="templates/godot-game")
@@ -136,6 +178,10 @@ def main() -> int:
         )
     except subprocess.TimeoutExpired as error:
         raise SystemExit("godot export timed out") from error
+    web_html = project / "exports" / args.preset / "index.html"
+    if proc.returncode == 0 and web_html.is_file() and args.preset.startswith("web"):
+        configure_web_renderer(web_html, args.preset)
+
     output_text = (proc.stdout or "") + (proc.stderr or "")
 
     missing = [p for p in expected_outputs(project, args.preset) if not p.exists()]

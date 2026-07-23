@@ -235,6 +235,21 @@ class ValidationTests(unittest.TestCase):
                 )
             )
 
+    def test_blocked_engine_artifacts_require_reason_and_no_records(self) -> None:
+        self.assertEqual(
+            validator.validate_engine_artifacts(
+                Path("unused"),
+                {"status": "blocked", "blocker": "Tint texture lowering"},
+            ),
+            [],
+        )
+        self.assertIn(
+            "blocked engine artifacts require a blocker",
+            validator.validate_engine_artifacts(
+                Path("unused"), {"status": "blocked", "blocker": ""}
+            ),
+        )
+
     def test_engine_artifact_records_require_complete_pair(self) -> None:
         records = {
             "web_webgpu_release": {

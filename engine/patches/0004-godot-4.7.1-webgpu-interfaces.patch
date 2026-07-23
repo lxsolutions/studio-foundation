@@ -1,0 +1,350 @@
+diff --git a/drivers/webgpu/rendering_context_driver_webgpu.cpp b/drivers/webgpu/rendering_context_driver_webgpu.cpp
+index b3c758e..623d010 100644
+--- a/drivers/webgpu/rendering_context_driver_webgpu.cpp
++++ b/drivers/webgpu/rendering_context_driver_webgpu.cpp
+@@ -160,13 +160,65 @@ void RenderingContextDriverWebGPU::surface_set_size(SurfaceID p_surface, uint32_
+ 	}
+ }
+ 
+-void RenderingContextDriverWebGPU::surface_set_vsync_mode(SurfaceID p_surface, DisplayServer::VSyncMode p_vsync_mode) {
++void RenderingContextDriverWebGPU::surface_set_hdr_output_enabled(SurfaceID p_surface, bool p_enabled) {
++	ERR_FAIL_COND(!surfaces.has(p_surface));
++	// Browser canvases currently expose SDR swapchains only.
++	if (p_enabled) {
++		WARN_PRINT_ONCE("WebGPU: HDR canvas output is not available; using SDR.");
++	}
++}
++
++bool RenderingContextDriverWebGPU::surface_get_hdr_output_enabled(SurfaceID p_surface) const {
++	ERR_FAIL_COND_V(!surfaces.has(p_surface), false);
++	return false;
++}
++
++void RenderingContextDriverWebGPU::surface_set_hdr_output_reference_luminance(SurfaceID p_surface, float p_reference_luminance) {
++	ERR_FAIL_COND(!surfaces.has(p_surface));
++	surfaces[p_surface].hdr_reference_luminance = p_reference_luminance;
++}
++
++float RenderingContextDriverWebGPU::surface_get_hdr_output_reference_luminance(SurfaceID p_surface) const {
++	ERR_FAIL_COND_V(!surfaces.has(p_surface), 200.0f);
++	return surfaces[p_surface].hdr_reference_luminance;
++}
++
++void RenderingContextDriverWebGPU::surface_set_hdr_output_max_luminance(SurfaceID p_surface, float p_max_luminance) {
++	ERR_FAIL_COND(!surfaces.has(p_surface));
++	surfaces[p_surface].hdr_max_luminance = p_max_luminance;
++}
++
++float RenderingContextDriverWebGPU::surface_get_hdr_output_max_luminance(SurfaceID p_surface) const {
++	ERR_FAIL_COND_V(!surfaces.has(p_surface), 1000.0f);
++	return surfaces[p_surface].hdr_max_luminance;
++}
++
++void RenderingContextDriverWebGPU::surface_set_hdr_output_linear_luminance_scale(SurfaceID p_surface, float p_linear_luminance_scale) {
++	ERR_FAIL_COND(!surfaces.has(p_surface));
++	surfaces[p_surface].hdr_linear_luminance_scale = p_linear_luminance_scale;
++}
++
++float RenderingContextDriverWebGPU::surface_get_hdr_output_linear_luminance_scale(SurfaceID p_surface) const {
++	ERR_FAIL_COND_V(!surfaces.has(p_surface), 100.0f);
++	return surfaces[p_surface].hdr_linear_luminance_scale;
++}
++
++float RenderingContextDriverWebGPU::surface_get_hdr_output_max_value(SurfaceID p_surface) const {
++	ERR_FAIL_COND_V(!surfaces.has(p_surface), 1.0f);
++	const Surface &surface = surfaces[p_surface];
++	return MAX(
++			surface.hdr_max_luminance / MAX(surface.hdr_reference_luminance, 1.0f),
++			1.0f);
++}
++
++
++void RenderingContextDriverWebGPU::surface_set_vsync_mode(SurfaceID p_surface, DisplayServerEnums::VSyncMode p_vsync_mode) {
+ 	ERR_FAIL_COND(!surfaces.has(p_surface));
+ 	surfaces[p_surface].vsync_mode = p_vsync_mode;
+ }
+ 
+-DisplayServer::VSyncMode RenderingContextDriverWebGPU::surface_get_vsync_mode(SurfaceID p_surface) const {
+-	ERR_FAIL_COND_V(!surfaces.has(p_surface), DisplayServer::VSYNC_ENABLED);
++DisplayServerEnums::VSyncMode RenderingContextDriverWebGPU::surface_get_vsync_mode(SurfaceID p_surface) const {
++	ERR_FAIL_COND_V(!surfaces.has(p_surface), DisplayServerEnums::VSYNC_ENABLED);
+ 	return surfaces[p_surface].vsync_mode;
+ }
+ 
+diff --git a/drivers/webgpu/rendering_context_driver_webgpu.h b/drivers/webgpu/rendering_context_driver_webgpu.h
+index fc3157d..f1b577c 100644
+--- a/drivers/webgpu/rendering_context_driver_webgpu.h
++++ b/drivers/webgpu/rendering_context_driver_webgpu.h
+@@ -48,8 +48,12 @@ class RenderingContextDriverWebGPU : public RenderingContextDriver {
+ 		WGPUSurface handle = nullptr;
+ 		uint32_t width = 0;
+ 		uint32_t height = 0;
+-		DisplayServer::VSyncMode vsync_mode = DisplayServer::VSYNC_ENABLED;
++		DisplayServerEnums::VSyncMode vsync_mode = DisplayServerEnums::VSYNC_ENABLED;
+ 		bool needs_resize = false;
++		float hdr_reference_luminance = 200.0f;
++		float hdr_max_luminance = 1000.0f;
++		float hdr_linear_luminance_scale = 100.0f;
++
+ 	};
+ 
+ 	HashMap<SurfaceID, Surface> surfaces;
+@@ -69,8 +73,17 @@ public:
+ 	virtual void driver_free(RenderingDeviceDriver *p_driver) override final;
+ 	virtual SurfaceID surface_create(const void *p_platform_data) override final;
+ 	virtual void surface_set_size(SurfaceID p_surface, uint32_t p_width, uint32_t p_height) override final;
+-	virtual void surface_set_vsync_mode(SurfaceID p_surface, DisplayServer::VSyncMode p_vsync_mode) override final;
+-	virtual DisplayServer::VSyncMode surface_get_vsync_mode(SurfaceID p_surface) const override final;
++	virtual void surface_set_vsync_mode(SurfaceID p_surface, DisplayServerEnums::VSyncMode p_vsync_mode) override final;
++	virtual DisplayServerEnums::VSyncMode surface_get_vsync_mode(SurfaceID p_surface) const override final;
++	virtual void surface_set_hdr_output_enabled(SurfaceID p_surface, bool p_enabled) override final;
++	virtual bool surface_get_hdr_output_enabled(SurfaceID p_surface) const override final;
++	virtual void surface_set_hdr_output_reference_luminance(SurfaceID p_surface, float p_reference_luminance) override final;
++	virtual float surface_get_hdr_output_reference_luminance(SurfaceID p_surface) const override final;
++	virtual void surface_set_hdr_output_max_luminance(SurfaceID p_surface, float p_max_luminance) override final;
++	virtual float surface_get_hdr_output_max_luminance(SurfaceID p_surface) const override final;
++	virtual void surface_set_hdr_output_linear_luminance_scale(SurfaceID p_surface, float p_linear_luminance_scale) override final;
++	virtual float surface_get_hdr_output_linear_luminance_scale(SurfaceID p_surface) const override final;
++	virtual float surface_get_hdr_output_max_value(SurfaceID p_surface) const override final;
+ 	virtual uint32_t surface_get_width(SurfaceID p_surface) const override final;
+ 	virtual uint32_t surface_get_height(SurfaceID p_surface) const override final;
+ 	virtual void surface_set_needs_resize(SurfaceID p_surface, bool p_needs_resize) override final;
+diff --git a/drivers/webgpu/rendering_device_driver_webgpu.cpp b/drivers/webgpu/rendering_device_driver_webgpu.cpp
+index 722a255..f11bee0 100644
+--- a/drivers/webgpu/rendering_device_driver_webgpu.cpp
++++ b/drivers/webgpu/rendering_device_driver_webgpu.cpp
+@@ -2676,7 +2676,8 @@ void RenderingDeviceDriverWebGPU::command_pipeline_barrier(
+ 		BitField<PipelineStageBits> p_dst_stages,
+ 		VectorView<MemoryAccessBarrier> p_memory_barriers,
+ 		VectorView<BufferBarrier> p_buffer_barriers,
+-		VectorView<TextureBarrier> p_texture_barriers) {
++		VectorView<TextureBarrier> p_texture_barriers,
++		VectorView<AccelerationStructureBarrier> p_acceleration_structure_barriers) {
+ 	// No-op: WebGPU handles synchronization automatically.
+ }
+ 
+@@ -3154,6 +3155,16 @@ RDD::DataFormat RenderingDeviceDriverWebGPU::swap_chain_get_format(SwapChainID p
+ 	return _wgpu_to_data_format(sc->format);
+ }
+ 
++
++RDD::ColorSpace RenderingDeviceDriverWebGPU::swap_chain_get_color_space(SwapChainID p_swap_chain) {
++	ERR_FAIL_COND_V(!p_swap_chain, COLOR_SPACE_MAX);
++	return COLOR_SPACE_REC709_NONLINEAR_SRGB;
++}
++
++bool RenderingDeviceDriverWebGPU::swap_chain_get_hdr_output_supported(SwapChainID p_swap_chain) {
++	return false;
++}
++
+ void RenderingDeviceDriverWebGPU::swap_chain_free(SwapChainID p_swap_chain) {
+ 	WGSwapChain *sc = (WGSwapChain *)(p_swap_chain.id);
+ 	ERR_FAIL_NULL(sc);
+@@ -8361,6 +8372,62 @@ RDD::PipelineID RenderingDeviceDriverWebGPU::compute_pipeline_create(ShaderID p_
+ 
+ // =============================================================================
+ // QUERIES
++// =============================================================================
++// RAY TRACING (UNSUPPORTED)
++// =============================================================================
++
++RDD::AccelerationStructureID RenderingDeviceDriverWebGPU::blas_create(VectorView<AccelerationStructureGeometry> p_geometries, BitField<AccelerationStructureFlagBits> p_flags) {
++	ERR_FAIL_V_MSG(AccelerationStructureID(), "Ray tracing is not supported by the WebGPU driver.");
++}
++
++RDD::AccelerationStructureID RenderingDeviceDriverWebGPU::tlas_create(uint32_t p_max_instance_count, BitField<AccelerationStructureFlagBits> p_flags) {
++	ERR_FAIL_V_MSG(AccelerationStructureID(), "Ray tracing is not supported by the WebGPU driver.");
++}
++
++void RenderingDeviceDriverWebGPU::acceleration_structure_instance_write(uint8_t *r_driver_instance, const AccelerationStructureInstance &p_instance) {
++	ERR_FAIL_MSG("Ray tracing is not supported by the WebGPU driver.");
++}
++
++void RenderingDeviceDriverWebGPU::acceleration_structure_free(AccelerationStructureID p_acceleration_structure) {
++	ERR_FAIL_MSG("Ray tracing is not supported by the WebGPU driver.");
++}
++
++uint32_t RenderingDeviceDriverWebGPU::acceleration_structure_get_scratch_size_bytes(AccelerationStructureID p_acceleration_structure) {
++	ERR_FAIL_V_MSG(0, "Ray tracing is not supported by the WebGPU driver.");
++}
++
++RDD::RaytracingPipelineID RenderingDeviceDriverWebGPU::raytracing_pipeline_create(VectorView<PipelineShader> p_shaders, VectorView<uint32_t> p_raygen_shader_indices, VectorView<uint32_t> p_miss_shader_indices, VectorView<HitGroup> p_hit_groups, uint32_t p_max_trace_recursion_depth, ShaderID p_layout_defining_shader) {
++	ERR_FAIL_V_MSG(RaytracingPipelineID(), "Ray tracing is not supported by the WebGPU driver.");
++}
++
++void RenderingDeviceDriverWebGPU::raytracing_pipeline_free(RaytracingPipelineID p_pipeline) {
++	ERR_FAIL_MSG("Ray tracing is not supported by the WebGPU driver.");
++}
++
++bool RenderingDeviceDriverWebGPU::raytracing_pipeline_get_shader_group_handles(RaytracingPipelineID p_pipeline, uint32_t p_group_index_offset, VectorView<uint32_t> p_group_indices, uint8_t *r_data, uint32_t p_data_stride_bytes) {
++	ERR_FAIL_V_MSG(false, "Ray tracing is not supported by the WebGPU driver.");
++}
++
++void RenderingDeviceDriverWebGPU::command_build_blas(CommandBufferID p_cmd_buffer, AccelerationStructureID p_acceleration_structure, BufferID p_scratch_buffer) {
++	ERR_FAIL_MSG("Ray tracing is not supported by the WebGPU driver.");
++}
++
++void RenderingDeviceDriverWebGPU::command_build_tlas(CommandBufferID p_cmd_buffer, AccelerationStructureID p_acceleration_structure, BufferID p_scratch_buffer, BufferID p_instance_buffer, uint32_t p_instance_offset, uint32_t p_instance_count) {
++	ERR_FAIL_MSG("Ray tracing is not supported by the WebGPU driver.");
++}
++
++void RenderingDeviceDriverWebGPU::command_bind_raytracing_pipeline(CommandBufferID p_cmd_buffer, RaytracingPipelineID p_pipeline) {
++	ERR_FAIL_MSG("Ray tracing is not supported by the WebGPU driver.");
++}
++
++void RenderingDeviceDriverWebGPU::command_bind_raytracing_uniform_set(CommandBufferID p_cmd_buffer, UniformSetID p_uniform_set, ShaderID p_shader, uint32_t p_set_index) {
++	ERR_FAIL_MSG("Ray tracing is not supported by the WebGPU driver.");
++}
++
++void RenderingDeviceDriverWebGPU::command_trace_rays(CommandBufferID p_cmd_buffer, const ShaderBindingTable &p_raygen_sbt, const ShaderBindingTable &p_miss_sbt, const ShaderBindingTable &p_hit_sbt, uint32_t p_width, uint32_t p_height, uint32_t p_depth) {
++	ERR_FAIL_MSG("Ray tracing is not supported by the WebGPU driver.");
++}
++
+ // =============================================================================
+ 
+ RDD::QueryPoolID RenderingDeviceDriverWebGPU::timestamp_query_pool_create(uint32_t p_query_count) {
+diff --git a/drivers/webgpu/rendering_device_driver_webgpu.h b/drivers/webgpu/rendering_device_driver_webgpu.h
+index bfaba87..20e5b06 100644
+--- a/drivers/webgpu/rendering_device_driver_webgpu.h
++++ b/drivers/webgpu/rendering_device_driver_webgpu.h
+@@ -327,7 +327,8 @@ public:
+ 			BitField<PipelineStageBits> p_dst_stages,
+ 			VectorView<MemoryAccessBarrier> p_memory_barriers,
+ 			VectorView<BufferBarrier> p_buffer_barriers,
+-			VectorView<TextureBarrier> p_texture_barriers) override final;
++			VectorView<TextureBarrier> p_texture_barriers,
++			VectorView<AccelerationStructureBarrier> p_acceleration_structure_barriers) override final;
+ 
+ 	// -----------------------------------------------------------------------
+ 	// FENCES
+@@ -395,6 +396,10 @@ public:
+ 	/// Get the pixel format of a swap chain (always BGRA8Unorm for WebGPU).
+ 	virtual DataFormat swap_chain_get_format(SwapChainID p_swap_chain) override final;
+ 	/// Release a swap chain and its associated render pass.
++	/// Browser canvases currently expose the nonlinear sRGB color space.
++	virtual ColorSpace swap_chain_get_color_space(SwapChainID p_swap_chain) override final;
++	/// Browser canvas HDR output is not currently exposed by this backend.
++	virtual bool swap_chain_get_hdr_output_supported(SwapChainID p_swap_chain) override final;
+ 	virtual void swap_chain_free(SwapChainID p_swap_chain) override final;
+ 
+ 	// -----------------------------------------------------------------------
+@@ -568,6 +573,25 @@ public:
+ 	/// Create a compute pipeline with optional specialization constants.
+ 	virtual PipelineID compute_pipeline_create(ShaderID p_shader, VectorView<PipelineSpecializationConstant> p_specialization_constants) override final;
+ 
++	// -----------------------------------------------------------------------
++	// RAY TRACING (UNSUPPORTED)
++	// -----------------------------------------------------------------------
++
++	virtual AccelerationStructureID blas_create(VectorView<AccelerationStructureGeometry> p_geometries, BitField<AccelerationStructureFlagBits> p_flags) override final;
++	virtual AccelerationStructureID tlas_create(uint32_t p_max_instance_count, BitField<AccelerationStructureFlagBits> p_flags) override final;
++	virtual void acceleration_structure_instance_write(uint8_t *r_driver_instance, const AccelerationStructureInstance &p_instance) override final;
++	virtual void acceleration_structure_free(AccelerationStructureID p_acceleration_structure) override final;
++	virtual uint32_t acceleration_structure_get_scratch_size_bytes(AccelerationStructureID p_acceleration_structure) override final;
++	virtual RaytracingPipelineID raytracing_pipeline_create(VectorView<PipelineShader> p_shaders, VectorView<uint32_t> p_raygen_shader_indices, VectorView<uint32_t> p_miss_shader_indices, VectorView<HitGroup> p_hit_groups, uint32_t p_max_trace_recursion_depth, ShaderID p_layout_defining_shader) override final;
++	virtual void raytracing_pipeline_free(RaytracingPipelineID p_pipeline) override final;
++	virtual bool raytracing_pipeline_get_shader_group_handles(RaytracingPipelineID p_pipeline, uint32_t p_group_index_offset, VectorView<uint32_t> p_group_indices, uint8_t *r_data, uint32_t p_data_stride_bytes) override final;
++	virtual void command_build_blas(CommandBufferID p_cmd_buffer, AccelerationStructureID p_acceleration_structure, BufferID p_scratch_buffer) override final;
++	virtual void command_build_tlas(CommandBufferID p_cmd_buffer, AccelerationStructureID p_acceleration_structure, BufferID p_scratch_buffer, BufferID p_instance_buffer, uint32_t p_instance_offset, uint32_t p_instance_count) override final;
++	virtual void command_bind_raytracing_pipeline(CommandBufferID p_cmd_buffer, RaytracingPipelineID p_pipeline) override final;
++	virtual void command_bind_raytracing_uniform_set(CommandBufferID p_cmd_buffer, UniformSetID p_uniform_set, ShaderID p_shader, uint32_t p_set_index) override final;
++	virtual void command_trace_rays(CommandBufferID p_cmd_buffer, const ShaderBindingTable &p_raygen_sbt, const ShaderBindingTable &p_miss_sbt, const ShaderBindingTable &p_hit_sbt, uint32_t p_width, uint32_t p_height, uint32_t p_depth) override final;
++
++
+ 	// -----------------------------------------------------------------------
+ 	// QUERIES
+ 	// -----------------------------------------------------------------------
+diff --git a/drivers/webgpu/wgsl_precompile.py b/drivers/webgpu/wgsl_precompile.py
+index a725c9f..dd6471a 100644
+--- a/drivers/webgpu/wgsl_precompile.py
++++ b/drivers/webgpu/wgsl_precompile.py
+@@ -853,6 +853,14 @@ def build_wgsl_precompiled(target, source, env):
+     wgsl_precompiled.gen.h.
+     """
+     output = str(target[0])
++    if os.name == "nt" and os.environ.get("STUDIO_WEBGPU_PRECOMPILE") != "1":
++        # The host-only converter takes hours to build under MinGW. The engine
++        # already links Tint and transparently converts cache misses at runtime,
++        # so use the valid empty table unless a Windows release builder opts in.
++        generate_precompiled_header([], output)
++        print("[WGSL Precompile] Windows host table skipped; runtime Tint enabled")
++        return
++
+     repo_root = str(env.Dir("#"))
+ 
+     # Build tint_convert_cli (native host tool) via build.sh.
+@@ -862,10 +870,18 @@ def build_wgsl_precompiled(target, source, env):
+         sys.exit(1)
+ 
+     print("[WGSL Precompile] Building tint_convert_cli...")
++    shell = "bash"
++    if os.name == "nt":
++        git_bash = os.path.join(
++            os.environ.get("ProgramFiles", r"C:\Program Files"),
++            "Git", "bin", "bash.exe",
++        )
++        if os.path.isfile(git_bash):
++            shell = git_bash
+     result = subprocess.run(
+-        ["bash", build_script],
++        [shell, build_script.replace("\\", "/")],
+         cwd=repo_root,
+-        timeout=600,
++        timeout=1800,
+     )
+     if result.returncode != 0:
+         print("[WGSL Precompile] ERROR: tint_convert_cli build failed", file=sys.stderr)
+diff --git a/platform/web/display_server_web.cpp b/platform/web/display_server_web.cpp
+index 8ec06ff..395cdc2 100644
+--- a/platform/web/display_server_web.cpp
++++ b/platform/web/display_server_web.cpp
+@@ -80,7 +80,7 @@ bool DisplayServerWeb::check_size_force_redraw() {
+ #ifdef WEBGPU_ENABLED
+ 		// Also update the rendering context surface so the swap chain resizes correctly.
+ 		if (rendering_context != nullptr) {
+-			rendering_context->window_set_size(MAIN_WINDOW_ID, window_size.x, window_size.y);
++			rendering_context->window_set_size(DisplayServerEnums::MAIN_WINDOW_ID, window_size.x, window_size.y);
+ 		}
+ #endif
+ 	}
+@@ -1159,18 +1159,18 @@ DisplayServerWeb::DisplayServerWeb(const String &p_rendering_driver, DisplayServ
+ 			r_error = ERR_CANT_CREATE;
+ 			ERR_FAIL_MSG("WebGPU: Failed to initialize rendering context. Ensure navigator.gpu is available and the device was pre-initialized in the HTML shell.");
+ 		}
+-		Error err = rendering_context->window_create(MAIN_WINDOW_ID, nullptr);
++		Error err = rendering_context->window_create(DisplayServerEnums::MAIN_WINDOW_ID, nullptr);
+ 		if (err != OK) {
+ 			memdelete(rendering_context);
+ 			rendering_context = nullptr;
+ 			r_error = err;
+ 			ERR_FAIL_MSG("WebGPU: Failed to create canvas surface.");
+ 		}
+-		rendering_context->window_set_size(MAIN_WINDOW_ID, p_resolution.x, p_resolution.y);
+-		rendering_context->window_set_vsync_mode(MAIN_WINDOW_ID, p_vsync_mode);
++		rendering_context->window_set_size(DisplayServerEnums::MAIN_WINDOW_ID, p_resolution.x, p_resolution.y);
++		rendering_context->window_set_vsync_mode(DisplayServerEnums::MAIN_WINDOW_ID, p_vsync_mode);
+ 
+ 		rendering_device = memnew(RenderingDevice);
+-		err = rendering_device->initialize(rendering_context, MAIN_WINDOW_ID);
++		err = rendering_device->initialize(rendering_context, DisplayServerEnums::MAIN_WINDOW_ID);
+ 		if (err != OK) {
+ 			memdelete(rendering_device);
+ 			rendering_device = nullptr;
+@@ -1179,7 +1179,7 @@ DisplayServerWeb::DisplayServerWeb(const String &p_rendering_driver, DisplayServ
+ 			r_error = err;
+ 			ERR_FAIL_MSG("WebGPU: Failed to initialize rendering device.");
+ 		}
+-		err = rendering_device->screen_create(MAIN_WINDOW_ID);
++		err = rendering_device->screen_create(DisplayServerEnums::MAIN_WINDOW_ID);
+ 		if (err != OK) {
+ 			// Non-fatal: the swapchain may be resized on first frame.
+ 			WARN_PRINT("WebGPU: screen_create() failed — swapchain will be set up on first frame.");
+@@ -1257,7 +1257,7 @@ DisplayServerWeb::~DisplayServerWeb() {
+ #endif
+ #ifdef WEBGPU_ENABLED
+ 	if (rendering_device) {
+-		rendering_device->screen_free(MAIN_WINDOW_ID);
++		rendering_device->screen_free(DisplayServerEnums::MAIN_WINDOW_ID);
+ 		memdelete(rendering_device);
+ 		rendering_device = nullptr;
+ 	}

@@ -36,6 +36,10 @@ for the 4.7.1 pack format, and subsequent API and renderer build fixes.
 | `0001-studio-webgpu-engine.patch` | Godot renderer, WebGPU driver, web platform, resource, and build integration | 72 | 18,888 | 188 |
 | `0002-studio-webgpu-spirv.patch` | Required vendored SPIR-V headers and tools | 397 | 155,766 | 10 |
 | `0003-studio-webgpu-tint.patch` | Required vendored Tint source and license | 824 | 202,514 | 0 |
+| `0004-godot-4.7.1-webgpu-interfaces.patch` | 4.7.1 API adaptation and Windows shader build reproducibility | 6 | 189 | 17 |
+| `0005-webgpu-shell-capability-gate.patch` | Fail-closed browser WebGPU capability gate | 1 | 13 | 8 |
+| `0006-webgpu-single-thread-stdio.patch` | No-threads web build compatibility | 1 | 1 | 0 |
+| `0007-tint-storage-buffer-access.patch` | SPIR-V/Tint storage-buffer access compatibility | 1 | 1 | 1 |
 
 The large third-party source patches are listed separately so their line counts
 are not presented as Studio Foundation-authored implementation. Copyright and
@@ -45,6 +49,20 @@ Studio Foundation maintains the 4.7.1 integration delta, patch packaging,
 source-preparation commands, template build, WebGL fallback, browser runtime
 checks, visual comparison, and release evidence. Godot itself remains upstream
 work maintained by the Godot contributors.
+
+The locked template build explicitly enables `webgpu=yes`, disables `opengl3`,
+and uses `threads=no`; an archive name is never treated as proof of its
+renderer. On Windows, the optional host-generated WGSL lookup table defaults to
+an empty table and the compiled runtime Tint path converts cache misses.
+
+## Current runtime status
+
+The no-threads build reaches a browser WebGPU adapter, device, canvas context,
+and Godot's Mobile renderer without requesting WebGL. Startup then fails in the
+vendored Tint SPIR-V reader at `texture.cc:606` while lowering a texture
+operation. Patch 0007 removed the preceding illegal write-only storage-buffer
+errors, but the texture assertion remains. Consequently, there are no accepted
+WebGPU template artifacts or public game proof at this checkpoint.
 
 ## Reproduce and inspect
 

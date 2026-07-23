@@ -7,7 +7,7 @@ and compared with the maintained WebGL fallback before lock data changes.
 ## Current state
 
 `engine/engine-lock.toml` pins official Godot 4.7.1 commit
-`a13da4feb8d8aefc283c3763d33a2f170a18d541` and three committed patch files.
+`a13da4feb8d8aefc283c3763d33a2f170a18d541` and seven committed patch files.
 The original backend lineage is `dwalter/godotwebgpu` commit
 `f329e39ce8db7acaa5c9d6628a530fb769969228`. The historical validated 4.7.1
 tree is `14f5effb72ae440a3aa575c801e4aae1a5da7fb8`. Neither historical

@@ -59,6 +59,18 @@ def validate_engine_artifacts(root: Path, records: object) -> list[str]:
     if not isinstance(records, dict):
         return ["engine artifact records must be a table"]
 
+    status = records.get("status", "accepted")
+    if status == "blocked":
+        problems = []
+        if any(key in records for key in EXPECTED_ENGINE_ARTIFACTS):
+            problems.append("blocked engine artifacts must not contain accepted records")
+        blocker = records.get("blocker")
+        if not isinstance(blocker, str) or not blocker.strip():
+            problems.append("blocked engine artifacts require a blocker")
+        return problems
+    if status != "accepted":
+        return ["engine artifact status must be accepted or blocked"]
+
     problems = []
     artifact_root = root / "engine" / "artifacts" / "templates"
     for key, expected_file in EXPECTED_ENGINE_ARTIFACTS.items():
@@ -185,6 +197,15 @@ def validate_engine_lock(root: Path) -> list[str]:
             problems.append(f"engine pin {label}.license is missing")
 
     patch_root = (root / "engine" / "patches").resolve()
+
+    webgpu_build = lock.get("build", {}).get("web_webgpu", {})
+    for profile in ("target_release", "target_debug"):
+        flags = webgpu_build.get(profile, [])
+        if "webgpu=yes" not in flags:
+            problems.append(f"build.web_webgpu.{profile} must explicitly enable webgpu=yes")
+        if "opengl3=no" not in flags:
+            problems.append(f"build.web_webgpu.{profile} must explicitly disable opengl3")
+
     series = lock.get("patches", {}).get("series", [])
     if not series:
         problems.append("engine patch series must not be empty")

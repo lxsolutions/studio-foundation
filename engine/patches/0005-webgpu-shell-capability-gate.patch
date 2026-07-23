@@ -1,0 +1,48 @@
+diff --git a/misc/dist/html/full-size.html b/misc/dist/html/full-size.html
+index d7bfbcd..3479286 100644
+--- a/misc/dist/html/full-size.html
++++ b/misc/dist/html/full-size.html
+@@ -163,6 +163,7 @@ const engine = new Engine(GODOT_CONFIG);
+ 
+ 	const missing = Engine.getMissingFeatures({
+ 		threads: GODOT_THREADS_ENABLED,
++		webgl: GODOT_RENDERING_DRIVER !== 'webgpu',
+ 	});
+ 
+ 	if (GODOT_RENDERING_DRIVER === 'webgpu' && (typeof navigator === 'undefined' || !navigator.gpu)) {
+diff --git a/misc/dist/html/webgpu-full-size.html b/misc/dist/html/webgpu-full-size.html
+index e257d44..4009278 100644
+--- a/misc/dist/html/webgpu-full-size.html
++++ b/misc/dist/html/webgpu-full-size.html
+@@ -247,6 +247,7 @@ async function initWebGPU() {
+ 
+ 	const missing = Engine.getMissingFeatures({
+ 		threads: GODOT_THREADS_ENABLED,
++		webgl: false,
+ 	});
+ 
+ 	if (missing.length !== 0) {
+diff --git a/platform/web/js/engine/features.js b/platform/web/js/engine/features.js
+index c366683..a8b27d6 100644
+--- a/platform/web/js/engine/features.js
++++ b/platform/web/js/engine/features.js
+@@ -72,16 +72,17 @@ const Features = {
+ 	 *
+ 	 * @returns {Array<string>} A list of human-readable missing features.
+ 	 * @function Engine.getMissingFeatures
+-	 * @param {{threads: (boolean|undefined)}} supportedFeatures
++	 * @param {{threads: (boolean|undefined), webgl: (boolean|undefined)}} supportedFeatures
+ 	 */
+ 	getMissingFeatures: function (supportedFeatures = {}) {
+ 		const {
+ 			// Quotes are needed for the Closure compiler.
+ 			'threads': supportsThreads = true,
++			'webgl': requiresWebGL = true,
+ 		} = supportedFeatures;
+ 
+ 		const missing = [];
+-		if (!Features.isWebGLAvailable(2)) {
++		if (requiresWebGL && !Features.isWebGLAvailable(2)) {
+ 			missing.push('WebGL2 - Check web browser configuration and hardware support');
+ 		}
+ 		if (!Features.isFetchAvailable()) {

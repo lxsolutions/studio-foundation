@@ -9,40 +9,34 @@ component is a beta WebGPU export path maintained as checksum-pinned patches
 against Godot 4.7.1. WebGL 2 remains the fallback. No separate LX Solutions
 engine fork is fetched or required.
 
-> **Status:** WebGPU support is beta. The repository records verified behavior
-> and known gaps in [BOOTSTRAP_REPORT.md](BOOTSTRAP_REPORT.md); it does not claim
-> untested browser, device, or production support.
-
-![Godot 4.7.1 template rendered through the WebGPU integration](templates/godot-game/project/captures/web-webgpu.png)
+> **Status:** WebGPU support is experimental and currently blocked during
+> shader translation by a Tint texture-lowering assertion. No WebGPU template,
+> screenshot, game, or production deployment is currently accepted as proof.
+> Reproducible findings and known gaps are recorded in
+> [BOOTSTRAP_REPORT.md](BOOTSTRAP_REPORT.md).
 
 ## What is verifiable
 
 | Capability | Evidence in this repository |
 |---|---|
 | Official engine base | Godot 4.7.1 stable is pinned by full commit in [engine-lock.toml](engine/engine-lock.toml) |
-| WebGPU source | Three ordered patches are stored in [engine/patches/](engine/patches/) and checked by SHA-256 before application |
+| WebGPU source | Seven ordered patches are stored in [engine/patches/](engine/patches/) and checked by SHA-256 before application |
 | Source preparation | `engine-fetch` clones official Godot only and creates a disposable patched worktree |
-| Export templates | Release and debug archives are recorded by filename, byte count, and SHA-256 in the engine lock |
-| Runtime verification | Browser smoke tests require `navigator.gpu`, a usable adapter, and an active WebGPU canvas context |
+| Export templates | Accepted archives must be recorded by filename, byte count, and SHA-256; the artifact lock has no accepted entries while runtime validation is red |
+| Runtime verification | Browser smoke tests observe the engine's adapter, device, and WebGPU canvas requests and reject any WebGL context request |
 | Fallback | The same template project has an official WebGL 2 export preset |
 | Template behavior | Headless GDScript tests cover the shared addon and neutral starter project |
 | Optional services | Rust and Nakama components are independently tested and are not required for client-only use |
 
 Exact test counts, artifact state, and unverified areas are listed in the
 [verification report](BOOTSTRAP_REPORT.md).
-## Independent game proof
 
-The separate [OSWT integration branch](https://github.com/lxsolutions/OSWT/tree/studio-foundation-webgpu-demo)
-is a playable consumer of this repository, rebased onto Devon Rowkowski's
-current `f6f8fe9` game update. At OSWT commit `a93d550` and Foundation commit
-`61a92fa`, it passes 103/103 headless checks, exports with the locked WebGPU
-template, and passes the strict live-browser WebGPU probe. The workflow emits a
-machine-readable record containing both source commits, patch and template
-hashes, exported artifact hashes, and verification results.
+## Demo status
 
-A public deployment is not claimed yet; the source and reproduction path are
-published before the hosted URL.
-
+OSWT is being evaluated as an external consumer, but it is not currently
+accepted as WebGPU proof. The existing Asha Arena route uses WebGL 2 and will
+remain labeled and deployed accordingly until a clean, locked build passes the
+engine-owned WebGPU context probe and produces matching provenance.
 
 ## Quick start
 
@@ -149,6 +143,8 @@ Run `just` to list every supported command.
 Material engine changes require tests, updated evidence, and the relevant ADR.
 Contributor workflow is documented in
 [WORKING_AGREEMENTS.md](docs/agents/WORKING_AGREEMENTS.md).
+Security scope and private reporting instructions are in [SECURITY.md](SECURITY.md).
+
 
 Foundation code, tooling, templates, documentation, and infrastructure are
 dual-licensed under MIT and CC BY 4.0; see [LICENSE](LICENSE). Third-party

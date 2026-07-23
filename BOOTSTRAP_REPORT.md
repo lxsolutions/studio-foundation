@@ -21,17 +21,13 @@ consumer.
 | Area | Evidence |
 |---|---|
 | Official engine source | Godot 4.7.1 stable commit `a13da4feb8d8aefc283c3763d33a2f170a18d541` is the sole active upstream pin |
-| WebGPU source preparation | Patch checksums, path containment, reusable-source preparation, candidate isolation, dry-run, resume, and conflict handling pass the engine-tool tests |
-| Release template record | `godot.web.template_release.webgpu.zip`: 9,884,813 bytes; SHA-256 `86674b227822ada41b3d9326dbfe3a70e2d8e1bb8711288e34027688939a2acd` |
-| Debug template record | `godot.web.template_debug.webgpu.zip`: 9,878,960 bytes; SHA-256 `dc4b60daa92593a491dc2863560d45a9271bcefbbd5df78a88de3a1d23207065` |
-| Artifact acceptance | The recorder requires a complete release/debug pair; release validation checks metadata and verifies matching local files |
-| Shared protocol v2 | Nine golden fixtures pass Rust, GDScript, and fixture-set validation |
-| Godot template | Godot 4.7.1 imports cleanly; 25 test methods and 137 assertions pass |
-| Rust service workspace | 16 fast tests pass; two PostgreSQL integration tests remain explicitly ignored without a live database |
-| Generated server template | The standalone server test passes against its regenerated lockfile |
-| Optional Nakama bridge | Six ES5 runtime tests and four Python probe tests pass |
-| Infrastructure tools | Five local/remote Compose and database lifecycle tests pass |
-| OSWT browser proof | Clean Foundation `61a92fa` and OSWT `a93d550` commits export with the locked template; Chrome reports `navigator.gpu`, an adapter, and an active WebGPU canvas context |
+| WebGPU source preparation | Seven checksum-pinned patches pass path-containment, reusable-source preparation, candidate-isolation, dry-run, resume, and conflict-handling tests |
+| Build configuration | WebGPU templates explicitly use `webgpu=yes`, `opengl3=no`, and `threads=no` |
+| Template installation | The installer selects only the archive matching the lock's thread mode and rejects archives missing the WebGPU loader bridge or compiled backend marker |
+| Browser evidence | The smoke test instruments engine-owned adapter, device, and canvas-context requests and rejects any WebGL/WebGL 2 request |
+| Artifact acceptance | The recorder requires a complete release/debug pair; the artifact lock has no accepted entries while the runtime gate is red |
+| Current engine result | A no-threads build reaches a WebGPU adapter, device, canvas context, and the Mobile renderer without requesting WebGL; startup then fails in Tint texture lowering at `texture.cc:606` |
+| Optional Nakama bridge | The bridge carries opaque consumer-owned payloads and remains optional |
 
 ## Engine lineage
 
@@ -40,20 +36,19 @@ separate LX Solutions engine fork. Historical MIT-licensed WebGPU lineage is
 retained in [NOTICE.md](NOTICE.md); the maintained 4.7.1 delta, patch curation,
 build commands, fallback, and validation live in this repository.
 
-## External game proof
+## External game status
 
-The separate [OSWT integration branch](https://github.com/lxsolutions/OSWT/tree/studio-foundation-webgpu-demo)
-is rebased onto Devon Rowkowski's `f6f8fe9` update. It passes 103/103 headless
-gameplay and proof checks, exports from clean Foundation and OSWT commits using
-the locked WebGPU template, and passes the strict Chrome WebGPU probe. Its
-generated provenance records both source commits, patch/template hashes,
-exported artifact hashes, and verification results. A hosted deployment is not
-claimed yet.
+OSWT is an external demo candidate, not accepted WebGPU proof. Independent live
+inspection found that the current Asha Arena OSWT route requests WebGL 2. It has
+not been overwritten or relabeled. A future proof release must use a clean
+locked template, pass the engine-owned context instrumentation, and publish
+matching source and artifact provenance.
 
 ## Not yet claimed
 
-- A published OSWT browser capture produced from the exact locked templates
-- A public OSWT deployment with a hosted provenance record
+- A WebGPU runtime that completes shader translation and reaches an interactive frame
+- Accepted release/debug WebGPU template artifacts and checksums
+- A published OSWT WebGPU capture and deployment produced from those exact templates
 - Safari/iOS WebGPU behavior
 - Native Android and iOS device runs
 - Database-backed integration tests against a live disposable PostgreSQL stack
@@ -78,5 +73,5 @@ just engine-record-artifacts
 just release-validate --allow-dirty
 ```
 
-A WebGPU screenshot is accepted only when the runtime probe confirms the WebGPU
-API, an adapter, and an active WebGPU canvas context.
+A WebGPU screenshot is accepted only when the runtime probe confirms engine-owned
+adapter, device, and WebGPU canvas-context requests with no WebGL request.

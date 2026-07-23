@@ -8,6 +8,14 @@ browser WebGPU template build. They apply to the official Godot commit in
    resource, and build integration.
 2. `0002-studio-webgpu-spirv.patch` - required vendored SPIR-V headers and tools.
 3. `0003-studio-webgpu-tint.patch` - required vendored Tint source and license.
+4. `0004-godot-4.7.1-webgpu-interfaces.patch` - Godot 4.7.1 interface adaptation
+   and reproducible WebGPU shader-generation fixes.
+5. `0005-webgpu-shell-capability-gate.patch` - fail closed when the browser does
+   not expose WebGPU instead of silently selecting WebGL.
+6. `0006-webgpu-single-thread-stdio.patch` - support the required no-threads web
+   build configuration.
+7. `0007-tint-storage-buffer-access.patch` - translate write-only SPIR-V storage
+   buffers to Tint's supported read-write access mode.
 
 The WebGPU implementation originated in `dwalter/godotwebgpu`. Studio
 Foundation owns the 4.7.1 port, scoped patch curation, preparation/build tooling,
@@ -26,3 +34,7 @@ authorship and maintenance boundary.
 
 `engine/.cache/studio-webgpu` is disposable output. This directory and
 `engine-lock.toml` are source of truth.
+
+The series currently compiles and reaches the WebGPU Mobile renderer, but the
+browser runtime is not accepted: startup stops in Tint texture lowering at
+`texture.cc:606`. No template artifact is locked until that gate passes.

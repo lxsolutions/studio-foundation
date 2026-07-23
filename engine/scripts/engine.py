@@ -21,6 +21,7 @@ import re
 import shutil
 import subprocess
 import sys
+import zipfile
 import tomllib
 from pathlib import Path
 
@@ -367,26 +368,55 @@ def cmd_build(lock: dict, source_dir: Path | None = None) -> int:
             break
         print(f"[build] {profile} OK", flush=True)
     if rc == 0:
-        _install_templates(source, artifact_dir)
+        _install_templates(
+            source,
+            artifact_dir,
+            threads_enabled="threads=yes" in targets["target_release"],
+        )
     return rc
 
 
-def _install_templates(source: Path, dest: Path | None = None) -> None:
-    """Copy built web template zips into the selected artifact destination.
+def _validate_webgpu_template(archive: Path) -> None:
+    """Reject mislabeled templates that do not contain the compiled backend."""
+    with zipfile.ZipFile(archive) as bundle:
+        try:
+            loader = bundle.read("godot.js")
+            runtime = bundle.read("godot.wasm")
+        except KeyError as error:
+            raise RuntimeError(f"incomplete Godot web template: {archive}") from error
+    missing = []
+    if b"importJsDevice" not in loader:
+        missing.append("emdawnwebgpu loader bridge")
+    if b"WebGPU: Device imported from JS successfully." not in runtime:
+        missing.append("compiled WebGPU context driver")
+    if missing:
+        raise RuntimeError(
+            f"refusing mislabeled WebGPU template {archive}: missing {', '.join(missing)}"
+        )
 
-    scons names its output godot.web.template_{release,debug}.wasm32.zip, but
-    export_presets.cfg's web-webgpu preset (custom_template/release, .../debug)
-    points at ...webgpu.zip — rename on copy so the preset actually resolves."""
+
+def _install_templates(
+    source: Path, dest: Path | None = None, *, threads_enabled: bool
+) -> None:
+    """Install only the archive matching the lock's thread configuration."""
     dest = dest or ENGINE_DIR / "artifacts" / "templates"
     dest.mkdir(parents=True, exist_ok=True)
-    zips = sorted((source / "bin").glob("godot.web.template_*.zip"))
-    for z in zips:
-        target = dest / z.name.replace(".wasm32.zip", ".webgpu.zip")
-        shutil.copy2(z, target)
-        print(f"[install] {z.name} -> {target.relative_to(REPO_ROOT)}", flush=True)
-    if not zips:
-        print("[install] WARNING: no template zips found under bin/", file=sys.stderr)
-
+    suffix = ".wasm32.zip" if threads_enabled else ".wasm32.nothreads.zip"
+    installed = 0
+    for profile in ("release", "debug"):
+        archive = source / "bin" / f"godot.web.template_{profile}{suffix}"
+        if not archive.is_file():
+            raise RuntimeError(f"expected built WebGPU template missing: {archive}")
+        target = dest / f"godot.web.template_{profile}.webgpu.zip"
+        _validate_webgpu_template(archive)
+        shutil.copy2(archive, target)
+        print(
+            f"[install] {archive.name} -> {target.relative_to(REPO_ROOT) if target.is_relative_to(REPO_ROOT) else target}",
+            flush=True,
+        )
+        installed += 1
+    if installed != 2:
+        raise RuntimeError("expected release and debug WebGPU templates")
 
 def main() -> int:
     parser = argparse.ArgumentParser(
