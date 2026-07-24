@@ -71,6 +71,7 @@ series = [
   { file = "patches/0011-webgpu-flatten-decoration-literals.patch", sha256 = "118d06a98d3046010dfe4926698242792125aeb08eac55c65e2abd1e6a323b17" },
   { file = "patches/0012-tint-texture-function-params.patch", sha256 = "b22a21de0dcc1e0df2ae8b50cac055635f48db7faace9917a03e620cbaee81ae" },
   { file = "patches/0013-webgpu-sampler-texture-stage-visibility.patch", sha256 = "ce1a89673a1079cb6bc83e51b3090877ba26a3c6bf3cb684830b6895c6e66ffc" },
+  { file = "patches/0014-webgpu-lit-shadow-sampler-types.patch", sha256 = "0cc3be74445b94b123eab68131cb37968b6448211fe3506b93a28e3321a6f811" },
 ]
 
 [artifacts.export_templates]

@@ -17,7 +17,7 @@
 > **✅ Updated 2026-07-24: 3D now renders in-browser on real hardware.** The
 > original symptom (a lit *or even unshaded* 3D mesh came out black; translation
 > stalled on the runtime-specialized scene shader) was a chain of shader-translation
-> and bind-group defects, not one bug. Patches 0009–0013 fix the whole chain —
+> and bind-group defects, not one bug. Patches 0009–0014 fix the whole chain —
 > verified on an NVIDIA Tesla P40 (headed Chrome/WebGPU): the 3D scene draws a lit,
 > perspective-projected mesh at 60 fps with **0 `GPUValidationError`** (was 2283).
 > The historical root-cause analysis is kept below in **§3D rendering gap** for the
@@ -29,7 +29,7 @@ runtime error) → visual compare **1.2%** vs the WebGL baseline — is green **
 neutral template's 2D menu**, and `engine-lock.toml [artifacts.export_templates]`
 records `web_webgpu_release` (`3642cf5e…`) + `web_webgpu_debug` (`1f1ed2b5…`). The
 automated gate historically rendered only a 2D Control scene; 3D is now **verified
-manually on GPU hardware** (NVIDIA Tesla P40 — lit mesh, 60 fps, 0 `GPUValidationError`).
+manually on GPU hardware** (NVIDIA Tesla P40 — six PBR meshes with real-time shadows, 59–60 fps, 0 `GPUValidationError`).
 Folding that 3D render into the automated gate is the remaining CI task.
 
 | Gate | Status | Evidence |
@@ -39,7 +39,7 @@ Folding that 3D render into the automated gate is the remaining CI task.
 | Tint SPIR‑V→WGSL translation (storage‑buffer + OpImage ordering) | ✅ | patches 0007, 0008 |
 | **Emdawn/Godot `RefCounted` ODR collision** (the heap‑buffer‑overflow) | ✅ **fixed in source** | `engine/toolchain/patches/0001-emdawn-private-namespace.patch`, locked in `[toolchain.emdawnwebgpu]` |
 | Rebuild + browser probe (2D menu) with the backport | ✅ 2026‑07‑24 | 2D menu, 1.2% vs WebGL |
-| **3D render on GPU hardware** (NVIDIA Tesla P40) | ✅ 2026‑07‑24 — patches 0009–0013 | lit mesh, 60 fps, 0 `GPUValidationError` |
+| **3D render on GPU hardware** (NVIDIA Tesla P40) | ✅ 2026‑07‑24 — patches 0009–0014 | six PBR meshes + real-time shadows, 59–60 fps, 36 draws/frame, 0 `GPUValidationError` |
 | **3D rendering under WebGPU** | 🟢 **in-browser render VERIFIED on an NVIDIA Tesla P40 (patches 0009–0013)** — 3D scene draws a lit mesh at 60 fps, 0 GPUValidationError | §3D rendering gap |
 | **3D scene-shader translation** | 🟢 **177/182 translate offline** (was 174); the runtime-specialized scene shader also translates *and renders* after patches 0011–0013 | §3D rendering gap |
 | Template artifacts locked in `engine-lock.toml` | ✅ | `[artifacts.export_templates]`: release + debug + sha256 |

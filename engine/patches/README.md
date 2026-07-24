@@ -40,8 +40,17 @@ browser WebGPU template build. They apply to the official Godot commit in
     scan instead of the `u.stages` union. Godot forward-mobile declares up to 22
     samplers visible to every stage, but the vertex stage samples none and the
     fragment stage at most 7; the over-approximation tripped WebGPU's hard
-    16-samplers-per-stage limit so every 3D pipeline failed to create (verified
-    rendering on a Tesla P40: 0 GPUValidationError, lit scene at 60 fps).
+    16-samplers-per-stage limit so every 3D pipeline failed to create (verified on a
+    Tesla P40: an unshaded 3D mesh renders at 60 fps with 0 GPUValidationError;
+    lit/shadowed scenes needed `0014` as well).
+
+14. `0014-webgpu-lit-shadow-sampler-types.patch` - make lit and shadowed 3D render.
+    Fixes two sampler-description defects remaining after `0013`: bindings reached
+    only through helper-function parameters (Godot's lighting/PCF helpers) were
+    wrongly demoted to no visibility, and depth textures were paired with Filtering
+    samplers, which WebGPU forbids. Adds a driver-owned non-filtering sampler for
+    depth slots. Verified on a Tesla P40: six PBR meshes with real-time shadows at
+    59-60 fps, 36 draws/frame, 0 GPUValidationError.
 
 The WebGPU implementation originated in `dwalter/godotwebgpu`. Studio
 Foundation owns the 4.7.1 port, scoped patch curation, preparation/build tooling,

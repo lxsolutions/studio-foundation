@@ -1,27 +1,34 @@
 # Studio Foundation
 
-Reproducible Godot 4.7.1 browser builds, a mechanics-neutral project template,
-and the tests needed to verify both.
+**An AI-native, open-source game-dev toolkit — with a Godot 4.7.1 WebGPU browser
+backend that actually renders 3D.**
 
-Studio Foundation is an open-source toolkit built around
-[official Godot](https://github.com/godotengine/godot). Its distinctive
-component is a beta WebGPU export path maintained as checksum-pinned patches
-against Godot 4.7.1. WebGL 2 remains the fallback. No separate LX Solutions
-engine fork is fetched or required.
+Official [Godot](https://github.com/godotengine/godot) is the base and stays the
+upstream. On top of it sits a WebGPU export path maintained as an ordered,
+SHA-256-locked patch series, plus the MCP server, agent workflows, and asset
+pipeline that make the whole thing drivable by AI assistants. WebGL 2 remains the
+supported fallback.
+
+![Godot 4.7.1 rendering a lit, shadowed 3D scene through WebGPU in a browser](docs/images/webgpu-3d-lit-shadows.png)
+
+*Six PBR meshes, a directional light, and real-time shadow mapping — rendered by
+Godot 4.7.1 through WebGPU in Chrome on an NVIDIA Tesla P40: 59–60 fps, 36 draws per
+frame, **0 `GPUValidationError`**. The scene is
+[`webgpu_showcase.gd`](templates/godot-game/project/scenes/webgpu_showcase.gd) —
+about 100 lines of GDScript, no external assets — so you can rebuild and re-verify
+this exact frame yourself.*
 
 ## Our lane: AI-native, open-source game development
 
-Godot itself does not accept AI-generated code contributions, and has stated it does
-not intend to add AI features to the engine. That is a deliberate choice — and it
+Godot does not accept AI-generated code contributions, and has stated it does not
+intend to add AI features to the engine. That is a deliberate choice — and it
 leaves an open lane. Studio Foundation takes it: building games **with** AI, in the
-open, is the point of this toolkit, not a bolt-on. Where the upstream engine steps
-back from AI, this project leans in — openly, reproducibly, and for free.
+open, is the point of this toolkit, not a bolt-on.
 
 The WebGPU backend is proof the model works: an AI-assisted capability the community
-wanted for years, carried forward as a transparent, checksum-pinned patch series on
-official Godot (MIT) and verified on real hardware (the 3D render above was confirmed
-on an NVIDIA Tesla P40). It could never land upstream under Godot's policy no matter
-how well it works — so it lives here instead. And the AI-native surface is
+wanted for years, carried as a transparent patch series on official Godot (MIT) and
+verified on real hardware. It could never land upstream under Godot's policy no
+matter how well it works — so it lives here instead. The AI-native surface is
 first-class throughout the repo, not just in the engine:
 
 - **An MCP server** ([`tools/studio-mcp`](tools/studio-mcp), config in
@@ -31,93 +38,19 @@ first-class throughout the repo, not just in the engine:
   [`docs/agents`](docs/agents)) so AI agents build, test, and verify against the repo
   predictably instead of ad hoc.
 - **An AI-driven Blender asset pipeline**
-  ([ADR 0006](docs/adr/0006-blender-master-asset-pipeline.md)) for generating and
-  processing game assets.
+  ([ADR 0006](docs/adr/0006-blender-master-asset-pipeline.md)).
 - **Reproducible by construction** — every artifact is byte-and-SHA-256 pinned and
-  every patch is checksum-locked and independently verifiable, so "AI-built" never
-  means "unauditable." That auditability is the answer to the slop critique: you can
-  rebuild and re-verify all of it yourself.
+  every patch is checksum-locked, so "AI-built" never means "unauditable." You can
+  rebuild and re-verify all of it yourself. That auditability is the whole answer to
+  the slop critique.
 
-This is the category the project owns on purpose: open-source, AI-native game-dev
-tooling for the era where assistants and agents are how software gets built.
-
-> **Status:** WebGPU support is beta and now **renders 3D in-browser on real
-> hardware.** The locked source build boots the WebGPU backend (Forward Mobile
-> renderer) and, as of 2026-07-24 (patch 0013), draws a lit, perspective-projected
-> 3D mesh in Chrome on an NVIDIA Tesla P40 — 60 fps, **0 `GPUValidationError`** (was
-> 2283) — verified against the engine-owned WebGPU probe, alongside the earlier 2D
-> menu gate (active canvas context, no runtime error; 1.2% vs the WebGL baseline).
-> Both templates are recorded by byte count and SHA-256 in
-> [engine-lock.toml](engine/engine-lock.toml). WebGL 2 remains a supported fallback.
->
-> **3D-black bug — root-caused and fixed (2026-07-24, patch 0009).** A lit *or
-> even unshaded* 3D mesh rendered black under WebGPU while rendering fine under
-> WebGL. Cause: Tint's SPIR-V reader aborts (`TINT_UNIMPLEMENTED`, decoration 21 =
-> `Volatile`) when translating Godot's coherent compute shaders — concretely
-> `volumetric_fog.glsl`, which the Forward Mobile renderer compiles during 3D
-> init. In the browser that abort is a WebAssembly trap that freezes the page, so
-> every 3D scene went black (2D/UI was unaffected). Patch 0009 strips the
-> `Volatile` decoration in SPIR-V preprocessing (same approach as `Restrict`).
-> **Verified offline** with a native reproducer over all 182 engine shaders:
-> `volumetric_fog` now translates and 0 crash (was 1). A follow-up (patch 0010)
-> also fixes a class of *silent* shader-translation failures — combined
-> image-samplers forwarded through function call chains (bicubic glow,
-> `taa_resolve`) — raising offline coverage to 177/182; the remaining 5 are
-> fundamental WGSL feature gaps, not crashes.
->
-> **In-browser render now verified on real hardware (2026-07-24, NVIDIA Tesla P40).**
-> Running the rebuilt WebGPU build in headless Chrome on an actual GPU exposed two
-> more shader-translation defects that the offline corpus missed (only the
-> runtime-*specialized* scene shader triggers them): patch 0011 stops
-> `flatten_binding_arrays` from corrupting struct-offset decoration literals, and
-> patch 0012 fixes Tint's SPIR-V reader so textures passed by *function parameter*
-> (Godot's lightmap/shadow helpers) are converted to core texture types instead of
-> crashing its texture lowering. With 0009–0012 the engine **no longer crashes** on
-> 3D shader translation on the GPU.
->
-> **A 3D frame now renders in-browser on real hardware (2026-07-24, NVIDIA Tesla
-> P40 — patch 0013).** The final blocker was a *non-crash* pipeline rejection:
-> Godot's Forward Mobile scene shader declares up to 18–22 samplers and marked every
-> one visible to both shader stages, over WebGPU's hard limit of 16 samplers per
-> stage. Patch 0013 gives sampler/texture bind-group entries precise per-stage
-> visibility from a WGSL reachability scan — the vertex stage samples none and the
-> fragment stage at most 7 — so every pipeline now creates. The exported 3D scene
-> renders a lit, perspective-projected mesh at 60 fps with **0 `GPUValidationError`**
-> (was 2283). WebGL 2 remains a supported fallback. Details:
-> [BOOTSTRAP_REPORT.md](BOOTSTRAP_REPORT.md).
-
-## What is verifiable
-
-| Capability | Evidence in this repository |
-|---|---|
-| Official engine base | Godot 4.7.1 stable is pinned by full commit in [engine-lock.toml](engine/engine-lock.toml) |
-| WebGPU source | Thirteen ordered patches are stored in [engine/patches/](engine/patches/) and checked by SHA-256 before application |
-| WebGPU toolchain | The exact Emdawn source and Dawn namespace backport are independently versioned and checksum-locked under [engine/toolchain/](engine/toolchain/) |
-| Source preparation | `engine-fetch` clones official Godot only and creates a disposable patched worktree |
-| Export templates | Accepted archives are recorded by filename, byte count, and SHA-256 in [engine-lock.toml](engine/engine-lock.toml); the release and debug WebGPU templates are locked (they passed the **2D** browser + visual gate on 2026-07-24) |
-| Runtime verification | Browser smoke tests observe the engine's adapter, device, and WebGPU canvas requests and reject any WebGL context request |
-| 3D shader translation (WebGPU) | No longer crashes — verified in-browser on an NVIDIA Tesla P40. Patches 0009–0012 fix four distinct translation crashes (`Volatile` decoration, transitive combined-sampler split, flatten decoration-literal corruption, and Tint's texture-function-parameter conversion). The rebuilt engine boots the WebGPU device and translates the specialized 3D scene shader without SIGILL |
-| WebGPU shader coverage | 177 of 182 engine shaders translate to valid WGSL offline; the runtime-specialized scene shader (which the offline corpus did not cover) also translates after 0011/0012. The 5 offline gaps are fundamental WGSL limits (subpass `input_attachment`, storage-texture format inference, vertex-stage `read_write` storage), not crashes |
-| 3D render (visible frame) | **Yes — verified in-browser on an NVIDIA Tesla P40.** Patch 0013 clears the last blocker (Forward Mobile over-declared 18 samplers per stage vs WebGPU's 16 limit) by giving sampler/texture bind-group entries precise per-stage visibility. The exported 3D scene renders a lit, perspective-projected mesh at 60 fps with 0 `GPUValidationError` (was 2283) |
-| Fallback | The same template project has an official WebGL 2 export preset |
-| Template behavior | Headless GDScript tests cover the shared addon and neutral starter project |
-| Optional services | Rust and Nakama components are independently tested and are not required for client-only use |
-
-Exact test counts, artifact state, and unverified areas are listed in the
-[verification report](BOOTSTRAP_REPORT.md).
-
-## Demo status
-
-OSWT is being evaluated as an external consumer, but it is not currently
-accepted as WebGPU proof. The existing Asha Arena route uses WebGL 2 and will
-remain labeled and deployed accordingly until a clean, locked build passes the
-engine-owned WebGPU context probe and produces matching provenance.
+Official Godot stays the upstream. We own the distribution, not the engine
+([ADR 0008](docs/adr/0008-own-the-distribution-not-the-engine.md)).
 
 ## Quick start
 
 Prerequisites are reported by `just doctor`. The fast repository checks require
-Python 3.11; Godot and the engine toolchain are needed only for their respective
-suites.
+Python 3.11; Godot and the engine toolchain are needed only for their suites.
 
 ```sh
 git clone https://github.com/lxsolutions/studio-foundation.git
@@ -130,61 +63,96 @@ just test
 Without `just`, run `powershell scripts/bootstrap.ps1` on Windows or
 `sh scripts/bootstrap.sh` on Linux, macOS, or WSL2.
 
-## Reproduce the WebGPU path
+### Build the WebGPU path yourself
 
 ```sh
-just engine-versions
-just engine-fetch
-just engine-build
+just engine-versions          # show the pinned commits and patch series
+just engine-fetch             # clone official Godot, verify + apply the patches
+just engine-build             # build the WebGPU export templates
 just engine-validate
-just engine-record-artifacts
-just release-validate --allow-dirty
+just export-browser-webgpu
 ```
 
-The pipeline is deliberately split:
+The pipeline is deliberately split, so each stage is independently checkable:
 
 ```text
-official Godot commit
-        |
-        v
-verified local patch series
-        |
-        v
-release + debug WebGPU templates
-        |
-        v
-Godot export -> browser runtime probe -> visual evidence
+official Godot commit -> verified patch series -> release + debug WebGPU templates
+    -> Godot export -> browser runtime probe -> visual evidence
 ```
 
 `engine-build` requires the Emscripten version pinned in
-[engine-lock.toml](engine/engine-lock.toml). The complete update procedure is in
+[engine-lock.toml](engine/engine-lock.toml). Full procedure:
 [the WebGPU runbook](docs/runbooks/godot-webgpu-update.md).
+
+### Drive it with an AI assistant
+
+The repo ships an MCP server, so an assistant can run the engine lifecycle, exports,
+and checks directly. Point any MCP-capable client at [`.mcp.json`](.mcp.json) (Claude
+Code picks it up automatically from the repo root), then see
+[`docs/agents/mcp`](docs/agents/mcp) for the exposed tools and
+[WORKING_AGREEMENTS.md](docs/agents/WORKING_AGREEMENTS.md) for how agents are expected
+to work here.
+
+## What is verifiable
+
+| Capability | Evidence in this repository |
+|---|---|
+| Official engine base | Godot 4.7.1 stable is pinned by full commit in [engine-lock.toml](engine/engine-lock.toml) |
+| WebGPU source | An ordered patch series in [engine/patches/](engine/patches/), each checked by SHA-256 before application |
+| WebGPU toolchain | The exact Emdawn source and Dawn namespace backport are independently versioned and checksum-locked under [engine/toolchain/](engine/toolchain/) |
+| Source preparation | `engine-fetch` clones official Godot only and creates a disposable patched worktree |
+| Export templates | Accepted archives are recorded by filename, byte count, and SHA-256 in [engine-lock.toml](engine/engine-lock.toml) |
+| Runtime verification | Browser smoke tests observe the engine's adapter, device, and WebGPU canvas requests and reject any WebGL context request |
+| 3D shader translation | Verified in-browser on an NVIDIA Tesla P40. Patches 0009–0012 fix four distinct translation crashes; the runtime-specialized scene shader translates without crashing |
+| WebGPU shader coverage | 177 of 182 engine shaders translate to valid WGSL offline. The 5 gaps are fundamental WGSL limits (subpass `input_attachment`, storage-texture format inference, vertex-stage `read_write` storage), not crashes |
+| 3D render (lit + shadowed) | **Verified in-browser on an NVIDIA Tesla P40.** Patches 0013–0014 fix per-stage sampler visibility and depth-texture sampler types; a scene with six PBR meshes, a directional light, and real-time shadow mapping renders at 59–60 fps, 36 draws/frame, with 0 `GPUValidationError` |
+| Fallback | The same template project has an official WebGL 2 export preset |
+| Template behavior | Headless GDScript tests cover the shared addon and neutral starter project |
+| Optional services | Rust and Nakama components are independently tested and are not required for client-only use |
+
+Exact test counts, artifact state, and unverified areas are in the
+[verification report](BOOTSTRAP_REPORT.md).
+
+## Status and honest limits
+
+WebGPU support is **beta**.
+
+What works, verified on real GPU hardware: the engine boots the WebGPU backend
+(Forward Mobile), translates the runtime-specialized 3D scene shaders, and renders
+lit, shadowed 3D geometry with 0 validation errors. 2D/UI renders and was gated
+against the WebGL baseline at a 1.2% visual difference.
+
+What does not, yet: several post-processing effects (tonemap variants, SSR, TAA,
+SDFGI/voxel-GI debug views) still fail Tint translation *gracefully* — they are
+skipped rather than crashing, so 3D renders without them. Getting to a visible frame
+took fourteen patches worth of shader-translation and binding-description fixes; each
+one is documented in [engine/patches/README.md](engine/patches/README.md) with the
+exact defect it addresses.
+
+Godot's own WebGPU support is separately in development upstream. This project is
+not a competitor to that effort — it is a maintained, reproducible path that works
+today on Godot 4.7.1, and it stays a patch series precisely so it can be retired
+into upstream when upstream is ready.
+
+Not yet claimed: a published real-game WebGPU deployment, Safari/iOS behavior, and
+native Android/iOS device runs. The full list is in
+[BOOTSTRAP_REPORT.md](BOOTSTRAP_REPORT.md); the running engineering log is in
+[docs/architecture/webgpu-runtime-status.md](docs/architecture/webgpu-runtime-status.md).
 
 ## Included components
 
 - A neutral Godot 4.7.1 project template and reusable `studio_core` addon.
 - WebGPU export tooling with an official WebGL 2 fallback.
 - Browser smoke, screenshot, visual-regression, benchmark, and release checks.
+- An MCP server and agent workflow documentation.
 - Blender-to-glTF validation and export tools.
 - Optional Rust API/session scaffolding and PostgreSQL development setup.
 - An optional Nakama adapter that forwards opaque application payloads without
   defining game mechanics.
 
-The optional backend is scaffolding, not a required architecture. A consuming
-game owns its content, rules, schemas, identity policy, persistence semantics,
-and deployment.
-
-## Source and attribution
-
-Official Godot is the sole active engine upstream. The WebGPU backend has
-MIT-licensed historical lineage from `dwalter/godotwebgpu`; Studio Foundation
-maintains the current Godot 4.7.1 patch series, build tooling, and validation
-surface in this repository. The lineage repository is never cloned by the
-build.
-
-See [NOTICE.md](NOTICE.md) and
-[WebGPU integration provenance](docs/architecture/webgpu-integration.md) for
-the exact source boundary and commit pins.
+The optional backend is scaffolding, not a required architecture. A consuming game
+owns its content, rules, schemas, identity policy, persistence semantics, and
+deployment.
 
 ## Repository layout
 
@@ -195,7 +163,7 @@ the exact source boundary and commit pins.
 | `shared/godot-addons/studio_core/` | Reusable Godot services and platform interfaces |
 | `services/` | Optional Rust protocol, session, API, and persistence scaffolding |
 | `infra/` | Optional local PostgreSQL, Nakama, and tracing services |
-| `tools/` | Engine, asset, export, browser, release, and repository tooling |
+| `tools/` | Engine, asset, export, browser, release, MCP, and repository tooling |
 | `tests/` | Cross-language, browser, integration, performance, and visual checks |
 | `docs/` | Decisions, architecture notes, and runbooks |
 
@@ -213,15 +181,25 @@ the exact source boundary and commit pins.
 
 Run `just` to list every supported command.
 
+## Source and attribution
+
+Official Godot is the sole active engine upstream. The WebGPU backend has
+MIT-licensed historical lineage from `dwalter/godotwebgpu`; Studio Foundation
+maintains the current Godot 4.7.1 patch series, build tooling, and validation surface
+in this repository. The lineage repository is never cloned by the build.
+
+See [NOTICE.md](NOTICE.md) and
+[WebGPU integration provenance](docs/architecture/webgpu-integration.md) for the exact
+source boundary and commit pins.
+
 ## Contributing and license
 
 Material engine changes require tests, updated evidence, and the relevant ADR.
-Contributor workflow is documented in
-[WORKING_AGREEMENTS.md](docs/agents/WORKING_AGREEMENTS.md).
-Security scope and private reporting instructions are in [SECURITY.md](SECURITY.md).
-
+Contributor workflow is in
+[WORKING_AGREEMENTS.md](docs/agents/WORKING_AGREEMENTS.md). Security scope and private
+reporting instructions are in [SECURITY.md](SECURITY.md).
 
 Foundation code, tooling, templates, documentation, and infrastructure are
-dual-licensed under MIT and CC BY 4.0; see [LICENSE](LICENSE). Third-party
-attribution is in [NOTICE.md](NOTICE.md) and
+dual-licensed under MIT and CC BY 4.0; see [LICENSE](LICENSE). Third-party attribution
+is in [NOTICE.md](NOTICE.md) and
 [dependency-licenses.md](docs/architecture/dependency-licenses.md).
