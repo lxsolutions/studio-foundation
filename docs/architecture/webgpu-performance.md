@@ -75,27 +75,50 @@ settings.
 
 ---
 
-## Cold start: ~20s to first frame
+## Cold start: ~20s to first frame — and it is NOT shader compilation
 
-Measured on Chariot, and the reason several earlier investigations wrongly
-concluded "3D is black":
+Measured on Chariot over a LAN-local server, and the reason several earlier
+investigations wrongly concluded "3D is black":
 
 | Milestone | Time |
 | --- | --- |
+| WebGPU device acquired | +1.3s |
 | `studio: boot completed` | +8.7s |
-| WGSL shader compilation running | to ~18s |
+| All WGSL module-compilation log entries | **+17.9s → +18.0s** |
 | **First drawn frame (non-zero draw calls)** | **+20.9s** |
 
-Riftline pays a similar cost despite ~350x fewer primitives, so this is
-**largely a fixed per-session shader-compilation cost, not scene complexity**.
+**Shader compilation is not the bottleneck.** Every one of the 21 compilation-log
+entries lands inside a **single sub-second burst**, and the count is identical
+across all three games regardless of scene size (Riftline +17.4s, Chariot
++17.9s, The Deep +24.5s) — they are the engine's own built-in shaders
+(`CanvasShaderRD`, `SceneForwardMobileShaderRD`, `TonemapMobileShaderRD`), not
+game content. An independent run against the *published* demo, throttled to
+12 Mbps with caching disabled, agrees: **80 pipelines built within ~2s** of the
+engine starting, with total time to first frame ~13s **dominated by downloading
+the 45.8 MB wasm**.
 
-Two consequences:
+So the cost is **engine startup — fetching and instantiating a 45.8 MB wasm,
+then engine and scene init — not WGSL translation**. For reference, the WebGL 2
+control reached its first frame at **+13.0s** on the same harness, so WebGPU adds
+real startup overhead, but far less than the raw ~20s figure suggests.
+
+Three consequences:
 
 1. **Any capture window shorter than ~25s screenshots a blank canvas.**
    `tests/browser/capture.mjs` previously defaulted to 6s, which could not
    photograph a real 3D scene before it drew anything. The default is now 25s.
-2. **Shader precompilation/caching is the highest-value optimization** for a
-   shippable web build — ahead of any scene-level tuning.
+   This holds regardless of *why* the first frame is late.
+2. **Payload size is the lever** — shrinking/streaming the wasm and compressing
+   transfer beats shader precompilation, which is already only ~2s.
+3. Measure first-frame latency with the **engine's own draw counters**, and
+   beware `page.goto(waitUntil: "load")`: it waits for the entire wasm and can
+   start a probe clock ~14s late, inflating every number after it.
+
+> **Correction (2026-07-24).** An earlier revision of this file attributed the
+> cold start to "a fixed per-session shader-compilation cost" and called shader
+> precompilation the highest-value optimization. The compilation-burst timing and
+> the throttled-network run above both refute that; the claim is corrected here
+> rather than quietly dropped.
 
 ---
 

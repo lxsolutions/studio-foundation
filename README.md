@@ -13,7 +13,9 @@ supported fallback.
 
 No install, no plugin. Needs a WebGPU-capable browser (Chrome/Edge 113+, Safari 26+,
 Firefox on Windows); the page tells you if yours qualifies before you click. First load
-takes ~30 seconds — most of it compiling shaders to WGSL in your browser.
+takes roughly 15–30 seconds depending on your connection — most of it downloading the
+~46 MB engine, not compiling shaders (pipelines build in about 2 seconds). It is
+cached afterwards. Details: [webgpu-performance.md](docs/architecture/webgpu-performance.md).
 
 [![The Chariot Club: a Roman colosseum with crowded stands and chariots, rendered in Godot through WebGPU](docs/images/webgpu-chariot.png)](https://lxsolutions.github.io/studio-foundation/)
 
