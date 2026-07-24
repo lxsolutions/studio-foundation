@@ -1,0 +1,32 @@
+name: patch series
+
+# The project's central claim is that the WebGPU backend is a transparent,
+# checksum-locked patch series applied to an official Godot commit. This verifies
+# that claim on every change, so drift between the patch files and the lock cannot
+# land silently.
+#
+# Deliberately toolchain-free: no Godot, no Emscripten, no GPU. It finishes in
+# seconds and cannot be flaky.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: checksums and ordering
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'   # tomllib landed in 3.11
+
+      - name: Verify the WebGPU patch series
+        run: python engine/scripts/verify_patch_series.py
