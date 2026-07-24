@@ -3,26 +3,55 @@
  *
  * Godot's web shell hides its loading UI as soon as startGame() resolves, but on
  * WebGPU that happens *before* the engine translates SPIR-V to WGSL and Dawn builds
- * the pipelines. For a large scene that is ~20 seconds of blocked main thread during
+ * the render pipelines. For a scene the size of Chariot that is ~20 seconds during
  * which the canvas is simply black — which reads as "the demo is broken" rather than
  * "it is still loading".
  *
- * This overlay stays up through that gap and reports what is actually happening.
- * It detects real rendering by watching requestAnimationFrame: while shaders compile
- * the main thread is blocked and rAF does not fire, so a run of consecutive smooth
- * frames means the engine is genuinely drawing.
+ * Detecting when it is genuinely rendering is the tricky part. Watching
+ * requestAnimationFrame for smooth frames does NOT work: while the engine is merely
+ * downloading, the page is idle and rAF already runs at a clean 60fps, so the overlay
+ * dismisses itself immediately (measured: gone by t=5s on a load whose first frame
+ * arrives at ~20s).
  *
- * Drop-in: include this AFTER the shell's own script. It is standalone — if a future
- * re-export overwrites index.html, only the single <script> tag needs re-adding.
+ * So we instrument the actual cause instead. Every GPU pipeline the engine builds goes
+ * through GPUDevice.createRenderPipeline / createComputePipeline; we wrap those, count
+ * them, and note when the last one was built. Pipeline construction going quiet, plus a
+ * run of smooth frames, is a precise and engine-agnostic "it is drawing now" signal —
+ * and it doubles as real progress to show the viewer.
+ *
+ * Drop-in: include AFTER the shell's own script. Standalone, so a future re-export only
+ * needs the single <script> tag re-added.
  */
 (function () {
 	'use strict';
 
-	var SMOOTH_FRAMES_REQUIRED = 24;   // consecutive good frames before we believe it
-	var SMOOTH_FRAME_MAX_MS = 34;      // ~30fps or better counts as "rendering"
-	var HARD_TIMEOUT_MS = 180000;      // never trap the user behind the overlay
+	var SMOOTH_FRAMES_REQUIRED = 20;   // consecutive good frames before we believe it
+	var SMOOTH_FRAME_MAX_MS = 34;      // ~30fps or better counts as rendering
+	var PIPELINE_QUIET_MS = 2500;      // no new pipelines for this long => build finished
+	var NO_PIPELINE_GRACE_MS = 8000;   // fallback if nothing is ever instrumented
+	var MIN_VISIBLE_MS = 1200;         // avoid a jarring flash on instant loads
+	var HARD_TIMEOUT_MS = 180000;      // never trap the viewer behind the overlay
 
 	var started = Date.now();
+
+	// --- instrument pipeline construction (the thing that actually costs the time) ---
+	var pipelineCount = 0;
+	var lastPipelineAt = 0;
+	(function instrument() {
+		if (typeof GPUDevice === 'undefined' || !GPUDevice.prototype) { return; }
+		['createRenderPipeline', 'createComputePipeline',
+			'createRenderPipelineAsync', 'createComputePipelineAsync'].forEach(function (name) {
+			var orig = GPUDevice.prototype[name];
+			if (typeof orig !== 'function') { return; }
+			GPUDevice.prototype[name] = function () {
+				pipelineCount++;
+				lastPipelineAt = Date.now();
+				return orig.apply(this, arguments);
+			};
+		});
+	}());
+
+	// --- overlay ---
 	var el = document.createElement('div');
 	el.id = 'sf-boot-overlay';
 	el.innerHTML =
@@ -53,69 +82,54 @@
 	function attach() { (document.body || document.documentElement).appendChild(el); }
 	if (document.body) { attach(); } else { document.addEventListener('DOMContentLoaded', attach); }
 
-	var msg = function (t) { var n = document.getElementById('sf-msg'); if (n) { n.textContent = t; } };
-	var sub = function (t) { var n = document.getElementById('sf-sub'); if (n) { n.textContent = t; } };
+	function msg(t) { var n = document.getElementById('sf-msg'); if (n) { n.textContent = t; } }
+	function sub(t) { var n = document.getElementById('sf-sub'); if (n) { n.textContent = t; } }
 
-	// Phase 1: download. Godot's own progress element is the source of truth.
+	// --- phase reporting ---
 	var progressEl = document.querySelector('#status-progress');
 	var downloadDone = false;
 	var downloadDoneAt = 0;
+
 	var phaseTimer = setInterval(function () {
 		var secs = Math.round((Date.now() - started) / 1000);
+
 		if (!downloadDone && progressEl && progressEl.max > 0) {
 			var pct = Math.min(100, Math.round((progressEl.value / progressEl.max) * 100));
 			msg('Downloading engine — ' + pct + '%');
-			if (pct >= 100) { downloadDone = true; downloadDoneAt = Date.now(); }
-		} else if (!downloadDone && secs > 4) {
-			downloadDone = true;
-			downloadDoneAt = Date.now();
-		}
-		if (downloadDone) {
-			msg('Compiling shaders for your GPU');
-			sub('First load only — about 20 seconds. ' + secs + 's elapsed.');
-		} else {
 			sub(secs + 's elapsed');
+			if (pct >= 100) { downloadDone = true; downloadDoneAt = Date.now(); }
+			return;
+		}
+		if (!downloadDone && secs > 4) { downloadDone = true; downloadDoneAt = Date.now(); }
+
+		if (pipelineCount > 0) {
+			msg('Compiling shaders for your GPU');
+			sub(pipelineCount + ' pipelines built — first load only, about 20 seconds. ' +
+				secs + 's elapsed.');
+		} else {
+			msg('Preparing the engine');
+			sub('First load only. ' + secs + 's elapsed.');
 		}
 	}, 250);
 
-	// Phase 2: detect actual rendering.
-	//
-	// Smooth frames alone are NOT sufficient: while the engine is merely downloading,
-	// the page is idle and rAF already runs at a clean 60fps, which would dismiss the
-	// overlay within a second — exactly the black-canvas problem this exists to solve.
-	// So we wait for evidence that the engine took over the main thread (a stall from
-	// wasm instantiation / SPIR-V translation / pipeline building) and only then treat
-	// a run of smooth frames as "drawing has begun". If no stall is ever observed —
-	// small scene, warm cache, very fast machine — fall back to dismissing a short
-	// while after the download finishes.
-	var STALL_MS = 250;              // a blocked main thread looks like this
-	var NO_STALL_GRACE_MS = 6000;    // fallback when nothing ever blocks
-	var MIN_VISIBLE_MS = 1200;       // avoid a jarring flash on instant loads
-
+	// --- completion detection ---
 	var smooth = 0;
-	var sawStall = false;
 	var last = performance.now();
 
 	function tick(now) {
 		var delta = now - last;
 		last = now;
-
-		if (delta >= STALL_MS) {
-			sawStall = true;
-			smooth = 0;
-		} else if (delta > 0 && delta < SMOOTH_FRAME_MAX_MS) {
-			smooth++;
-		} else {
-			smooth = 0;
-		}
+		if (delta > 0 && delta < SMOOTH_FRAME_MAX_MS) { smooth++; } else { smooth = 0; }
 
 		var age = Date.now() - started;
 		var settled = smooth >= SMOOTH_FRAMES_REQUIRED;
-		var readyAfterStall = sawStall && settled;
-		var readyWithoutStall = !sawStall && settled && downloadDone &&
-			downloadDoneAt > 0 && (Date.now() - downloadDoneAt) > NO_STALL_GRACE_MS;
+		var pipelinesQuiet = pipelineCount > 0 && (Date.now() - lastPipelineAt) > PIPELINE_QUIET_MS;
+		// Fallback for a build where nothing got instrumented at all.
+		var noPipelinesFallback = pipelineCount === 0 && downloadDone &&
+			(Date.now() - downloadDoneAt) > NO_PIPELINE_GRACE_MS;
 
-		if ((age > MIN_VISIBLE_MS && (readyAfterStall || readyWithoutStall)) || age > HARD_TIMEOUT_MS) {
+		if ((age > MIN_VISIBLE_MS && settled && (pipelinesQuiet || noPipelinesFallback)) ||
+				age > HARD_TIMEOUT_MS) {
 			finish();
 			return;
 		}
@@ -131,4 +145,4 @@
 		el.classList.add('sf-done');
 		setTimeout(function () { if (el.parentNode) { el.parentNode.removeChild(el); } }, 700);
 	}
-})();
+}());
