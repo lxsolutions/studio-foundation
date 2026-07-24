@@ -68,6 +68,8 @@ series = [
   { file = "patches/0008-tint-image-ordering.patch", sha256 = "14af2071b54ca4233b7a5280f2b8c48052a94be18bc64c912c13d07a8576c6db" },
   { file = "patches/0009-tint-volatile-decoration.patch", sha256 = "55e4611a21f3c809e3e3dbf0f6e3fb052f2a8f23e659ca91019306cd25b28fe0" },
   { file = "patches/0010-webgpu-transitive-sampler-split.patch", sha256 = "ef6039b6c68077fd6956745a602778f986aadd15280e1e346f5a89d966c8de39" },
+  { file = "patches/0011-webgpu-flatten-decoration-literals.patch", sha256 = "118d06a98d3046010dfe4926698242792125aeb08eac55c65e2abd1e6a323b17" },
+  { file = "patches/0012-tint-texture-function-params.patch", sha256 = "b22a21de0dcc1e0df2ae8b50cac055635f48db7faace9917a03e620cbaee81ae" },
 ]
 
 [artifacts.export_templates]

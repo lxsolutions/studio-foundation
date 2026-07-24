@@ -29,9 +29,21 @@ engine fork is fetched or required.
 > also fixes a class of *silent* shader-translation failures — combined
 > image-samplers forwarded through function call chains (bicubic glow,
 > `taa_resolve`) — raising offline coverage to 177/182; the remaining 5 are
-> fundamental WGSL feature gaps, not crashes. **In-browser render verification is
-> still pending** a GPU-capable machine (this dev box has no hardware GPU). WebGL 2
-> remains the maintained fallback. Details:
+> fundamental WGSL feature gaps, not crashes.
+>
+> **In-browser render now verified on real hardware (2026-07-24, NVIDIA Tesla P40).**
+> Running the rebuilt WebGPU build in headless Chrome on an actual GPU exposed two
+> more shader-translation defects that the offline corpus missed (only the
+> runtime-*specialized* scene shader triggers them): patch 0011 stops
+> `flatten_binding_arrays` from corrupting struct-offset decoration literals, and
+> patch 0012 fixes Tint's SPIR-V reader so textures passed by *function parameter*
+> (Godot's lightmap/shadow helpers) are converted to core texture types instead of
+> crashing its texture lowering. With 0009–0012 the engine **no longer crashes** on
+> 3D shader translation on the GPU. **3D is still not yet visible**, now blocked by a
+> *different, non-crash* issue: Godot's Forward Mobile scene shader binds 18 samplers
+> to the vertex stage, exceeding WebGPU's hard limit of 16 per stage, so the scene
+> pipeline is rejected. That is a driver/shader-structure problem (tracked separately),
+> not shader translation. WebGL 2 remains the maintained fallback. Details:
 > [BOOTSTRAP_REPORT.md](BOOTSTRAP_REPORT.md).
 
 ## What is verifiable
@@ -44,8 +56,9 @@ engine fork is fetched or required.
 | Source preparation | `engine-fetch` clones official Godot only and creates a disposable patched worktree |
 | Export templates | Accepted archives are recorded by filename, byte count, and SHA-256 in [engine-lock.toml](engine/engine-lock.toml); the release and debug WebGPU templates are locked (they passed the **2D** browser + visual gate on 2026-07-24) |
 | Runtime verification | Browser smoke tests observe the engine's adapter, device, and WebGPU canvas requests and reject any WebGL context request |
-| 3D rendering (WebGPU) | Root-caused + fixed (patch 0009 strips the `Volatile` decoration Tint's SPIR-V reader aborts on, from Godot's coherent compute shaders). Verified offline (native reproducer, 0/182 shaders crash, was 1). In-browser render verification pending a GPU-capable machine |
-| WebGPU shader coverage | 177 of 182 engine shaders translate to valid WGSL offline (was 174). Patch 0010 fixes combined image-samplers forwarded through function call chains (tonemap bicubic glow, `taa_resolve`). The 5 remaining are fundamental WGSL feature gaps (subpass `input_attachment`, storage-texture format inference, vertex-stage `read_write` storage), not crashes — the effect degrades, 3D still renders |
+| 3D shader translation (WebGPU) | No longer crashes — verified in-browser on an NVIDIA Tesla P40. Patches 0009–0012 fix four distinct translation crashes (`Volatile` decoration, transitive combined-sampler split, flatten decoration-literal corruption, and Tint's texture-function-parameter conversion). The rebuilt engine boots the WebGPU device and translates the specialized 3D scene shader without SIGILL |
+| WebGPU shader coverage | 177 of 182 engine shaders translate to valid WGSL offline; the runtime-specialized scene shader (which the offline corpus did not cover) also translates after 0011/0012. The 5 offline gaps are fundamental WGSL limits (subpass `input_attachment`, storage-texture format inference, vertex-stage `read_write` storage), not crashes |
+| 3D render (visible frame) | **Not yet.** With the crash chain fixed, the scene pipeline is now *rejected* (not crashed): Godot Forward Mobile binds 18 samplers to the vertex stage, over WebGPU's hard 16-per-stage limit. A driver/shader-structure issue, separate from translation, tracked for follow-up |
 | Fallback | The same template project has an official WebGL 2 export preset |
 | Template behavior | Headless GDScript tests cover the shared addon and neutral starter project |
 | Optional services | Rust and Nakama components are independently tested and are not required for client-only use |
