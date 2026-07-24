@@ -21,6 +21,11 @@ browser WebGPU template build. They apply to the official Godot commit in
 9. `0009-tint-volatile-decoration.patch` - strip the SPIR-V `Volatile` decoration
    (21) that Tint's reader aborts on; without it, coherent compute shaders (e.g.
    `volumetric_fog`) crash shader translation and every 3D scene renders black.
+10. `0010-webgpu-transitive-sampler-split.patch` - propagate the combined
+    image-sampler split through function call chains, so a `sampler2D` forwarded
+    from a wrapper into a deeper helper (e.g. tonemap's `texture2D_bicubic`, and
+    `taa_resolve`) no longer produces invalid SPIR-V (`OpFunctionCall` argument
+    type mismatch) that silently fails Tint translation.
 
 The WebGPU implementation originated in `dwalter/godotwebgpu`. Studio
 Foundation owns the 4.7.1 port, scoped patch curation, preparation/build tooling,

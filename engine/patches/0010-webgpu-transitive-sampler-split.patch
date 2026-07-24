@@ -1,0 +1,114 @@
+Subject: [PATCH] webgpu: propagate combined-sampler split through call chains
+
+split_combined_samplers() rewrites GLSL combined image-samplers (sampler2D)
+into WebGPU's required separate texture + sampler. A function that receives a
+combined sampler as a parameter gets that parameter retyped to a plain image
+pointer, and its combined loads are redirected to the split image/sampler pair.
+
+The pass only started that rewrite for functions called with a combined GLOBAL
+variable, so it missed wrapper chains: main -> wrapper(global sampler) -> leaf
+(wrapper's parameter). The wrapper's parameter was split to ptr(Image) but the
+leaf it forwarded to kept ptr(SampledImage), so the forwarded call became
+invalid SPIR-V (OpFunctionCall argument type does not match the callee's
+parameter type). Tint rejects the module and the shader silently fails to
+translate. Godot's tonemap bicubic-glow path (texture2D_bicubic) and taa_resolve
+hit exactly this.
+
+Fix: after seeding the split from global-variable call sites, iterate to a
+fixpoint, following every combined value forwarded through a parameter and
+splitting each callee the same way, mapping its parameter back to the same
+underlying global sampler so the in-function sampler load still resolves. The
+existing type / parameter / load rewrite then covers the whole chain unchanged.
+
+Verified offline with a native tint_convert_cli over all 182 engine shaders:
+tonemap bicubic (x2) and taa_resolve now produce SPIR-V that passes SPIRV-Tools
+validation and translates to correct WGSL (separate texture_2d + sampler with
+the expected doubled bindings; textureSampleLevel wired to the split pair).
+Result: 177 of 182 translate (was 174); 0 crash; the 5 remaining failures are
+unrelated fundamental WGSL limits (subpass input_attachment, storage-texture
+format inference, vertex-stage read_write storage, vertex @builtin(position)).
+
+diff --git a/drivers/webgpu/spirv_preprocess.cpp b/drivers/webgpu/spirv_preprocess.cpp
+--- a/drivers/webgpu/spirv_preprocess.cpp
++++ b/drivers/webgpu/spirv_preprocess.cpp
+@@ -924,6 +924,15 @@
+ 	// func_type_id -> list of param_type_ids (from OpTypeFunction).
+ 	HashMap<uint32_t, Vector<uint32_t>> func_type_params;
+ 
++	// Every OpFunctionCall as (callee, [arg_ids...]). Needed for the transitive
++	// split-propagation fixpoint below (a combined sampler forwarded through a
++	// chain of wrapper functions).
++	struct CallRecord {
++		uint32_t func_id;
++		Vector<uint32_t> args;
++	};
++	Vector<CallRecord> all_calls;
++
+ 	// First scan: collect OpTypeFunction definitions.
+ 	{
+ 		uint32_t pos2 = 5;
+@@ -990,13 +999,17 @@
+ 				case OP_FUNCTION_CALL: { // OpFunctionCall
+ 					if (wc2 >= 4) {
+ 						uint32_t func_id = read_word(data, len, pos2 + 3);
++						CallRecord rec;
++						rec.func_id = func_id;
+ 						for (uint32_t arg_idx = 0; arg_idx < wc2 - 4; arg_idx++) {
+ 							uint32_t arg_id = read_word(data, len, pos2 + 4 + arg_idx);
++							rec.args.push_back(arg_id);
+ 							if (combined_vars.has(arg_id)) {
+ 								uint64_t key = ((uint64_t)func_id << 32) | (uint64_t)arg_idx;
+ 								call_combined_args.insert(key, arg_id);
+ 							}
+ 						}
++						all_calls.push_back(rec);
+ 					}
+ 				} break;
+ 
+@@ -1024,6 +1037,46 @@
+ 		}
+ 	}
+ 
++	// Transitively propagate the split through call chains. The pass above only
++	// catches a function called with a combined GLOBAL variable. But a wrapper
++	// can receive a combined sampler as a parameter and forward it to a deeper
++	// helper (tonemap's bicubic path does exactly this: main -> wrapper(global
++	// var) -> texture2D_bicubic(wrapper's param)). Every deeper helper must ALSO
++	// be split, with its parameter mapped back to the SAME underlying global var
++	// so the sampler load inside it resolves to that global's sampler. Iterate to
++	// a fixpoint so wrapper chains of any depth are fully covered. Without this a
++	// split param (ptr(Image)) is passed to an unsplit param (ptr(SampledImage)),
++	// producing invalid SPIR-V (OpFunctionCall argument type mismatch).
++	bool propagated = true;
++	while (propagated) {
++		propagated = false;
++		for (const CallRecord &rec : all_calls) {
++			const Vector<uint32_t> *params = function_param_ids.getptr(rec.func_id);
++			for (int i = 0; i < rec.args.size(); i++) {
++				// Underlying global combined var carried by this argument, if any.
++				uint32_t global_var = 0;
++				if (combined_vars.has(rec.args[i])) {
++					global_var = rec.args[i];
++				} else if (const uint32_t *v = param_combined.getptr(rec.args[i])) {
++					global_var = *v;
++				} else {
++					continue;
++				}
++				uint64_t key = ((uint64_t)rec.func_id << 32) | (uint64_t)i;
++				if (!call_combined_args.has(key)) {
++					call_combined_args.insert(key, global_var);
++				}
++				if (params && i < params->size()) {
++					uint32_t param_id = (*params)[i];
++					if (!param_combined.has(param_id)) {
++						param_combined.insert(param_id, global_var);
++						propagated = true;
++					}
++				}
++			}
++		}
++	}
++
+ 	// Build: func_id -> new_func_type_id for functions with combined-var params.
+ 	// Also build: param_id -> image_ptr_type_id for parameter type rewriting.
+ 	HashMap<uint32_t, uint32_t> param_new_type; // param_id -> new pointer type (image_ptr_type_id)
