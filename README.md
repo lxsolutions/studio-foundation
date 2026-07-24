@@ -9,17 +9,37 @@ component is a beta WebGPU export path maintained as checksum-pinned patches
 against Godot 4.7.1. WebGL 2 remains the fallback. No separate LX Solutions
 engine fork is fetched or required.
 
-## Why an independent WebGPU backend
+## Our lane: AI-native, open-source game development
 
 Godot itself does not accept AI-generated code contributions, and has stated it does
-not intend to add AI features to the engine. Under that policy an AI-assisted
-capability — even one the community has asked about for years, like a browser-grade
-WebGPU backend — cannot land upstream no matter how well it works. Studio Foundation
-carries the work forward in the open instead: official Godot as the base (MIT), a
-transparent, checksum-pinned patch series on top, and every change reproducible and
-verified on real hardware (the 3D render above was confirmed on an NVIDIA Tesla P40).
-The capability ships to anyone who wants it, for free — no gatekeeping, no permission
-required.
+not intend to add AI features to the engine. That is a deliberate choice — and it
+leaves an open lane. Studio Foundation takes it: building games **with** AI, in the
+open, is the point of this toolkit, not a bolt-on. Where the upstream engine steps
+back from AI, this project leans in — openly, reproducibly, and for free.
+
+The WebGPU backend is proof the model works: an AI-assisted capability the community
+wanted for years, carried forward as a transparent, checksum-pinned patch series on
+official Godot (MIT) and verified on real hardware (the 3D render above was confirmed
+on an NVIDIA Tesla P40). It could never land upstream under Godot's policy no matter
+how well it works — so it lives here instead. And the AI-native surface is
+first-class throughout the repo, not just in the engine:
+
+- **An MCP server** ([`tools/studio-mcp`](tools/studio-mcp), config in
+  [`.mcp.json`](.mcp.json)) that exposes the toolkit to AI assistants and CLIs, with
+  its own tests and a security boundary ([`studio_tools/mcp`](tools/pylib/studio_tools/mcp)).
+- **Agent operating agreements** ([`AGENTS.md`](AGENTS.md), [`CLAUDE.md`](CLAUDE.md),
+  [`docs/agents`](docs/agents)) so AI agents build, test, and verify against the repo
+  predictably instead of ad hoc.
+- **An AI-driven Blender asset pipeline**
+  ([ADR 0006](docs/adr/0006-blender-master-asset-pipeline.md)) for generating and
+  processing game assets.
+- **Reproducible by construction** — every artifact is byte-and-SHA-256 pinned and
+  every patch is checksum-locked and independently verifiable, so "AI-built" never
+  means "unauditable." That auditability is the answer to the slop critique: you can
+  rebuild and re-verify all of it yourself.
+
+This is the category the project owns on purpose: open-source, AI-native game-dev
+tooling for the era where assistants and agents are how software gets built.
 
 > **Status:** WebGPU support is beta and now **renders 3D in-browser on real
 > hardware.** The locked source build boots the WebGPU backend (Forward Mobile
