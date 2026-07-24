@@ -99,7 +99,14 @@
 
   <div class="card">
     <h2>Reproduce it yourself</h2>
-    <p class="muted">Everything is checksum-locked, so you can rebuild and re-verify it independently.</p>
+    <p class="muted">
+      The engine, the patch series, and the minimal scene are checksum-locked and
+      rebuildable from the repository. <strong>The Chariot Club's game content is not
+      published</strong> — it is a studio game, so the colosseum above cannot be rebuilt
+      from source today. The scene at
+      <a href="showcase/index.html">/showcase/</a> is the one you can reproduce end to
+      end, and it exercises the same render path.
+    </p>
 <pre><code>git clone https://github.com/lxsolutions/studio-foundation.git
 cd studio-foundation
 just engine-fetch      # official Godot + verified patch series
