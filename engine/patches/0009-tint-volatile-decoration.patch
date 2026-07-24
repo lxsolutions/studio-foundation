@@ -1,0 +1,35 @@
+Subject: [PATCH] webgpu: strip SPIR-V Volatile decoration Tint cannot read
+
+Tint's SPIR-V reader (Parser::EmitVar, tint .../parser.cc:4454) aborts with
+TINT_UNIMPLEMENTED "unhandled decoration 21" (Volatile) on Godot's coherent
+compute shaders such as volumetric_fog.glsl. Natively this is a SIGILL; in the
+browser the abort is a WebAssembly trap that freezes the page, so ANY 3D scene
+whose renderer compiles a coherent compute shader renders black (the observed
+"WebGPU 3D hang"). 2D/UI is unaffected because it never compiles those shaders.
+
+WGSL has no equivalent access qualifier, so drop the Volatile decoration during
+SPIR-V preprocessing -- the same rationale already used for Restrict. Verified
+offline via a native tint_convert_cli over all 182 engine shaders: volumetric_fog
+now translates to WGSL, and 0 of 182 shaders crash or hang (was 1 crash).
+
+diff --git a/drivers/webgpu/spirv_preprocess.cpp b/drivers/webgpu/spirv_preprocess.cpp
+--- a/drivers/webgpu/spirv_preprocess.cpp
++++ b/drivers/webgpu/spirv_preprocess.cpp
+@@ -1887,10 +1887,16 @@
+ 	const uint8_t *data = p_bytes.ptr();
+ 	static constexpr uint32_t DECO_RESTRICT = 19;
+ 	static constexpr uint32_t DECO_INPUT_ATTACHMENT_INDEX = 43;
++	// Tint's SPIR-V reader (Parser::EmitVar) aborts with TINT_UNIMPLEMENTED on the
++	// Volatile decoration (21), which Godot emits on coherent compute resources
++	// (e.g. volumetric_fog.glsl). WGSL has no equivalent access qualifier, so drop
++	// it — same rationale as Restrict. Without this, any 3D scene that compiles a
++	// coherent compute shader crashes shader translation (black frame / wasm trap).
++	static constexpr uint32_t DECO_VOLATILE = 21;
+ 
+ 	// Helper: is this a decoration we need to strip?
+ 	auto is_stripped_deco = [](uint32_t d) {
+-		return d == DECO_RESTRICT || d == DECO_INPUT_ATTACHMENT_INDEX;
++		return d == DECO_RESTRICT || d == DECO_INPUT_ATTACHMENT_INDEX || d == DECO_VOLATILE;
+ 	};
+ 
+ 	// Quick scan: any stripped decoration present?

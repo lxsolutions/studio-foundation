@@ -277,7 +277,7 @@ async function main() {
     if (failed) {
       const relevant = consoleMessages.filter(
         (line) =>
-          PAUSE_STACK || /\[error\]|\[tint-trace\]|\[rd-init-trace\]|\[heap-trace\]|Godot Engine|WebGPU/i.test(line)
+          PAUSE_STACK || /\[error\]|\[tint-trace\]|\[rd-init-trace\]|\[heap-trace\]|\[shader\]|\[diag|\[js-p|precompiled|forward mobile|pipeline|shader|Godot Engine|WebGPU/i.test(line)
           || FATAL_PATTERNS.some((pattern) => pattern.test(line))
       );
       if (webgpuEvidence?.mallocTrace) {

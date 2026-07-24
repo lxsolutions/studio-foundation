@@ -16,13 +16,18 @@ engine fork is fetched or required.
 > template's 2D menu against the WebGL baseline (1.2% diff). Both templates are
 > recorded by byte count and SHA-256 in [engine-lock.toml](engine/engine-lock.toml).
 >
-> **Known gap — 3D does not render yet.** A lit *or even unshaded* 3D mesh that
-> renders correctly under WebGL comes out black under WebGPU: the backend
-> initializes and selects Forward Mobile, then the 3D draw path stalls before any
-> frame presents. So this is **not usable for 3D games yet.** Getting here fixed
-> Tint storage-buffer lowering, Tint `OpImage` ordering, and an Emdawn/Godot
-> `RefCounted` link-time crash; the 3D render path is the next open work. WebGL 2
-> is the maintained fallback and renders both 2D and 3D. Findings and gaps:
+> **3D-black bug — root-caused and fixed (2026-07-24, patch 0009).** A lit *or
+> even unshaded* 3D mesh rendered black under WebGPU while rendering fine under
+> WebGL. Cause: Tint's SPIR-V reader aborts (`TINT_UNIMPLEMENTED`, decoration 21 =
+> `Volatile`) when translating Godot's coherent compute shaders — concretely
+> `volumetric_fog.glsl`, which the Forward Mobile renderer compiles during 3D
+> init. In the browser that abort is a WebAssembly trap that freezes the page, so
+> every 3D scene went black (2D/UI was unaffected). Patch 0009 strips the
+> `Volatile` decoration in SPIR-V preprocessing (same approach as `Restrict`).
+> **Verified offline** with a native reproducer over all 182 engine shaders:
+> `volumetric_fog` now translates and 0 crash (was 1). **In-browser render
+> verification is still pending** a GPU-capable machine (this dev box has no
+> hardware GPU). WebGL 2 remains the maintained fallback. Details:
 > [BOOTSTRAP_REPORT.md](BOOTSTRAP_REPORT.md).
 
 ## What is verifiable
@@ -35,7 +40,7 @@ engine fork is fetched or required.
 | Source preparation | `engine-fetch` clones official Godot only and creates a disposable patched worktree |
 | Export templates | Accepted archives are recorded by filename, byte count, and SHA-256 in [engine-lock.toml](engine/engine-lock.toml); the release and debug WebGPU templates are locked (they passed the **2D** browser + visual gate on 2026-07-24) |
 | Runtime verification | Browser smoke tests observe the engine's adapter, device, and WebGPU canvas requests and reject any WebGL context request |
-| 3D rendering (WebGPU) | **Not working yet.** A lit or unshaded 3D mesh renders under WebGL but is black under WebGPU — the Forward Mobile 3D draw path stalls after device init. Under investigation; WebGL 2 renders 3D as the fallback |
+| 3D rendering (WebGPU) | Root-caused + fixed (patch 0009 strips the `Volatile` decoration Tint's SPIR-V reader aborts on, from Godot's coherent compute shaders). Verified offline (native reproducer, 0/182 shaders crash, was 1). In-browser render verification pending a GPU-capable machine |
 | Fallback | The same template project has an official WebGL 2 export preset |
 | Template behavior | Headless GDScript tests cover the shared addon and neutral starter project |
 | Optional services | Rust and Nakama components are independently tested and are not required for client-only use |
