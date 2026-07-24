@@ -1,0 +1,139 @@
+Subject: [PATCH] webgpu: per-stage BGL visibility for samplers and textures
+
+WebGPU caps each shader stage at 16 samplers (Dawn's maxSamplersPerShaderStage
+adapter limit). Godot's Forward Mobile scene shader declares up to 18-22 sampler
+bindings in shared descriptor sets and, because RenderingDeviceDriver reports
+u.stages as the union across entry points, marks every one visible to BOTH the
+vertex and fragment stage. The vertex entry point samples NONE of them and the
+fragment entry point samples at most 7 distinct samplers, but the over-
+approximated visibility makes Dawn count all 18 against each stage -> "number of
+samplers (18) in the Vertex stage exceeds the maximum (16)". Every 3D pipeline
+then fails to create and the scene never draws.
+
+Storage buffers already get precise per-stage visibility from a WGSL reachability
+scan (wgsl_buffer_stages, driven by //SSBO_USED: markers) to satisfy Metal's
+8-storage-buffer limit. Extend the same idea to samplers/textures:
+
+  - During the per-stage WGSL scan, record every @group/@binding whose variable is
+    actually passed to a texture builtin (textureSample*, textureGather*, ...) in
+    that stage into wgsl_binding_stages (set<<16 | wgsl_binding -> stage mask).
+    Preprocessing doubles non-combined bindings, so the sampler/texture halves of
+    a binding land at binding*2 and binding*2+1; both keys are consulted.
+  - When building each sampler/texture bind-group-layout entry, use that precise
+    stage mask instead of u.stages. A binding not reached by any texture builtin
+    in any stage is declared-but-never-sampled and gets zero visibility (it counts
+    against no stage's limit), exactly as unused storage buffers already do.
+
+The scan only ever REMOVES visibility from a stage that does not sample the
+binding, so a genuinely sampled resource keeps its stage.
+
+Verified on real NVIDIA hardware (Tesla P40, Vulkan) through headed Chrome/WebGPU:
+the exported 3D scene now creates every pipeline with 0 GPUValidationError (was
+2283), the worst fragment stage uses 7 distinct samplers (previously rejected at
+18), 0 vertex samplers, and the scene renders a lit box at 60 fps / 3 draws per
+frame. No "sampler used but not visible" errors appear, confirming the
+reachability scan matches Dawn's usage accounting.
+
+diff --git a/drivers/webgpu/rendering_device_driver_webgpu.cpp b/drivers/webgpu/rendering_device_driver_webgpu.cpp
+--- a/drivers/webgpu/rendering_device_driver_webgpu.cpp
++++ b/drivers/webgpu/rendering_device_driver_webgpu.cpp
+@@ -3291,6 +3291,7 @@ RDD::ShaderID RenderingDeviceDriverWebGPU::shader_create_from_container(const Re
+ 	// so fragment-only storage buffers don't consume vertex buffer slots on Metal.
+ 	// Firefox/wgpu enforces Metal's limit of 8 storage buffers per shader stage.
+ 	HashMap<uint32_t, uint32_t> wgsl_buffer_stages;
++	HashMap<uint32_t, uint32_t> wgsl_binding_stages;
+ 
+ 	// Read-write storage texture splits: maps (set << 16 | write_binding) → shadow_read_binding.
+ 	// Populated when readonly-and-readwrite-storage-textures is unavailable.
+@@ -3966,6 +3967,67 @@ RDD::ShaderID RenderingDeviceDriverWebGPU::shader_create_from_container(const Re
+ 					wgsl_buffer_stages[key] = (uint32_t)current_wgpu_stage;
+ 				}
+ 			}
++
++			// Record which stages declare each binding. Tint emits only the bindings
++			// each entry point actually reaches, giving precise per-stage BGL visibility
++			// for samplers/textures too (not just storage buffers) so fragment-only
++			// samplers don't overflow the vertex stage's 16-sampler WebGPU limit.
++			{
++				// A texture/sampler binding is USED by this stage only if its WGSL variable
++				// is passed to a texture builtin (textureSample*, textureGather*, ...). Godot
++				// Forward Mobile DECLARES all samplers in the vertex stage (shared descriptor
++				// sets / helper-function params) but SAMPLES none; declaration- or reference-
++				// based visibility overflows WebGPU's hard 16-samplers-per-stage limit.
++				HashSet<String> used_vars;
++				const char *tp = wgsl_str;
++				while ((tp = strstr(tp, "texture")) != nullptr) {
++					// Only builtins: "texture" must START an identifier (skip e.g. "sample_texture(").
++					if (tp != wgsl_str) {
++						char pc = tp[-1];
++						if ((pc >= 'a' && pc <= 'z') || (pc >= 'A' && pc <= 'Z') || (pc >= '0' && pc <= '9') || pc == '_') { tp += 7; continue; }
++					}
++					const char *ce = tp + 7;
++					while ((*ce >= 'a' && *ce <= 'z') || (*ce >= 'A' && *ce <= 'Z') || (*ce >= '0' && *ce <= '9') || *ce == '_') { ce++; }
++					if (*ce == '(') {
++						const char *ap = ce + 1;
++						int depth = 1;
++						while (*ap && depth > 0) {
++							if (*ap == '(') { depth++; ap++; }
++							else if (*ap == ')') { depth--; ap++; }
++							else if ((*ap >= 'a' && *ap <= 'z') || (*ap >= 'A' && *ap <= 'Z') || *ap == '_') {
++								const char *is = ap;
++								while ((*ap >= 'a' && *ap <= 'z') || (*ap >= 'A' && *ap <= 'Z') || (*ap >= '0' && *ap <= '9') || *ap == '_') { ap++; }
++								used_vars.insert(String::utf8(is, (int)(ap - is)));
++							} else { ap++; }
++						}
++					}
++					tp = ce;
++				}
++				const char *bp = wgsl_str;
++				while ((bp = strstr(bp, "@group(")) != nullptr) {
++					unsigned int g = 0, b = 0;
++					if (parse_group_binding(bp, g, b)) {
++						const char *vp = strstr(bp, " var ");
++						if (vp && vp < bp + 256) {
++							vp += 5;
++							while (*vp == ' ') { vp++; }
++							int nlen = 0;
++							while (true) {
++								char c = vp[nlen];
++								bool id = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_';
++								if (!id) { break; }
++								nlen++;
++							}
++							if (nlen > 0 && used_vars.has(String::utf8(vp, nlen))) {
++								uint32_t bkey = ((uint32_t)g << 16) | (uint32_t)b;
++								if (wgsl_binding_stages.has(bkey)) { wgsl_binding_stages[bkey] |= (uint32_t)current_wgpu_stage; }
++								else { wgsl_binding_stages[bkey] = (uint32_t)current_wgpu_stage; }
++							}
++						}
++					}
++					bp++;
++				}
++			}
+ 		}
+ 
+ 		// Scan WGSL for storage buffer access modes and uniform bindings.
+@@ -4209,6 +4271,23 @@ RDD::ShaderID RenderingDeviceDriverWebGPU::shader_create_from_container(const Re
+ 			const RenderingDeviceCommons::ShaderUniform &u = set_uniforms[u_idx];
+ 			WGShader::BindGroupEntry &bge = bgi.entries[u_idx];
+ 			WGPUShaderStage vis = _stages_to_wgpu_visibility((uint32_t)u.stages);
++			// Samplers/textures: use precise per-stage visibility (Tint WGSL reachability)
++			// so fragment-only samplers/textures don't count against the vertex stage's
++			// per-stage limits (WebGPU caps 16 samplers per stage).
++			if (u.type == RDD::UNIFORM_TYPE_SAMPLER || u.type == RDD::UNIFORM_TYPE_TEXTURE ||
++					u.type == RDD::UNIFORM_TYPE_SAMPLER_WITH_TEXTURE) {
++				uint32_t _vk0 = ((uint32_t)set << 16) | (u.binding * 2);
++				uint32_t _vk1 = ((uint32_t)set << 16) | (u.binding * 2 + 1);
++				uint32_t _vs = 0; bool _vf = false;
++				if (wgsl_binding_stages.has(_vk0)) { _vs |= wgsl_binding_stages[_vk0]; _vf = true; }
++				if (wgsl_binding_stages.has(_vk1)) { _vs |= wgsl_binding_stages[_vk1]; _vf = true; }
++				if (_vf) { vis = (WGPUShaderStage)_vs; }
++				// Not referenced by any texture builtin in ANY stage's WGSL: the binding is
++				// declared but never sampled, so it needs no stage visibility. Godot Forward
++				// Mobile declares up to 22 samplers per shader but samples far fewer; leaving
++				// unused samplers visible overflows WebGPU's 16-samplers-per-stage limit.
++				else { vis = (WGPUShaderStage)0; }
++			}
+ 
+ 			bge.godot_type = u.type;
+ 
