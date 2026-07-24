@@ -69,11 +69,12 @@
     <a class="ghost" href="showcase/index.html">Minimal scene</a>
 
     <div class="note">
-      <strong>Give it about 30 seconds.</strong> First load downloads ~45&nbsp;MB and then
-      compiles every shader to WGSL in your browser — roughly 20 seconds of that is shader
-      compilation before the first frame appears. A black canvas during that window is
-      expected, not a failure. (Shader precompilation is a known optimization we have not
-      done yet.)
+      <strong>First load takes a while — the page will tell you where it is.</strong>
+      It downloads ~45&nbsp;MB of engine (12&nbsp;MB compressed) and then compiles every
+      shader to WGSL for your GPU. On a ~12&nbsp;Mbps connection that measured about 13
+      seconds end to end, most of it the download; a slower link takes proportionally
+      longer. A loading screen stays up until frames are actually being drawn, so you
+      won't be staring at a black canvas wondering if it broke.
     </div>
   </div>
 
