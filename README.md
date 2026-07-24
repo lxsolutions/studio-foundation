@@ -9,12 +9,26 @@ component is a beta WebGPU export path maintained as checksum-pinned patches
 against Godot 4.7.1. WebGL 2 remains the fallback. No separate LX Solutions
 engine fork is fetched or required.
 
-> **Status:** WebGPU support is beta and **2D-only today.** The locked source
-> build boots the WebGPU backend (Forward Mobile renderer) and renders 2D/Control
-> UI in-browser — verified 2026-07-24 against the engine-owned WebGPU probe
-> (active canvas context, no runtime error) and a visual comparison of the neutral
-> template's 2D menu against the WebGL baseline (1.2% diff). Both templates are
-> recorded by byte count and SHA-256 in [engine-lock.toml](engine/engine-lock.toml).
+## Why an independent WebGPU backend
+
+Godot itself does not accept AI-generated code contributions, and has stated it does
+not intend to add AI features to the engine. Under that policy an AI-assisted
+capability — even one the community has asked about for years, like a browser-grade
+WebGPU backend — cannot land upstream no matter how well it works. Studio Foundation
+carries the work forward in the open instead: official Godot as the base (MIT), a
+transparent, checksum-pinned patch series on top, and every change reproducible and
+verified on real hardware (the 3D render above was confirmed on an NVIDIA Tesla P40).
+The capability ships to anyone who wants it, for free — no gatekeeping, no permission
+required.
+
+> **Status:** WebGPU support is beta and now **renders 3D in-browser on real
+> hardware.** The locked source build boots the WebGPU backend (Forward Mobile
+> renderer) and, as of 2026-07-24 (patch 0013), draws a lit, perspective-projected
+> 3D mesh in Chrome on an NVIDIA Tesla P40 — 60 fps, **0 `GPUValidationError`** (was
+> 2283) — verified against the engine-owned WebGPU probe, alongside the earlier 2D
+> menu gate (active canvas context, no runtime error; 1.2% vs the WebGL baseline).
+> Both templates are recorded by byte count and SHA-256 in
+> [engine-lock.toml](engine/engine-lock.toml). WebGL 2 remains a supported fallback.
 >
 > **3D-black bug — root-caused and fixed (2026-07-24, patch 0009).** A lit *or
 > even unshaded* 3D mesh rendered black under WebGPU while rendering fine under
