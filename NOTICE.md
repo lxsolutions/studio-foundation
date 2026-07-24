@@ -20,6 +20,11 @@ Technical source lineage:
 - Historical, validated Studio Foundation 4.7.1 integration tree:
   `14f5effb72ae440a3aa575c801e4aae1a5da7fb8`
 - License: MIT, with copyright retained by the respective contributors
+- Emdawn WebGPU package: Dawn revision
+  `ea66c0fa309f01f2ba1ec2fd2c680cc992eaf72a`, with the private-namespace fix
+  backported from Dawn commit
+  `2752c7d71a190c8512f38ceda922253d23876fb4`; package licenses are MIT/UIUC
+  and BSD-3-Clause as included by the pinned Emscripten distribution
 
 The committed patches are intentionally scoped to the WebGPU implementation
 and its required SPIR-V/Tint sources. Unrelated changes from the historical
@@ -28,7 +33,7 @@ license files required by the patched source are carried in the corresponding
 patches.
 
 The historical source repository is an attribution and engineering reference only.
-Studio Foundation owns the current 4.7.1 integration, patch curation, build
+Studio Foundation maintains the current 4.7.1 integration, patch curation, build
 tooling, browser validation, and release evidence.
 
 ## Godot Engine

@@ -48,6 +48,61 @@ REQUIRED_PATHS = (
     "tools/release/attribution.py",
     "tools/release/make_sbom.py",
 )
+EXPECTED_ENGINE_ARTIFACTS = {
+    "web_webgpu_release": "godot.web.template_release.webgpu.zip",
+    "web_webgpu_debug": "godot.web.template_debug.webgpu.zip",
+}
+
+
+def validate_engine_artifacts(root: Path, records: object) -> list[str]:
+    """Validate locked template metadata and any matching local build outputs."""
+    if not isinstance(records, dict):
+        return ["engine artifact records must be a table"]
+
+    status = records.get("status", "accepted")
+    if status == "blocked":
+        problems = []
+        if any(key in records for key in EXPECTED_ENGINE_ARTIFACTS):
+            problems.append("blocked engine artifacts must not contain accepted records")
+        blocker = records.get("blocker")
+        if not isinstance(blocker, str) or not blocker.strip():
+            problems.append("blocked engine artifacts require a blocker")
+        return problems
+    if status != "accepted":
+        return ["engine artifact status must be accepted or blocked"]
+
+    problems = []
+    artifact_root = root / "engine" / "artifacts" / "templates"
+    for key, expected_file in EXPECTED_ENGINE_ARTIFACTS.items():
+        record = records.get(key)
+        if not isinstance(record, dict):
+            problems.append(f"engine artifact record is missing: {key}")
+            continue
+
+        filename = record.get("file")
+        byte_count = record.get("bytes")
+        raw_sha = str(record.get("sha256", ""))
+        if filename != expected_file:
+            problems.append(f"engine artifact {key}.file must be {expected_file}")
+        if not isinstance(byte_count, int) or isinstance(byte_count, bool) or byte_count <= 0:
+            problems.append(f"engine artifact {key}.bytes must be a positive integer")
+        if not re.fullmatch(r"[0-9a-f]{64}", raw_sha):
+            problems.append(f"engine artifact {key}.sha256 must be lowercase SHA-256")
+
+        artifact = artifact_root / expected_file
+        if artifact.is_file() and isinstance(byte_count, int) and not isinstance(byte_count, bool):
+            actual_bytes = artifact.stat().st_size
+            if actual_bytes != byte_count:
+                problems.append(
+                    f"engine artifact size mismatch for {expected_file}: expected {byte_count}, got {actual_bytes}"
+                )
+            with artifact.open("rb") as handle:
+                actual_sha = hashlib.file_digest(handle, "sha256").hexdigest()
+            if actual_sha != raw_sha:
+                problems.append(
+                    f"engine artifact checksum mismatch for {expected_file}: expected {raw_sha}, got {actual_sha}"
+                )
+    return problems
 
 
 def license_ids(expression: str) -> set[str]:
@@ -142,6 +197,15 @@ def validate_engine_lock(root: Path) -> list[str]:
             problems.append(f"engine pin {label}.license is missing")
 
     patch_root = (root / "engine" / "patches").resolve()
+
+    webgpu_build = lock.get("build", {}).get("web_webgpu", {})
+    for profile in ("target_release", "target_debug"):
+        flags = webgpu_build.get(profile, [])
+        if "webgpu=yes" not in flags:
+            problems.append(f"build.web_webgpu.{profile} must explicitly enable webgpu=yes")
+        if "opengl3=no" not in flags:
+            problems.append(f"build.web_webgpu.{profile} must explicitly disable opengl3")
+
     series = lock.get("patches", {}).get("series", [])
     if not series:
         problems.append("engine patch series must not be empty")
@@ -165,6 +229,9 @@ def validate_engine_lock(root: Path) -> list[str]:
             problems.append(
                 f"engine patch checksum mismatch for {relative}: expected {expected}, got {actual}"
             )
+    problems.extend(
+        validate_engine_artifacts(root, lock.get("artifacts", {}).get("export_templates", {}))
+    )
     return problems
 
 

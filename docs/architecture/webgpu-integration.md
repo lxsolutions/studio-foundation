@@ -1,83 +1,69 @@
-# WebGPU integration: provenance and Studio Foundation work
+# WebGPU integration provenance
 
-Studio Foundation does not claim to have invented its Godot WebGPU backend.
-The original backend code is MIT-licensed work from
-[`dwalter/godotwebgpu`](https://github.com/dwalter/godotwebgpu), pinned for
-lineage at commit `f329e39ce8db7acaa5c9d6628a530fb769969228`.
+This document separates upstream Godot, historical backend lineage, third-party
+source, and Studio Foundation maintenance.
 
-It is also inaccurate to describe Studio Foundation as merely a copy of that
-repository. The available historical source line was a useful starting implementation,
-but it was not a usable release for Studio Foundation's Godot 4.7.1 target.
-Studio Foundation completed the forward port, corrected integration failures,
-scoped the result, and made it one component of a broader reproducible platform.
+## Source model
 
-The historical source repository is not strategically required: Studio Foundation owns
-the maintained integration and can replace or rewrite any part of it under the
-MIT license. Its name is preserved here because honest ancestry strengthens the
-project; it does not define the project's identity or ongoing roadmap.
+Studio Foundation builds from one active engine upstream:
 
-## Why a forward port was required
+- Repository: [godotengine/godot](https://github.com/godotengine/godot)
+- Version: Godot 4.7.1 stable
+- Commit: `a13da4feb8d8aefc283c3763d33a2f170a18d541`
 
-At the pinned historical source commit:
+`engine-fetch` clones that repository and applies the ordered patches recorded
+in [engine-lock.toml](../../engine/engine-lock.toml). The patched tree is
+disposable build state. No LX Solutions engine fork, Git submodule, or secondary
+upstream is used.
 
-- the available backend line was based on Godot 4.6.2, while Studio Foundation
-  authored and exported projects with official Godot 4.7.1;
-- the 4.6.2 template read pack format v3 while the 4.7.1 editor wrote v4, causing
-  `Pack version unsupported: 4` at browser startup;
-- no aligned 4.7 release line was available for Studio Foundation to consume;
-- integrating the backend with official 4.7.1 required resolution of 119
-  conflicts across renderer, platform, dependency, and engine changes; and
-- after that integration, two additional 4.7.1 API/renderer compile failures
-  still had to be diagnosed and corrected.
+## Historical lineage
 
-Copying that historical source commit could therefore neither load nor render the project's
-4.7.1 export. Studio Foundation's maintained result is the completed 4.7.1 port
-plus its reproducible build, fallback, and validation system. Detailed command
-and runtime evidence is preserved in `BOOTSTRAP_REPORT.md`.
+The initial Godot WebGPU backend code came from the MIT-licensed
+[dwalter/godotwebgpu](https://github.com/dwalter/godotwebgpu) project at commit
+`f329e39ce8db7acaa5c9d6628a530fb769969228`. That commit is retained for
+attribution and engineering traceability only; it is not fetched by the build.
 
-## Upstream model
+The available backend line targeted Godot 4.6.2. Studio Foundation's current
+series adapts the selected backend code to the pinned Godot 4.7.1 source. The
+port included resolution of the conflicts recorded in
+[rebase-4.7.1-conflicts.txt](../../engine/rebase-4.7.1-conflicts.txt), support
+for the 4.7.1 pack format, and subsequent API and renderer build fixes.
 
-Studio Foundation has one engine upstream:
-[`godotengine/godot`](https://github.com/godotengine/godot). The WebGPU patches
-are Studio Foundation's maintained delta against that upstream. Other
-repositories named in this document are source lineage, not upstreams,
-submodules, remotes, or build dependencies.
+## Maintained patch series
 
-## Responsibility boundary
-
-| Area | Origin or owner |
-|---|---|
-| Initial Godot WebGPU backend implementation | `dwalter/godotwebgpu`; retained with MIT attribution |
-| Port from the available 4.6.2 line to official Godot 4.7.1 | Studio Foundation |
-| Resolution of 119 upstream integration conflicts | Studio Foundation |
-| 4.7.1 API and renderer fixes after the merge | Studio Foundation |
-| Selection of build-relevant changes and exclusion of unrelated branch changes | Studio Foundation |
-| Checksummed, repository-local patch packaging | Studio Foundation |
-| Official-base source preparation and update tooling | Studio Foundation |
-| Release/debug template build and artifact layout | Studio Foundation |
-| WebGPU browser boot, screenshot, visual comparison, and benchmark gates | Studio Foundation |
-| WebGL 2 fallback policy and Godot-facing platform abstractions | Studio Foundation |
-| Shared Godot addon, templates, Rust authority, persistence, assets, CI, and agent workflows | Studio Foundation |
-
-The integration is therefore derivative open-source engineering with clear
-lineage, plus substantial maintenance, porting, validation, and platform work.
-It is not a clean-room backend, and the project does not market it as one.
-
-## Reviewable patch scope
-
-The locked series currently contains:
-
-| Patch | Purpose | Files | Added | Deleted |
+| Patch | Scope | Files | Added | Deleted |
 |---|---|---:|---:|---:|
-| `0001-studio-webgpu-engine.patch` | Engine, renderer, browser platform, and build integration | 72 | 18,888 | 188 |
-| `0002-studio-webgpu-spirv.patch` | Required vendored SPIR-V headers/tools | 397 | 155,766 | 10 |
+| `0001-studio-webgpu-engine.patch` | Godot renderer, WebGPU driver, web platform, resource, and build integration | 72 | 18,888 | 188 |
+| `0002-studio-webgpu-spirv.patch` | Required vendored SPIR-V headers and tools | 397 | 155,766 | 10 |
 | `0003-studio-webgpu-tint.patch` | Required vendored Tint source and license | 824 | 202,514 | 0 |
+| `0004-godot-4.7.1-webgpu-interfaces.patch` | 4.7.1 API adaptation and Windows shader build reproducibility | 6 | 189 | 17 |
+| `0005-webgpu-shell-capability-gate.patch` | Fail-closed browser WebGPU capability gate | 1 | 13 | 8 |
+| `0006-webgpu-single-thread-stdio.patch` | No-threads web build compatibility | 1 | 1 | 0 |
+| `0007-tint-storage-buffer-access.patch` | SPIR-V/Tint storage-buffer access compatibility | 1 | 1 | 1 |
+| `0008-tint-image-ordering.patch` | SPIR-V/Tint image-value lowering order | 1 | 10 | 3 |
 
-The third-party line counts are reported separately so dependency source is not
-misrepresented as Studio Foundation-authored code. The first patch is the
-reviewable Godot integration surface: 30 files under `servers/rendering`, 26
-under `drivers/webgpu`, 7 under `platform/web`, and a small set of build,
-resource, and startup hooks.
+The large third-party source patches are listed separately so their line counts
+are not presented as Studio Foundation-authored implementation. Copyright and
+license notices remain with their respective projects.
+
+Studio Foundation maintains the 4.7.1 integration delta, patch packaging,
+source-preparation commands, template build, WebGL fallback, browser runtime
+checks, visual comparison, and release evidence. Godot itself remains upstream
+work maintained by the Godot contributors.
+
+The locked template build explicitly enables `webgpu=yes`, disables `opengl3`,
+and uses `threads=no`; an archive name is never treated as proof of its
+renderer. On Windows, the optional host-generated WGSL lookup table defaults to
+an empty table and the compiled runtime Tint path converts cache misses.
+
+## Current runtime status
+
+The no-threads build reaches a browser WebGPU adapter, device, canvas context,
+and Godot's Mobile renderer without requesting WebGL. Startup then fails in the
+vendored Tint SPIR-V reader at `texture.cc:606` while lowering a texture
+operation. Patch 0007 removed the preceding illegal write-only storage-buffer
+errors, but the texture assertion remains. Consequently, there are no accepted
+WebGPU template artifacts or public game proof at this checkpoint.
 
 ## Reproduce and inspect
 
@@ -88,12 +74,14 @@ git -C engine/.cache/studio-webgpu status --short
 git apply --numstat engine/patches/0001-studio-webgpu-engine.patch
 just engine-build
 just engine-validate
+just engine-record-artifacts
 ```
 
-`engine-fetch` retrieves official Godot only. It rejects missing, altered,
-uppercase, or path-escaping patch entries before source preparation. The
-separate LX Solutions engine repository is not required.
+Before preparing source, `engine-fetch` rejects missing patches, path traversal,
+and any patch whose SHA-256 differs from the lock. `engine-record-artifacts`
+accepts only a complete release/debug pair and records exact filenames, byte
+counts, and SHA-256 values.
 
-Build and runtime evidence is recorded in `BOOTSTRAP_REPORT.md`. Exact source
-and toolchain pins live in `engine/engine-lock.toml`. Attribution lives in
-`NOTICE.md`.
+Current verification results are in
+[BOOTSTRAP_REPORT.md](../../BOOTSTRAP_REPORT.md). Attribution is also summarized
+in [NOTICE.md](../../NOTICE.md).

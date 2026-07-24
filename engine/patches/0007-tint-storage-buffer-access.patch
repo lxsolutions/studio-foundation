@@ -1,0 +1,20 @@
+diff --git a/thirdparty/tint/src/tint/lang/spirv/reader/parser/parser.cc b/thirdparty/tint/src/tint/lang/spirv/reader/parser/parser.cc
+index 0a879f5..fd5f864 100644
+--- a/thirdparty/tint/src/tint/lang/spirv/reader/parser/parser.cc
++++ b/thirdparty/tint/src/tint/lang/spirv/reader/parser/parser.cc
+@@ -4471,6 +4471,15 @@ class Parser {
+         }
+ 
+         auto* element_ty = Type(inst.type_id(), access_mode)->As<core::type::Pointer>();
++        // WGSL does not permit write-only storage buffers. SPIR-V represents
++        // them with NonReadable, which Tint maps to kWrite. Preserve the write
++        // capability while adding the read capability required by WGSL.
++        if (element_ty->AddressSpace() == core::AddressSpace::kStorage &&
++            element_ty->Access() == core::Access::kWrite) {
++            access_mode = core::Access::kReadWrite;
++            element_ty = ty_.ptr(core::AddressSpace::kStorage, element_ty->StoreType(), access_mode);
++        }
++
+         if (element_ty->AddressSpace() == core::AddressSpace::kOut &&
+             element_ty->StoreType()->IsIntegerScalarOrVector()) {
+             io_attributes.interpolation = {

@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-07-19
-- Last amended: 2026-07-22
+- Last amended: 2026-07-23
 
 ## Context
 
@@ -28,14 +28,37 @@ and release evidence.
    SHA-256 values before preparing a disposable patched worktree.
 4. The patch series is scoped to the WebGPU implementation and required
    SPIR-V/Tint sources. Unrelated changes from historical branches are excluded.
-5. `dwalter/godotwebgpu` remains technical source lineage and attribution, not
+5. WebGPU templates explicitly build with `webgpu=yes` and `opengl3=no`.
+   Filenames or HTML configuration alone never establish renderer capability.
+6. `dwalter/godotwebgpu` remains technical source lineage and attribution, not
    a runtime, build, or availability dependency.
-6. Game code cannot call integration-only APIs directly. Renderer differences
+7. Game code cannot call integration-only APIs directly. Renderer differences
    stay behind `studio_core` interfaces and quality profiles.
-7. Official WebGL 2 is the maintained release fallback. WebGPU may be red
+8. Official WebGL 2 is the maintained release fallback. WebGPU may be red
    without blocking a release; WebGL may not.
-8. A Godot update is accepted only after the patches apply, templates build,
+9. A Godot update is accepted only after the patches apply, templates build,
    browser smoke passes, visual comparison passes, and evidence is recorded.
+10. Accepted release/debug templates have byte counts and SHA-256 values in
+   `engine-lock.toml`; proof consumers must verify both before export.
+11. Template installation must find the compiled WebGPU bridge and backend.
+    Browser proof observes the engine's adapter, device, and canvas requests
+    and fails if the alleged WebGPU runtime requests WebGL or WebGL 2.
+12. The browser build uses `threads=no` because the current backend does not
+    support Godot's threaded web runtime. Installers may not relabel an archive
+    built for a different thread mode.
+13. Toolchain backports are separate checksum-locked inputs under
+    `engine/toolchain/`. The build copies and patches the exact Emdawn package
+    in a disposable cache; it never mutates the installed Emscripten SDK.
+
+Tint storage-buffer lowering is fixed in the Godot patch series. An ASAN
+regression test also reproduced the later Emdawn/Godot global `RefCounted`
+collision and passed with the locked Dawn namespace backport. On 2026-07-24 the
+release and debug templates were rebuilt from those locked inputs and passed the
+engine-owned browser WebGPU probe (active WebGPU canvas context, no runtime
+error) and the visual comparison against the WebGL baseline (1.2% diff, 3%
+threshold). Both templates are now recorded with byte counts and SHA-256 values
+in `engine-lock.toml [artifacts.export_templates]`; the artifact lock is no
+longer blocked. See `docs/architecture/webgpu-runtime-status.md`.
 
 ## Update procedure
 

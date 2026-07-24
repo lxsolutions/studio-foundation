@@ -7,63 +7,52 @@ It is not a product roadmap.
 
 ## Public scope
 
-Studio Foundation is a mechanics-neutral Godot toolkit. The public release
-surface contains:
+Studio Foundation contains reusable Godot integration, a neutral project
+template, asset/export/release tooling, mechanics-neutral transport and service
+scaffolding, optional provider adapters, and their tests.
 
-- official Godot pinning and a checksummed WebGPU patch series
-- shared Godot addons and a neutral project template
-- asset, export, browser, release, and agent tooling
-- a versioned handshake/transport protocol with an opaque application hook
-- optional Rust API, session, persistence, and administration scaffolding
-- optional PostgreSQL, Nakama, and tracing development infrastructure
-
-Game content, domain schemas, business rules, identity policy, and production
-deployment configuration belong in consuming repositories. ADR 0014 records
-this boundary.
+It does not define a game's content, entities, mechanics, domain schema,
+identity policy, persistence semantics, or production deployment. The optional
+server and Nakama adapter carry opaque application payloads supplied by a
+consumer.
 
 ## Verified in this change
 
 | Area | Evidence |
 |---|---|
 | Official engine source | Godot 4.7.1 stable commit `a13da4feb8d8aefc283c3763d33a2f170a18d541` is the sole active upstream pin |
-| WebGPU source preparation | Patch checksums, path containment, reusable-source preparation, candidate isolation, dry-run, resume, and conflict handling pass the engine-tool tests |
-| Shared protocol v2 | Nine golden fixtures pass Rust, GDScript, and fixture-set validation |
-| Godot template | Godot 4.7.1 imports cleanly; 25 test methods and 137 assertions pass |
-| Rust service workspace | 16 fast tests pass; two PostgreSQL integration tests remain explicitly ignored without a live database |
-| Generated server template | Standalone server test passes against the regenerated lockfile |
-| Optional Nakama bridge | Six ES5 runtime tests and four Python probe tests pass |
-| Infrastructure tools | Five local/remote Compose and database lifecycle tests pass |
-| Workflow policy | Representative generic workflow passes trigger, immutable-action-pin, and self-hosted trust-boundary validation |
-| Python tooling | Engine, release, security, generator, CI, connectivity, benchmark, and MCP unit suites pass after the generic workflow was installed |
-| Browser capture guard | WebGPU capture requires `navigator.gpu`, a usable adapter, and an active WebGPU canvas context before accepting evidence |
+| WebGPU source preparation | Eight checksum-pinned patches pass path-containment, reusable-source preparation, candidate-isolation, dry-run, resume, and conflict-handling tests |
+| Build configuration | WebGPU templates explicitly use `webgpu=yes`, `opengl3=no`, and `threads=no` |
+| Template installation | The installer selects only the archive matching the lock's thread mode and rejects archives missing the WebGPU loader bridge or compiled backend marker |
+| Browser evidence | The smoke test instruments engine-owned adapter, device, and canvas-context requests and rejects any WebGL/WebGL 2 request |
+| Artifact acceptance | The recorder requires a complete release/debug pair; the artifact lock has no accepted entries while the runtime gate is red |
+| Current engine result | A no-threads build reaches a WebGPU adapter, device, canvas context, and the Mobile renderer without requesting WebGL; startup then fails in Tint texture lowering at `texture.cc:606` |
+| Optional Nakama bridge | The bridge carries opaque consumer-owned payloads and remains optional |
 
-## Engine lineage and responsibility
+## Engine lineage
 
-Official Godot is upstream. Studio Foundation does not depend on a separate LX
-Solutions engine fork. The local patch series retains required historical
-attribution in [NOTICE.md](NOTICE.md), while this repository owns the 4.7.1
-forward port, patch curation, build orchestration, fallback, and validation
-surface it ships.
+Official Godot is upstream. Studio Foundation has no active dependency on a
+separate LX Solutions engine fork. Historical MIT-licensed WebGPU lineage is
+retained in [NOTICE.md](NOTICE.md); the maintained 4.7.1 delta, patch curation,
+build commands, fallback, and validation live in this repository.
 
-## External consuming proof
+## External game status
 
-OSWT is maintained in a separate game repository and is not embedded into the
-Foundation tree. Its integration branch currently passes 55 headless gameplay
-checks and includes a runtime proof panel. Publishing it as current WebGPU
-evidence remains gated on fresh locked templates, strict browser validation,
-and a clean provenance record.
+OSWT is an external demo candidate, not accepted WebGPU proof. Independent live
+inspection found that the current Asha Arena OSWT route requests WebGL 2. It has
+not been overwritten or relabeled. A future proof release must use a clean
+locked template, pass the engine-owned context instrumentation, and publish
+matching source and artifact provenance.
 
 ## Not yet claimed
 
-The following require additional evidence before a public claim is upgraded:
-
-- fresh release and debug WebGPU template archives from the current lock
-- WebGPU browser capture from those exact archives
-- OSWT redeployment from a clean Foundation and OSWT commit pair
+- A WebGPU runtime that completes shader translation and reaches an interactive frame
+- Accepted release/debug WebGPU template artifacts and checksums
+- A published OSWT WebGPU capture and deployment produced from those exact templates
 - Safari/iOS WebGPU behavior
-- native Android and iOS device runs
-- database-backed integration tests against a live disposable PostgreSQL stack
-- console support beyond the documented licensed-provider path
+- Native Android and iOS device runs
+- Database-backed integration tests against a live disposable PostgreSQL stack
+- Console support beyond the documented licensed-provider path
 
 ## Reproduce the fast evidence
 
@@ -74,13 +63,15 @@ just test-generated
 just release-validate --allow-dirty
 ```
 
-Engine evidence uses the longer sequence:
+The longer engine sequence is:
 
 ```sh
 just engine-fetch
 just engine-build
 just engine-validate
+just engine-record-artifacts
+just release-validate --allow-dirty
 ```
 
-A WebGPU screenshot is accepted only when the strict runtime probe confirms the
-WebGPU API, adapter, and canvas context.
+A WebGPU screenshot is accepted only when the runtime probe confirms engine-owned
+adapter, device, and WebGPU canvas-context requests with no WebGL request.

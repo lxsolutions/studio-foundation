@@ -7,20 +7,25 @@ out-of-tree in engine/.cache (gitignored, never committed).
   python engine/scripts/engine.py versions   # print locked pins and local cache state
   python engine/scripts/engine.py fetch      # fetch official Godot + apply local patches
   python engine/scripts/engine.py build      # build pinned WebGPU export templates
+  python engine/scripts/engine.py record-artifacts  # lock validated template bytes
   python engine/scripts/engine.py rebase     # test the patch series on a newer Godot ref
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
+import zipfile
 import tomllib
 from pathlib import Path
 
+from emdawn_port import EmdawnPortError, prepare_locked_emdawn_port
 from patch_series import PatchSeriesError, patch_state, verified_patches
 from rebase import RebaseError, cmd_rebase, rebase_workspace
 
@@ -29,6 +34,10 @@ ENGINE_DIR = REPO_ROOT / "engine"
 CACHE_DIR = ENGINE_DIR / ".cache"
 LOCK_FILE = ENGINE_DIR / "engine-lock.toml"
 PATCHED_CACHE_DIR = CACHE_DIR / "studio-webgpu"
+TEMPLATE_ARTIFACTS = {
+    "web_webgpu_release": "godot.web.template_release.webgpu.zip",
+    "web_webgpu_debug": "godot.web.template_debug.webgpu.zip",
+}
 
 
 def load_lock() -> dict:
@@ -63,19 +72,27 @@ def fetch_repo(name: str, repo: str, commit: str, ref: str) -> Path:
     return dest
 
 
-def _patches_are_applied(source: Path, patches: list) -> bool:
-    """Confirm that every disjoint locked patch is present in the derived tree."""
-    for patch in reversed(patches):
-        proc = subprocess.run(
-            ["git", "apply", "--reverse", "--check", str(patch.path)],
-            cwd=source,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if proc.returncode != 0:
-            return False
-    return True
+def _patch_tree_fingerprint(source: Path, patches: list) -> str:
+    """Hash every source path governed by the ordered patch series."""
+    paths: set[str] = set()
+    for patch in patches:
+        for line in patch.path.read_text(encoding="utf-8").splitlines():
+            match = re.match(r"^diff --git a/(.+) b/(.+)$", line)
+            if match:
+                paths.update(match.groups())
+    digest = hashlib.sha256()
+    for relative in sorted(paths):
+        path = source / relative
+        digest.update(relative.encode("utf-8"))
+        digest.update(b"\0")
+        if path.is_file():
+            with path.open("rb") as handle:
+                for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                    digest.update(chunk)
+        else:
+            digest.update(b"<missing>")
+        digest.update(b"\0")
+    return digest.hexdigest()
 
 
 def prepare_patched_source(
@@ -98,8 +115,10 @@ def prepare_patched_source(
                 raise PatchSeriesError(
                     f"invalid patch-state file: {state_file}"
                 ) from exc
-            if current_state == expected_state and _patches_are_applied(
-                destination, patches
+            tree_sha256 = current_state.pop("tree_sha256", None)
+            if (
+                current_state == expected_state
+                and tree_sha256 == _patch_tree_fingerprint(destination, patches)
             ):
                 print(f"[fetch] reusing verified patched source {destination}")
                 return destination
@@ -123,8 +142,12 @@ def prepare_patched_source(
         print(f"[fetch] checking {patch.relative}")
         git("apply", "--check", str(patch.path), cwd=destination)
         git("apply", str(patch.path), cwd=destination)
+    recorded_state = {
+        **expected_state,
+        "tree_sha256": _patch_tree_fingerprint(destination, patches),
+    }
     state_file.write_text(
-        json.dumps(expected_state, indent=2, sort_keys=True) + "\n",
+        json.dumps(recorded_state, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
     return destination
@@ -149,6 +172,11 @@ def cmd_versions(lock: dict) -> int:
         f"toolchain      : emscripten {toolchain['emscripten']}, scons {toolchain['scons']}, "
         f"python {toolchain['python']}, rust {toolchain['rust']}"
     )
+    emdawn = toolchain["emdawnwebgpu"]
+    print(
+        f"emdawn port    : {emdawn['version']} @ {emdawn['revision'][:12]} "
+        f"(upstream fix {emdawn['upstream_fix_commit'][:12]})"
+    )
     for name, key in (
         ("official", "godot-official"),
         ("patched", PATCHED_CACHE_DIR.name),
@@ -158,6 +186,19 @@ def cmd_versions(lock: dict) -> int:
         print(f"cache {name:11s}: {state} ({dest})")
     patches = lock.get("patches", {}).get("series", [])
     print(f"patch series   : {len(patches)} patch(es)")
+    artifacts = lock.get("artifacts", {}).get("export_templates", {})
+    records = [
+        value
+        for value in artifacts.values()
+        if isinstance(value, dict) and {"file", "bytes", "sha256"}.issubset(value)
+    ]
+    detail = ""
+    if artifacts.get("status"):
+        detail = f" ({artifacts['status']}"
+        if artifacts.get("blocker"):
+            detail += f": {artifacts['blocker']}"
+        detail += ")"
+    print(f"artifact records: {len(records)} template(s){detail}")
     return 0
 
 
@@ -176,16 +217,27 @@ def cmd_fetch(lock: dict) -> int:
     return 0
 
 
+def _emsdk_bat(root: Path, expected: str) -> Path | None:
+    bat = root / "emsdk_env.bat"
+    version_file = root / "upstream" / "emscripten" / "emscripten-version.txt"
+    if not bat.is_file() or not version_file.is_file():
+        return None
+    try:
+        actual = version_file.read_text(encoding="utf-8").strip().strip('"')
+    except OSError:
+        return None
+    return bat if actual == expected else None
+
+
 def _find_emsdk_env_bat(expected: str) -> Path | None:
-    """Locate emsdk_env.bat for an emsdk install containing the pinned version."""
-    candidates = [
-        Path.home() / "emsdk",
-        Path(os.environ.get("EMSDK", "")) if os.environ.get("EMSDK") else None,
-        Path("C:/emsdk"),
-    ]
-    for root in [c for c in candidates if c]:
-        bat = root / "emsdk_env.bat"
-        if bat.is_file():
+    """Locate the exact configured emsdk, preferring an explicit EMSDK root."""
+    configured = os.environ.get("EMSDK")
+    if configured:
+        return _emsdk_bat(Path(configured), expected)
+
+    for root in (Path.home() / "emsdk", Path("C:/emsdk")):
+        bat = _emsdk_bat(root, expected)
+        if bat:
             return bat
     return None
 
@@ -197,6 +249,73 @@ def artifact_destination(
     if source_dir:
         return engine_dir / "artifacts" / "candidates" / source_dir.name / "templates"
     return engine_dir / "artifacts" / "templates"
+
+
+def artifact_record(path: Path) -> dict[str, str | int]:
+    """Return the immutable metadata used to accept a built template."""
+    with path.open("rb") as handle:
+        digest = hashlib.file_digest(handle, "sha256").hexdigest()
+    return {"file": path.name, "bytes": path.stat().st_size, "sha256": digest}
+
+
+def record_artifacts(
+    *,
+    lock_path: Path = LOCK_FILE,
+    artifact_dir: Path | None = None,
+) -> dict[str, dict[str, str | int]]:
+    """Record a complete release/debug template pair in engine-lock.toml.
+
+    Compilation creates candidates. This separate command explicitly accepts
+    exact bytes after local validation, and never records a partial pair.
+    """
+    artifact_dir = artifact_dir or ENGINE_DIR / "artifacts" / "templates"
+    records: dict[str, dict[str, str | int]] = {}
+    missing = []
+    for key, filename in TEMPLATE_ARTIFACTS.items():
+        path = artifact_dir / filename
+        if not path.is_file():
+            missing.append(str(path))
+            continue
+        records[key] = artifact_record(path)
+    if missing:
+        raise FileNotFoundError("missing required template(s): " + ", ".join(missing))
+
+    source = lock_path.read_text(encoding="utf-8")
+    pattern = re.compile(
+        r"^\[artifacts\.export_templates\]\r?\n.*?(?=^\[|\Z)",
+        flags=re.MULTILINE | re.DOTALL,
+    )
+    if not pattern.search(source):
+        raise ValueError(f"{lock_path} has no [artifacts.export_templates] table")
+
+    lines = [
+        "[artifacts.export_templates]",
+        "# Generated by engine-record-artifacts after build validation.",
+    ]
+    for key in TEMPLATE_ARTIFACTS:
+        record = records[key]
+        lines.append(
+            f'{key} = {{ file = "{record["file"]}", bytes = {record["bytes"]}, '
+            f'sha256 = "{record["sha256"]}" }}'
+        )
+    replacement = "\n".join(lines) + "\n\n"
+    lock_path.write_text(pattern.sub(replacement, source, count=1), encoding="utf-8")
+    return records
+
+
+def cmd_record_artifacts() -> int:
+    try:
+        records = record_artifacts()
+    except (FileNotFoundError, OSError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    for key, record in records.items():
+        print(
+            f"[record] {key}: {record['file']} bytes={record['bytes']} "
+            f"sha256={record['sha256']}"
+        )
+    print(f"[record] updated {LOCK_FILE.relative_to(REPO_ROOT)}")
+    return 0
 
 
 def cmd_build(lock: dict, source_dir: Path | None = None) -> int:
@@ -215,15 +334,22 @@ def cmd_build(lock: dict, source_dir: Path | None = None) -> int:
         return 2
     em_version = lock["toolchain"]["emscripten"]
     build_env = os.environ.copy()
-    if not shutil.which("emcc"):
-        bat = _find_emsdk_env_bat(em_version)
+    configured_emsdk = os.environ.get("EMSDK")
+    bat = _find_emsdk_env_bat(em_version)
+    if configured_emsdk or not shutil.which("emcc"):
         if not bat:
-            print(
-                f"error: emcc not on PATH and no emsdk found — install/activate emsdk {em_version}:\n"
-                f"  git clone https://github.com/emscripten-core/emsdk ~\\emsdk\n"
-                f"  ~\\emsdk\\emsdk install {em_version} && ~\\emsdk\\emsdk activate {em_version}",
-                file=sys.stderr,
-            )
+            if configured_emsdk:
+                print(
+                    f"error: EMSDK={configured_emsdk} is not activated at exact "
+                    f"Emscripten {em_version}",
+                    file=sys.stderr,
+                )
+            else:
+                print(
+                    f"error: emcc not on PATH and no exact emsdk found — "
+                    f"install/activate emsdk {em_version}",
+                    file=sys.stderr,
+                )
             return 2
         # emsdk_env.bat ultimately puts <root> and <root>/upstream/emscripten on
         # PATH; do that directly instead of shelling out (robust across hosts).
@@ -238,9 +364,41 @@ def cmd_build(lock: dict, source_dir: Path | None = None) -> int:
         print(f"[build] using emsdk at {root}")
         build_env["PATH"] = f"{em_dir};{root};" + build_env.get("PATH", "")
         build_env["EMSDK"] = str(root)
+        config = root / ".emscripten"
+        if config.is_file():
+            build_env["EM_CONFIG"] = str(config)
         if not shutil.which("emcc", path=build_env["PATH"]):
             print("error: emcc still not found after PATH update", file=sys.stderr)
             return 2
+    emcc = shutil.which("emcc", path=build_env["PATH"])
+    version = subprocess.run(
+        [emcc, "--version"],
+        env=build_env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if version.returncode != 0 or em_version not in version.stdout:
+        actual = version.stdout.splitlines()[0] if version.stdout else "unavailable"
+        print(
+            f"error: expected Emscripten {em_version}, resolved {actual}",
+            file=sys.stderr,
+        )
+        return 2
+    try:
+        emdawn_port = prepare_locked_emdawn_port(
+            lock,
+            engine_dir=ENGINE_DIR,
+            cache_dir=CACHE_DIR,
+            emscripten_dir=Path(emcc).resolve().parent,
+            emcc=Path(emcc),
+            env=build_env,
+        )
+    except (EmdawnPortError, OSError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    build_env["EMDAWNWEBGPU_PORT"] = emdawn_port.resolve().as_posix()
+    print(f"[build] locked Emdawn port: {build_env['EMDAWNWEBGPU_PORT']}")
     scons = [sys.executable, "-m", "SCons"]
     targets = lock["build"]["web_webgpu"]
     jobs = str(os.cpu_count() or 4)
@@ -255,32 +413,65 @@ def cmd_build(lock: dict, source_dir: Path | None = None) -> int:
             break
         print(f"[build] {profile} OK", flush=True)
     if rc == 0:
-        _install_templates(source, artifact_dir)
+        _install_templates(
+            source,
+            artifact_dir,
+            threads_enabled="threads=yes" in targets["target_release"],
+        )
     return rc
 
 
-def _install_templates(source: Path, dest: Path | None = None) -> None:
-    """Copy built web template zips into the selected artifact destination.
+def _validate_webgpu_template(archive: Path) -> None:
+    """Reject mislabeled templates that do not contain the compiled backend."""
+    with zipfile.ZipFile(archive) as bundle:
+        try:
+            loader = bundle.read("godot.js")
+            runtime = bundle.read("godot.wasm")
+        except KeyError as error:
+            raise RuntimeError(f"incomplete Godot web template: {archive}") from error
+    missing = []
+    if b"importJsDevice" not in loader:
+        missing.append("emdawnwebgpu loader bridge")
+    if b"WebGPU: Device imported from JS successfully." not in runtime:
+        missing.append("compiled WebGPU context driver")
+    if missing:
+        raise RuntimeError(
+            f"refusing mislabeled WebGPU template {archive}: missing {', '.join(missing)}"
+        )
 
-    scons names its output godot.web.template_{release,debug}.wasm32.zip, but
-    export_presets.cfg's web-webgpu preset (custom_template/release, .../debug)
-    points at ...webgpu.zip — rename on copy so the preset actually resolves."""
+
+def _install_templates(
+    source: Path, dest: Path | None = None, *, threads_enabled: bool
+) -> None:
+    """Install only the archive matching the lock's thread configuration."""
     dest = dest or ENGINE_DIR / "artifacts" / "templates"
     dest.mkdir(parents=True, exist_ok=True)
-    zips = sorted((source / "bin").glob("godot.web.template_*.zip"))
-    for z in zips:
-        target = dest / z.name.replace(".wasm32.zip", ".webgpu.zip")
-        shutil.copy2(z, target)
-        print(f"[install] {z.name} -> {target.relative_to(REPO_ROOT)}", flush=True)
-    if not zips:
-        print("[install] WARNING: no template zips found under bin/", file=sys.stderr)
+    suffix = ".wasm32.zip" if threads_enabled else ".wasm32.nothreads.zip"
+    installed = 0
+    for profile in ("release", "debug"):
+        archive = source / "bin" / f"godot.web.template_{profile}{suffix}"
+        if not archive.is_file():
+            raise RuntimeError(f"expected built WebGPU template missing: {archive}")
+        target = dest / f"godot.web.template_{profile}.webgpu.zip"
+        _validate_webgpu_template(archive)
+        shutil.copy2(archive, target)
+        print(
+            f"[install] {archive.name} -> {target.relative_to(REPO_ROOT) if target.is_relative_to(REPO_ROOT) else target}",
+            flush=True,
+        )
+        installed += 1
+    if installed != 2:
+        raise RuntimeError("expected release and debug WebGPU templates")
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("command", choices=["versions", "fetch", "build", "rebase"])
+    parser.add_argument(
+        "command",
+        choices=["versions", "fetch", "build", "record-artifacts", "rebase"],
+    )
     parser.add_argument(
         "--official-ref", default="", help="official commit/tag (default: lock pin)"
     )
@@ -309,6 +500,8 @@ def main() -> int:
             print(f"error: {exc}", file=sys.stderr)
             return 2
         return cmd_build(lock, source_dir)
+    if args.command == "record-artifacts":
+        return cmd_record_artifacts()
     return cmd_rebase(lock, args)
 
 

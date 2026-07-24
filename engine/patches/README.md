@@ -8,6 +8,16 @@ browser WebGPU template build. They apply to the official Godot commit in
    resource, and build integration.
 2. `0002-studio-webgpu-spirv.patch` - required vendored SPIR-V headers and tools.
 3. `0003-studio-webgpu-tint.patch` - required vendored Tint source and license.
+4. `0004-godot-4.7.1-webgpu-interfaces.patch` - Godot 4.7.1 interface adaptation
+   and reproducible WebGPU shader-generation fixes.
+5. `0005-webgpu-shell-capability-gate.patch` - fail closed when the browser does
+   not expose WebGPU instead of silently selecting WebGL.
+6. `0006-webgpu-single-thread-stdio.patch` - support the required no-threads web
+   build configuration.
+7. `0007-tint-storage-buffer-access.patch` - translate write-only SPIR-V storage
+   buffers to Tint's supported read-write access mode.
+8. `0008-tint-image-ordering.patch` - lower SPIR-V `OpImage` values before
+   texture operations that can reference them earlier in module order.
 
 The WebGPU implementation originated in `dwalter/godotwebgpu`. Studio
 Foundation owns the 4.7.1 port, scoped patch curation, preparation/build tooling,
@@ -26,3 +36,13 @@ authorship and maintenance boundary.
 
 `engine/.cache/studio-webgpu` is disposable output. This directory and
 `engine-lock.toml` are source of truth.
+
+The pinned Emdawn port also needs a toolchain-level namespace backport, stored
+separately under `engine/toolchain/patches/`. It isolates Dawn's private
+`RefCounted` type from Godot's type of the same name and is independently
+checksum-locked in `engine-lock.toml`.
+
+As of 2026-07-24 the release/debug rebuild and the engine-owned browser WebGPU
+probe (active canvas context + 1.2% visual diff vs the WebGL baseline) both pass;
+the accepted templates are checksum-locked in
+`engine-lock.toml [artifacts.export_templates]`.

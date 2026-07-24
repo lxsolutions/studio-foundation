@@ -101,6 +101,7 @@ test-rust:
 test-python:
     uv run --project tools python -m unittest discover -s tools/studio-mcp/tests -p "test_*.py" -v
     uv run --project tools python -m unittest discover -s tools/infra/tests -p "test_*.py" -v
+    {{PY}} -m unittest discover -s engine/scripts/tests -p "test_*.py" -v
 
 # Cross-language protocol golden-fixture checks (Rust side runs in test-rust too)
 test-protocol:
@@ -217,6 +218,9 @@ compare-screenshots BASELINE CANDIDATE *ARGS:
 
 # ------------------------------------------------------------------ engine
 
+engine-test:
+    {{PY}} -m unittest discover -s engine/scripts/tests -p "test_*.py" -v
+
 engine-versions:
     {{PY}} engine/scripts/engine.py versions
 
@@ -225,8 +229,14 @@ engine-fetch:
     {{PY}} engine/scripts/engine.py fetch
 
 # Build templates from the pin or --workspace candidate (long; requires scons+emsdk)
+# Runs under the tools venv: engine.py shells out to `sys.executable -m SCons`, and
+# SCons lives only in the tools venv, not the system Python that {{PY}} resolves to.
 engine-build *ARGS:
-    {{PY}} engine/scripts/engine.py build {{ARGS}}
+    uv run --project tools python engine/scripts/engine.py build {{ARGS}}
+
+# Accept a complete release/debug pair into engine-lock.toml after validation
+engine-record-artifacts:
+    {{PY}} engine/scripts/engine.py record-artifacts
 
 # Test the patch series on another official ref (see godot-webgpu-update runbook)
 engine-rebase *ARGS:

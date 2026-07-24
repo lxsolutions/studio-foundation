@@ -1,0 +1,40 @@
+diff --git a/thirdparty/tint/src/tint/lang/spirv/reader/lower/texture.cc b/thirdparty/tint/src/tint/lang/spirv/reader/lower/texture.cc
+index 45518d7..539d9b3 100644
+--- a/thirdparty/tint/src/tint/lang/spirv/reader/lower/texture.cc
++++ b/thirdparty/tint/src/tint/lang/spirv/reader/lower/texture.cc
+@@ -200,6 +200,7 @@ struct State {
+         }
+         UpdateValues();
+ 
++        Vector<spirv::ir::BuiltinCall*, 4> image_worklist;
+         Vector<spirv::ir::BuiltinCall*, 4> builtin_worklist;
+         for (auto* inst : ir.Instructions()) {
+             if (auto* builtin = inst->As<spirv::ir::BuiltinCall>()) {
+@@ -213,6 +214,8 @@ struct State {
+                         SampledImage(builtin);
+                         break;
+                     case spirv::BuiltinFn::kOpImage:
++                        image_worklist.Push(builtin);
++                        break;
+                     case spirv::BuiltinFn::kImageRead:
+                     case spirv::BuiltinFn::kImageFetch:
+                     case spirv::BuiltinFn::kImageGather:
+@@ -238,11 +241,15 @@ struct State {
+             }
+         }
+ 
++        // OpImage values can be used by texture builtins that appear earlier in
++        // the module traversal order. Lower every OpImage first so all direct
++        // image operands have been replaced by their core texture value.
++        for (auto* image : image_worklist) {
++            Image(image);
++        }
++
+         for (auto* builtin : builtin_worklist) {
+             switch (builtin->Func()) {
+-                case spirv::BuiltinFn::kOpImage:
+-                    Image(builtin);
+-                    break;
+                 case spirv::BuiltinFn::kImageRead:
+                 case spirv::BuiltinFn::kImageFetch:
+                     ImageFetch(builtin);

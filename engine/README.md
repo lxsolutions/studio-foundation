@@ -12,9 +12,11 @@ lineage.
 
 `engine-lock.toml` records the official base commit, historical source lineage,
 toolchain versions, ordered patch files, patch checksums, and build flags.
-`engine/patches/` contains the reviewable integration. `engine/.cache/` contains
-disposable clones and worktrees; `engine/artifacts/` contains build outputs.
-Neither cache nor artifacts are source of truth.
+`engine/patches/` contains the reviewable Godot integration.
+`engine/toolchain/patches/` contains checksum-locked toolchain backports.
+`engine/.cache/` contains disposable clones, patched toolchain packages, and
+worktrees; `engine/artifacts/` contains build outputs. Neither cache nor
+artifacts are source of truth.
 
 ## Commands
 
@@ -22,6 +24,7 @@ Neither cache nor artifacts are source of truth.
 just engine-versions
 just engine-fetch
 just engine-build
+just engine-record-artifacts
 just engine-rebase --dry-run --json
 ```
 
@@ -29,8 +32,16 @@ just engine-rebase --dry-run --json
 - `engine-fetch` fetches only official Godot, verifies every patch checksum, and
   prepares `engine/.cache/studio-webgpu`.
 - `engine-build` builds WebGPU release/debug templates from that patched tree.
+  It verifies the exact Emdawn package shipped with the pinned Emscripten,
+  copies it into the disposable cache, and applies the locked Dawn namespace
+  backport without mutating the SDK installation.
   `engine-build --workspace <name>` builds an update candidate into
   `engine/artifacts/candidates/<name>/templates`.
+  When `EMSDK` is set, that exact SDK root is authoritative and its
+  `.emscripten` configuration is passed to every SCons child; the builder
+  does not silently fall back to a different user-level SDK.
+- `engine-record-artifacts` accepts only a complete release/debug pair and
+  records each filename, byte count, and SHA-256 in `engine-lock.toml`.
 - `engine-rebase` applies the locked patch series with three-way context to
   another official Godot ref in an isolated candidate worktree.
 

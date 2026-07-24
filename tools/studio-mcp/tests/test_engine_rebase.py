@@ -2,11 +2,15 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import os
 import subprocess
 import sys
 import tempfile
+import tomllib
 import unittest
+import zipfile
 from pathlib import Path
+from unittest import mock
 
 REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO / "engine" / "scripts"))
@@ -195,6 +199,175 @@ class EngineRebaseTests(unittest.TestCase):
                 )
 
 
+class EngineBuildToolchainTests(unittest.TestCase):
+    def test_accepts_template_with_compiled_webgpu_backend(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            archive = Path(temp_dir) / "template.zip"
+            with zipfile.ZipFile(archive, "w") as bundle:
+                bundle.writestr("godot.js", b"const importJsDevice = true;")
+                bundle.writestr("godot.wasm", b"WebGPU: Device imported from JS successfully.")
+            engine_tool._validate_webgpu_template(archive)
+
+    def test_rejects_mislabeled_webgl_template(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            archive = Path(temp_dir) / "template.zip"
+            with zipfile.ZipFile(archive, "w") as bundle:
+                bundle.writestr("godot.js", b"ordinary loader")
+                bundle.writestr("godot.wasm", b"ordinary WebGL runtime")
+            with self.assertRaisesRegex(RuntimeError, "missing"):
+                engine_tool._validate_webgpu_template(archive)
+
+    def test_records_complete_template_pair_deterministically(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            lock_path = root / "engine-lock.toml"
+            lock_path.write_text(
+                '[artifacts.export_templates]\n# empty\n\n[installed.editor]\nversion = "test"\n',
+                encoding="utf-8",
+            )
+            artifact_dir = root / "templates"
+            artifact_dir.mkdir()
+            release = artifact_dir / engine_tool.TEMPLATE_ARTIFACTS["web_webgpu_release"]
+            debug = artifact_dir / engine_tool.TEMPLATE_ARTIFACTS["web_webgpu_debug"]
+            release.write_bytes(b"release-template")
+            debug.write_bytes(b"debug-template")
+
+            records = engine_tool.record_artifacts(
+                lock_path=lock_path,
+                artifact_dir=artifact_dir,
+            )
+            first = lock_path.read_text(encoding="utf-8")
+            parsed = tomllib.loads(first)["artifacts"]["export_templates"]
+
+            self.assertEqual(parsed, records)
+            self.assertEqual(records["web_webgpu_release"]["bytes"], len(b"release-template"))
+            self.assertEqual(
+                records["web_webgpu_debug"]["sha256"],
+                hashlib.sha256(b"debug-template").hexdigest(),
+            )
+            engine_tool.record_artifacts(
+                lock_path=lock_path,
+                artifact_dir=artifact_dir,
+            )
+            self.assertEqual(lock_path.read_text(encoding="utf-8"), first)
+
+    def test_refuses_to_record_partial_template_pair(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            lock_path = root / "engine-lock.toml"
+            original = (
+                '[artifacts.export_templates]\n# empty\n\n[installed.editor]\nversion = "test"\n'
+            )
+            lock_path.write_text(original, encoding="utf-8")
+            artifact_dir = root / "templates"
+            artifact_dir.mkdir()
+            (artifact_dir / engine_tool.TEMPLATE_ARTIFACTS["web_webgpu_release"]).write_bytes(
+                b"release-template"
+            )
+
+            with self.assertRaisesRegex(FileNotFoundError, "debug"):
+                engine_tool.record_artifacts(
+                    lock_path=lock_path,
+                    artifact_dir=artifact_dir,
+                )
+            self.assertEqual(lock_path.read_text(encoding="utf-8"), original)
+
+    def test_explicit_emsdk_is_authoritative(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            explicit = root / "workspace-emsdk"
+            home = root / "home"
+            (explicit / "upstream" / "emscripten").mkdir(parents=True)
+            (explicit / "emsdk_env.bat").write_text("", encoding="utf-8")
+            (explicit / "upstream" / "emscripten" / "emscripten-version.txt").write_text(
+                '"4.0.11"\n', encoding="utf-8"
+            )
+            home_sdk = home / "emsdk"
+            (home_sdk / "upstream" / "emscripten").mkdir(parents=True)
+            (home_sdk / "emsdk_env.bat").write_text("", encoding="utf-8")
+            (home_sdk / "upstream" / "emscripten" / "emscripten-version.txt").write_text(
+                '"4.0.11"\n', encoding="utf-8"
+            )
+
+            with (
+                mock.patch.dict(os.environ, {"EMSDK": str(explicit)}),
+                mock.patch.object(engine_tool.Path, "home", return_value=home),
+            ):
+                self.assertEqual(
+                    engine_tool._find_emsdk_env_bat("4.0.11"),
+                    explicit / "emsdk_env.bat",
+                )
+
+    def test_explicit_emsdk_must_match_locked_version(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            explicit = Path(temp_dir) / "workspace-emsdk"
+            (explicit / "upstream" / "emscripten").mkdir(parents=True)
+            (explicit / "emsdk_env.bat").write_text("", encoding="utf-8")
+            (explicit / "upstream" / "emscripten" / "emscripten-version.txt").write_text(
+                '"4.0.10"\n', encoding="utf-8"
+            )
+
+            with mock.patch.dict(os.environ, {"EMSDK": str(explicit)}):
+                self.assertIsNone(engine_tool._find_emsdk_env_bat("4.0.11"))
+
+    def test_invalid_explicit_emsdk_does_not_fall_back(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            home = root / "home"
+            home_sdk = home / "emsdk"
+            (home_sdk / "upstream" / "emscripten").mkdir(parents=True)
+            (home_sdk / "emsdk_env.bat").write_text("", encoding="utf-8")
+            (home_sdk / "upstream" / "emscripten" / "emscripten-version.txt").write_text(
+                '"4.0.11"\n', encoding="utf-8"
+            )
+
+            with (
+                mock.patch.dict(os.environ, {"EMSDK": str(root / "missing")}),
+                mock.patch.object(engine_tool.Path, "home", return_value=home),
+            ):
+                self.assertIsNone(engine_tool._find_emsdk_env_bat("4.0.11"))
+
+
+class TemplateInstallTests(unittest.TestCase):
+    @staticmethod
+    def _write_template(path: Path, marker: bytes) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with zipfile.ZipFile(path, "w") as bundle:
+            bundle.writestr("godot.js", b"importJsDevice" + marker)
+            bundle.writestr(
+                "godot.wasm",
+                b"WebGPU: Device imported from JS successfully." + marker,
+            )
+
+    def test_installs_only_lock_matching_no_threads_archives(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "source"
+            dest = root / "dest"
+            for profile in ("release", "debug"):
+                self._write_template(
+                    source / "bin" / f"godot.web.template_{profile}.wasm32.zip",
+                    b"-threaded",
+                )
+                self._write_template(
+                    source / "bin" / f"godot.web.template_{profile}.wasm32.nothreads.zip",
+                    b"-no-threads",
+                )
+
+            engine_tool._install_templates(source, dest, threads_enabled=False)
+
+            self.assertEqual(
+                sorted(path.name for path in dest.iterdir()),
+                [
+                    "godot.web.template_debug.webgpu.zip",
+                    "godot.web.template_release.webgpu.zip",
+                ],
+            )
+            for profile in ("release", "debug"):
+                with zipfile.ZipFile(dest / f"godot.web.template_{profile}.webgpu.zip") as bundle:
+                    self.assertTrue(bundle.read("godot.js").endswith(b"-no-threads"))
+
+
 class PatchSeriesTests(unittest.TestCase):
     def test_verifies_checksum_and_prepares_reusable_source(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -220,6 +393,14 @@ class PatchSeriesTests(unittest.TestCase):
                 ),
                 source,
             )
+            (source / "shared.txt").write_text("tampered\n", encoding="utf-8")
+            with self.assertRaisesRegex(PatchSeriesError, "does not match"):
+                engine_tool.prepare_patched_source(
+                    lock,
+                    cache / "godot-official",
+                    patches,
+                    cache_dir=cache,
+                )
 
     def test_rejects_tampered_patch(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
