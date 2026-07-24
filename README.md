@@ -69,6 +69,19 @@ just test
 Without `just`, run `powershell scripts/bootstrap.ps1` on Windows or
 `sh scripts/bootstrap.sh` on Linux, macOS, or WSL2.
 
+### Use the WebGPU backend without building it
+
+Prebuilt web export templates are published, so you can try WebGPU 3D without a
+multi-hour engine build:
+
+**[Download the templates](https://github.com/lxsolutions/studio-foundation/releases/tag/godot-4.7.1-webgpu-p0014)**
+(official Godot 4.7.1 + patch series 0001–0014, single-threaded so exports run on plain
+static hosts with no COOP/COEP headers). Point your `web` preset's
+`custom_template/release` and `custom_template/debug` at them, then export with
+`just export-browser-webgpu` — that step applies the WebGPU handoff the official editor
+cannot emit, and skipping it produces a build that fails to start. Both files are
+SHA-256 listed in the release notes and reproducible from source.
+
 ### Build the WebGPU path yourself
 
 ```sh
