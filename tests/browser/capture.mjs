@@ -3,7 +3,15 @@
 // a browser rasterizes the actual WebGL/WebGPU canvas.
 //
 //   node capture.mjs [--game templates/godot-game] [--preset web-webgl] \
-//     [--out captures/web-main.png] [--wait 6000] [--size 1280x720]
+//     [--out captures/web-main.png] [--wait 25000] [--size 1280x720]
+//
+// --wait must outlast the export's cold start, or the screenshot is a blank
+// canvas that reads as "nothing rendered". A real 3D scene spends most of that
+// time compiling WGSL: measured on an NVIDIA Tesla P40, boot completed at ~8.7s,
+// shader compilation ran to ~18s, and the first drawn frame landed at ~20.9s.
+// The old 6s default screenshotted every real 3D scene before it drew a single
+// frame. Small 2D scenes are ready far sooner; pass a lower --wait for those.
+// See docs/architecture/webgpu-performance.md.
 
 import { spawn } from "node:child_process";
 import { access, mkdir } from "node:fs/promises";
@@ -20,7 +28,10 @@ function opt(name, fallback) {
 const GAME = opt("game", "templates/godot-game");
 const PRESET = opt("preset", "web-webgl");
 const OUT = opt("out", `captures/${PRESET}.png`);
-const WAIT_MS = Number(opt("wait", "6000"));
+// 25s clears the measured ~20.9s cold start (boot + WGSL compilation) of a real
+// 3D scene. Erring slow costs seconds; erring fast yields a blank capture that
+// looks like a rendering failure.
+const WAIT_MS = Number(opt("wait", "25000"));
 const [W, H] = opt("size", "1280x720").split("x").map(Number);
 const PORT = Number(opt("port", "8061"));
 const REPO_ROOT = new URL("../../", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1");
