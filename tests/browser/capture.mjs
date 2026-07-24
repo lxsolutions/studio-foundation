@@ -6,9 +6,10 @@
 //     [--out captures/web-main.png] [--wait 25000] [--size 1280x720]
 //
 // --wait must outlast the export's cold start, or the screenshot is a blank
-// canvas that reads as "nothing rendered". A real 3D scene spends most of that
-// time compiling WGSL: measured on an NVIDIA Tesla P40, boot completed at ~8.7s,
-// shader compilation ran to ~18s, and the first drawn frame landed at ~20.9s.
+// canvas that reads as "nothing rendered". Measured on an NVIDIA Tesla P40: boot
+// completed at ~8.7s and the first drawn frame landed at ~20.9s. That time goes
+// to fetching and instantiating the ~45.8 MB wasm plus engine/scene init, NOT to
+// shader compilation (all WGSL module compiles land in one sub-second burst).
 // The old 6s default screenshotted every real 3D scene before it drew a single
 // frame. Small 2D scenes are ready far sooner; pass a lower --wait for those.
 // See docs/architecture/webgpu-performance.md.
