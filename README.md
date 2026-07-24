@@ -9,20 +9,32 @@ SHA-256-locked patch series, plus the MCP server, agent workflows, and asset
 pipeline that make the whole thing drivable by AI assistants. WebGL 2 remains the
 supported fallback.
 
-### ▶ [Try it live — Godot 3D through WebGPU, in your browser](https://lxsolutions.github.io/studio-foundation/)
+### ▶ [Play it live — a Godot game running on WebGPU, in your browser](https://lxsolutions.github.io/studio-foundation/)
 
 No install, no plugin. Needs a WebGPU-capable browser (Chrome/Edge 113+, Safari 26+,
-Firefox on Windows); the page tells you if yours qualifies before you click.
+Firefox on Windows); the page tells you if yours qualifies before you click. First load
+takes ~30 seconds — most of it compiling shaders to WGSL in your browser.
 
-[![Godot 4.7.1 rendering a lit, shadowed 3D scene through WebGPU in a browser](docs/images/webgpu-3d-lit-shadows.png)](https://lxsolutions.github.io/studio-foundation/)
+[![The Chariot Club: a Roman colosseum with crowded stands and chariots, rendered in Godot through WebGPU](docs/images/webgpu-chariot.png)](https://lxsolutions.github.io/studio-foundation/)
 
-*Six PBR meshes, a directional light, and real-time shadow mapping — rendered by
-Godot 4.7.1 through WebGPU in Chrome on an NVIDIA Tesla P40: 59–60 fps, 36 draws per
-frame, **0 `GPUValidationError`**. The scene is
-[`webgpu_showcase.gd`](templates/godot-game/project/scenes/webgpu_showcase.gd) —
-about 100 lines of GDScript, no external assets — so you can rebuild and re-verify
-this exact frame yourself. The published demo above was itself re-rendered from its
-public URL on that same GPU as a final check.*
+***The Chariot Club*** *— a real game, not a test scene: a Roman colosseum with
+crowded stands, chariot teams, and real-time shadows, rendered by Godot 4.7.1 through
+WebGPU. Verified on an NVIDIA Tesla P40 at a locked 60 fps, ~490–630 draw calls and
+~23M primitives per frame, with **0 `GPUValidationError`**. The published demo was
+re-rendered from its own public URL on that GPU as a final check.*
+
+<details>
+<summary>Also published: a ~100-line minimal scene, for reproducing the render path from scratch</summary>
+
+[![Six PBR meshes with a directional light and real-time shadows](docs/images/webgpu-3d-lit-shadows.png)](https://lxsolutions.github.io/studio-foundation/showcase/index.html)
+
+[`webgpu_showcase.gd`](templates/godot-game/project/scenes/webgpu_showcase.gd) builds
+six PBR meshes, a directional light, and real-time shadow mapping entirely in code with
+no external assets — 59–60 fps, 36 draws/frame, 0 `GPUValidationError`. It exists so the
+render path can be re-verified without any game content. Live at
+[`/showcase/`](https://lxsolutions.github.io/studio-foundation/showcase/index.html).
+
+</details>
 
 ## Our lane: AI-native, open-source game development
 
@@ -124,7 +136,7 @@ to work here.
 | Runtime verification | Browser smoke tests observe the engine's adapter, device, and WebGPU canvas requests and reject any WebGL context request |
 | 3D shader translation | Verified in-browser on an NVIDIA Tesla P40. Patches 0009–0012 fix four distinct translation crashes; the runtime-specialized scene shader translates without crashing |
 | WebGPU shader coverage | 177 of 182 engine shaders translate to valid WGSL offline. The 5 gaps are fundamental WGSL limits (subpass `input_attachment`, storage-texture format inference, vertex-stage `read_write` storage), not crashes |
-| 3D render (lit + shadowed) | **Verified in-browser on an NVIDIA Tesla P40.** Patches 0013–0014 fix per-stage sampler visibility and depth-texture sampler types; a scene with six PBR meshes, a directional light, and real-time shadow mapping renders at 59–60 fps, 36 draws/frame, with 0 `GPUValidationError` |
+| 3D render (lit + shadowed) | **Verified in-browser on an NVIDIA Tesla P40.** Patches 0013–0014 fix per-stage sampler visibility and depth-texture sampler types. A minimal PBR + shadow scene renders at 59–60 fps / 36 draws per frame, and a full game (The Chariot Club) holds a locked 60 fps at ~490–630 draws and ~23M primitives per frame — both with 0 `GPUValidationError` |
 | Fallback | The same template project has an official WebGL 2 export preset |
 | Template behavior | Headless GDScript tests cover the shared addon and neutral starter project |
 | Optional services | Rust and Nakama components are independently tested and are not required for client-only use |
