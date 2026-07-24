@@ -165,8 +165,11 @@ not a competitor to that effort — it is a maintained, reproducible path that w
 today on Godot 4.7.1, and it stays a patch series precisely so it can be retired
 into upstream when upstream is ready.
 
-Not yet claimed: a published real-game WebGPU deployment, Safari/iOS behavior, and
-native Android/iOS device runs. The full list is in
+The published demo downloads ~45 MB of engine (12 MB compressed) before it can draw.
+Measured breakdown, and why that is mostly Godot rather than the WebGPU stack, is in
+[WebGPU payload and startup](docs/architecture/webgpu-payload-and-startup.md).
+
+Not yet claimed: Safari/iOS behavior and native Android/iOS device runs. The full list is in
 [BOOTSTRAP_REPORT.md](BOOTSTRAP_REPORT.md); the running engineering log is in
 [docs/architecture/webgpu-runtime-status.md](docs/architecture/webgpu-runtime-status.md).
 
