@@ -37,6 +37,7 @@
 	// --- instrument pipeline construction (the thing that actually costs the time) ---
 	var pipelineCount = 0;
 	var lastPipelineAt = 0;
+	var hooked = [];
 	(function instrument() {
 		if (typeof GPUDevice === 'undefined' || !GPUDevice.prototype) { return; }
 		['createRenderPipeline', 'createComputePipeline',
@@ -48,8 +49,21 @@
 				lastPipelineAt = Date.now();
 				return orig.apply(this, arguments);
 			};
+			hooked.push(name);
 		});
 	}());
+
+	// Exposed so the render harness can verify the overlay's own logic.
+	window.__sfBoot = function () {
+		return {
+			hooked: hooked,
+			pipelines: pipelineCount,
+			sinceLastPipeline: lastPipelineAt ? Date.now() - lastPipelineAt : null,
+			downloadDone: downloadDone,
+			smooth: smooth,
+			age: Date.now() - started
+		};
+	};
 
 	// --- overlay ---
 	var el = document.createElement('div');
