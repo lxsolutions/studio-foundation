@@ -9,10 +9,15 @@ component is a beta WebGPU export path maintained as checksum-pinned patches
 against Godot 4.7.1. WebGL 2 remains the fallback. No separate LX Solutions
 engine fork is fetched or required.
 
-> **Status:** WebGPU support is experimental. The locked source build includes
-> fixes for Tint storage-buffer lowering and an Emdawn/Godot `RefCounted`
-> symbol collision; rebuilt templates and current browser evidence are still
-> required before any game or deployment is accepted as WebGPU proof.
+> **Status:** WebGPU support is beta. The locked source build fixes Tint
+> storage-buffer lowering, Tint `OpImage` lowering order, and an Emdawn/Godot
+> `RefCounted` symbol collision. On 2026-07-24 the release and debug templates
+> were rebuilt from those locked inputs and passed the engine-owned browser
+> WebGPU probe (active canvas context, no runtime error) and visual comparison
+> against the WebGL baseline (1.2% diff, 3% cross-renderer band); both templates
+> are now recorded by byte count and SHA-256 in
+> [engine-lock.toml](engine/engine-lock.toml). A specific game or deployment
+> still needs its own matching provenance before it is labeled WebGPU.
 > Reproducible findings and known gaps are recorded in
 > [BOOTSTRAP_REPORT.md](BOOTSTRAP_REPORT.md).
 
@@ -24,7 +29,7 @@ engine fork is fetched or required.
 | WebGPU source | Eight ordered patches are stored in [engine/patches/](engine/patches/) and checked by SHA-256 before application |
 | WebGPU toolchain | The exact Emdawn source and Dawn namespace backport are independently versioned and checksum-locked under [engine/toolchain/](engine/toolchain/) |
 | Source preparation | `engine-fetch` clones official Godot only and creates a disposable patched worktree |
-| Export templates | Accepted archives must be recorded by filename, byte count, and SHA-256; the artifact lock has no accepted entries while runtime validation is red |
+| Export templates | Accepted archives are recorded by filename, byte count, and SHA-256 in [engine-lock.toml](engine/engine-lock.toml); the release and debug WebGPU templates passed the browser + visual gate on 2026-07-24 and are locked |
 | Runtime verification | Browser smoke tests observe the engine's adapter, device, and WebGPU canvas requests and reject any WebGL context request |
 | Fallback | The same template project has an official WebGL 2 export preset |
 | Template behavior | Headless GDScript tests cover the shared addon and neutral starter project |
