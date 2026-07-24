@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Studio Foundation — Godot 4.7.1 WebGPU 3D, live in your browser</title>
-<meta name="description" content="A lit, animated 3D scene rendered by Godot 4.7.1 through a WebGPU backend, running in your browser. Open source, reproducible, checksum-locked.">
+<title>Studio Foundation — a Godot game running on WebGPU, in your browser</title>
+<meta name="description" content="The Chariot Club: a Roman colosseum racing game rendered by Godot 4.7.1 through a WebGPU backend, running in your browser. Open source, reproducible, checksum-locked.">
 <style>
   :root {
     --bg: #0b0e14; --panel: #131824; --edge: #232a3a;
@@ -18,14 +18,14 @@
   .wrap { max-width: 900px; margin: 0 auto; padding: 40px 20px 72px; }
   h1 { font-size: clamp(1.7rem, 4vw, 2.6rem); line-height: 1.15; margin: 0 0 12px; letter-spacing: -0.02em; }
   h1 .hl { color: var(--accent); }
-  .sub { color: var(--muted); font-size: 1.05rem; margin: 0 0 28px; }
+  .sub { color: var(--muted); font-size: 1.05rem; margin: 0 0 24px; }
   .card { background: var(--panel); border: 1px solid var(--edge); border-radius: 14px; padding: 22px; margin: 20px 0; }
   .cta { display: inline-block; background: var(--accent); color: #1b1205; font-weight: 700;
          padding: 14px 26px; border-radius: 10px; text-decoration: none; font-size: 1.05rem; }
   .cta:hover { filter: brightness(1.08); }
   .cta.disabled { background: #3a4152; color: var(--muted); pointer-events: none; }
-  .ghost { display: inline-block; margin-left: 14px; color: var(--fg); text-decoration: none;
-           border: 1px solid var(--edge); padding: 13px 22px; border-radius: 10px; }
+  .ghost { display: inline-block; margin-left: 10px; color: var(--fg); text-decoration: none;
+           border: 1px solid var(--edge); padding: 13px 20px; border-radius: 10px; }
   .ghost:hover { border-color: var(--accent); }
   code { background: #0a0d14; border: 1px solid var(--edge); border-radius: 5px; padding: 2px 6px; font-size: 0.9em; }
   pre { background: #0a0d14; border: 1px solid var(--edge); border-radius: 10px; padding: 16px; overflow-x: auto; }
@@ -36,8 +36,11 @@
            border: 1px solid var(--edge); color: var(--muted); margin-right: 6px; }
   #gpu-status { font-weight: 600; }
   .ok { color: var(--ok); } .warn { color: var(--warn); }
+  .shot { width: 100%; border-radius: 12px; border: 1px solid var(--edge); display: block; margin: 0 0 20px; }
+  .note { border-left: 3px solid var(--warn); padding: 10px 0 10px 14px; margin: 16px 0 0; color: var(--muted); }
   footer { color: var(--muted); font-size: 0.9rem; border-top: 1px solid var(--edge); margin-top: 40px; padding-top: 20px; }
   a { color: var(--accent); }
+  h2 { font-size: 1.2rem; margin-top: 0; }
 </style>
 </head>
 <body>
@@ -49,57 +52,73 @@
     <span class="badge">MIT / open source</span>
   </p>
 
-  <h1>Godot renders <span class="hl">3D through WebGPU</span>, in your browser.</h1>
+  <h1>A real Godot game, running on <span class="hl">WebGPU</span>, in your browser.</h1>
   <p class="sub">
-    A lit, animated 3D scene running on the Studio Foundation WebGPU backend —
-    official Godot 4.7.1 plus a transparent, checksum-locked patch series.
-    No plugin, no download. Click and see it for yourself.
+    <strong>The Chariot Club</strong> — a Roman colosseum rendered by Godot 4.7.1 through
+    the Studio Foundation WebGPU backend: official Godot plus a transparent,
+    checksum-locked patch series. No plugin, no download.
   </p>
+
+  <img class="shot" src="chariot.png" alt="A Roman colosseum with crowded stands and chariots on the sand, rendered in Godot through WebGPU">
 
   <div class="card">
     <p>WebGPU support: <span id="gpu-status">checking…</span></p>
     <p id="gpu-detail" class="muted" style="margin-top:-6px"></p>
-    <a class="cta" id="launch" href="demo/index.html">Launch the 3D demo</a>
-    <a class="ghost" href="https://github.com/lxsolutions/studio-foundation">View the source</a>
-    <p class="muted" style="margin-bottom:0; margin-top:16px; font-size:0.92rem">
-      First load downloads the engine (~45&nbsp;MB) — give it a moment.
-    </p>
+    <a class="cta" id="launch" href="demo/index.html">Enter the colosseum</a>
+    <a class="ghost" href="https://github.com/lxsolutions/studio-foundation">Source</a>
+    <a class="ghost" href="showcase/index.html">Minimal scene</a>
+
+    <div class="note">
+      <strong>Give it about 30 seconds.</strong> First load downloads ~45&nbsp;MB and then
+      compiles every shader to WGSL in your browser — roughly 20 seconds of that is shader
+      compilation before the first frame appears. A black canvas during that window is
+      expected, not a failure. (Shader precompilation is a known optimization we have not
+      done yet.)
+    </div>
   </div>
 
   <div class="card">
-    <h2 style="margin-top:0; font-size:1.2rem">What you are actually looking at</h2>
+    <h2>What you are actually looking at</h2>
     <ul>
       <li>Official <strong>Godot 4.7.1</strong> (MIT), unmodified as the base — pinned by full commit hash.</li>
-      <li>A <strong>WebGPU export backend</strong> maintained as an ordered, SHA-256-locked patch series
-          (currently 13 patches), each one auditable in the repo.</li>
-      <li>Rendering through the <strong>Forward Mobile</strong> renderer with real materials and lighting —
-          not a canvas trick, not WebGL 2.</li>
-      <li>Verified on real hardware (an NVIDIA Tesla P40) before shipping, not just "it compiled."</li>
+      <li>A <strong>WebGPU export backend</strong> maintained as an ordered, SHA-256-locked
+          patch series (currently 14 patches), each one auditable in the repo.</li>
+      <li>Rendering through the <strong>Forward Mobile</strong> renderer with real materials,
+          lighting, and shadows — not a canvas trick, and not WebGL&nbsp;2.</li>
+      <li>Verified on real hardware (an NVIDIA Tesla P40): locked 60&nbsp;fps at roughly
+          490–630 draw calls and ~23M primitives per frame, with
+          <strong>0 <code>GPUValidationError</code></strong>.</li>
     </ul>
     <p class="muted" style="margin-bottom:0">
-      Honest status: WebGPU support is <strong>beta</strong>. Some post-processing effects are still
-      disabled under WebGPU, and WebGL 2 remains the supported fallback for production.
+      Honest status: WebGPU support is <strong>beta</strong>. Some post-processing effects
+      are still disabled under WebGPU, and WebGL&nbsp;2 remains the supported fallback for
+      production.
     </p>
   </div>
 
   <div class="card">
-    <h2 style="margin-top:0; font-size:1.2rem">Reproduce it yourself</h2>
-    <p class="muted">Everything here is checksum-locked, so you can rebuild and re-verify it independently.</p>
+    <h2>Reproduce it yourself</h2>
+    <p class="muted">Everything is checksum-locked, so you can rebuild and re-verify it independently.</p>
 <pre><code>git clone https://github.com/lxsolutions/studio-foundation.git
 cd studio-foundation
 just engine-fetch      # official Godot + verified patch series
 just engine-build      # build the WebGPU export templates
 just export-browser-webgpu</code></pre>
+    <p class="muted" style="margin-bottom:0">
+      Skipping the multi-hour engine build:
+      <a href="https://github.com/lxsolutions/studio-foundation/releases/tag/godot-4.7.1-webgpu-p0014">prebuilt
+      export templates</a> are published with their SHA-256 hashes.
+    </p>
   </div>
 
   <div class="card">
-    <h2 style="margin-top:0; font-size:1.2rem">Why this project exists</h2>
+    <h2>Why this project exists</h2>
     <p>
-      Godot does not accept AI-generated contributions and has said it does not intend to add AI
-      features to the engine. That leaves an open lane, and Studio Foundation takes it: an
-      <strong>AI-native, open-source game-dev toolkit</strong> — MCP server, agent workflows, and an
-      AI-assisted engine backend — built in the open and reproducible by construction, so
-      "AI-built" never means "unauditable."
+      Godot does not accept AI-generated contributions and has said it does not intend to
+      add AI features to the engine. That leaves an open lane, and Studio Foundation takes
+      it: an <strong>AI-native, open-source game-dev toolkit</strong> — MCP server, agent
+      workflows, and an AI-assisted engine backend — built in the open and reproducible by
+      construction, so "AI-built" never means "unauditable."
     </p>
     <p class="muted" style="margin-bottom:0">
       Official Godot stays the upstream. We own the distribution, not the engine.
