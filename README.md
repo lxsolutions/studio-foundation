@@ -25,6 +25,11 @@ WebGPU. Verified on an NVIDIA Tesla P40 at a locked 60 fps, ~490–630 draw call
 ~23M primitives per frame, with **0 `GPUValidationError`**. The published demo was
 re-rendered from its own public URL on that GPU as a final check.*
 
+> **What you can rebuild:** the engine, the patch series, and the minimal scene below
+> are checksum-locked and reproducible from this repository. The Chariot Club's *game
+> content* is not published here, so that specific demo cannot be rebuilt from source —
+> use the showcase scene to reproduce the render path end to end.
+
 <details>
 <summary>Also published: a ~100-line minimal scene, for reproducing the render path from scratch</summary>
 
