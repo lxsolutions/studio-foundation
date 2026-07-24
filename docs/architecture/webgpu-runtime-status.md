@@ -14,28 +14,32 @@
 
 ## TL;DR
 
-> **⚠️ Corrected later on 2026-07-24: the gate below only ever exercised 2D UI.**
-> WebGPU renders 2D/Control content but **not 3D** — a lit *or even unshaded* 3D
-> mesh is black under WebGPU while WebGL renders it. Root cause: the 3D scene
-> uber-shader **hangs during synchronous SPIR‑V→WGSL translation** (first ~50
-> shaders translate; the ~51st never completes). See **§3D rendering gap** below.
-> Do not read "renders in the browser" as "renders 3D games."
+> **✅ Updated 2026-07-24: 3D now renders in-browser on real hardware.** The
+> original symptom (a lit *or even unshaded* 3D mesh came out black; translation
+> stalled on the runtime-specialized scene shader) was a chain of shader-translation
+> and bind-group defects, not one bug. Patches 0009–0013 fix the whole chain —
+> verified on an NVIDIA Tesla P40 (headed Chrome/WebGPU): the 3D scene draws a lit,
+> perspective-projected mesh at 60 fps with **0 `GPUValidationError`** (was 2283).
+> The historical root-cause analysis is kept below in **§3D rendering gap** for the
+> record.
 
 The boot/RefCounted blocker was genuinely fixed and both templates are locked: the
 ADR 0002 gate — rebuild → export → browser WebGPU probe (active canvas context, no
 runtime error) → visual compare **1.2%** vs the WebGL baseline — is green **for the
 neutral template's 2D menu**, and `engine-lock.toml [artifacts.export_templates]`
 records `web_webgpu_release` (`3642cf5e…`) + `web_webgpu_debug` (`1f1ed2b5…`). The
-gate's blind spot — it renders a 2D Control scene, never a 3D one — is exactly what
-let "WebGPU renders" overclaim slip through. **A 3D probe must be added to the gate.**
+automated gate historically rendered only a 2D Control scene; 3D is now **verified
+manually on GPU hardware** (NVIDIA Tesla P40 — lit mesh, 60 fps, 0 `GPUValidationError`).
+Folding that 3D render into the automated gate is the remaining CI task.
 
 | Gate | Status | Evidence |
 | --- | --- | --- |
-| Patch series (0001–0008) applies to official 4.7.1 `a13da4feb8` | ✅ | `just engine-versions` → "patch series: 8 patch(es)" |
+| Patch series (0001–0013) applies to official 4.7.1 `a13da4feb8` | ✅ | `just engine-versions` → "patch series: 13 patch(es)" |
 | Web templates compile (release + debug, `nothreads`, `webgpu=yes`) | ✅ | `bin/godot.web.template_*.wasm32.nothreads.*` |
 | Tint SPIR‑V→WGSL translation (storage‑buffer + OpImage ordering) | ✅ | patches 0007, 0008 |
 | **Emdawn/Godot `RefCounted` ODR collision** (the heap‑buffer‑overflow) | ✅ **fixed in source** | `engine/toolchain/patches/0001-emdawn-private-namespace.patch`, locked in `[toolchain.emdawnwebgpu]` |
-| **Rebuild + browser probe (2D UI only)** with the backport | ✅ 2026‑07‑24 — **2D only** | 2D menu, 1.2% vs WebGL |
+| Rebuild + browser probe (2D menu) with the backport | ✅ 2026‑07‑24 | 2D menu, 1.2% vs WebGL |
+| **3D render on GPU hardware** (NVIDIA Tesla P40) | ✅ 2026‑07‑24 — patches 0009–0013 | lit mesh, 60 fps, 0 `GPUValidationError` |
 | **3D rendering under WebGPU** | 🟢 **in-browser render VERIFIED on an NVIDIA Tesla P40 (patches 0009–0013)** — 3D scene draws a lit mesh at 60 fps, 0 GPUValidationError | §3D rendering gap |
 | **3D scene-shader translation** | 🟢 **177/182 translate offline** (was 174); the runtime-specialized scene shader also translates *and renders* after patches 0011–0013 | §3D rendering gap |
 | Template artifacts locked in `engine-lock.toml` | ✅ | `[artifacts.export_templates]`: release + debug + sha256 |
