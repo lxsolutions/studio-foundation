@@ -1,0 +1,289 @@
+Subject: [PATCH] webgpu: correct sampler binding types for lit and shadowed 3D
+
+Patch 0013 made a simple unshaded 3D scene render, but any scene with real
+materials, lighting, or shadows still produced a black frame. Two further
+defects, both in how the driver describes samplers to WebGPU:
+
+1. Over-eager "unused" classification. 0013 marked a sampler/texture binding
+   unused (visibility None) unless its WGSL variable appeared inside a texture
+   builtin. Godot's lighting and PCF helpers take the texture as a FUNCTION
+   PARAMETER, so the global's name never appears in a builtin call and the
+   binding was wrongly demoted -> "Entry point's stage (Fragment) is not in the
+   binding visibility in the layout (ShaderStage::None)" and every scene
+   pipeline was rejected. The vertex stage keeps the strict builtin test (that
+   is what buys back the 16-samplers-per-stage headroom 0013 exists for), while
+   fragment/compute now count a binding as used when its variable is referenced
+   anywhere beyond its own declaration, which covers helper-function passing.
+
+2. Depth textures paired with filtering samplers. WebGPU requires a
+   Depth-sample-type texture to be used with a NonFiltering or Comparison
+   sampler, but the BGL declared plain Filtering, so Dawn rejected the scene
+   pipeline: "Texture binding is TextureSampleType::Depth but used statically
+   with a sampler that's SamplerBindingType::Filtering". Godot reads the scene
+   depth buffer and shadow maps exactly this way. The WGSL is now scanned for
+   non-comparison texture builtins that pair a depth texture with a sampler, and
+   those sampler layout entries are declared NonFiltering. Because Godot still
+   supplies its own (linear) sampler for those slots, the driver also creates a
+   nearest/non-filtering sampler and substitutes it wherever a layout entry
+   demands one -- in uniform_set_create for both plain and combined
+   sampler+texture bindings, and in the bind-group adaptation path.
+
+Verified on an NVIDIA Tesla P40 (Vulkan) through headed Chrome/WebGPU: a scene
+with six PBR meshes, a directional light and real-time shadow mapping renders
+correctly at 59-60 fps, 36 draws per frame, with 0 GPUValidationError (was 2283
+before 0013, and still 1980 with 0013 alone). Shadows, specular response, and
+depth-buffer reads all behave.
+
+diff --git a/drivers/webgpu/rendering_device_driver_webgpu.cpp b/drivers/webgpu/rendering_device_driver_webgpu.cpp
+--- a/drivers/webgpu/rendering_device_driver_webgpu.cpp
++++ b/drivers/webgpu/rendering_device_driver_webgpu.cpp
+@@ -393,6 +393,10 @@ RenderingDeviceDriverWebGPU::~RenderingDeviceDriverWebGPU() {
+ 		wgpuSamplerRelease(dummy_comparison_sampler);
+ 		dummy_comparison_sampler = nullptr;
+ 	}
++	if (dummy_nonfiltering_sampler) {
++		wgpuSamplerRelease(dummy_nonfiltering_sampler);
++		dummy_nonfiltering_sampler = nullptr;
++	}
+ 
+ 	// Release aliasing stub buffer.
+ 	if (aliasing_stub_buffer) {
+@@ -592,6 +596,19 @@ Error RenderingDeviceDriverWebGPU::initialize(uint32_t p_device_index, uint32_t
+ 		csd.maxAnisotropy = 1;
+ 		csd.compare = WGPUCompareFunction_Less;
+ 		dummy_comparison_sampler = wgpuDeviceCreateSampler(device, &csd);
++
++		// Non-filtering (nearest) sampler: WebGPU forbids filtering samplers on
++		// Depth-sample-type texture bindings, which is how Godot reads the scene
++		// depth buffer and shadow maps.
++		WGPUSamplerDescriptor nfd = {};
++		nfd.addressModeU = WGPUAddressMode_ClampToEdge;
++		nfd.addressModeV = WGPUAddressMode_ClampToEdge;
++		nfd.addressModeW = WGPUAddressMode_ClampToEdge;
++		nfd.magFilter = WGPUFilterMode_Nearest;
++		nfd.minFilter = WGPUFilterMode_Nearest;
++		nfd.mipmapFilter = WGPUMipmapFilterMode_Nearest;
++		nfd.maxAnisotropy = 1;
++		dummy_nonfiltering_sampler = wgpuDeviceCreateSampler(device, &nfd);
+ 	}
+ 
+ 	// Create aliasing stub buffer — substituted for duplicate writable storage buffer bindings
+@@ -3274,6 +3291,9 @@ RDD::ShaderID RenderingDeviceDriverWebGPU::shader_create_from_container(const Re
+ 
+ 	// Maps (set_index << 16 | binding) → true if the WGSL has sampler_comparison at this binding.
+ 	HashMap<uint32_t, bool> wgsl_is_comparison_sampler;
++	// Samplers statically paired with a Depth texture by a non-comparison texture
++	// builtin. WebGPU requires those to be NonFiltering (or Comparison).
++	HashMap<uint32_t, bool> wgsl_sampler_nonfiltering;
+ 
+ 	// Maps (set_index << 16 | binding) → true if the WGSL has texture_multisampled_*
+ 	// or texture_depth_multisampled_* at this binding. Used so BGL entries set
+@@ -4018,10 +4038,38 @@ RDD::ShaderID RenderingDeviceDriverWebGPU::shader_create_from_container(const Re
+ 								if (!id) { break; }
+ 								nlen++;
+ 							}
+-							if (nlen > 0 && used_vars.has(String::utf8(vp, nlen))) {
+-								uint32_t bkey = ((uint32_t)g << 16) | (uint32_t)b;
+-								if (wgsl_binding_stages.has(bkey)) { wgsl_binding_stages[bkey] |= (uint32_t)current_wgpu_stage; }
+-								else { wgsl_binding_stages[bkey] = (uint32_t)current_wgpu_stage; }
++							if (nlen > 0) {
++								bool _use;
++								if (current_wgpu_stage == WGPUShaderStage_Vertex) {
++									// Vertex: require an actual texture-builtin sample (vertex texture
++									// fetch is rare) so unused shared samplers stay out of the vertex
++									// stage's hard 16-sampler limit.
++									_use = used_vars.has(String::utf8(vp, nlen));
++								} else {
++									// Fragment/compute: a binding is used if its variable is referenced
++									// beyond its declaration (whole-identifier occurrence > 1). This
++									// catches globals passed into helper functions (PCF/lighting), whose
++									// sampling happens through a parameter and is invisible to a
++									// texture-builtin-only scan.
++									CharString _nm = String::utf8(vp, nlen).utf8();
++									const char *_ns = _nm.get_data();
++									int _occ = 0;
++									const char *_sp = wgsl_str;
++									while ((_sp = strstr(_sp, _ns)) != nullptr) {
++										char _bc = (_sp == wgsl_str) ? ' ' : _sp[-1];
++										char _ac = _sp[nlen];
++										bool _bid = (_bc >= 'a' && _bc <= 'z') || (_bc >= 'A' && _bc <= 'Z') || (_bc >= '0' && _bc <= '9') || _bc == '_';
++										bool _aid = (_ac >= 'a' && _ac <= 'z') || (_ac >= 'A' && _ac <= 'Z') || (_ac >= '0' && _ac <= '9') || _ac == '_';
++										if (!_bid && !_aid) { _occ++; }
++										_sp += nlen;
++									}
++									_use = (_occ > 1);
++								}
++								if (_use) {
++									uint32_t bkey = ((uint32_t)g << 16) | (uint32_t)b;
++									if (wgsl_binding_stages.has(bkey)) { wgsl_binding_stages[bkey] |= (uint32_t)current_wgpu_stage; }
++									else { wgsl_binding_stages[bkey] = (uint32_t)current_wgpu_stage; }
++								}
+ 							}
+ 						}
+ 					}
+@@ -4030,6 +4078,72 @@ RDD::ShaderID RenderingDeviceDriverWebGPU::shader_create_from_container(const Re
+ 			}
+ 		}
+ 
++
++		// WebGPU forbids using a Depth-sample-type texture with a Filtering sampler.
++		// Find every non-comparison texture builtin that pairs a depth texture with a
++		// sampler and flag that sampler NonFiltering, so the BGL matches how the
++		// shader actually samples (Godot reads the scene depth buffer this way).
++		{
++			HashMap<String, uint32_t> var_binding;
++			const char *vp0 = wgsl_str;
++			while ((vp0 = strstr(vp0, "@group(")) != nullptr) {
++				unsigned int g = 0, b = 0;
++				if (parse_group_binding(vp0, g, b)) {
++					const char *vv = strstr(vp0, " var ");
++					if (vv && vv < vp0 + 256) {
++						vv += 5;
++						while (*vv == ' ') { vv++; }
++						int nl = 0;
++						while (true) {
++							char c = vv[nl];
++							bool id = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_';
++							if (!id) { break; }
++							nl++;
++						}
++						if (nl > 0) { var_binding[String::utf8(vv, nl)] = ((uint32_t)g << 16) | (uint32_t)b; }
++					}
++				}
++				vp0++;
++			}
++
++			const char *cp = wgsl_str;
++			while ((cp = strstr(cp, "texture")) != nullptr) {
++				if (cp != wgsl_str) {
++					char pc = cp[-1];
++					if ((pc >= 'a' && pc <= 'z') || (pc >= 'A' && pc <= 'Z') || (pc >= '0' && pc <= '9') || pc == '_') { cp += 7; continue; }
++				}
++				const char *ne = cp + 7;
++				while ((*ne >= 'a' && *ne <= 'z') || (*ne >= 'A' && *ne <= 'Z') || (*ne >= '0' && *ne <= '9') || *ne == '_') { ne++; }
++				if (*ne != '(') { cp = ne; continue; }
++				bool is_compare = false;
++				for (const char *q = cp; q + 7 <= ne; q++) {
++					if (strncmp(q, "Compare", 7) == 0) { is_compare = true; break; }
++				}
++				if (is_compare) { cp = ne; continue; }
++				String targs[2];
++				int found = 0;
++				const char *ap = ne + 1;
++				int adepth = 1;
++				while (*ap && adepth > 0 && found < 2) {
++					if (*ap == '(') { adepth++; ap++; }
++					else if (*ap == ')') { adepth--; ap++; }
++					else if ((*ap >= 'a' && *ap <= 'z') || (*ap >= 'A' && *ap <= 'Z') || *ap == '_') {
++						const char *is = ap;
++						while ((*ap >= 'a' && *ap <= 'z') || (*ap >= 'A' && *ap <= 'Z') || (*ap >= '0' && *ap <= '9') || *ap == '_') { ap++; }
++						targs[found++] = String::utf8(is, (int)(ap - is));
++					} else { ap++; }
++				}
++				if (found == 2 && var_binding.has(targs[0]) && var_binding.has(targs[1])) {
++					uint32_t tk = var_binding[targs[0]];
++					uint32_t sk = var_binding[targs[1]];
++					if (wgsl_is_depth_texture.has(tk) && wgsl_is_depth_texture[tk]) {
++						wgsl_sampler_nonfiltering[sk] = true;
++					}
++				}
++				cp = ne;
++			}
++		}
++
+ 		// Scan WGSL for storage buffer access modes and uniform bindings.
+ 		// Tint actual output formats:
+ 		//   - Read-write: "var<storage, read_write>"  (space after comma)
+@@ -4301,7 +4415,9 @@ RDD::ShaderID RenderingDeviceDriverWebGPU::shader_create_from_container(const Re
+ 					// so layout entries are always non-array (no bindingArraySize).
+ 					{ uint32_t k = ((uint32_t)set << 16) | (u.binding * 2);
+ 					  entry.sampler.type = (wgsl_is_comparison_sampler.has(k) && wgsl_is_comparison_sampler[k])
+-						  ? WGPUSamplerBindingType_Comparison : WGPUSamplerBindingType_Filtering; }
++						  ? WGPUSamplerBindingType_Comparison
++						  : ((wgsl_sampler_nonfiltering.has(k) && wgsl_sampler_nonfiltering[k])
++							  ? WGPUSamplerBindingType_NonFiltering : WGPUSamplerBindingType_Filtering); }
+ 					bge.layout_entry = entry;
+ 					bge.array_length = 1;
+ 				} break;
+@@ -4337,7 +4453,9 @@ RDD::ShaderID RenderingDeviceDriverWebGPU::shader_create_from_container(const Re
+ 					samp_entry.visibility = vis;
+ 					{ uint32_t k = ((uint32_t)set << 16) | (u.binding * 2 + 0);
+ 					  samp_entry.sampler.type = (wgsl_is_comparison_sampler.has(k) && wgsl_is_comparison_sampler[k])
+-						  ? WGPUSamplerBindingType_Comparison : WGPUSamplerBindingType_Filtering; }
++						  ? WGPUSamplerBindingType_Comparison
++						  : ((wgsl_sampler_nonfiltering.has(k) && wgsl_sampler_nonfiltering[k])
++							  ? WGPUSamplerBindingType_NonFiltering : WGPUSamplerBindingType_Filtering); }
+ 
+ 					WGPUBindGroupLayoutEntry &tex_entry = entries[e_idx++];
+ 					tex_entry = {};
+@@ -4645,7 +4763,9 @@ RDD::ShaderID RenderingDeviceDriverWebGPU::shader_create_from_container(const Re
+ 						se.binding = pu.binding * 2 + 0; se.visibility = pvis;
+ 						{ uint32_t k = ((uint32_t)i << 16) | (pu.binding * 2 + 0);
+ 						  se.sampler.type = (wgsl_is_comparison_sampler.has(k) && wgsl_is_comparison_sampler[k])
+-							  ? WGPUSamplerBindingType_Comparison : WGPUSamplerBindingType_Filtering; }
++							  ? WGPUSamplerBindingType_Comparison
++							  : ((wgsl_sampler_nonfiltering.has(k) && wgsl_sampler_nonfiltering[k])
++								  ? WGPUSamplerBindingType_NonFiltering : WGPUSamplerBindingType_Filtering); }
+ 						te.binding = pu.binding * 2 + 1; te.visibility = pvis;
+ 						{ uint32_t k = ((uint32_t)i << 16) | (pu.binding * 2 + 1);
+ 						  bool is_ms = wgsl_is_multisampled_texture.has(k) && wgsl_is_multisampled_texture[k];
+@@ -4873,6 +4993,17 @@ RDD::UniformSetID RenderingDeviceDriverWebGPU::uniform_set_create(VectorView<Bou
+ 					WGPUBindGroupEntry entry = {};
+ 					entry.binding = uniform.binding * 2;
+ 					entry.sampler = (WGPUSampler)(uniform.ids[0].id);
++					// A NonFiltering layout slot (required for depth textures) rejects a
++					// filtering sampler — substitute the driver's non-filtering one.
++					if (dummy_nonfiltering_sampler && p_set_index < (uint32_t)shader->bind_group_infos.size()) {
++						for (const auto &bge : shader->bind_group_infos[p_set_index].entries) {
++							if (bge.layout_entry.binding == entry.binding &&
++									bge.layout_entry.sampler.type == WGPUSamplerBindingType_NonFiltering) {
++								entry.sampler = dummy_nonfiltering_sampler;
++								break;
++							}
++						}
++					}
+ 					entries.push_back(entry);
+ 				}
+ 			} break;
+@@ -4987,6 +5118,15 @@ RDD::UniformSetID RenderingDeviceDriverWebGPU::uniform_set_create(VectorView<Bou
+ 						WGPUBindGroupEntry se = {};
+ 						se.binding = uniform.binding * 2 + j * 2 + 0;
+ 						se.sampler = sampler;
++						if (dummy_nonfiltering_sampler && p_set_index < (uint32_t)shader->bind_group_infos.size()) {
++							for (const auto &bge : shader->bind_group_infos[p_set_index].entries) {
++								if (bge.layout_entry.binding == se.binding &&
++										bge.layout_entry.sampler.type == WGPUSamplerBindingType_NonFiltering) {
++									se.sampler = dummy_nonfiltering_sampler;
++									break;
++								}
++							}
++						}
+ 						entries.push_back(se);
+ 					}
+ 					if (tex && tex->default_view) {
+@@ -5378,8 +5518,10 @@ WGPUBindGroup RenderingDeviceDriverWebGPU::_get_compatible_bind_group(WGUniformS
+ 					}
+ 				}
+ 
+-				if ((target_samp_type == WGPUSamplerBindingType_Filtering ||
+-						target_samp_type == WGPUSamplerBindingType_NonFiltering) &&
++				if (target_samp_type == WGPUSamplerBindingType_NonFiltering && dummy_nonfiltering_sampler) {
++					// Depth-texture slots demand a non-filtering sampler regardless of source.
++					entry.sampler = dummy_nonfiltering_sampler;
++				} else if (target_samp_type == WGPUSamplerBindingType_Filtering &&
+ 						source_samp_type == WGPUSamplerBindingType_Comparison && dummy_filtering_sampler) {
+ 					entry.sampler = dummy_filtering_sampler;
+ 				} else if (target_samp_type == WGPUSamplerBindingType_Comparison &&
+diff --git a/drivers/webgpu/rendering_device_driver_webgpu.h b/drivers/webgpu/rendering_device_driver_webgpu.h
+--- a/drivers/webgpu/rendering_device_driver_webgpu.h
++++ b/drivers/webgpu/rendering_device_driver_webgpu.h
+@@ -168,6 +168,9 @@ class RenderingDeviceDriverWebGPU : public RenderingDeviceDriver {
+ 	// these dummy samplers are used as substitutes.
+ 	WGPUSampler dummy_filtering_sampler = nullptr;
+ 	WGPUSampler dummy_comparison_sampler = nullptr;
++	// Bound wherever a BGL entry is NonFiltering (WebGPU requires it for depth
++	// textures) but Godot supplied a filtering sampler.
++	WGPUSampler dummy_nonfiltering_sampler = nullptr;
+ 
+ 	// --- BGL Rebinding Helper ---
+ 	WGPUBindGroup _get_compatible_bind_group(WGUniformSet *p_us, WGShader *p_target_shader, uint32_t p_set_idx);
