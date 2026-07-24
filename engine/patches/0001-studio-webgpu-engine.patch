@@ -173,7 +173,7 @@ index 0000000000000000000000000000000000000000..c9485e958c8a8fa384e7b5c19660f708
 +```
 +
 +The build flag `webgpu=yes` enables `WEBGPU_ENABLED` and adds
-+`--use-port=emdawnwebgpu` to both compile and link flags.
++a checksum-locked Emdawn port to both compile and link flags.
 +
 +## Project Settings
 +
@@ -17720,16 +17720,18 @@ index 57b79b2c3e6675307f622f302964f174eef4cffb..2ffe701c7d2f7838478e9350cce39a90
      }
  
  
-@@ -265,6 +266,13 @@ def configure(env: "SConsEnvironment"):
+@@ -265,6 +266,15 @@ def configure(env: "SConsEnvironment"):
          # See https://emscripten.org/docs/tools_reference/settings_reference.html#gl-enable-get-proc-address
          env.Append(LINKFLAGS=["-sGL_ENABLE_GET_PROC_ADDRESS=0"])
  
 +    if env["webgpu"]:
 +        env.AppendUnique(CPPDEFINES=["WEBGPU_ENABLED", "RD_ENABLED"])
++        emdawn_port = os.environ.get("EMDAWNWEBGPU_PORT", "emdawnwebgpu")
++        use_emdawn_port = f"--use-port={emdawn_port}"
 +        # Emscripten 4.0.10+ uses the emdawnwebgpu port; -sUSE_WEBGPU=1 was removed in 5.0.
-+        # Pass --use-port=emdawnwebgpu to both CCFLAGS (for headers) and LINKFLAGS (for JS glue).
-+        env.Append(CCFLAGS=["--use-port=emdawnwebgpu"])
-+        env.Append(LINKFLAGS=["--use-port=emdawnwebgpu"])
++        # Use the locked Studio Foundation copy when the build driver supplies it.
++        env.Append(CCFLAGS=[use_emdawn_port])
++        env.Append(LINKFLAGS=[use_emdawn_port])
 +
      if env["javascript_eval"]:
          env.Append(CPPDEFINES=["JAVASCRIPT_EVAL_ENABLED"])

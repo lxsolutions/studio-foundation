@@ -25,6 +25,7 @@ import zipfile
 import tomllib
 from pathlib import Path
 
+from emdawn_port import EmdawnPortError, prepare_locked_emdawn_port
 from patch_series import PatchSeriesError, patch_state, verified_patches
 from rebase import RebaseError, cmd_rebase, rebase_workspace
 
@@ -71,19 +72,27 @@ def fetch_repo(name: str, repo: str, commit: str, ref: str) -> Path:
     return dest
 
 
-def _patches_are_applied(source: Path, patches: list) -> bool:
-    """Confirm that every disjoint locked patch is present in the derived tree."""
-    for patch in reversed(patches):
-        proc = subprocess.run(
-            ["git", "apply", "--reverse", "--check", str(patch.path)],
-            cwd=source,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if proc.returncode != 0:
-            return False
-    return True
+def _patch_tree_fingerprint(source: Path, patches: list) -> str:
+    """Hash every source path governed by the ordered patch series."""
+    paths: set[str] = set()
+    for patch in patches:
+        for line in patch.path.read_text(encoding="utf-8").splitlines():
+            match = re.match(r"^diff --git a/(.+) b/(.+)$", line)
+            if match:
+                paths.update(match.groups())
+    digest = hashlib.sha256()
+    for relative in sorted(paths):
+        path = source / relative
+        digest.update(relative.encode("utf-8"))
+        digest.update(b"\0")
+        if path.is_file():
+            with path.open("rb") as handle:
+                for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                    digest.update(chunk)
+        else:
+            digest.update(b"<missing>")
+        digest.update(b"\0")
+    return digest.hexdigest()
 
 
 def prepare_patched_source(
@@ -106,8 +115,10 @@ def prepare_patched_source(
                 raise PatchSeriesError(
                     f"invalid patch-state file: {state_file}"
                 ) from exc
-            if current_state == expected_state and _patches_are_applied(
-                destination, patches
+            tree_sha256 = current_state.pop("tree_sha256", None)
+            if (
+                current_state == expected_state
+                and tree_sha256 == _patch_tree_fingerprint(destination, patches)
             ):
                 print(f"[fetch] reusing verified patched source {destination}")
                 return destination
@@ -131,8 +142,12 @@ def prepare_patched_source(
         print(f"[fetch] checking {patch.relative}")
         git("apply", "--check", str(patch.path), cwd=destination)
         git("apply", str(patch.path), cwd=destination)
+    recorded_state = {
+        **expected_state,
+        "tree_sha256": _patch_tree_fingerprint(destination, patches),
+    }
     state_file.write_text(
-        json.dumps(expected_state, indent=2, sort_keys=True) + "\n",
+        json.dumps(recorded_state, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
     return destination
@@ -157,6 +172,11 @@ def cmd_versions(lock: dict) -> int:
         f"toolchain      : emscripten {toolchain['emscripten']}, scons {toolchain['scons']}, "
         f"python {toolchain['python']}, rust {toolchain['rust']}"
     )
+    emdawn = toolchain["emdawnwebgpu"]
+    print(
+        f"emdawn port    : {emdawn['version']} @ {emdawn['revision'][:12]} "
+        f"(upstream fix {emdawn['upstream_fix_commit'][:12]})"
+    )
     for name, key in (
         ("official", "godot-official"),
         ("patched", PATCHED_CACHE_DIR.name),
@@ -167,7 +187,18 @@ def cmd_versions(lock: dict) -> int:
     patches = lock.get("patches", {}).get("series", [])
     print(f"patch series   : {len(patches)} patch(es)")
     artifacts = lock.get("artifacts", {}).get("export_templates", {})
-    print(f"artifact records: {len(artifacts)} template(s)")
+    records = [
+        value
+        for value in artifacts.values()
+        if isinstance(value, dict) and {"file", "bytes", "sha256"}.issubset(value)
+    ]
+    detail = ""
+    if artifacts.get("status"):
+        detail = f" ({artifacts['status']}"
+        if artifacts.get("blocker"):
+            detail += f": {artifacts['blocker']}"
+        detail += ")"
+    print(f"artifact records: {len(records)} template(s){detail}")
     return 0
 
 
@@ -354,6 +385,20 @@ def cmd_build(lock: dict, source_dir: Path | None = None) -> int:
             file=sys.stderr,
         )
         return 2
+    try:
+        emdawn_port = prepare_locked_emdawn_port(
+            lock,
+            engine_dir=ENGINE_DIR,
+            cache_dir=CACHE_DIR,
+            emscripten_dir=Path(emcc).resolve().parent,
+            emcc=Path(emcc),
+            env=build_env,
+        )
+    except (EmdawnPortError, OSError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    build_env["EMDAWNWEBGPU_PORT"] = emdawn_port.resolve().as_posix()
+    print(f"[build] locked Emdawn port: {build_env['EMDAWNWEBGPU_PORT']}")
     scons = [sys.executable, "-m", "SCons"]
     targets = lock["build"]["web_webgpu"]
     jobs = str(os.cpu_count() or 4)
@@ -417,6 +462,7 @@ def _install_templates(
         installed += 1
     if installed != 2:
         raise RuntimeError("expected release and debug WebGPU templates")
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(

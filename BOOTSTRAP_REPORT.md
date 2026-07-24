@@ -21,7 +21,7 @@ consumer.
 | Area | Evidence |
 |---|---|
 | Official engine source | Godot 4.7.1 stable commit `a13da4feb8d8aefc283c3763d33a2f170a18d541` is the sole active upstream pin |
-| WebGPU source preparation | Seven checksum-pinned patches pass path-containment, reusable-source preparation, candidate-isolation, dry-run, resume, and conflict-handling tests |
+| WebGPU source preparation | Eight checksum-pinned patches pass path-containment, reusable-source preparation, candidate-isolation, dry-run, resume, and conflict-handling tests |
 | Build configuration | WebGPU templates explicitly use `webgpu=yes`, `opengl3=no`, and `threads=no` |
 | Template installation | The installer selects only the archive matching the lock's thread mode and rejects archives missing the WebGPU loader bridge or compiled backend marker |
 | Browser evidence | The smoke test instruments engine-owned adapter, device, and canvas-context requests and rejects any WebGL/WebGL 2 request |

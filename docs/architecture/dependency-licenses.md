@@ -15,6 +15,7 @@ Exact resolved versions live in the lockfiles (`Cargo.lock`, `uv.lock`,
 | Godot export templates (web) | 4.7.1.stable official | MIT | WebGL2 browser export | installed via editor |
 | Blender | 5.2.0 LTS | GPL-2.0-or-later | Master asset tool (standalone process only) | ADR 0006 isolation note |
 | Emscripten | 4.0.11 | MIT/UIUC | Web engine builds | pinned for the local integration |
+| Emdawn WebGPU port | `v20250531.224602` / Dawn `ea66c0fa…` | MIT/UIUC and BSD-3-Clause | Browser WebGPU C/C++ bindings | Shipped by pinned Emscripten; source and namespace backport are checksum-locked in `engine-lock.toml` |
 | SCons | 4.9.1 | MIT | Godot build system | via uv-managed venv |
 
 ## Developer toolchain

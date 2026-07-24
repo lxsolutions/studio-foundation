@@ -9,9 +9,10 @@ component is a beta WebGPU export path maintained as checksum-pinned patches
 against Godot 4.7.1. WebGL 2 remains the fallback. No separate LX Solutions
 engine fork is fetched or required.
 
-> **Status:** WebGPU support is experimental and currently blocked during
-> shader translation by a Tint texture-lowering assertion. No WebGPU template,
-> screenshot, game, or production deployment is currently accepted as proof.
+> **Status:** WebGPU support is experimental. The locked source build includes
+> fixes for Tint storage-buffer lowering and an Emdawn/Godot `RefCounted`
+> symbol collision; rebuilt templates and current browser evidence are still
+> required before any game or deployment is accepted as WebGPU proof.
 > Reproducible findings and known gaps are recorded in
 > [BOOTSTRAP_REPORT.md](BOOTSTRAP_REPORT.md).
 
@@ -20,7 +21,8 @@ engine fork is fetched or required.
 | Capability | Evidence in this repository |
 |---|---|
 | Official engine base | Godot 4.7.1 stable is pinned by full commit in [engine-lock.toml](engine/engine-lock.toml) |
-| WebGPU source | Seven ordered patches are stored in [engine/patches/](engine/patches/) and checked by SHA-256 before application |
+| WebGPU source | Eight ordered patches are stored in [engine/patches/](engine/patches/) and checked by SHA-256 before application |
+| WebGPU toolchain | The exact Emdawn source and Dawn namespace backport are independently versioned and checksum-locked under [engine/toolchain/](engine/toolchain/) |
 | Source preparation | `engine-fetch` clones official Godot only and creates a disposable patched worktree |
 | Export templates | Accepted archives must be recorded by filename, byte count, and SHA-256; the artifact lock has no accepted entries while runtime validation is red |
 | Runtime verification | Browser smoke tests observe the engine's adapter, device, and WebGPU canvas requests and reject any WebGL context request |

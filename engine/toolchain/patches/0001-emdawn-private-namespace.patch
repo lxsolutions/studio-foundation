@@ -1,0 +1,25 @@
+diff --git a/webgpu/src/webgpu.cpp b/webgpu/src/webgpu.cpp
+index 607543a..5246f63 100644
+--- a/webgpu/src/webgpu.cpp
++++ b/webgpu/src/webgpu.cpp
+@@ -122,7 +122,9 @@ void emwgpuShaderModuleGetCompilationInfo(WGPUShaderModule shader,
+                                           FutureID futureId,
+                                           WGPUCompilationInfo* compilationInfo);
+ }  // extern "C"
+ 
++namespace {
++
+ // ----------------------------------------------------------------------------
+ // Implementation details that are not exposed upwards in the API.
+ // ----------------------------------------------------------------------------
+@@ -710,8 +712,10 @@ static EventManager& GetEventManager() {
+ static EventManager& GetEventManager() {
+   static EventManager kEventManager;
+   return kEventManager;
+ }
+ 
++}  // namespace
++
+ // ----------------------------------------------------------------------------
+ // WGPU struct declarations.
+ // ----------------------------------------------------------------------------

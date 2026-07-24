@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-07-19
-- Last amended: 2026-07-22
+- Last amended: 2026-07-23
 
 ## Context
 
@@ -46,10 +46,19 @@ and release evidence.
 12. The browser build uses `threads=no` because the current backend does not
     support Godot's threaded web runtime. Installers may not relabel an archive
     built for a different thread mode.
+13. Toolchain backports are separate checksum-locked inputs under
+    `engine/toolchain/`. The build copies and patches the exact Emdawn package
+    in a disposable cache; it never mutates the installed Emscripten SDK.
 
-At this checkpoint the source and build gates pass, and the browser reaches the
-WebGPU Mobile renderer, but runtime acceptance is red due to a Tint assertion
-at `texture.cc:606`. The artifact lock therefore remains explicitly blocked with no accepted entries.
+Tint storage-buffer lowering is fixed in the Godot patch series. An ASAN
+regression test also reproduced the later Emdawn/Godot global `RefCounted`
+collision and passed with the locked Dawn namespace backport. On 2026-07-24 the
+release and debug templates were rebuilt from those locked inputs and passed the
+engine-owned browser WebGPU probe (active WebGPU canvas context, no runtime
+error) and the visual comparison against the WebGL baseline (1.2% diff, 3%
+threshold). Both templates are now recorded with byte counts and SHA-256 values
+in `engine-lock.toml [artifacts.export_templates]`; the artifact lock is no
+longer blocked. See `docs/architecture/webgpu-runtime-status.md`.
 
 ## Update procedure
 

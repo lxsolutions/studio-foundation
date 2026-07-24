@@ -40,6 +40,7 @@ for the 4.7.1 pack format, and subsequent API and renderer build fixes.
 | `0005-webgpu-shell-capability-gate.patch` | Fail-closed browser WebGPU capability gate | 1 | 13 | 8 |
 | `0006-webgpu-single-thread-stdio.patch` | No-threads web build compatibility | 1 | 1 | 0 |
 | `0007-tint-storage-buffer-access.patch` | SPIR-V/Tint storage-buffer access compatibility | 1 | 1 | 1 |
+| `0008-tint-image-ordering.patch` | SPIR-V/Tint image-value lowering order | 1 | 10 | 3 |
 
 The large third-party source patches are listed separately so their line counts
 are not presented as Studio Foundation-authored implementation. Copyright and

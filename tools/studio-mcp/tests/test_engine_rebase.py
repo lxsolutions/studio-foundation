@@ -393,6 +393,14 @@ class PatchSeriesTests(unittest.TestCase):
                 ),
                 source,
             )
+            (source / "shared.txt").write_text("tampered\n", encoding="utf-8")
+            with self.assertRaisesRegex(PatchSeriesError, "does not match"):
+                engine_tool.prepare_patched_source(
+                    lock,
+                    cache / "godot-official",
+                    patches,
+                    cache_dir=cache,
+                )
 
     def test_rejects_tampered_patch(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

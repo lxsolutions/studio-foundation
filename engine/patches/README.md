@@ -16,6 +16,8 @@ browser WebGPU template build. They apply to the official Godot commit in
    build configuration.
 7. `0007-tint-storage-buffer-access.patch` - translate write-only SPIR-V storage
    buffers to Tint's supported read-write access mode.
+8. `0008-tint-image-ordering.patch` - lower SPIR-V `OpImage` values before
+   texture operations that can reference them earlier in module order.
 
 The WebGPU implementation originated in `dwalter/godotwebgpu`. Studio
 Foundation owns the 4.7.1 port, scoped patch curation, preparation/build tooling,
@@ -35,6 +37,12 @@ authorship and maintenance boundary.
 `engine/.cache/studio-webgpu` is disposable output. This directory and
 `engine-lock.toml` are source of truth.
 
-The series currently compiles and reaches the WebGPU Mobile renderer, but the
-browser runtime is not accepted: startup stops in Tint texture lowering at
-`texture.cc:606`. No template artifact is locked until that gate passes.
+The pinned Emdawn port also needs a toolchain-level namespace backport, stored
+separately under `engine/toolchain/patches/`. It isolates Dawn's private
+`RefCounted` type from Godot's type of the same name and is independently
+checksum-locked in `engine-lock.toml`.
+
+As of 2026-07-24 the release/debug rebuild and the engine-owned browser WebGPU
+probe (active canvas context + 1.2% visual diff vs the WebGL baseline) both pass;
+the accepted templates are checksum-locked in
+`engine-lock.toml [artifacts.export_templates]`.

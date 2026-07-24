@@ -101,6 +101,7 @@ test-rust:
 test-python:
     uv run --project tools python -m unittest discover -s tools/studio-mcp/tests -p "test_*.py" -v
     uv run --project tools python -m unittest discover -s tools/infra/tests -p "test_*.py" -v
+    {{PY}} -m unittest discover -s engine/scripts/tests -p "test_*.py" -v
 
 # Cross-language protocol golden-fixture checks (Rust side runs in test-rust too)
 test-protocol:
@@ -216,6 +217,9 @@ compare-screenshots BASELINE CANDIDATE *ARGS:
     {{PY}} tools/screenshots/compare_screenshots.py "{{BASELINE}}" "{{CANDIDATE}}" {{ARGS}}
 
 # ------------------------------------------------------------------ engine
+
+engine-test:
+    {{PY}} -m unittest discover -s engine/scripts/tests -p "test_*.py" -v
 
 engine-versions:
     {{PY}} engine/scripts/engine.py versions
