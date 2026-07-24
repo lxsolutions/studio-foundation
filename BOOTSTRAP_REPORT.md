@@ -26,7 +26,7 @@ consumer.
 | Template installation | The installer selects only the archive matching the lock's thread mode and rejects archives missing the WebGPU loader bridge or compiled backend marker |
 | Browser evidence | The smoke test instruments engine-owned adapter, device, and canvas-context requests and rejects any WebGL/WebGL 2 request |
 | Artifact acceptance | The recorder requires a complete release/debug pair; on 2026-07-24 the release and debug WebGPU templates were recorded by byte count and SHA-256 in `engine-lock.toml` after passing the runtime gate |
-| Current engine result | A no-threads build reaches a WebGPU adapter, device, and active canvas context and renders through the Mobile renderer without requesting WebGL. It passes the browser probe and the visual comparison against the WebGL baseline (1.2% diff, 3% cross-renderer band). The earlier `texture.cc:606` Tint assertion and a later Emdawn/Godot `RefCounted` heap-buffer-overflow are both fixed — via the locked Tint patches (`OpImage` ordering, storage-buffer lowering) and the checksum-locked Emdawn private-namespace toolchain backport |
+| Current engine result | A no-threads build reaches a WebGPU adapter, device, and active canvas context under the Forward Mobile renderer without requesting WebGL, and **renders 2D/Control UI**: it passes the browser probe and a visual comparison of the neutral template's 2D menu against the WebGL baseline (1.2% diff). **3D does not render — a lit or even unshaded 3D mesh is black under WebGPU while WebGL renders it; the 3D draw path stalls after device init.** The earlier `texture.cc:606` Tint assertion and a later Emdawn/Godot `RefCounted` heap-buffer-overflow are both fixed (locked Tint patches + the checksum-locked Emdawn private-namespace backport); the 3D draw path is the next open work |
 | Optional Nakama bridge | The bridge carries opaque consumer-owned payloads and remains optional |
 
 ## Engine lineage
@@ -46,6 +46,7 @@ matching source and artifact provenance.
 
 ## Not yet claimed
 
+- **3D rendering under WebGPU** — a 3D scene (meshes/lighting) is black under WebGPU today; WebGL 2 renders it. The Forward Mobile 3D draw path is under investigation
 - A published OSWT (or other real-game) WebGPU capture and deployment produced from the accepted templates
 - Safari/iOS WebGPU behavior
 - Native Android and iOS device runs

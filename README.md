@@ -9,16 +9,20 @@ component is a beta WebGPU export path maintained as checksum-pinned patches
 against Godot 4.7.1. WebGL 2 remains the fallback. No separate LX Solutions
 engine fork is fetched or required.
 
-> **Status:** WebGPU support is beta. The locked source build fixes Tint
-> storage-buffer lowering, Tint `OpImage` lowering order, and an Emdawn/Godot
-> `RefCounted` symbol collision. On 2026-07-24 the release and debug templates
-> were rebuilt from those locked inputs and passed the engine-owned browser
-> WebGPU probe (active canvas context, no runtime error) and visual comparison
-> against the WebGL baseline (1.2% diff, 3% cross-renderer band); both templates
-> are now recorded by byte count and SHA-256 in
-> [engine-lock.toml](engine/engine-lock.toml). A specific game or deployment
-> still needs its own matching provenance before it is labeled WebGPU.
-> Reproducible findings and known gaps are recorded in
+> **Status:** WebGPU support is beta and **2D-only today.** The locked source
+> build boots the WebGPU backend (Forward Mobile renderer) and renders 2D/Control
+> UI in-browser — verified 2026-07-24 against the engine-owned WebGPU probe
+> (active canvas context, no runtime error) and a visual comparison of the neutral
+> template's 2D menu against the WebGL baseline (1.2% diff). Both templates are
+> recorded by byte count and SHA-256 in [engine-lock.toml](engine/engine-lock.toml).
+>
+> **Known gap — 3D does not render yet.** A lit *or even unshaded* 3D mesh that
+> renders correctly under WebGL comes out black under WebGPU: the backend
+> initializes and selects Forward Mobile, then the 3D draw path stalls before any
+> frame presents. So this is **not usable for 3D games yet.** Getting here fixed
+> Tint storage-buffer lowering, Tint `OpImage` ordering, and an Emdawn/Godot
+> `RefCounted` link-time crash; the 3D render path is the next open work. WebGL 2
+> is the maintained fallback and renders both 2D and 3D. Findings and gaps:
 > [BOOTSTRAP_REPORT.md](BOOTSTRAP_REPORT.md).
 
 ## What is verifiable
@@ -29,8 +33,9 @@ engine fork is fetched or required.
 | WebGPU source | Eight ordered patches are stored in [engine/patches/](engine/patches/) and checked by SHA-256 before application |
 | WebGPU toolchain | The exact Emdawn source and Dawn namespace backport are independently versioned and checksum-locked under [engine/toolchain/](engine/toolchain/) |
 | Source preparation | `engine-fetch` clones official Godot only and creates a disposable patched worktree |
-| Export templates | Accepted archives are recorded by filename, byte count, and SHA-256 in [engine-lock.toml](engine/engine-lock.toml); the release and debug WebGPU templates passed the browser + visual gate on 2026-07-24 and are locked |
+| Export templates | Accepted archives are recorded by filename, byte count, and SHA-256 in [engine-lock.toml](engine/engine-lock.toml); the release and debug WebGPU templates are locked (they passed the **2D** browser + visual gate on 2026-07-24) |
 | Runtime verification | Browser smoke tests observe the engine's adapter, device, and WebGPU canvas requests and reject any WebGL context request |
+| 3D rendering (WebGPU) | **Not working yet.** A lit or unshaded 3D mesh renders under WebGL but is black under WebGPU — the Forward Mobile 3D draw path stalls after device init. Under investigation; WebGL 2 renders 3D as the fallback |
 | Fallback | The same template project has an official WebGL 2 export preset |
 | Template behavior | Headless GDScript tests cover the shared addon and neutral starter project |
 | Optional services | Rust and Nakama components are independently tested and are not required for client-only use |
