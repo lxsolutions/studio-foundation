@@ -47,9 +47,21 @@ fixed and awaiting the re‑verified rebuild.
 
 ---
 
-## 3D rendering gap (the current open blocker for games)
+## 3D rendering gap — ROOT-CAUSED AND FIXED (patch 0009, 2026-07-24)
 
-**Symptom.** WebGPU renders 2D/Control UI (menus) but any 3D scene is black. A
+**Fix:** Tint's SPIR-V reader (`Parser::EmitVar`) aborts with `TINT_UNIMPLEMENTED`
+"decoration 21" (`Volatile`) on Godot's coherent compute shaders — concretely
+`volumetric_fog.glsl`, compiled by Forward Mobile during 3D init. In the browser
+that abort is a wasm trap → frozen page → all 3D black. Patch 0009 strips the
+`Volatile` decoration in `spirv_preprocess.cpp` (same as `Restrict`). Found and
+verified **GPU-free** by building a native offline reproducer of the exact runtime
+path — `glsl2spv` (Godot's glslang) → the driver's 11 preprocess passes → Tint
+(`tint_convert_cli`): over all 182 engine shaders, `volumetric_fog` was the only
+crash, and with 0009 it translates with **0/182** crashes/hangs. In-browser render
+verification is still pending a GPU-capable machine (this dev box has none). The
+original investigation notes below are retained for context.
+
+**Symptom (original).** WebGPU renders 2D/Control UI (menus) but any 3D scene is black. A
 minimal `Node3D` + `BoxMesh` + `Camera3D` probe — even with an **unshaded**
 material — renders correctly under WebGL and is black under WebGPU. So it is not a
 lighting/shadow issue; it is the base 3D draw path.
