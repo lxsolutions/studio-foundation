@@ -9,14 +9,20 @@ SHA-256-locked patch series, plus the MCP server, agent workflows, and asset
 pipeline that make the whole thing drivable by AI assistants. WebGL 2 remains the
 supported fallback.
 
-![Godot 4.7.1 rendering a lit, shadowed 3D scene through WebGPU in a browser](docs/images/webgpu-3d-lit-shadows.png)
+### ▶ [Try it live — Godot 3D through WebGPU, in your browser](https://lxsolutions.github.io/studio-foundation/)
+
+No install, no plugin. Needs a WebGPU-capable browser (Chrome/Edge 113+, Safari 26+,
+Firefox on Windows); the page tells you if yours qualifies before you click.
+
+[![Godot 4.7.1 rendering a lit, shadowed 3D scene through WebGPU in a browser](docs/images/webgpu-3d-lit-shadows.png)](https://lxsolutions.github.io/studio-foundation/)
 
 *Six PBR meshes, a directional light, and real-time shadow mapping — rendered by
 Godot 4.7.1 through WebGPU in Chrome on an NVIDIA Tesla P40: 59–60 fps, 36 draws per
 frame, **0 `GPUValidationError`**. The scene is
 [`webgpu_showcase.gd`](templates/godot-game/project/scenes/webgpu_showcase.gd) —
 about 100 lines of GDScript, no external assets — so you can rebuild and re-verify
-this exact frame yourself.*
+this exact frame yourself. The published demo above was itself re-rendered from its
+public URL on that same GPU as a final check.*
 
 ## Our lane: AI-native, open-source game development
 
