@@ -1,0 +1,29 @@
+Subject: [PATCH] webgpu: don't rewrite OpDecorate/OpMemberDecorate literals in flatten_binding_arrays
+
+flatten_binding_arrays() eliminates arrays of handle types by replacing every array-type
+id with its element-type id across all instruction words, excluding only OpConstant and
+OpSwitch literals. It did NOT exclude OpDecorate/OpMemberDecorate arguments (Offset,
+ArrayStride, Binding, Location, ...), which are literals, not ids. A large struct member
+Offset literal that happened to equal an array/pointer type id got rewritten, corrupting
+the struct layout (e.g. member offset 7603, not 16-aligned) and producing invalid SPIR-V
+that crashes Tint's texture lowering. Treat decorations as having literal operands (only
+word 1, the target, is an id). After this the flattened SPIR-V passes SPIRV-Tools validation.
+
+diff --git a/drivers/webgpu/spirv_preprocess.cpp b/drivers/webgpu/spirv_preprocess.cpp
+--- a/drivers/webgpu/spirv_preprocess.cpp
++++ b/drivers/webgpu/spirv_preprocess.cpp
+@@ -2415,6 +2415,14 @@
+ 		if (op == OP_CONSTANT || op == OP_SPEC_CONSTANT) {
+ 			has_literals = true;
+ 			literal_start = 3;
++		} else if (op == OP_DECORATE || op == OP_MEMBER_DECORATE) {
++			// Decoration args (Offset, ArrayStride, Binding, Location, ...) are
++			// LITERALS, not IDs. Only word 1 (the target) is an ID. Without this,
++			// a large literal (e.g. a struct member Offset) that happens to equal
++			// an array/pointer type ID gets wrongly rewritten, corrupting the
++			// struct layout and crashing Tint's texture lowering.
++			has_literals = true;
++			literal_start = 2;
+ 		} else if (op == 251 /* OpSwitch */) {
+ 			switch_alternating = true;
+ 		}

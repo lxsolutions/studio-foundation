@@ -1,0 +1,41 @@
+Subject: [PATCH] tint/spirv-reader: convert texture function-parameter types
+
+The spirv reader's texture lowering (State::Process) rewrites spirv::type::Image
+to core::type::Texture only for global variables in ir.root_block. A texture
+forwarded through a function PARAMETER keeps its spirv::type::Image type, then
+hits ProcessCoords -> TINT_ASSERT(tex_ty) (texture.cc). Godot's forward-mobile
+lightmap/shadow PCF helpers pass textures by parameter, so any 3D scene crashes
+shader translation. Convert texture parameters with the same TypeFor() the global
+loop uses; the existing dref/comparison propagation re-specialises depth params.
+
+diff --git a/thirdparty/tint/src/tint/lang/spirv/reader/lower/texture.cc b/thirdparty/tint/src/tint/lang/spirv/reader/lower/texture.cc
+--- a/thirdparty/tint/src/tint/lang/spirv/reader/lower/texture.cc
++++ b/thirdparty/tint/src/tint/lang/spirv/reader/lower/texture.cc
+@@ -125,6 +125,27 @@
+             });
+         }
+ 
++        // The global-var loop above only rewrites root-block texture vars.
++        // A texture forwarded through function PARAMETERS (Godot's lightmap /
++        // shadow sampling helpers do this) otherwise keeps its spirv::type::Image
++        // type and later crashes ProcessCoords. Convert texture params here too;
++        // depth/comparison params are re-specialised by the dref propagation below.
++        for (auto* _fn : ir.functions) {
++            for (auto* _param : _fn->Params()) {
++                auto* _pty = _param->Type();
++                if (auto* _ptr = _pty->As<core::type::Pointer>()) {
++                    auto* _inner = _ptr->UnwrapPtr();
++                    if (_inner->Is<spirv::type::Image>()) {
++                        _param->SetType(ty.ptr(_ptr->AddressSpace(), TypeFor(_inner), _ptr->Access()));
++                        values_to_fix_usages_.Push(_param);
++                    }
++                } else if (_pty->Is<spirv::type::Image>()) {
++                    _param->SetType(TypeFor(_pty));
++                    values_to_fix_usages_.Push(_param);
++                }
++            }
++        }
++
+         Vector<spirv::ir::BuiltinCall*, 4> depth_worklist;
+         for (auto* inst : ir.Instructions()) {
+             if (auto* builtin = inst->As<spirv::ir::BuiltinCall>()) {

@@ -26,6 +26,14 @@ browser WebGPU template build. They apply to the official Godot commit in
     from a wrapper into a deeper helper (e.g. tonemap's `texture2D_bicubic`, and
     `taa_resolve`) no longer produces invalid SPIR-V (`OpFunctionCall` argument
     type mismatch) that silently fails Tint translation.
+11. `0011-webgpu-flatten-decoration-literals.patch` - stop `flatten_binding_arrays`
+    from rewriting `OpDecorate`/`OpMemberDecorate` literal arguments (Offset,
+    ArrayStride, ...). A struct-member Offset literal that collided with an array
+    type id was being remapped, corrupting the struct layout into invalid SPIR-V.
+12. `0012-tint-texture-function-params.patch` - Tint spirv-reader fix: convert
+    texture types on function PARAMETERS, not only global vars. Godot forward-mobile
+    passes lightmap/shadow textures by parameter; those kept `spirv::type::Image`
+    and crashed Tint's texture lowering (`ProcessCoords` assert) on any 3D scene.
 
 The WebGPU implementation originated in `dwalter/godotwebgpu`. Studio
 Foundation owns the 4.7.1 port, scoped patch curation, preparation/build tooling,

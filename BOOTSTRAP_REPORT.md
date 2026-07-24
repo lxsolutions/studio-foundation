@@ -47,7 +47,7 @@ matching source and artifact provenance.
 
 ## Not yet claimed
 
-- **In-browser 3D render verification** — the 3D-black *crash* is fixed (patch 0009) and verified offline (shader translation no longer crashes), but rendering a 3D frame in a browser has not been confirmed here (no GPU on this dev box); needs a GPU-capable run
+- **A visible 3D frame** — in-browser translation is now verified on real hardware (NVIDIA Tesla P40): with patches 0009–0012 the engine no longer crashes translating the runtime-specialized 3D scene shader. But a rendered frame is **still not produced** — the scene render pipeline is rejected because Godot Forward Mobile binds 18 samplers to the vertex stage, over WebGPU's hard 16-per-stage limit. That is a driver/shader-structure issue (per-stage bind-group visibility or vertex-sampler reduction), separate from shader translation, and is the next blocker to a visible frame
 - A published OSWT (or other real-game) WebGPU capture and deployment produced from the accepted templates
 - Safari/iOS WebGPU behavior
 - Native Android and iOS device runs
