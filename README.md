@@ -173,6 +173,10 @@ Not yet claimed: Safari/iOS behavior and native Android/iOS device runs. The ful
 [BOOTSTRAP_REPORT.md](BOOTSTRAP_REPORT.md); the running engineering log is in
 [docs/architecture/webgpu-runtime-status.md](docs/architecture/webgpu-runtime-status.md).
 
+Measured WebGPU-vs-WebGL 2 performance (same scene, same GPU) and per-game render
+verification live in
+[docs/architecture/webgpu-performance.md](docs/architecture/webgpu-performance.md).
+
 ## Included components
 
 - A neutral Godot 4.7.1 project template and reusable `studio_core` addon.
