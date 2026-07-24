@@ -59,14 +59,16 @@
 	// Phase 1: download. Godot's own progress element is the source of truth.
 	var progressEl = document.querySelector('#status-progress');
 	var downloadDone = false;
+	var downloadDoneAt = 0;
 	var phaseTimer = setInterval(function () {
 		var secs = Math.round((Date.now() - started) / 1000);
 		if (!downloadDone && progressEl && progressEl.max > 0) {
 			var pct = Math.min(100, Math.round((progressEl.value / progressEl.max) * 100));
 			msg('Downloading engine — ' + pct + '%');
-			if (pct >= 100) { downloadDone = true; }
+			if (pct >= 100) { downloadDone = true; downloadDoneAt = Date.now(); }
 		} else if (!downloadDone && secs > 4) {
 			downloadDone = true;
+			downloadDoneAt = Date.now();
 		}
 		if (downloadDone) {
 			msg('Compiling shaders for your GPU');
@@ -76,19 +78,44 @@
 		}
 	}, 250);
 
-	// Phase 2: detect actual rendering. The main thread stalls while Dawn builds
-	// pipelines, so a run of smooth frames means real drawing has begun.
+	// Phase 2: detect actual rendering.
+	//
+	// Smooth frames alone are NOT sufficient: while the engine is merely downloading,
+	// the page is idle and rAF already runs at a clean 60fps, which would dismiss the
+	// overlay within a second — exactly the black-canvas problem this exists to solve.
+	// So we wait for evidence that the engine took over the main thread (a stall from
+	// wasm instantiation / SPIR-V translation / pipeline building) and only then treat
+	// a run of smooth frames as "drawing has begun". If no stall is ever observed —
+	// small scene, warm cache, very fast machine — fall back to dismissing a short
+	// while after the download finishes.
+	var STALL_MS = 250;              // a blocked main thread looks like this
+	var NO_STALL_GRACE_MS = 6000;    // fallback when nothing ever blocks
+	var MIN_VISIBLE_MS = 1200;       // avoid a jarring flash on instant loads
+
 	var smooth = 0;
+	var sawStall = false;
 	var last = performance.now();
+
 	function tick(now) {
 		var delta = now - last;
 		last = now;
-		if (delta > 0 && delta < SMOOTH_FRAME_MAX_MS) {
+
+		if (delta >= STALL_MS) {
+			sawStall = true;
+			smooth = 0;
+		} else if (delta > 0 && delta < SMOOTH_FRAME_MAX_MS) {
 			smooth++;
 		} else {
 			smooth = 0;
 		}
-		if (smooth >= SMOOTH_FRAMES_REQUIRED || Date.now() - started > HARD_TIMEOUT_MS) {
+
+		var age = Date.now() - started;
+		var settled = smooth >= SMOOTH_FRAMES_REQUIRED;
+		var readyAfterStall = sawStall && settled;
+		var readyWithoutStall = !sawStall && settled && downloadDone &&
+			downloadDoneAt > 0 && (Date.now() - downloadDoneAt) > NO_STALL_GRACE_MS;
+
+		if ((age > MIN_VISIBLE_MS && (readyAfterStall || readyWithoutStall)) || age > HARD_TIMEOUT_MS) {
 			finish();
 			return;
 		}
