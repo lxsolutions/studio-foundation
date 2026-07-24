@@ -36,8 +36,8 @@ let "WebGPU renders" overclaim slip through. **A 3D probe must be added to the g
 | Tint SPIR‑V→WGSL translation (storage‑buffer + OpImage ordering) | ✅ | patches 0007, 0008 |
 | **Emdawn/Godot `RefCounted` ODR collision** (the heap‑buffer‑overflow) | ✅ **fixed in source** | `engine/toolchain/patches/0001-emdawn-private-namespace.patch`, locked in `[toolchain.emdawnwebgpu]` |
 | **Rebuild + browser probe (2D UI only)** with the backport | ✅ 2026‑07‑24 — **2D only** | 2D menu, 1.2% vs WebGL |
-| **3D rendering under WebGPU** | 🟡 **crash/hang fixed offline (patches 0009 + 0010); in-browser render pending a GPU** | §3D rendering gap |
-| **3D scene-shader translation** | 🟡 **177/182 translate offline** (was 174) — patch 0010 fixes combined samplers forwarded through call chains; 5 remaining are fundamental WGSL gaps | §3D rendering gap |
+| **3D rendering under WebGPU** | 🟢 **in-browser render VERIFIED on an NVIDIA Tesla P40 (patches 0009–0013)** — 3D scene draws a lit mesh at 60 fps, 0 GPUValidationError | §3D rendering gap |
+| **3D scene-shader translation** | 🟢 **177/182 translate offline** (was 174); the runtime-specialized scene shader also translates *and renders* after patches 0011–0013 | §3D rendering gap |
 | Template artifacts locked in `engine-lock.toml` | ✅ | `[artifacts.export_templates]`: release + debug + sha256 |
 
 Reference point: a **release** WebGPU export passed a (shallow, non‑ASAN) browser
@@ -48,7 +48,7 @@ fixed and awaiting the re‑verified rebuild.
 
 ---
 
-## 3D rendering gap — ROOT-CAUSED AND FIXED (patch 0009, 2026-07-24)
+## 3D rendering gap — RESOLVED; in-browser render verified (patches 0009–0013, 2026-07-24)
 
 **Fix:** Tint's SPIR-V reader (`Parser::EmitVar`) aborts with `TINT_UNIMPLEMENTED`
 "decoration 21" (`Volatile`) on Godot's coherent compute shaders — concretely

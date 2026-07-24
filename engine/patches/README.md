@@ -35,6 +35,14 @@ browser WebGPU template build. They apply to the official Godot commit in
     passes lightmap/shadow textures by parameter; those kept `spirv::type::Image`
     and crashed Tint's texture lowering (`ProcessCoords` assert) on any 3D scene.
 
+13. `0013-webgpu-sampler-texture-stage-visibility.patch` - give sampler/texture
+    bind-group-layout entries precise per-stage visibility from a WGSL reachability
+    scan instead of the `u.stages` union. Godot forward-mobile declares up to 22
+    samplers visible to every stage, but the vertex stage samples none and the
+    fragment stage at most 7; the over-approximation tripped WebGPU's hard
+    16-samplers-per-stage limit so every 3D pipeline failed to create (verified
+    rendering on a Tesla P40: 0 GPUValidationError, lit scene at 60 fps).
+
 The WebGPU implementation originated in `dwalter/godotwebgpu`. Studio
 Foundation owns the 4.7.1 port, scoped patch curation, preparation/build tooling,
 and validation. See `../../docs/architecture/webgpu-integration.md` for the

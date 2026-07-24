@@ -39,11 +39,17 @@ engine fork is fetched or required.
 > patch 0012 fixes Tint's SPIR-V reader so textures passed by *function parameter*
 > (Godot's lightmap/shadow helpers) are converted to core texture types instead of
 > crashing its texture lowering. With 0009–0012 the engine **no longer crashes** on
-> 3D shader translation on the GPU. **3D is still not yet visible**, now blocked by a
-> *different, non-crash* issue: Godot's Forward Mobile scene shader binds 18 samplers
-> to the vertex stage, exceeding WebGPU's hard limit of 16 per stage, so the scene
-> pipeline is rejected. That is a driver/shader-structure problem (tracked separately),
-> not shader translation. WebGL 2 remains the maintained fallback. Details:
+> 3D shader translation on the GPU.
+>
+> **A 3D frame now renders in-browser on real hardware (2026-07-24, NVIDIA Tesla
+> P40 — patch 0013).** The final blocker was a *non-crash* pipeline rejection:
+> Godot's Forward Mobile scene shader declares up to 18–22 samplers and marked every
+> one visible to both shader stages, over WebGPU's hard limit of 16 samplers per
+> stage. Patch 0013 gives sampler/texture bind-group entries precise per-stage
+> visibility from a WGSL reachability scan — the vertex stage samples none and the
+> fragment stage at most 7 — so every pipeline now creates. The exported 3D scene
+> renders a lit, perspective-projected mesh at 60 fps with **0 `GPUValidationError`**
+> (was 2283). WebGL 2 remains a supported fallback. Details:
 > [BOOTSTRAP_REPORT.md](BOOTSTRAP_REPORT.md).
 
 ## What is verifiable
@@ -51,14 +57,14 @@ engine fork is fetched or required.
 | Capability | Evidence in this repository |
 |---|---|
 | Official engine base | Godot 4.7.1 stable is pinned by full commit in [engine-lock.toml](engine/engine-lock.toml) |
-| WebGPU source | Eight ordered patches are stored in [engine/patches/](engine/patches/) and checked by SHA-256 before application |
+| WebGPU source | Thirteen ordered patches are stored in [engine/patches/](engine/patches/) and checked by SHA-256 before application |
 | WebGPU toolchain | The exact Emdawn source and Dawn namespace backport are independently versioned and checksum-locked under [engine/toolchain/](engine/toolchain/) |
 | Source preparation | `engine-fetch` clones official Godot only and creates a disposable patched worktree |
 | Export templates | Accepted archives are recorded by filename, byte count, and SHA-256 in [engine-lock.toml](engine/engine-lock.toml); the release and debug WebGPU templates are locked (they passed the **2D** browser + visual gate on 2026-07-24) |
 | Runtime verification | Browser smoke tests observe the engine's adapter, device, and WebGPU canvas requests and reject any WebGL context request |
 | 3D shader translation (WebGPU) | No longer crashes — verified in-browser on an NVIDIA Tesla P40. Patches 0009–0012 fix four distinct translation crashes (`Volatile` decoration, transitive combined-sampler split, flatten decoration-literal corruption, and Tint's texture-function-parameter conversion). The rebuilt engine boots the WebGPU device and translates the specialized 3D scene shader without SIGILL |
 | WebGPU shader coverage | 177 of 182 engine shaders translate to valid WGSL offline; the runtime-specialized scene shader (which the offline corpus did not cover) also translates after 0011/0012. The 5 offline gaps are fundamental WGSL limits (subpass `input_attachment`, storage-texture format inference, vertex-stage `read_write` storage), not crashes |
-| 3D render (visible frame) | **Not yet.** With the crash chain fixed, the scene pipeline is now *rejected* (not crashed): Godot Forward Mobile binds 18 samplers to the vertex stage, over WebGPU's hard 16-per-stage limit. A driver/shader-structure issue, separate from translation, tracked for follow-up |
+| 3D render (visible frame) | **Yes — verified in-browser on an NVIDIA Tesla P40.** Patch 0013 clears the last blocker (Forward Mobile over-declared 18 samplers per stage vs WebGPU's 16 limit) by giving sampler/texture bind-group entries precise per-stage visibility. The exported 3D scene renders a lit, perspective-projected mesh at 60 fps with 0 `GPUValidationError` (was 2283) |
 | Fallback | The same template project has an official WebGL 2 export preset |
 | Template behavior | Headless GDScript tests cover the shared addon and neutral starter project |
 | Optional services | Rust and Nakama components are independently tested and are not required for client-only use |
