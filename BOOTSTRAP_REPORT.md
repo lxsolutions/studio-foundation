@@ -25,8 +25,8 @@ consumer.
 | Build configuration | WebGPU templates explicitly use `webgpu=yes`, `opengl3=no`, and `threads=no` |
 | Template installation | The installer selects only the archive matching the lock's thread mode and rejects archives missing the WebGPU loader bridge or compiled backend marker |
 | Browser evidence | The smoke test instruments engine-owned adapter, device, and canvas-context requests and rejects any WebGL/WebGL 2 request |
-| Artifact acceptance | The recorder requires a complete release/debug pair; the artifact lock has no accepted entries while the runtime gate is red |
-| Current engine result | A no-threads build reaches a WebGPU adapter, device, canvas context, and the Mobile renderer without requesting WebGL; startup then fails in Tint texture lowering at `texture.cc:606` |
+| Artifact acceptance | The recorder requires a complete release/debug pair; on 2026-07-24 the release and debug WebGPU templates were recorded by byte count and SHA-256 in `engine-lock.toml` after passing the runtime gate |
+| Current engine result | A no-threads build reaches a WebGPU adapter, device, and active canvas context and renders through the Mobile renderer without requesting WebGL. It passes the browser probe and the visual comparison against the WebGL baseline (1.2% diff, 3% cross-renderer band). The earlier `texture.cc:606` Tint assertion and a later Emdawn/Godot `RefCounted` heap-buffer-overflow are both fixed — via the locked Tint patches (`OpImage` ordering, storage-buffer lowering) and the checksum-locked Emdawn private-namespace toolchain backport |
 | Optional Nakama bridge | The bridge carries opaque consumer-owned payloads and remains optional |
 
 ## Engine lineage
@@ -46,9 +46,7 @@ matching source and artifact provenance.
 
 ## Not yet claimed
 
-- A WebGPU runtime that completes shader translation and reaches an interactive frame
-- Accepted release/debug WebGPU template artifacts and checksums
-- A published OSWT WebGPU capture and deployment produced from those exact templates
+- A published OSWT (or other real-game) WebGPU capture and deployment produced from the accepted templates
 - Safari/iOS WebGPU behavior
 - Native Android and iOS device runs
 - Database-backed integration tests against a live disposable PostgreSQL stack
