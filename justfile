@@ -229,8 +229,10 @@ engine-fetch:
     {{PY}} engine/scripts/engine.py fetch
 
 # Build templates from the pin or --workspace candidate (long; requires scons+emsdk)
+# Runs under the tools venv: engine.py shells out to `sys.executable -m SCons`, and
+# SCons lives only in the tools venv, not the system Python that {{PY}} resolves to.
 engine-build *ARGS:
-    {{PY}} engine/scripts/engine.py build {{ARGS}}
+    uv run --project tools python engine/scripts/engine.py build {{ARGS}}
 
 # Accept a complete release/debug pair into engine-lock.toml after validation
 engine-record-artifacts:
