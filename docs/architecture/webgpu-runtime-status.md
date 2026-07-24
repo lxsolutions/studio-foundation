@@ -14,12 +14,20 @@
 
 ## TL;DR
 
-**Root cause found, fixed, and verified end-to-end (2026-07-24). WebGPU 4.7.1
-renders in the browser and both templates are checksum-locked.** The full ADR 0002
-gate — rebuild → export → browser WebGPU probe (active canvas context, no runtime
-error) → visual compare **1.2%** vs the WebGL baseline (3% threshold) — is green,
-and `engine-lock.toml [artifacts.export_templates]` now records
-`web_webgpu_release` (`3642cf5e…`) + `web_webgpu_debug` (`1f1ed2b5…`).
+> **⚠️ Corrected later on 2026-07-24: the gate below only ever exercised 2D UI.**
+> WebGPU renders 2D/Control content but **not 3D** — a lit *or even unshaded* 3D
+> mesh is black under WebGPU while WebGL renders it. Root cause: the 3D scene
+> uber-shader **hangs during synchronous SPIR‑V→WGSL translation** (first ~50
+> shaders translate; the ~51st never completes). See **§3D rendering gap** below.
+> Do not read "renders in the browser" as "renders 3D games."
+
+The boot/RefCounted blocker was genuinely fixed and both templates are locked: the
+ADR 0002 gate — rebuild → export → browser WebGPU probe (active canvas context, no
+runtime error) → visual compare **1.2%** vs the WebGL baseline — is green **for the
+neutral template's 2D menu**, and `engine-lock.toml [artifacts.export_templates]`
+records `web_webgpu_release` (`3642cf5e…`) + `web_webgpu_debug` (`1f1ed2b5…`). The
+gate's blind spot — it renders a 2D Control scene, never a 3D one — is exactly what
+let "WebGPU renders" overclaim slip through. **A 3D probe must be added to the gate.**
 
 | Gate | Status | Evidence |
 | --- | --- | --- |
@@ -27,7 +35,8 @@ and `engine-lock.toml [artifacts.export_templates]` now records
 | Web templates compile (release + debug, `nothreads`, `webgpu=yes`) | ✅ | `bin/godot.web.template_*.wasm32.nothreads.*` |
 | Tint SPIR‑V→WGSL translation (storage‑buffer + OpImage ordering) | ✅ | patches 0007, 0008 |
 | **Emdawn/Godot `RefCounted` ODR collision** (the heap‑buffer‑overflow) | ✅ **fixed in source** | `engine/toolchain/patches/0001-emdawn-private-namespace.patch`, locked in `[toolchain.emdawnwebgpu]` |
-| **Rebuild + browser WebGPU probe** with the backport | ✅ **verified 2026‑07‑24** | full gate green (this file, §Verification) |
+| **Rebuild + browser probe (2D UI only)** with the backport | ✅ 2026‑07‑24 — **2D only** | 2D menu, 1.2% vs WebGL |
+| **3D rendering under WebGPU** | ❌ **black — hangs in 3D scene-shader translation** | §3D rendering gap |
 | Template artifacts locked in `engine-lock.toml` | ✅ | `[artifacts.export_templates]`: release + debug + sha256 |
 
 Reference point: a **release** WebGPU export passed a (shallow, non‑ASAN) browser
@@ -35,6 +44,41 @@ proof on 2026‑07‑22 — `navigator.gpu` + adapter + active canvas context + 
 headless (`engine/.cache/oswt-proof/.studio/verification.json`). ASAN hardening
 then surfaced the `RefCounted` overflow that proof did not catch; that is now
 fixed and awaiting the re‑verified rebuild.
+
+---
+
+## 3D rendering gap (the current open blocker for games)
+
+**Symptom.** WebGPU renders 2D/Control UI (menus) but any 3D scene is black. A
+minimal `Node3D` + `BoxMesh` + `Camera3D` probe — even with an **unshaded**
+material — renders correctly under WebGL and is black under WebGPU. So it is not a
+lighting/shadow issue; it is the base 3D draw path.
+
+**Root cause (instrumented, 2026‑07‑24).** A `WEBGPU_VERBOSE` build shows WebGPU
+inits (`WebGPU 1.0 - Forward Mobile - Using Device`), submits ~3 frames, and
+translates the first ~50 shaders through Tint fine (2D `CanvasOcclusionShaderRD`
+pipelines get created). Then translation of the **~51st shader — the large 3D
+`SceneForwardMobile` uber‑shader — hangs and never completes** (`tint_misses`
+frozen at 50 after 90 s = a genuine hang, not slowness). The hang is in the
+synchronous SPIR‑V→WGSL step in `_translate_spirv_to_wgsl`
+(`rendering_device_driver_webgpu.cpp`): either one of the `spirv_preprocess::*`
+passes or `tint_wrapper_spirv_to_wgsl`. A per‑pass `[XLATE]` tracer build is in
+flight to name the exact step.
+
+**Secondary problem.** `precompiled_hits=0` — `wgsl_precompiled.gen.h` is empty
+(`_wgsl_precompiled_count = 0`) because `bin/tint_convert_cli` was never built
+(`wgsl_precompile.py` errors out without it). So even once the hang is fixed, every
+shader hits slow runtime Tint until the precompile table is populated (build
+`drivers/webgpu/tint_cli/build.sh`).
+
+**Reproduce.** Point the neutral template `main_scene` at a Node3D+BoxMesh probe
+(unshaded), `export_game.py --preset web-webgpu`, `run_browser_smoke.py` (widen its
+`relevant` console filter to include `[shader]|[diag|[js-p|[xlate`), read the last
+`[XLATE]`/`[SHADER]` line before the stall.
+
+**Gate blind spot.** The ADR 0002 acceptance gate exercises the neutral template's
+**2D** menu, so it passed while 3D was broken. **Add a 3D render probe to the gate**
+so "WebGPU renders" can never again mean "2D only."
 
 ---
 
