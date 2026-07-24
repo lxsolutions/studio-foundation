@@ -13,11 +13,15 @@
  * dismisses itself immediately (measured: gone by t=5s on a load whose first frame
  * arrives at ~20s).
  *
- * So we instrument the actual cause instead. Every GPU pipeline the engine builds goes
- * through GPUDevice.createRenderPipeline / createComputePipeline; we wrap those, count
- * them, and note when the last one was built. Pipeline construction going quiet, plus a
- * run of smooth frames, is a precise and engine-agnostic "it is drawing now" signal —
- * and it doubles as real progress to show the viewer.
+ * Pipeline construction is not a reliable signal either: Godot builds a few canvas
+ * pipelines early, then goes quiet for many seconds while Tint translates the scene
+ * shaders (translation creates no pipelines), so "pipelines went quiet" fires ~12s
+ * before anything is drawn — measured on the live demo.
+ *
+ * The decisive signal is the render loop itself. A running engine submits a command
+ * buffer every frame, so sustained GPUQueue.submit traffic means frames are genuinely
+ * being produced. We wrap that, and wrap pipeline creation too so the overlay can show
+ * real progress ("N pipelines built") while the viewer waits.
  *
  * Drop-in: include AFTER the shell's own script. Standalone, so a future re-export only
  * needs the single <script> tag re-added.
@@ -31,6 +35,7 @@
 	var NO_PIPELINE_GRACE_MS = 8000;   // fallback if nothing is ever instrumented
 	var MIN_VISIBLE_MS = 1200;         // avoid a jarring flash on instant loads
 	var HARD_TIMEOUT_MS = 180000;      // never trap the viewer behind the overlay
+	var SUSTAINED_SUBMITS = 20;        // command buffers in 1.5s => render loop is live
 
 	var started = Date.now();
 
@@ -53,6 +58,35 @@
 		});
 	}());
 
+	// The decisive signal: a running render loop submits a command buffer every frame.
+	// Pipeline construction alone is not enough — Godot builds a few canvas pipelines
+	// early, then goes quiet for many seconds while Tint translates the scene shaders
+	// (translation creates no pipelines), which makes "pipelines have gone quiet" fire
+	// long before anything is drawn. Sustained queue submissions only happen once the
+	// engine is genuinely producing frames.
+	var submitTimes = [];
+	(function instrumentQueue() {
+		if (typeof GPUQueue === 'undefined' || !GPUQueue.prototype) { return; }
+		var orig = GPUQueue.prototype.submit;
+		if (typeof orig !== 'function') { return; }
+		GPUQueue.prototype.submit = function () {
+			var now = Date.now();
+			submitTimes.push(now);
+			if (submitTimes.length > 200) { submitTimes.shift(); }
+			return orig.apply(this, arguments);
+		};
+		hooked.push('submit');
+	}());
+
+	function submitsInLast(ms) {
+		var cutoff = Date.now() - ms;
+		var n = 0;
+		for (var i = submitTimes.length - 1; i >= 0; i--) {
+			if (submitTimes[i] >= cutoff) { n++; } else { break; }
+		}
+		return n;
+	}
+
 	// Exposed so the render harness can verify the overlay's own logic.
 	window.__sfBoot = function () {
 		return {
@@ -61,6 +95,8 @@
 			sinceLastPipeline: lastPipelineAt ? Date.now() - lastPipelineAt : null,
 			downloadDone: downloadDone,
 			smooth: smooth,
+			submits1_5s: submitsInLast(1500),
+			totalSubmits: submitTimes.length,
 			age: Date.now() - started
 		};
 	};
@@ -137,13 +173,18 @@
 
 		var age = Date.now() - started;
 		var settled = smooth >= SMOOTH_FRAMES_REQUIRED;
-		var pipelinesQuiet = pipelineCount > 0 && (Date.now() - lastPipelineAt) > PIPELINE_QUIET_MS;
-		// Fallback for a build where nothing got instrumented at all.
-		var noPipelinesFallback = pipelineCount === 0 && downloadDone &&
-			(Date.now() - downloadDoneAt) > NO_PIPELINE_GRACE_MS;
 
-		if ((age > MIN_VISIBLE_MS && settled && (pipelinesQuiet || noPipelinesFallback)) ||
-				age > HARD_TIMEOUT_MS) {
+		// Primary: the render loop is submitting work every frame.
+		var rendering = submitsInLast(1500) >= SUSTAINED_SUBMITS;
+
+		// Fallback only if queue instrumentation never took (non-WebGPU build, or a
+		// browser where GPUQueue is not patchable): fall back to the older signal.
+		var instrumented = hooked.indexOf('submit') !== -1;
+		var fallback = !instrumented && settled &&
+			((pipelineCount > 0 && (Date.now() - lastPipelineAt) > PIPELINE_QUIET_MS) ||
+			 (pipelineCount === 0 && downloadDone && (Date.now() - downloadDoneAt) > NO_PIPELINE_GRACE_MS));
+
+		if ((age > MIN_VISIBLE_MS && (rendering || fallback)) || age > HARD_TIMEOUT_MS) {
 			finish();
 			return;
 		}
