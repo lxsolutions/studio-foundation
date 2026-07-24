@@ -129,7 +129,7 @@ to work here.
 | Capability | Evidence in this repository |
 |---|---|
 | Official engine base | Godot 4.7.1 stable is pinned by full commit in [engine-lock.toml](engine/engine-lock.toml) |
-| WebGPU source | An ordered patch series in [engine/patches/](engine/patches/), each checked by SHA-256 before application |
+| WebGPU source | An ordered patch series in [engine/patches/](engine/patches/), each checked by SHA-256 before application. `just engine-verify-patches` re-checks the whole series — checksums, ordering, and that nothing on disk is unlocked — with no toolchain required |
 | WebGPU toolchain | The exact Emdawn source and Dawn namespace backport are independently versioned and checksum-locked under [engine/toolchain/](engine/toolchain/) |
 | Source preparation | `engine-fetch` clones official Godot only and creates a disposable patched worktree |
 | Export templates | Accepted archives are recorded by filename, byte count, and SHA-256 in [engine-lock.toml](engine/engine-lock.toml) |

@@ -224,6 +224,11 @@ engine-test:
 engine-versions:
     {{PY}} engine/scripts/engine.py versions
 
+# Verify the WebGPU patch series against engine-lock.toml (checksums, ordering,
+# nothing unlocked). Stdlib only — no Godot, Emscripten, or GPU required.
+engine-verify-patches:
+    {{PY}} engine/scripts/verify_patch_series.py
+
 # Fetch pinned official Godot and apply the verified local patch series
 engine-fetch:
     {{PY}} engine/scripts/engine.py fetch
