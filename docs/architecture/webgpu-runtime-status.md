@@ -36,7 +36,8 @@ let "WebGPU renders" overclaim slip through. **A 3D probe must be added to the g
 | Tint SPIR‑V→WGSL translation (storage‑buffer + OpImage ordering) | ✅ | patches 0007, 0008 |
 | **Emdawn/Godot `RefCounted` ODR collision** (the heap‑buffer‑overflow) | ✅ **fixed in source** | `engine/toolchain/patches/0001-emdawn-private-namespace.patch`, locked in `[toolchain.emdawnwebgpu]` |
 | **Rebuild + browser probe (2D UI only)** with the backport | ✅ 2026‑07‑24 — **2D only** | 2D menu, 1.2% vs WebGL |
-| **3D rendering under WebGPU** | ❌ **black — hangs in 3D scene-shader translation** | §3D rendering gap |
+| **3D rendering under WebGPU** | 🟡 **crash/hang fixed offline (patches 0009 + 0010); in-browser render pending a GPU** | §3D rendering gap |
+| **3D scene-shader translation** | 🟡 **177/182 translate offline** (was 174) — patch 0010 fixes combined samplers forwarded through call chains; 5 remaining are fundamental WGSL gaps | §3D rendering gap |
 | Template artifacts locked in `engine-lock.toml` | ✅ | `[artifacts.export_templates]`: release + debug + sha256 |
 
 Reference point: a **release** WebGPU export passed a (shallow, non‑ASAN) browser
@@ -60,6 +61,26 @@ path — `glsl2spv` (Godot's glslang) → the driver's 11 preprocess passes → 
 crash, and with 0009 it translates with **0/182** crashes/hangs. In-browser render
 verification is still pending a GPU-capable machine (this dev box has none). The
 original investigation notes below are retained for context.
+
+**Follow-up — patch 0010 (combined-sampler split is now transitive).** With the
+crash gone, 8 of 182 shaders still failed Tint *gracefully* (translation returns
+an error → the effect is skipped, 3D still renders). Three of those were the same
+class of bug: `split_combined_samplers` rewrites GLSL `sampler2D` into WebGPU's
+required separate texture + sampler, but only started that rewrite for functions
+called with a combined **global** variable. A combined sampler forwarded through a
+wrapper into a deeper helper (Godot's tonemap bicubic-glow `texture2D_bicubic`
+chain, and `taa_resolve`) left the wrapper's parameter split (`ptr(Image)`) while
+the callee stayed `ptr(SampledImage)` — an invalid `OpFunctionCall` argument-type
+mismatch that Tint rejects. Patch 0010 iterates the split to a fixpoint, following
+every forwarded combined value and splitting each callee back to the same
+underlying global sampler. Verified offline with the same reproducer **plus
+SPIRV-Tools validation**: the three shaders now pass validation and translate to
+correct WGSL (separate `texture_2d` + `sampler`, `textureSampleLevel` wired to the
+split pair), coverage 174 → **177/182**, still 0 crashes. The 5 remaining are
+fundamental WGSL feature gaps (subpass `input_attachment` ×2, storage-texture
+format inference on `ssr_filter`, vertex-stage `read_write` storage on
+`voxel_gi_debug`, vertex `@builtin(position)` on `sdfgi_debug_probes`), not
+combined-sampler issues.
 
 **Symptom (original).** WebGPU renders 2D/Control UI (menus) but any 3D scene is black. A
 minimal `Node3D` + `BoxMesh` + `Camera3D` probe — even with an **unshaded**

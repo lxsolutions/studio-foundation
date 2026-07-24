@@ -67,6 +67,7 @@ series = [
   { file = "patches/0007-tint-storage-buffer-access.patch", sha256 = "708809d830b4559faadf62c11ed68a774dfb1897ddebbd04febf54089207baea" },
   { file = "patches/0008-tint-image-ordering.patch", sha256 = "14af2071b54ca4233b7a5280f2b8c48052a94be18bc64c912c13d07a8576c6db" },
   { file = "patches/0009-tint-volatile-decoration.patch", sha256 = "55e4611a21f3c809e3e3dbf0f6e3fb052f2a8f23e659ca91019306cd25b28fe0" },
+  { file = "patches/0010-webgpu-transitive-sampler-split.patch", sha256 = "ef6039b6c68077fd6956745a602778f986aadd15280e1e346f5a89d966c8de39" },
 ]
 
 [artifacts.export_templates]

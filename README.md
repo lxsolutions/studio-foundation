@@ -25,9 +25,13 @@ engine fork is fetched or required.
 > every 3D scene went black (2D/UI was unaffected). Patch 0009 strips the
 > `Volatile` decoration in SPIR-V preprocessing (same approach as `Restrict`).
 > **Verified offline** with a native reproducer over all 182 engine shaders:
-> `volumetric_fog` now translates and 0 crash (was 1). **In-browser render
-> verification is still pending** a GPU-capable machine (this dev box has no
-> hardware GPU). WebGL 2 remains the maintained fallback. Details:
+> `volumetric_fog` now translates and 0 crash (was 1). A follow-up (patch 0010)
+> also fixes a class of *silent* shader-translation failures — combined
+> image-samplers forwarded through function call chains (bicubic glow,
+> `taa_resolve`) — raising offline coverage to 177/182; the remaining 5 are
+> fundamental WGSL feature gaps, not crashes. **In-browser render verification is
+> still pending** a GPU-capable machine (this dev box has no hardware GPU). WebGL 2
+> remains the maintained fallback. Details:
 > [BOOTSTRAP_REPORT.md](BOOTSTRAP_REPORT.md).
 
 ## What is verifiable
@@ -41,6 +45,7 @@ engine fork is fetched or required.
 | Export templates | Accepted archives are recorded by filename, byte count, and SHA-256 in [engine-lock.toml](engine/engine-lock.toml); the release and debug WebGPU templates are locked (they passed the **2D** browser + visual gate on 2026-07-24) |
 | Runtime verification | Browser smoke tests observe the engine's adapter, device, and WebGPU canvas requests and reject any WebGL context request |
 | 3D rendering (WebGPU) | Root-caused + fixed (patch 0009 strips the `Volatile` decoration Tint's SPIR-V reader aborts on, from Godot's coherent compute shaders). Verified offline (native reproducer, 0/182 shaders crash, was 1). In-browser render verification pending a GPU-capable machine |
+| WebGPU shader coverage | 177 of 182 engine shaders translate to valid WGSL offline (was 174). Patch 0010 fixes combined image-samplers forwarded through function call chains (tonemap bicubic glow, `taa_resolve`). The 5 remaining are fundamental WGSL feature gaps (subpass `input_attachment`, storage-texture format inference, vertex-stage `read_write` storage), not crashes — the effect degrades, 3D still renders |
 | Fallback | The same template project has an official WebGL 2 export preset |
 | Template behavior | Headless GDScript tests cover the shared addon and neutral starter project |
 | Optional services | Rust and Nakama components are independently tested and are not required for client-only use |
