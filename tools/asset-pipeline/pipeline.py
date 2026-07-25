@@ -2,7 +2,7 @@
 """Deterministic command-line asset pipeline (ADR 0006).
 
   pipeline.py validate <file.blend>
-  pipeline.py export   <file.blend> [--out P]  # validate first, then GLB
+  pipeline.py export   <file.blend> [--out P] [--require-node N]
   pipeline.py cook     --profile P [--game G]  # export all + sync into project + manifests
   pipeline.py preview  <file.blend> [--frames N]
   pipeline.py report
@@ -23,8 +23,11 @@ import re
 import sys
 from pathlib import Path
 
+ASSET_PIPELINE_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(ASSET_PIPELINE_DIR))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pylib"))
 
+from glb_contract import GlbContractError, validate_glb_contract  # noqa: E402
 from studio_tools import env as senv  # noqa: E402
 
 REPO = senv.repo_root()
@@ -156,6 +159,10 @@ def cache_key_for(out_path: Path) -> str:
         return f"external/{resolved.name}-{digest}"
 
 
+def candidate_path_for(out_path: Path) -> Path:
+    return out_path.with_name(f".{out_path.stem}.candidate.glb")
+
+
 def cmd_validate(blend: Path) -> int:
     meta = load_meta(blend)
     result = run_blender(blend, "validate.py", [f"--meta={sidecar_for(blend)}"])
@@ -176,6 +183,7 @@ def cmd_export(
     blend: Path,
     force: bool = False,
     requested_out: Path | None = None,
+    required_nodes: tuple[str, ...] = (),
 ) -> tuple[int, Path]:
     out_path = export_path_for(blend, requested_out)
     cache = load_cache()
@@ -183,15 +191,42 @@ def cmd_export(
     key = cache_key_for(out_path)
     display_path = key if not key.startswith("external/") else str(out_path)
     if not force and cache.get(key) == digest and out_path.is_file():
-        print(f"export {blend.name}: cached ({display_path})")
-        return 0, out_path
+        try:
+            validate_glb_contract(out_path, required_nodes)
+        except GlbContractError as exc:
+            print(
+                f"export {blend.name}: cached output failed GLB contract ({exc}); rebuilding",
+                file=sys.stderr,
+            )
+        else:
+            print(f"export {blend.name}: cached ({display_path})")
+            return 0, out_path
     code = cmd_validate(blend)
     if code != 0:
         return code, out_path
-    result = run_blender(blend, "export_gltf.py", [f"--out={out_path}"])
-    if not result.get("ok"):
-        print(f"export {blend.name}: FAILED — {result.get('error', 'unknown')}", file=sys.stderr)
+    candidate_path = candidate_path_for(out_path)
+    try:
+        candidate_path.unlink(missing_ok=True)
+        result = run_blender(blend, "export_gltf.py", [f"--out={candidate_path}"])
+        if not result.get("ok"):
+            print(
+                f"export {blend.name}: FAILED — {result.get('error', 'unknown')}",
+                file=sys.stderr,
+            )
+            return 1, out_path
+        validate_glb_contract(candidate_path, required_nodes)
+        candidate_path.replace(out_path)
+    except GlbContractError as exc:
+        print(f"export {blend.name}: FAILED — {exc}", file=sys.stderr)
         return 1, out_path
+    except OSError as exc:
+        print(f"export {blend.name}: FAILED — cannot publish GLB candidate: {exc}", file=sys.stderr)
+        return 1, out_path
+    finally:
+        try:
+            candidate_path.unlink(missing_ok=True)
+        except OSError:
+            pass
     cache[key] = digest
     save_cache(cache)
     print(f"export {blend.name}: OK -> {display_path} ({result.get('bytes', 0)} bytes)")
@@ -304,6 +339,13 @@ def main() -> int:
                 "--out",
                 help="GLB output path (required when the master is outside this repository)",
             )
+            cmd.add_argument(
+                "--require-node",
+                action="append",
+                default=[],
+                metavar="NAME",
+                help="case-sensitive GLB node name required by the runtime; repeat as needed",
+            )
     cook = sub.add_parser("cook")
     cook.add_argument("--profile", required=True)
     cook.add_argument("--game", default="templates/godot-game")
@@ -321,7 +363,12 @@ def main() -> int:
         return cmd_validate(blend)
     if args.command == "export":
         requested_out = Path(args.out) if args.out else None
-        return cmd_export(blend, force=args.force, requested_out=requested_out)[0]
+        return cmd_export(
+            blend,
+            force=args.force,
+            requested_out=requested_out,
+            required_nodes=tuple(args.require_node),
+        )[0]
     if args.command == "preview":
         return cmd_preview(blend, args.frames)
     return 2

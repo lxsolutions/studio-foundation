@@ -59,7 +59,15 @@ class ExportPaths(unittest.TestCase):
 
         self.assertEqual(pipeline.export_path_for(blend, requested), requested.resolve())
 
-    def test_export_cli_forwards_explicit_output(self) -> None:
+    def test_candidate_is_a_sibling_glb_for_atomic_replacement(self) -> None:
+        output = self.external / "assets/vehicles/skimmer.glb"
+
+        candidate = pipeline.candidate_path_for(output)
+
+        self.assertEqual(candidate.parent, output.parent)
+        self.assertEqual(candidate.name, ".skimmer.candidate.glb")
+
+    def test_export_cli_forwards_output_and_required_nodes(self) -> None:
         blend = self.external / "art_source/blender/skimmer.blend"
         requested = self.external / "assets/vehicles/skimmer.glb"
         blend.parent.mkdir(parents=True)
@@ -71,6 +79,10 @@ class ExportPaths(unittest.TestCase):
             "--out",
             str(requested),
             "--force",
+            "--require-node",
+            "AetherDartHull",
+            "--require-node",
+            "FactionArmor",
         ]
 
         with (
@@ -84,6 +96,7 @@ class ExportPaths(unittest.TestCase):
             blend.resolve(),
             force=True,
             requested_out=requested,
+            required_nodes=("AetherDartHull", "FactionArmor"),
         )
 
     def test_external_cache_key_is_stable_hashed_and_path_free(self) -> None:
