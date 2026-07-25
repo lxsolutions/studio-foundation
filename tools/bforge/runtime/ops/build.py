@@ -216,6 +216,85 @@ def build_lathe(ctx, name, profile, segments, location, material, color, uv, uv_
     return _finish(ctx, obj, locals())
 
 
+@op(
+    "build.sweep",
+    summary="Sweep a 2D cross-section along a path — the workhorse for level geometry. Racetracks, grandstands, roads, ramparts, rails, tunnels, mouldings and pipes are all one profile plus one path. Frames use parallel transport, so a closed loop does not twist.",
+    params=_params(
+        profile=("num[]", None, "Flat [lateral0, vertical0, lateral1, vertical1, ...] cross-section in metres, relative to the path"),
+        path=("num[]", [], "Flat [x0,y0,z0, x1,y1,z1, ...] path points; leave empty and use path_shape instead"),
+        path_shape=("enum:custom|oval|circle|line|arc", "custom", "Built-in path generator"),
+        straight=("num", 40.0, "oval: length of each straight in metres"),
+        radius=("num", 12.0, "oval/circle/arc radius in metres"),
+        length=("num", 20.0, "line: total length in metres along X"),
+        arc_degrees=("num", 180.0, "arc: sweep angle in degrees"),
+        segments=("int", 24, "Path resolution (per turn for an oval)"),
+        closed_path=("bool", True, "Close the path into a loop (oval and circle are always closed)"),
+        closed_profile=("bool", True, "Treat the cross-section as a closed outline (a solid tube) rather than an open strip"),
+        smooth=("bool", False, "Smooth shading"),
+        uv=("enum:box|cylinder|smart|smart_packed|none", "box", "UV strategy"),
+        uv_scale=("num", 4.0, "Metres per UV tile"),
+        origin=("enum:bottom|center|center_xy|world", "world", "Pivot placement"),
+    ),
+    tags=["build", "architecture"],
+)
+def build_sweep(ctx, name, profile, path, path_shape, straight, radius, length, arc_degrees,
+                segments, closed_path, closed_profile, location, material, color, uv, uv_scale,
+                origin, smooth):
+    import math
+
+    if len(profile) < 4 or len(profile) % 2 != 0:
+        raise OpError(
+            "profile must be an even-length list of at least 2 (lateral, vertical) pairs, "
+            "e.g. [-12,0, 12,0, 12,0.4, -12,0.4] for a 24 m wide, 0.4 m thick road"
+        )
+    section = [(profile[i], profile[i + 1]) for i in range(0, len(profile), 2)]
+    segments = max(3, segments)
+
+    if path_shape == "custom":
+        if len(path) < 6 or len(path) % 3 != 0:
+            raise OpError(
+                "path_shape='custom' needs a flat list of at least 2 (x, y, z) points, "
+                "or pick path_shape='oval'|'circle'|'line'|'arc'"
+            )
+        points = [(path[i], path[i + 1], path[i + 2]) for i in range(0, len(path), 3)]
+    elif path_shape == "oval":
+        points = mesh_lib.oval_path(straight, radius, segments)
+        closed_path = True
+    elif path_shape == "circle":
+        points = [
+            (math.cos(2 * math.pi * i / segments) * radius,
+             math.sin(2 * math.pi * i / segments) * radius, 0.0)
+            for i in range(segments)
+        ]
+        closed_path = True
+    elif path_shape == "arc":
+        total = math.radians(arc_degrees)
+        points = [
+            (math.cos(total * i / segments) * radius,
+             math.sin(total * i / segments) * radius, 0.0)
+            for i in range(segments + 1)
+        ]
+        closed_path = False
+    else:  # line
+        points = [(-length * 0.5 + length * i / segments, 0.0, 0.0) for i in range(segments + 1)]
+        closed_path = False
+
+    bm = mesh_lib.new_bmesh()
+    try:
+        mesh_lib.sweep(bm, points, section, closed_path=closed_path,
+                       closed_profile=closed_profile)
+    except ValueError as exc:
+        bm.free()
+        raise OpError(str(exc)) from exc
+    mesh_lib.cleanup(bm)
+    obj = mesh_lib.to_object(bm, scene_lib.unique_name(name))
+    obj.location = location
+    result = _finish(ctx, obj, locals())
+    result["path_points"] = len(points)
+    result["path_shape"] = path_shape
+    return result
+
+
 # ---------------------------------------------------------------------------
 # editing existing geometry
 # ---------------------------------------------------------------------------

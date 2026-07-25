@@ -59,10 +59,20 @@ PRESETS = {
 }
 
 
+def srgb_to_linear(channel: float) -> float:
+    return channel / 12.92 if channel <= 0.04045 else ((channel + 0.055) / 1.055) ** 2.4
+
+
 def resolve_color(value) -> tuple:
     if isinstance(value, str):
         if value in PALETTE:
-            return PALETTE[value]
+            # PALETTE is authored in sRGB, the space an artist picks colours in.
+            # Blender's colour sockets are LINEAR. Feeding sRGB values straight
+            # in makes every palette colour render roughly 40% too bright and
+            # washed out — and it silently disagreed with hex colours, which
+            # were being converted. Same treatment for both.
+            rgba = PALETTE[value]
+            return (*(srgb_to_linear(c) for c in rgba[:3]), rgba[3])
         if value.startswith("#"):
             return hex_to_rgba(value)
         raise ValueError(
@@ -82,7 +92,7 @@ def hex_to_rgba(text: str) -> tuple:
     channels = [int(text[i : i + 2], 16) / 255.0 for i in range(0, len(text), 2)]
     # sRGB -> linear: Blender's colour sockets are linear, and skipping this is
     # why AI-made assets so often come out washed out.
-    linear = [c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4 for c in channels[:3]]
+    linear = [srgb_to_linear(c) for c in channels[:3]]
     alpha = channels[3] if len(channels) == 4 else 1.0
     return (*linear, alpha)
 
@@ -97,14 +107,34 @@ def principled(
     alpha=1.0,
     ior=1.45,
 ):
+    rgba_requested = resolve_color(color)
+    wanted = (
+        tuple(round(c, 4) for c in rgba_requested),
+        round(float(roughness), 4), round(float(metallic), 4),
+        round(float(emission), 4), round(float(alpha), 4),
+    )
     existing = bpy.data.materials.get(name)
     if existing is not None:
-        return existing
+        if _describes(existing) == wanted:
+            return existing
+        # Same name, different appearance. Returning the cached one silently
+        # hands back the WRONG colour — which is exactly what happened when a
+        # scene asked for m_stone in grey after an earlier call made it warm,
+        # and every stone surface in the build came out the same shade.
+        # Make a deterministic variant instead; material.consolidate merges
+        # any that really are identical later.
+        index = 2
+        while f"{name}_{index}" in bpy.data.materials:
+            candidate = bpy.data.materials[f"{name}_{index}"]
+            if _describes(candidate) == wanted:
+                return candidate
+            index += 1
+        name = f"{name}_{index}"
     material = bpy.data.materials.new(name)
     material.use_nodes = True
     tree = material.node_tree
     bsdf = tree.nodes.get("Principled BSDF")
-    rgba = resolve_color(color)
+    rgba = rgba_requested
     _set(bsdf, "Base Color", rgba)
     _set(bsdf, "Roughness", float(roughness))
     _set(bsdf, "Metallic", float(metallic))
@@ -131,6 +161,32 @@ def from_preset(preset: str, name=None, color=None, roughness=None, metallic=Non
         roughness=spec["roughness"] if roughness is None else roughness,
         metallic=spec["metallic"] if metallic is None else metallic,
         emission=spec.get("emission", 0.0),
+    )
+
+
+def _describes(material):
+    """The appearance tuple used to tell a cache hit from a name collision."""
+    if not material.use_nodes:
+        return None
+    bsdf = next((n for n in material.node_tree.nodes if n.type == "BSDF_PRINCIPLED"), None)
+    if bsdf is None:
+        return None
+
+    def value(socket_name, default=0.0):
+        socket = bsdf.inputs.get(socket_name)
+        if socket is None or socket.is_linked:
+            return default
+        try:
+            return round(float(socket.default_value), 4)
+        except TypeError:
+            return tuple(round(float(v), 4) for v in socket.default_value)
+
+    base = value("Base Color", (0.0, 0.0, 0.0, 1.0))
+    if not isinstance(base, tuple):
+        base = (base, base, base, 1.0)
+    return (
+        base, value("Roughness"), value("Metallic"),
+        value("Emission Strength"), value("Alpha", 1.0),
     )
 
 

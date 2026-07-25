@@ -186,7 +186,11 @@ def _configure_engine(engine, samples, resolution):
     scene.cycles.device = "CPU"
     scene.cycles.samples = max(1, samples)
     scene.cycles.use_denoising = False
-    scene.cycles.max_bounces = 4
+    # Two bounces, not four. These are review renders: with full GI a large
+    # saturated surface (a red racetrack, a green field) bleeds its colour over
+    # every other material in the scene and you can no longer judge any of them.
+    scene.cycles.max_bounces = 2
+    scene.cycles.diffuse_bounces = 2
     scene.cycles.caustics_reflective = False
     scene.cycles.caustics_refractive = False
     return "cycles"
@@ -247,6 +251,65 @@ def render_view(ctx, out, objects, view, resolution, samples, engine, ortho, wor
     return {
         "path": str(path), "rel": ctx.rel(path), "view": view, "engine": used,
         "resolution": resolution, "subject_radius_m": round(radius, 4),
+    }
+
+
+@op(
+    "render.camera",
+    summary="Render from an explicit camera position and target. Auto-framing always fits the WHOLE subject, which is useless on a 700 m stadium or a 40 m terrain — this is how you get a close-up, an eye-level gameplay view, or a hero shot.",
+    params={
+        "out": ("path", "shot.png", "PNG output path"),
+        "position": ("vec3", None, "Camera position in metres"),
+        "target": ("vec3", [0.0, 0.0, 0.0], "Point to look at"),
+        "lens": ("num", 50.0, "Focal length in mm — 24 is wide, 50 neutral, 105 compressed"),
+        "resolution": ("int", 640, "Width in pixels"),
+        "aspect": ("num", 1.0, "Width / height. Use 1.78 for a 16:9 gameplay framing"),
+        "samples": ("int", 32, "Render samples"),
+        "engine": ("enum:auto|cycles|eevee", "auto", "Render engine"),
+        "light_distance": ("num", 0.0, "Light rig scale in metres; 0 fits it to the whole scene"),
+        "world_light": ("num", 0.6, "Ambient strength"),
+    },
+    tags=["render"],
+)
+def render_camera(ctx, out, position, target, lens, resolution, aspect, samples, engine,
+                  light_distance, world_light):
+    if not [o for o in bpy.context.scene.objects if o.type == "MESH"]:
+        raise OpError("nothing to render — the scene has no mesh objects")
+    centre = Vector(target)
+    eye = Vector(position)
+    # Light the region being looked at, not the whole 700 m building, or the
+    # rig ends up so far away and so powerful that the close-up is unlit.
+    radius = light_distance if light_distance > 0 else max(1.0, (eye - centre).length * 0.55)
+
+    _setup_world(world_light)
+    lights = _setup_lights(centre, radius)
+
+    camera_data = bpy.data.cameras.new("_bforge_shot")
+    camera = bpy.data.objects.new("_bforge_shot", camera_data)
+    bpy.context.scene.collection.objects.link(camera)
+    bpy.context.scene.camera = camera
+    camera_data.lens = max(8.0, lens)
+    camera.location = eye
+    camera.rotation_euler = (centre - eye).to_track_quat("-Z", "Y").to_euler()
+    distance = max(0.1, (eye - centre).length)
+    camera_data.clip_start = max(0.01, distance * 0.001)
+    camera_data.clip_end = distance * 20.0
+
+    used = _configure_engine(engine, samples, resolution)
+    scene = bpy.context.scene
+    scene.render.resolution_x = resolution
+    scene.render.resolution_y = max(1, int(resolution / max(0.1, aspect)))
+    bpy.context.view_layer.update()
+
+    path = ctx.out_path(out, ".png")
+    try:
+        _render_to(path)
+    finally:
+        _cleanup_rig(lights + [camera])
+    return {
+        "path": str(path), "rel": ctx.rel(path), "engine": used,
+        "position": [round(v, 3) for v in eye], "target": [round(v, 3) for v in centre],
+        "lens_mm": lens, "resolution": [scene.render.resolution_x, scene.render.resolution_y],
     }
 
 

@@ -136,6 +136,114 @@ def material_bake(ctx, object, pass_name, size, samples, out, unwrap, rewire):
 
 
 @op(
+    "material.consolidate",
+    summary="Merge materials that render identically into one shared material. Composing a scene from many prop recipes leaves a pile of near-duplicate materials, and every distinct material is a draw call — this collapses them without changing how anything looks.",
+    params={
+        "tolerance": ("num", 0.02, "How close two materials' colour/roughness/metallic must be to count as the same"),
+        "objects": ("str[]", [], "Limit to these objects (empty = whole scene)"),
+        "dry_run": ("bool", False, "Report what would merge without changing anything"),
+    },
+    tags=["material", "gameready"],
+)
+def material_consolidate(ctx, tolerance, objects, dry_run):
+    targets = (
+        [_get(n) for n in objects] if objects
+        else [o for o in bpy.context.scene.objects if o.type == "MESH"]
+    )
+    if not targets:
+        raise OpError("no mesh objects to consolidate")
+
+    used: list = []
+    for obj in targets:
+        for material in obj.data.materials:
+            if material is not None and material not in used:
+                used.append(material)
+
+    # Group by rendered appearance, not by name. Two materials called
+    # m_flame_torch_0 and m_flame_torch_7 with the same inputs are one material
+    # as far as the GPU is concerned.
+    groups: list[tuple[tuple, list]] = []
+    for material in used:
+        key = _appearance(material)
+        if key is None:
+            continue  # procedural/unresolvable — never merge, it may differ
+        for existing_key, members in groups:
+            if _close(existing_key, key, tolerance):
+                members.append(material)
+                break
+        else:
+            groups.append((key, [material]))
+
+    merges = {}
+    for _key, members in groups:
+        if len(members) < 2:
+            continue
+        # Keep the shortest name: it is almost always the generic one
+        # (m_stone) rather than a per-instance variant (m_stone_torch_12).
+        keeper = min(members, key=lambda m: (len(m.name), m.name))
+        for member in members:
+            if member is not keeper:
+                merges[member.name] = keeper.name
+
+    if not dry_run and merges:
+        for obj in targets:
+            for index, material in enumerate(obj.data.materials):
+                if material is not None and material.name in merges:
+                    obj.data.materials[index] = bpy.data.materials[merges[material.name]]
+        # Drop the now-unused datablocks so material.list stays honest.
+        for name in list(merges):
+            leftover = bpy.data.materials.get(name)
+            if leftover is not None and leftover.users == 0:
+                bpy.data.materials.remove(leftover)
+
+    remaining = sorted(
+        {m.name for o in targets for m in o.data.materials if m is not None}
+    )
+    return {
+        "merged": merges,
+        "materials_before": len(used),
+        "materials_after": len(remaining),
+        "draw_calls_saved": max(0, len(used) - len(remaining)),
+        "remaining": remaining,
+        "dry_run": dry_run,
+    }
+
+
+def _appearance(material):
+    """A comparable tuple of what actually reaches the GPU, or None if unknown."""
+    if not material.use_nodes:
+        return ("flat", tuple(round(c, 4) for c in material.diffuse_color))
+    tree = material.node_tree
+    if any(n.type not in
+           ("BSDF_PRINCIPLED", "OUTPUT_MATERIAL", "FRAME", "REROUTE") for n in tree.nodes):
+        return None  # textured or procedural: appearance is not just its sockets
+    bsdf = next((n for n in tree.nodes if n.type == "BSDF_PRINCIPLED"), None)
+    if bsdf is None:
+        return None
+    values = []
+    for socket_name in ("Base Color", "Roughness", "Metallic", "Alpha",
+                        "Emission Color", "Emission Strength", "IOR"):
+        socket = bsdf.inputs.get(socket_name)
+        if socket is None:
+            values.append(0.0)
+        elif socket.is_linked:
+            return None
+        else:
+            value = socket.default_value
+            try:
+                values.extend(float(v) for v in value)
+            except TypeError:
+                values.append(float(value))
+    return ("principled", tuple(values))
+
+
+def _close(left, right, tolerance):
+    if left[0] != right[0] or len(left[1]) != len(right[1]):
+        return False
+    return all(abs(a - b) <= tolerance for a, b in zip(left[1], right[1], strict=True))
+
+
+@op(
     "material.list",
     summary="List materials in the file and flag any that glTF cannot export.",
     params={},

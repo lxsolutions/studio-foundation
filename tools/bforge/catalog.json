@@ -897,6 +897,146 @@
       }
     },
     {
+      "name": "build.sweep",
+      "summary": "Sweep a 2D cross-section along a path \u2014 the workhorse for level geometry. Racetracks, grandstands, roads, ramparts, rails, tunnels, mouldings and pipes are all one profile plus one path. Frames use parallel transport, so a closed loop does not twist.",
+      "tags": [
+        "build",
+        "architecture"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name (coerced to snake_case)",
+            "default": "part"
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World position in metres",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "material": {
+            "type": "string",
+            "description": "Material preset name, or '' for none. See meta.palette",
+            "default": "stone"
+          },
+          "color": {
+            "type": "string",
+            "description": "Override colour: palette name or #rrggbb",
+            "default": ""
+          },
+          "uv": {
+            "type": "string",
+            "enum": [
+              "box",
+              "cylinder",
+              "smart",
+              "smart_packed",
+              "none"
+            ],
+            "description": "UV strategy",
+            "default": "box"
+          },
+          "uv_scale": {
+            "type": "number",
+            "description": "Metres per UV tile",
+            "default": 4.0
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "bottom",
+              "center",
+              "center_xy",
+              "world"
+            ],
+            "description": "Pivot placement",
+            "default": "world"
+          },
+          "smooth": {
+            "type": "boolean",
+            "description": "Smooth shading",
+            "default": false
+          },
+          "profile": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "description": "Flat [lateral0, vertical0, lateral1, vertical1, ...] cross-section in metres, relative to the path"
+          },
+          "path": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "description": "Flat [x0,y0,z0, x1,y1,z1, ...] path points; leave empty and use path_shape instead",
+            "default": []
+          },
+          "path_shape": {
+            "type": "string",
+            "enum": [
+              "custom",
+              "oval",
+              "circle",
+              "line",
+              "arc"
+            ],
+            "description": "Built-in path generator",
+            "default": "custom"
+          },
+          "straight": {
+            "type": "number",
+            "description": "oval: length of each straight in metres",
+            "default": 40.0
+          },
+          "radius": {
+            "type": "number",
+            "description": "oval/circle/arc radius in metres",
+            "default": 12.0
+          },
+          "length": {
+            "type": "number",
+            "description": "line: total length in metres along X",
+            "default": 20.0
+          },
+          "arc_degrees": {
+            "type": "number",
+            "description": "arc: sweep angle in degrees",
+            "default": 180.0
+          },
+          "segments": {
+            "type": "integer",
+            "description": "Path resolution (per turn for an oval)",
+            "default": 24
+          },
+          "closed_path": {
+            "type": "boolean",
+            "description": "Close the path into a loop (oval and circle are always closed)",
+            "default": true
+          },
+          "closed_profile": {
+            "type": "boolean",
+            "description": "Treat the cross-section as a closed outline (a solid tube) rather than an open strip",
+            "default": true
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "build.torus",
       "summary": "Torus. Rings, handles, hoops, portal frames.",
       "tags": [
@@ -2411,6 +2551,11 @@
             "type": "boolean",
             "description": "Move each object so its lowest point sits at Z=0",
             "default": false
+          },
+          "to_origin": {
+            "type": "boolean",
+            "description": "Also move the object itself to (0,0,0). Required for a single-asset master file \u2014 the studio validator rejects a root object that is not at the world origin",
+            "default": false
           }
         },
         "additionalProperties": false
@@ -2790,6 +2935,40 @@
             "type": "boolean",
             "description": "Replace the procedural graph with the baked texture",
             "default": true
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "material.consolidate",
+      "summary": "Merge materials that render identically into one shared material. Composing a scene from many prop recipes leaves a pile of near-duplicate materials, and every distinct material is a draw call \u2014 this collapses them without changing how anything looks.",
+      "tags": [
+        "material",
+        "gameready"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "tolerance": {
+            "type": "number",
+            "description": "How close two materials' colour/roughness/metallic must be to count as the same",
+            "default": 0.02
+          },
+          "objects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Limit to these objects (empty = whole scene)",
+            "default": []
+          },
+          "dry_run": {
+            "type": "boolean",
+            "description": "Report what would merge without changing anything",
+            "default": false
           }
         },
         "additionalProperties": false
@@ -4446,6 +4625,89 @@
       }
     },
     {
+      "name": "render.camera",
+      "summary": "Render from an explicit camera position and target. Auto-framing always fits the WHOLE subject, which is useless on a 700 m stadium or a 40 m terrain \u2014 this is how you get a close-up, an eye-level gameplay view, or a hero shot.",
+      "tags": [
+        "render"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "out": {
+            "type": "string",
+            "description": "PNG output path",
+            "default": "shot.png"
+          },
+          "position": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "Camera position in metres"
+          },
+          "target": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "Point to look at",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "lens": {
+            "type": "number",
+            "description": "Focal length in mm \u2014 24 is wide, 50 neutral, 105 compressed",
+            "default": 50.0
+          },
+          "resolution": {
+            "type": "integer",
+            "description": "Width in pixels",
+            "default": 640
+          },
+          "aspect": {
+            "type": "number",
+            "description": "Width / height. Use 1.78 for a 16:9 gameplay framing",
+            "default": 1.0
+          },
+          "samples": {
+            "type": "integer",
+            "description": "Render samples",
+            "default": 32
+          },
+          "engine": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "cycles",
+              "eevee"
+            ],
+            "description": "Render engine",
+            "default": "auto"
+          },
+          "light_distance": {
+            "type": "number",
+            "description": "Light rig scale in metres; 0 fits it to the whole scene",
+            "default": 0.0
+          },
+          "world_light": {
+            "type": "number",
+            "description": "Ambient strength",
+            "default": 0.6
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "render.contact_sheet",
       "summary": "THE review image. Renders hero/front/side/top plus a wireframe pass (shows topology and wasted triangles) and a checker pass (shows UV stretch and texel-density mismatches), composited into one PNG. Look at this after generating anything \u2014 it is how you catch problems a triangle count cannot show.",
       "tags": [
@@ -4639,6 +4901,50 @@
             "type": "number",
             "description": "Ambient strength",
             "default": 0.6
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "session.import",
+      "summary": "Import an existing glTF/GLB, OBJ, FBX or .blend into the current scene. Use this to inspect, critique, fix or extend assets a game already ships \u2014 not just ones you generated.",
+      "tags": [
+        "session",
+        "io"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "File to import (.glb/.gltf/.obj/.fbx/.blend)"
+          },
+          "prefix": {
+            "type": "string",
+            "description": "Rename imported objects with this prefix (keeps names snake_case)",
+            "default": ""
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "Offset to place the import at",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "reset_first": {
+            "type": "boolean",
+            "description": "Clear the scene before importing",
+            "default": false
           }
         },
         "additionalProperties": false
