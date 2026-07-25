@@ -52,6 +52,34 @@ browser WebGPU template build. They apply to the official Godot commit in
     depth slots. Verified on a Tesla P40: six PBR meshes with real-time shadows at
     59-60 fps, 36 draws/frame, 0 GPUValidationError.
 
+15. `0015-webgpu-cluster-builder-no-subgroups.patch` - unblock Forward+ (clustered)
+    under WebGPU. The cluster builder's fragment shader elects one writer per
+    cluster with subgroup ballot/arithmetic, which WebGPU does not have at all
+    (the driver already reported `LIMIT_SUBGROUP_*` as 0, but nothing in
+    `servers/rendering` ever read those limits), and guards that election with
+    `gl_HelperInvocation`, which aborts Tint's SPIR-V reader outright
+    (`TINT_UNIMPLEMENTED ... BuiltIn: HelperInvocation` - a wasm trap in the
+    browser, same failure mode as the Volatile decoration fixed in `0009`). Adds
+    an appended `USE_SUBGROUPS` variant pair so subgroup-capable drivers are
+    untouched, and a plain-atomics fallback that is bit-identical because every
+    invocation the ballot would have grouped writes the same word and bit and
+    `atomicOr` is idempotent. Forward+ is the renderer that fits WebGPU: Forward
+    Mobile's only untranslatable shader, `tonemap_mobile.glsl`, is also the only
+    shader in the engine that uses subpasses, which WebGPU has no concept of.
+
+16. `0016-webgpu-offline-harness-engine-parity.patch` - make the GPU-free shader
+    harness reproduce the engine. `glsl2spv` hardcoded Vulkan 1.0 / SPIR-V 1.0
+    while `RenderingShaderContainerWebGPU` reports Vulkan 1.1 / SPIR-V 1.3, so
+    every offline result was measured against a target the runtime never uses -
+    and because subgroup ops cannot compile at 1.0, that mismatch actively hid
+    the `HelperInvocation` abort fixed in `0015`. Also stops one crashing module
+    from being reported as an all-modules failure (a Tint abort killed the whole
+    `--batch` process and the caller turned that into "everything failed"), names
+    failing shaders instead of only counting them, and teaches the harness the
+    real `cluster_render` variant set. Adds `build_glsl2spv.sh` (glslang-only
+    build, ~1 min instead of ~30, statically linked) and `probe_one.py`
+    (single-shader probe that prints the raw Tint error).
+
 The WebGPU implementation originated in `dwalter/godotwebgpu`. Studio
 Foundation owns the 4.7.1 port, scoped patch curation, preparation/build tooling,
 and validation. See `../../docs/architecture/webgpu-integration.md` for the

@@ -1,0 +1,324 @@
+Subject: [PATCH] webgpu: make the offline shader harness match the engine
+
+The GPU-free harness (glsl2spv -> the driver's 11 preprocess passes -> Tint) is
+how every shader-translation defect in this series was found and verified. It
+was not reproducing the engine.
+
+1. Wrong target environment. glsl2spv hardcoded EShTargetVulkan_1_0 /
+   EShTargetSpv_1_0, but RenderingShaderContainerWebGPU reports
+   SHADER_LANGUAGE_VULKAN_VERSION_1_1 + SHADER_SPIRV_VERSION_1_3, and
+   modules/glslang/register_types.cpp feeds those straight into glslang. So the
+   harness compiled every shader against a SPIR-V version the runtime never
+   uses. That is not cosmetic: SPIR-V 1.0 emits SSBOs as StorageClass::Uniform +
+   BufferBlock rather than StorageClass::StorageBuffer, and any shader using
+   subgroup ops cannot be compiled at all.
+
+   That last part actively hid a bug. cluster_render.glsl failed at the
+   GLSL->SPIR-V step, so it never reached Tint, so the TINT_UNIMPLEMENTED abort
+   on gl_HelperInvocation (fixed in 0015) was invisible. Now defaults to the
+   engine's 1.1/1.3; GLSL2SPV_SPV=10 restores the old target for bisecting.
+
+2. One crashing module reported as "everything is broken". Tint aborts take down
+   the whole `--batch` process, and convert_spirv_batch turned a non-zero exit
+   into `return {}`, marking every module in the batch as a Tint failure. A
+   single bad shader read as 183 failures and 0 successes. It now degrades to
+   per-file conversion so the crasher is isolated and named and the rest still
+   convert.
+
+3. Silent failure lists. Tint failures were counted but never named, so the
+   summary said "5 tint failures" without saying which five. They are now
+   printed.
+
+4. cluster_render variants. The harness only knew the single "default" variant;
+   it now mirrors the four variants cluster_builder_rd.cpp actually builds, so
+   both the subgroup and non-subgroup paths are exercised.
+
+Also adds two tools:
+
+  - tint_cli/build_glsl2spv.sh: builds glsl2spv from Godot's vendored glslang
+    alone (~1 minute) instead of requiring the full Tint + SPIRV-Tools build
+    (~30). Source list and defines mirror modules/glslang/SCsub. Statically
+    links the toolchain runtime, without which a MinGW-built binary dies with
+    0xC0000139 (STATUS_ENTRYPOINT_NOT_FOUND) the moment Python or PowerShell
+    launches it.
+  - tint_cli/probe_one.py: runs one shader variant through Tint on its own and
+    prints the raw error and the SPIR-V version header, which is what made the
+    HelperInvocation abort identifiable rather than just a count.
+
+Sweep at the corrected target env, with 0015 applied: 182 modules compiled,
+6 Tint failures -- tonemap_mobile subpass x2 (Forward Mobile only; WebGPU has no
+subpasses), screen_space_reflection_filter (storage-texture format inference,
+the one real Forward+ gap), cluster_render subgroup variants x2 (not selected on
+WebGPU), and sdfgi_debug_probes (editor debug visualisation).
+
+diff --git a/drivers/webgpu/tint_cli/glsl2spv.cpp b/drivers/webgpu/tint_cli/glsl2spv.cpp
+--- a/drivers/webgpu/tint_cli/glsl2spv.cpp
++++ b/drivers/webgpu/tint_cli/glsl2spv.cpp
+@@ -3,6 +3,7 @@
+ //   glsl2spv <vert|frag|comp> <in.glsl> <out.spv>
+ //   tint_convert_cli <out.spv>            # hang == the runtime bug, no GPU needed
+ #include <cstdio>
++#include <cstdlib>
+ #include <fstream>
+ #include <sstream>
+ #include <string>
+@@ -69,8 +70,24 @@
+ 	glslang::TShader shader(stage);
+ 	shader.setStrings(srcs, 1);
+ 	shader.setEnvInput(glslang::EShSourceGlsl, stage, glslang::EShClientVulkan, 100);
+-	shader.setEnvClient(glslang::EShClientVulkan, glslang::EShTargetVulkan_1_0);
+-	shader.setEnvTarget(glslang::EShTargetSpv, glslang::EShTargetSpv_1_0);
++
++	// Match the engine, not an arbitrary default. RenderingShaderContainerWebGPU
++	// reports SHADER_LANGUAGE_VULKAN_VERSION_1_1 + SHADER_SPIRV_VERSION_1_3, and
++	// the runtime feeds those straight into glslang (modules/glslang/register_types.cpp).
++	// Targeting 1.0 here silently diverges from the engine: SPIR-V 1.0 emits SSBOs as
++	// StorageClass::Uniform + BufferBlock, and shaders using subgroup ops (the Forward+
++	// cluster builder) fail to compile at all, so they never even reach Tint.
++	// Override with GLSL2SPV_SPV=10|13 only to bisect a version-specific problem.
++	glslang::EShTargetClientVersion client_ver = glslang::EShTargetVulkan_1_1;
++	glslang::EShTargetLanguageVersion spv_ver = glslang::EShTargetSpv_1_3;
++	if (const char *e = getenv("GLSL2SPV_SPV")) {
++		if (std::string(e) == "10") {
++			client_ver = glslang::EShTargetVulkan_1_0;
++			spv_ver = glslang::EShTargetSpv_1_0;
++		}
++	}
++	shader.setEnvClient(glslang::EShClientVulkan, client_ver);
++	shader.setEnvTarget(glslang::EShTargetSpv, spv_ver);
+ 
+ 	if (!shader.parse(GetDefaultResources(), 450, false, EShMsgDefault)) {
+ 		fprintf(stderr, "GLSL parse error:\n%s\n%s\n", shader.getInfoLog(), shader.getInfoDebugLog());
+diff --git a/drivers/webgpu/wgsl_precompile.py b/drivers/webgpu/wgsl_precompile.py
+--- a/drivers/webgpu/wgsl_precompile.py
++++ b/drivers/webgpu/wgsl_precompile.py
+@@ -546,8 +546,16 @@
+     # ── Cluster ─────────────────────────────────────────────────────
+     ("servers/rendering/renderer_rd/shaders/cluster_debug.glsl",
+      GENERAL_DEFINES_NONE, [("default", "", [VERT, FRAG])]),
++    # Mirrors the variant list in cluster_builder_rd.cpp. The USE_SUBGROUPS pair is
++    # what every subgroup-capable driver compiles; the bare pair is the fallback a
++    # driver without fragment-stage subgroups (WebGPU) selects.
+     ("servers/rendering/renderer_rd/shaders/cluster_render.glsl",
+-     GENERAL_DEFINES_NONE, [("default", "", [VERT, FRAG])]),
++     GENERAL_DEFINES_NONE, [
++         ("subgroups", "\n#define USE_SUBGROUPS\n", [VERT, FRAG]),
++         ("attachment_subgroups", "\n#define USE_ATTACHMENT\n#define USE_SUBGROUPS\n", [VERT, FRAG]),
++         ("default", "", [VERT, FRAG]),
++         ("attachment", "\n#define USE_ATTACHMENT\n", [VERT, FRAG]),
++     ]),
+     ("servers/rendering/renderer_rd/shaders/cluster_store.glsl",
+      GENERAL_DEFINES_NONE, [("default", "", [COMP])]),
+ 
+@@ -675,8 +683,28 @@
+         sys.exit(1)
+ 
+     if result.returncode != 0:
+-        print(f"Tint batch conversion failed: {result.stderr}", file=sys.stderr)
+-        return {}
++        # A TINT_UNIMPLEMENTED abort takes down the whole batch process, and returning
++        # {} here used to mark every module in the batch as a Tint failure -- one bad
++        # shader read as "everything is broken". Retry one file at a time so the
++        # crasher is isolated and named and the rest still convert.
++        first_line = (result.stderr.strip().splitlines() or ["(no stderr)"])[0]
++        print(f"[WGSL Precompile] Batch aborted: {first_line}", file=sys.stderr)
++        print("[WGSL Precompile] Retrying per-file to isolate the crasher...", file=sys.stderr)
++        output = {}
++        for key, path in spv_files:
++            try:
++                one = subprocess.run([tint_cli_path, path], capture_output=True, text=True, timeout=120)
++            except subprocess.TimeoutExpired:
++                print(f"  TINT-HANG: {key}", file=sys.stderr)
++                output[key] = None
++                continue
++            if one.returncode != 0 or not one.stdout:
++                detail = (one.stderr.strip().splitlines() or ["(no stderr)"])[0]
++                print(f"  TINT-CRASH: {key} :: {detail}", file=sys.stderr)
++                output[key] = None
++            else:
++                output[key] = one.stdout
++        return output
+ 
+     results = json.loads(result.stdout)
+     output = {}
+@@ -817,6 +845,7 @@
+             wgsl = wgsl_results.get(key)
+             if wgsl is None:
+                 failed_convert += 1
++                print(f"  TINT-FAIL: {key}")
+             else:
+                 spv_hash = compute_spv_hash(spv_data[key])
+                 # Avoid duplicate hashes (same SPIR-V from different variants).
+diff --git a/drivers/webgpu/tint_cli/build_glsl2spv.sh b/drivers/webgpu/tint_cli/build_glsl2spv.sh
+new file mode 100644
+--- /dev/null
++++ b/drivers/webgpu/tint_cli/build_glsl2spv.sh
+@@ -0,0 +1,112 @@
++#!/usr/bin/env bash
++# Build glsl2spv — native GLSL -> SPIR-V compiler using Godot's vendored glslang.
++#
++# Companion to tint_cli/build.sh (which builds tint_convert_cli). Kept separate
++# because glsl2spv only needs glslang, not Tint + SPIRV-Tools, so it builds in
++# ~1 minute instead of ~30.
++#
++# Source list and defines mirror modules/glslang/SCsub exactly, so the offline
++# harness compiles shaders the same way the engine does.
++#
++# Usage: ./drivers/webgpu/tint_cli/build_glsl2spv.sh [--clean]
++# Output: bin/glsl2spv
++set -euo pipefail
++
++SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
++REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
++cd "$REPO_ROOT"
++
++GLSLANG_DIR="thirdparty/glslang"
++SPIRV_HEADERS_DIR="thirdparty/spirv-headers"
++BUILD_DIR="drivers/webgpu/tint_cli/.build/glslang"
++CXX="${CXX:-g++}"
++JOBS=$(nproc 2>/dev/null || echo 4)
++
++for arg in "$@"; do
++    [[ "$arg" == "--clean" ]] && rm -rf "$BUILD_DIR"
++done
++mkdir -p "$BUILD_DIR"
++
++# Source list from modules/glslang/SCsub.
++SOURCES=(
++    "glslang/GenericCodeGen/CodeGen.cpp"
++    "glslang/GenericCodeGen/Link.cpp"
++    "glslang/MachineIndependent/attribute.cpp"
++    "glslang/MachineIndependent/Constant.cpp"
++    "glslang/MachineIndependent/glslang_tab.cpp"
++    "glslang/MachineIndependent/InfoSink.cpp"
++    "glslang/MachineIndependent/Initialize.cpp"
++    "glslang/MachineIndependent/Intermediate.cpp"
++    "glslang/MachineIndependent/intermOut.cpp"
++    "glslang/MachineIndependent/IntermTraverse.cpp"
++    "glslang/MachineIndependent/iomapper.cpp"
++    "glslang/MachineIndependent/limits.cpp"
++    "glslang/MachineIndependent/linkValidate.cpp"
++    "glslang/MachineIndependent/parseConst.cpp"
++    "glslang/MachineIndependent/ParseContextBase.cpp"
++    "glslang/MachineIndependent/ParseHelper.cpp"
++    "glslang/MachineIndependent/PoolAlloc.cpp"
++    "glslang/MachineIndependent/preprocessor/PpAtom.cpp"
++    "glslang/MachineIndependent/preprocessor/PpContext.cpp"
++    "glslang/MachineIndependent/preprocessor/Pp.cpp"
++    "glslang/MachineIndependent/preprocessor/PpScanner.cpp"
++    "glslang/MachineIndependent/preprocessor/PpTokens.cpp"
++    "glslang/MachineIndependent/propagateNoContraction.cpp"
++    "glslang/MachineIndependent/reflection.cpp"
++    "glslang/MachineIndependent/RemoveTree.cpp"
++    "glslang/MachineIndependent/Scan.cpp"
++    "glslang/MachineIndependent/ShaderLang.cpp"
++    "glslang/MachineIndependent/SpirvIntrinsics.cpp"
++    "glslang/MachineIndependent/SymbolTable.cpp"
++    "glslang/MachineIndependent/Versions.cpp"
++    "glslang/ResourceLimits/ResourceLimits.cpp"
++    "SPIRV/disassemble.cpp"
++    "SPIRV/doc.cpp"
++    "SPIRV/GlslangToSpv.cpp"
++    "SPIRV/InReadableOrder.cpp"
++    "SPIRV/Logger.cpp"
++    "SPIRV/SpvBuilder.cpp"
++    "SPIRV/SpvPostProcess.cpp"
++    "SPIRV/SpvTools.cpp"
++)
++
++case "$(uname -s)" in
++    Linux|Darwin) SOURCES+=("glslang/OSDependent/Unix/ossource.cpp") ;;
++    *)            SOURCES+=("glslang/OSDependent/Windows/ossource.cpp") ;;
++esac
++
++INCLUDES=(
++    -I"$GLSLANG_DIR"
++    -I"thirdparty"
++    -I"$SPIRV_HEADERS_DIR/include/spirv/unified1"
++)
++# ENABLE_OPT=0 matches SCsub (no SPIRV-Tools optimizer dependency).
++DEFINES=(-DENABLE_OPT=0)
++FLAGS=(-O2 -w -std=c++17)
++
++echo "[1/2] Compiling glslang (${#SOURCES[@]} sources)..."
++OBJS=()
++for src in "${SOURCES[@]}"; do
++    obj="$BUILD_DIR/${src%.cpp}.o"
++    OBJS+=("$obj")
++    if [[ -f "$obj" && "$obj" -nt "$GLSLANG_DIR/$src" ]]; then
++        continue
++    fi
++    mkdir -p "$(dirname "$obj")"
++    $CXX -c "$GLSLANG_DIR/$src" -o "$obj" "${FLAGS[@]}" "${INCLUDES[@]}" "${DEFINES[@]}" &
++    while (( $(jobs -r | wc -l) >= JOBS )); do wait -n 2>/dev/null || true; done
++done
++wait
++
++echo "[2/2] Compiling + linking glsl2spv..."
++mkdir -p bin
++# Static-link the toolchain runtime. On Windows a MinGW-built exe otherwise dies
++# with 0xC0000139 (STATUS_ENTRYPOINT_NOT_FOUND) as soon as it is launched from
++# outside the MinGW shell, because a different libstdc++/libgcc is found first
++# on PATH. Static linking makes the harness runnable from Python/PowerShell.
++LINK_FLAGS=(-static -static-libgcc -static-libstdc++)
++$CXX drivers/webgpu/tint_cli/glsl2spv.cpp -o bin/glsl2spv \
++    "${FLAGS[@]}" "${INCLUDES[@]}" "${DEFINES[@]}" "${OBJS[@]}" "${LINK_FLAGS[@]}"
++
++echo ""
++echo "Built: bin/glsl2spv ($(du -h bin/glsl2spv | cut -f1))"
+diff --git a/drivers/webgpu/tint_cli/probe_one.py b/drivers/webgpu/tint_cli/probe_one.py
+new file mode 100644
+--- /dev/null
++++ b/drivers/webgpu/tint_cli/probe_one.py
+@@ -0,0 +1,51 @@
++"""Compile one shader variant and run it through Tint by hand, printing raw errors.
++
++The batch sweep only reports pass/fail counts, which hides whether a failure is
++Tint rejecting the module or the harness failing to invoke Tint at all.
++
++Usage: python probe_one.py <repo_root> <glsl2spv> <shader-substr> <stage> [variant]
++"""
++
++import os
++import subprocess
++import sys
++
++sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
++import wgsl_precompile as W  # noqa: E402
++
++repo_root, glslang, want, want_stage = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
++want_variant = sys.argv[5] if len(sys.argv) > 5 else None
++
++tint = os.path.join(repo_root, "bin", "tint_convert_cli")
++print(f"tint_convert_cli present: {os.path.isfile(tint)} -> {tint}")
++
++
++# Reuse the sweep's own shader/variant enumeration, but intercept the conversion
++# step so we can run the one module we care about on its own and see the raw error.
++def stop_batch(spv_files, tint_cli_path):
++    # Grab the first matching module, convert it alone, and print everything.
++    for key, path in spv_files:
++        if want not in key:
++            continue
++        if f":{want_stage}" not in key:
++            continue
++        if want_variant and f":{want_variant}:" not in key:
++            continue
++        size = os.path.getsize(path)
++        with open(path, "rb") as f:
++            header = f.read(8)
++        # SPIR-V header word 1 is the version: 0x00010300 == 1.3
++        ver = int.from_bytes(header[4:8], "little")
++        print(f"\nMATCH {key}\n  spv bytes: {size}  version: 0x{ver:08x} "
++              f"({(ver >> 16) & 0xFF}.{(ver >> 8) & 0xFF})")
++        r = subprocess.run([tint_cli_path, path], capture_output=True, text=True, timeout=120)
++        print(f"  tint exit: {r.returncode}")
++        print(f"  stderr: {r.stderr[:1500]}")
++        print(f"  stdout[:300]: {r.stdout[:300]}")
++        raise SystemExit(0)
++    print(f"\nNo module matched {want}:{want_stage}")
++    raise SystemExit(1)
++
++
++W.convert_spirv_batch = stop_batch
++W.precompile_wgsl(repo_root, os.devnull, glslang)
