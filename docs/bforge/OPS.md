@@ -1,6 +1,6 @@
 # bforge op reference
 
-105 operations.
+106 operations.
 
 ## `arch.*`
 
@@ -799,6 +799,22 @@ Bake procedural shading down to an image texture and rewire the material to use 
 | `out` | string | '' | PNG output path (defaults to textures/<object>_<pass>.png) |
 | `unwrap` | boolean | True | Auto-unwrap first — baking needs non-overlapping UVs |
 | `rewire` | boolean | True | Replace the procedural graph with the baked texture |
+
+### `material.bake_detail`
+
+Bake high-poly detail onto a low-poly mesh as a tangent-space normal (or AO) map. This is what makes a cheap mesh read as an expensive one: the silhouette stays low-poly but the surface gets its detail back. Use this instead of material.bake when the detail lives in a separate dense mesh -- material.bake bakes an object onto itself, so its normal pass just reproduces the low-poly's own flat normals.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `low` | string | None | Low-poly object that receives the texture (needs UVs) |
+| `high` | array | None | High-poly source object(s) the detail is projected from |
+| `pass_name` | normal \| ao \| base_color | 'normal' | Which channel to transfer |
+| `size` | integer | 2048 | Texture resolution in pixels |
+| `samples` | integer | 32 | Cycles samples; raise for AO, 32 is plenty for normals |
+| `cage_extrusion` | number | 0.02 | Metres to push the low-poly out before casting rays |
+| `max_ray_distance` | number | 0.05 | Metres to search for the high-poly surface |
+| `out` | string | '' | PNG output path (defaults to textures/<low>_<pass>_detail.png) |
+| `attach` | boolean | True | Link the baked map into the low-poly's existing material |
 
 ### `material.bake_pbr`
 

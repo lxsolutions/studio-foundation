@@ -236,6 +236,74 @@ def material_bake(ctx, object, pass_name, size, samples, out, unwrap, rewire):
 
 
 @op(
+    "material.bake_detail",
+    summary=(
+        "Bake high-poly detail onto a low-poly mesh as a tangent-space normal (or AO) map. "
+        "This is what makes a cheap mesh read as an expensive one: the silhouette stays low-poly "
+        "but the surface gets its detail back. Use this instead of material.bake when the detail "
+        "lives in a separate dense mesh -- material.bake bakes an object onto itself, so its "
+        "normal pass just reproduces the low-poly's own flat normals."
+    ),
+    params={
+        "low": ("str", None, "Low-poly object that receives the texture (needs UVs)"),
+        "high": ("str[]", None, "High-poly source object(s) the detail is projected from"),
+        "pass_name": ("enum:normal|ao|base_color", "normal", "Which channel to transfer"),
+        "size": ("int", 2048, "Texture resolution in pixels"),
+        "samples": ("int", 32, "Cycles samples; raise for AO, 32 is plenty for normals"),
+        "cage_extrusion": ("num", 0.02, "Metres to push the low-poly out before casting rays"),
+        "max_ray_distance": ("num", 0.05, "Metres to search for the high-poly surface"),
+        "out": ("path", "", "PNG output path (defaults to textures/<low>_<pass>_detail.png)"),
+        "attach": ("bool", True, "Link the baked map into the low-poly's existing material"),
+    },
+    tags=["material", "bake"],
+)
+def material_bake_detail(
+    ctx, low, high, pass_name, size, samples, cage_extrusion, max_ray_distance, out, attach
+):
+    low_obj = _get(low)
+    if low_obj.type != "MESH":
+        raise OpError(f"'{low}' is a {low_obj.type}, not a mesh")
+    high_objs = [_get(name) for name in high]
+    for obj in high_objs:
+        if obj.type != "MESH":
+            raise OpError(f"high-poly source '{obj.name}' is a {obj.type}, not a mesh")
+
+    low_tris = len(low_obj.data.loop_triangles) or len(low_obj.data.polygons)
+    high_tris = sum(len(o.data.loop_triangles) or len(o.data.polygons) for o in high_objs)
+    if high_tris <= low_tris:
+        ctx.note(
+            f"high-poly total ({high_tris} faces) is not denser than '{low_obj.name}' "
+            f"({low_tris} faces) — a detail bake can only transfer detail the source "
+            "actually has, so this will produce a flat map."
+        )
+
+    target = ctx.out_path(out or f"textures/{low_obj.name}_{pass_name}_detail.png", ".png")
+    try:
+        result = mat_lib.bake_detail(
+            low_obj, high_objs, target, pass_name=pass_name, size=size,
+            samples=samples, cage_extrusion=cage_extrusion,
+            max_ray_distance=max_ray_distance,
+        )
+    except ValueError as exc:
+        raise OpError(str(exc)) from exc
+
+    attached = []
+    if attach:
+        attached = mat_lib.attach_baked_map(low_obj, result["image"], pass_name)
+    return {
+        "low": low_obj.name,
+        "high": [o.name for o in high_objs],
+        "pass": pass_name,
+        "texture": str(target),
+        "rel": ctx.rel(target),
+        "size": size,
+        "low_faces": low_tris,
+        "high_faces": high_tris,
+        "attached_materials": attached,
+    }
+
+
+@op(
     "material.consolidate",
     summary="Merge materials that render identically into one shared material. Composing a scene from many prop recipes leaves a pile of near-duplicate materials, and every distinct material is a draw call — this collapses them without changing how anything looks.",
     params={
