@@ -1,6 +1,83 @@
 # bforge op reference
 
-93 operations.
+104 operations.
+
+## `arch.*`
+
+### `arch.arcade`
+
+A wall of repeating arched bays following a path — THE Roman building block. Stack these to turn a stadium bowl into a colosseum, or run one along a line for an aqueduct or a cloister. Bays are spaced by arc length so an oval colonnade stays even through the turns.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `name` | string | 'arcade' | Object name |
+| `path` | array | [] | Flat [x0,y0,z0, ...] path; leave empty and use path_shape |
+| `path_shape` | custom \| oval \| circle \| line \| arc | 'oval' | Built-in path generator |
+| `straight` | number | 40.0 | oval: length of each straight in metres |
+| `radius` | number | 20.0 | oval/circle/arc radius in metres |
+| `length` | number | 30.0 | line: total length in metres along X |
+| `arc_degrees` | number | 180.0 | arc: sweep angle in degrees |
+| `resolution` | integer | 48 | Path sampling resolution |
+| `material` | string | 'stone' | Material preset |
+| `color` | string | '' | Override colour |
+| `uv_scale` | number | 3.0 | Metres per UV tile |
+| `z` | number | 0.0 | Base height in metres |
+| `bays` | integer | 32 | Number of arched openings around the path |
+| `height` | number | 9.0 | Storey height in metres, plinth to cornice |
+| `thickness` | number | 1.6 | Wall depth in metres |
+| `opening` | number | 0.58 | Fraction of each bay that is opening rather than pier (0.3-0.75) |
+| `arch_rise` | number | 0.0 | Height of the arch semicircle; 0 makes it a true semicircle (half the opening width) |
+| `springing` | number | 0.42 | Height where the arch starts, as a fraction of storey height |
+| `voussoirs` | integer | 7 | Segments per arch — 7 reads as an arch, more is wasted at distance |
+| `plinth` | number | 0.5 | Base band height in metres |
+| `cornice` | number | 0.6 | Top band height in metres |
+| `cornice_jut` | number | 0.35 | How far the cornice projects past the wall |
+| `engaged_columns` | boolean | True | Half-columns on the piers — the Colosseum's storey articulation |
+
+### `arch.colonnade`
+
+A ring or run of free-standing columns with an entablature — temple fronts, stadium rims, forum porticos. Cheaper than an arcade and the right silhouette for a top storey.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `name` | string | 'arcade' | Object name |
+| `path` | array | [] | Flat [x0,y0,z0, ...] path; leave empty and use path_shape |
+| `path_shape` | custom \| oval \| circle \| line \| arc | 'oval' | Built-in path generator |
+| `straight` | number | 40.0 | oval: length of each straight in metres |
+| `radius` | number | 20.0 | oval/circle/arc radius in metres |
+| `length` | number | 30.0 | line: total length in metres along X |
+| `arc_degrees` | number | 180.0 | arc: sweep angle in degrees |
+| `resolution` | integer | 48 | Path sampling resolution |
+| `material` | string | 'stone' | Material preset |
+| `color` | string | '' | Override colour |
+| `uv_scale` | number | 3.0 | Metres per UV tile |
+| `z` | number | 0.0 | Base height in metres |
+| `columns` | integer | 40 | Number of columns |
+| `height` | number | 6.5 | Column height in metres |
+| `column_radius` | number | 0.42 | Shaft radius |
+| `segments` | integer | 8 | Sides per column |
+| `entablature` | number | 0.9 | Depth of the beam carried across the tops; 0 for none |
+| `flutes` | boolean | False | Fluted shafts (costs triangles, only reads up close) |
+| `statues` | boolean | False | Blocky statue silhouettes above every fourth column |
+
+### `arch.gateway`
+
+A monumental arched gate — the triumphal entrance every Roman venue frames its far end with. One big central arch, optional flanking arches, an attic storey above.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `name` | string | 'gateway' | Object name |
+| `width` | number | 14.0 | Overall width in metres |
+| `height` | number | 16.0 | Overall height in metres |
+| `thickness` | number | 3.0 | Depth in metres |
+| `side_arches` | boolean | True | Smaller arches either side of the main opening |
+| `attic` | number | 4.0 | Attic storey height above the cornice; 0 for none |
+| `voussoirs` | integer | 9 | Segments in the main arch |
+| `location` | array | [0.0, 0.0, 0.0] | World position |
+| `rotation` | number | 0.0 | Yaw in degrees |
+| `material` | string | 'stone' | Material preset |
+| `color` | string | '' | Override colour |
+| `uv_scale` | number | 3.0 | Metres per UV tile |
 
 ## `build.*`
 
@@ -217,6 +294,7 @@ Sweep a 2D cross-section along a path — the workhorse for level geometry. Race
 | `origin` | bottom \| center \| center_xy \| world | 'world' | Pivot placement |
 | `smooth` | boolean | False | Smooth shading |
 | `profile` | array | None | Flat [lateral0, vertical0, lateral1, vertical1, ...] cross-section in metres, relative to the path |
+| `profile_scales` | array | [] | Flat [lateral0, vertical0, ...] multipliers applied to the cross-section ALONG the path, interpolated to fit. This is what turns a uniform tube into an anatomy — a barrel that swells at the girth, a neck that tapers to the poll. Give a few key values, not one per point |
 | `path` | array | [] | Flat [x0,y0,z0, x1,y1,z1, ...] path points; leave empty and use path_shape instead |
 | `path_shape` | custom \| oval \| circle \| line \| arc | 'custom' | Built-in path generator |
 | `straight` | number | 40.0 | oval: length of each straight in metres |
@@ -348,6 +426,16 @@ Quality critique with specific, actionable findings: triangle-density hot spots,
 | `objects` | array | [] | Objects to critique (empty = every mesh) |
 | `texture_size` | integer | 1024 | Texture resolution the texel-density figures assume |
 
+### `check.image`
+
+Measure an image instead of eyeballing it: luminance range, blown highlights, crushed blacks, contrast, saturation, dominant colours and subject coverage. Reading a render is slow and cannot tell 'the asset is wrong' from 'the render is over-lit'. These numbers can, in a fraction of the time.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `path` | string | None | PNG to analyse — a render, a contact sheet, or a baked texture |
+| `colors` | integer | 6 | How many dominant colours to report |
+| `background` | array | [0.05, 0.055, 0.065, 1.0] | Backdrop colour, excluded from subject stats |
+
 ### `check.silhouette`
 
 Score how readable an object's silhouette is from the standard game camera angles. A prop that fails here will not read at gameplay distance no matter how good its texture is.
@@ -358,6 +446,38 @@ Score how readable an object's silhouette is from the standard game camera angle
 | `samples` | integer | 64 | Rays per axis for the projected-area estimate |
 
 ## `env.*`
+
+### `env.amphitheatre`
+
+A complete Roman venue in one call: raked cavea, podium, arched arcade storey, statued attic colonnade, vomitoria stair wedges, velarium masts, hanging banners and gateways. This is the difference between a stone bowl and the Colosseum — arches and vertical rhythm. Use shape='oval' for a circus/hippodrome, 'circle' for an amphitheatre.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `name` | string | 'amphitheatre' | Object name |
+| `shape` | oval \| circle | 'circle' | oval = circus/hippodrome, circle = amphitheatre |
+| `arena_radius` | number | 40.0 | Arena half-width in metres (short axis) |
+| `straight` | number | 0.0 | oval only: length of each straight in metres |
+| `arena_margin` | number | 6.0 | Flat run-off between the arena edge and the podium wall |
+| `podium_height` | number | 4.0 | Height of the solid wall between arena and first seats |
+| `tiers` | integer | 3 | Seating tiers (maenianum), separated by walkway walls |
+| `tier_depth` | number | 9.0 | Depth of each tier in metres |
+| `tier_rise` | number | 5.4 | Height gained across each tier |
+| `tier_riser` | number | 2.4 | Walkway wall height between tiers |
+| `rows_per_tier` | integer | 7 | Seat steps cut per tier |
+| `arcade_height` | number | 9.5 | Height of the arched storey crowning the stands; 0 for none |
+| `arcade_bays` | integer | 0 | Arch count; 0 auto-sizes to roughly one arch per 8 m |
+| `colonnade` | boolean | True | Statued attic colonnade above the arcade |
+| `vomitoria` | integer | 0 | Stair wedges dividing the seating; 0 auto-sizes |
+| `masts` | integer | 0 | Velarium masts on the rim; 0 auto-sizes, -1 for none |
+| `gateways` | integer | 2 | Monumental arched gates cut through the podium |
+| `banners` | integer | 0 | Hanging banners between arcade bays; 0 auto-sizes |
+| `stone` | string | '#d6c4a0' | Sunlit stone colour (travertine, not concrete) |
+| `stone_shade` | string | '#9c8763' | Shadowed stone colour |
+| `sand` | string | '#d9bd8e' | Arena floor colour |
+| `banner_color` | string | '#7a201a' | Banner cloth colour |
+| `quality` | low \| medium \| high | 'medium' | Path and detail resolution |
+| `join` | boolean | True | Merge into one object |
+| `seed` | integer | 0 | Random seed |
 
 ### `env.arena`
 
@@ -501,6 +621,7 @@ Export to GLB/glTF with an engine-specific preset. Checks for the things that si
 | `animations` | boolean | True | Include armature actions |
 | `draco` | boolean | False | Draco mesh compression — smaller files, slower load, not all importers support it |
 | `strict` | boolean | True | Fail on problems that would corrupt the import instead of warning |
+| `rename` | object | None | Names to apply IN THE EXPORTED FILE ONLY, e.g. {"horse": "Horse", "m_coat": "Coat", "gallop": "Gallop"}. Game code often looks up nodes and materials by exact name, and those names break the studio's snake_case rule — this satisfies both without renaming the master |
 
 ### `export.meta`
 
@@ -679,6 +800,21 @@ Bake procedural shading down to an image texture and rewire the material to use 
 | `unwrap` | boolean | True | Auto-unwrap first — baking needs non-overlapping UVs |
 | `rewire` | boolean | True | Replace the procedural graph with the baked texture |
 
+### `material.bake_pbr`
+
+Bake a layered material into a real PBR texture set (base colour, normal, roughness, AO) and rewire it as glTF-safe image textures. This is the step that makes a procedurally-surfaced asset actually shippable.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `object` | string | None | Object to bake |
+| `stem` | string | '' | Filename stem (defaults to the object name) |
+| `out_dir` | string | 'textures' | Directory for the PNGs |
+| `size` | integer | 1024 | Texture resolution per map |
+| `samples` | integer | 24 | Cycles samples; AO and normal want more than base colour |
+| `maps` | array | ['base_color', 'normal', 'roughness', 'ao'] | Which maps to bake |
+| `unwrap` | boolean | True | Auto-unwrap first — baking needs non-overlapping UVs |
+| `margin` | integer | 10 | Bake margin in pixels; prevents seams at low mips |
+
 ### `material.consolidate`
 
 Merge materials that render identically into one shared material. Composing a scene from many prop recipes leaves a pile of near-duplicate materials, and every distinct material is a draw call — this collapses them without changing how anything looks.
@@ -706,6 +842,26 @@ Give a subset of faces its own material — trim strips, emissive panels, painte
 
 List materials in the file and flag any that glTF cannot export.
 
+### `material.pbr`
+
+Apply a layered AAA-grade surface: base albedo, curvature-driven EDGE WEAR, ambient-occlusion-driven CAVITY DIRT, two octaves of micro-detail and non-constant roughness. This is the single biggest jump in perceived quality — flat-coloured geometry never reads as AAA no matter how good the silhouette. Bake it with material.bake_pbr before export.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `object` | string | None | Object to surface |
+| `base_color` | any | 'stone_grey' | Base albedo: palette name or #rrggbb |
+| `roughness` | number | 0.75 | Mid roughness; the layers vary around it |
+| `metallic` | number | 0.0 | Metallic 0..1 |
+| `detail_scale` | number | 14.0 | Micro-detail frequency — higher is finer grain |
+| `grain` | number | 0.55 | How strongly the noise tints the albedo |
+| `edge_wear` | number | 0.55 | Abrasion on convex edges (0..1). Real objects are worn where they stick out |
+| `edge_color` | any | '' | Colour of worn edges; defaults to a lighter base |
+| `cavity_dirt` | number | 0.5 | Grime settled in crevices (0..1) |
+| `dirt_color` | any | '#2b2118' | Colour of the grime |
+| `bump` | number | 0.35 | Surface relief strength |
+| `name` | string | '' | Material name |
+| `seed` | integer | 0 | Random seed for the noise |
+
 ### `material.procedural`
 
 Build a noise/voronoi/wave/gradient material. Gives surfaces real variation instead of flat colour — but it must be baked (material.bake) before it can export to glTF.
@@ -732,7 +888,7 @@ Create and assign a PBR material. Prefer a preset name (stone, wood, metal, gold
 | `object` | string | None | Object to assign to |
 | `preset` | string | 'stone' | Material preset; see meta.palette for the list |
 | `name` | string | '' | Material name (defaults to m_<preset>) |
-| `color` | string | '' | Override colour: palette name or #rrggbb |
+| `color` | any | '' | Override colour: palette name, #rrggbb, or a linear [r,g,b] triple |
 | `roughness` | number | -1.0 | Override roughness 0..1; -1 keeps the preset value |
 | `metallic` | number | -1.0 | Override metallic 0..1; -1 keeps the preset value |
 | `emission` | number | -1.0 | Emission strength; -1 keeps the preset value |
@@ -1103,7 +1259,7 @@ Render from an explicit camera position and target. Auto-framing always fits the
 | `samples` | integer | 32 | Render samples |
 | `engine` | auto \| cycles \| eevee | 'auto' | Render engine |
 | `light_distance` | number | 0.0 | Light rig scale in metres; 0 fits it to the whole scene |
-| `world_light` | number | 0.6 | Ambient strength |
+| `world_light` | number | 0.32 | Ambient dome strength. Higher fills shadows but piles white specular sheen onto every surface, which washes out saturated albedo |
 
 ### `render.contact_sheet`
 
@@ -1146,7 +1302,56 @@ Render one framed view of the scene or of specific objects. The camera and a thr
 | `samples` | integer | 24 | Render samples — 24 is enough to judge form |
 | `engine` | auto \| cycles \| eevee | 'auto' | Render engine. 'auto' means Cycles/CPU, which is the only one that works without a GPU context; 'eevee' is faster but crashes headless on machines with no display server |
 | `ortho` | boolean | False | Orthographic projection (right for front/side/top reference) |
-| `world_light` | number | 0.6 | Ambient strength |
+| `world_light` | number | 0.32 | Ambient dome strength. Higher fills shadows but piles white specular sheen onto every surface, which washes out saturated albedo |
+
+## `rig.*`
+
+### `rig.keyframe`
+
+Author an animation clip from explicit per-frame bone poses. Give the poses that define the motion and let the interpolation do the rest — this is how a real cycle is built, not by driving bones with sine waves.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `rig` | string | None | Armature object |
+| `action` | string | 'action' | Action (clip) name |
+| `keys` | object | None | {"1": {"spine": [rx, ry, rz]}, "12": {...}} — frame -> bone -> XYZ degrees |
+| `locations` | object | None | Optional {"frame": {"bone": [x, y, z]}} bone translations in metres |
+| `length` | integer | 24 | Clip length in frames |
+| `loop` | boolean | True | Match the last frame to the first so the clip cycles seamlessly |
+| `interpolation` | BEZIER \| LINEAR \| CONSTANT | 'BEZIER' | Keyframe interpolation |
+
+### `rig.mirror_bones`
+
+Duplicate a set of bones mirrored across an axis, renaming _l to _r (or vice versa). Halves the work of describing a symmetrical skeleton.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `bones` | array | None | Bone specs to mirror, same shape as rig.skeleton |
+| `axis` | x \| y \| z | 'x' | Axis to mirror across |
+| `from_suffix` | string | '_l' | Suffix on the source bones |
+| `to_suffix` | string | '_r' | Suffix for the mirrored copies |
+
+### `rig.skeleton`
+
+Build an armature from an explicit bone list — any creature, not just humanoids. Each bone is {name, head:[x,y,z], tail:[x,y,z], parent}. Exactly one bone may be parentless, because engines and the studio validator both require a single root.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `name` | string | 'rig' | Armature object name |
+| `bones` | array | None | Bones: [{"name": "spine", "head": [0,0,1], "tail": [0,0.3,1], "parent": ""}, ...] |
+| `location` | array | [0.0, 0.0, 0.0] | Armature position in metres |
+
+### `rig.skin`
+
+Bind a mesh to an armature using distance-to-bone falloff weights. Works on any skeleton and never fails the way Blender's bone-heat solver does on a non-watertight mesh.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `mesh` | string | None | Mesh object to bind |
+| `rig` | string | None | Armature object |
+| `falloff` | number | 2.0 | Weight sharpness; higher is more rigid, lower is smoother |
+| `influences` | integer | 2 | Bones influencing each vertex (2 is right for game skins) |
+| `only_bones` | array | [] | Restrict binding to these bones (empty = all deform bones) |
 
 ## `session.*`
 

@@ -1,4 +1,4 @@
-"""Material ops: PBR presets, procedural graphs, and baking to glTF-safe textures."""
+﻿"""Material ops: PBR presets, procedural graphs, and baking to glTF-safe textures."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from registry import OpError, op
         "object": ("str", None, "Object to assign to"),
         "preset": ("str", "stone", "Material preset; see meta.palette for the list"),
         "name": ("str", "", "Material name (defaults to m_<preset>)"),
-        "color": ("str", "", "Override colour: palette name or #rrggbb"),
+        "color": ("colorref", "", "Override colour: palette name, #rrggbb, or a linear [r,g,b] triple"),
         "roughness": ("num", -1.0, "Override roughness 0..1; -1 keeps the preset value"),
         "metallic": ("num", -1.0, "Override metallic 0..1; -1 keeps the preset value"),
         "emission": ("num", -1.0, "Emission strength; -1 keeps the preset value"),
@@ -85,6 +85,106 @@ def material_procedural(ctx, object, kind, name, color_a, color_b, scale, detail
         f"arrive in-engine as flat grey."
     )
     return {"object": obj.name, "material": material.name, "gltf_safe": False}
+
+
+@op(
+    "material.pbr",
+    summary="Apply a layered AAA-grade surface: base albedo, curvature-driven EDGE WEAR, ambient-occlusion-driven CAVITY DIRT, two octaves of micro-detail and non-constant roughness. This is the single biggest jump in perceived quality — flat-coloured geometry never reads as AAA no matter how good the silhouette. Bake it with material.bake_pbr before export.",
+    params={
+        "object": ("str", None, "Object to surface"),
+        "base_color": ("colorref", "stone_grey", "Base albedo: palette name or #rrggbb"),
+        "roughness": ("num", 0.75, "Mid roughness; the layers vary around it"),
+        "metallic": ("num", 0.0, "Metallic 0..1"),
+        "detail_scale": ("num", 14.0, "Micro-detail frequency — higher is finer grain"),
+        "grain": ("num", 0.55, "How strongly the noise tints the albedo"),
+        "edge_wear": ("num", 0.55, "Abrasion on convex edges (0..1). Real objects are worn where they stick out"),
+        "edge_color": ("colorref", "", "Colour of worn edges; defaults to a lighter base"),
+        "cavity_dirt": ("num", 0.5, "Grime settled in crevices (0..1)"),
+        "dirt_color": ("colorref", "#2b2118", "Colour of the grime"),
+        "bump": ("num", 0.35, "Surface relief strength"),
+        "name": ("str", "", "Material name"),
+        "seed": ("int", 0, "Random seed for the noise"),
+    },
+    tags=["material", "pbr"],
+)
+def material_pbr(ctx, object, base_color, roughness, metallic, detail_scale, grain, edge_wear,
+                 edge_color, cavity_dirt, dirt_color, bump, name, seed):
+    obj = _get(object)
+    if obj.type != "MESH":
+        raise OpError(f"'{object}' is a {obj.type}, not a mesh")
+    try:
+        material = mat_lib.layered_pbr(
+            name or f"m_pbr_{scene_lib.sanitize(obj.name)}",
+            base_color, roughness=roughness, metallic=metallic,
+            detail_scale=detail_scale, grain=grain, edge_wear=edge_wear,
+            edge_color=edge_color or None, cavity_dirt=cavity_dirt,
+            dirt_color=dirt_color, bump=bump, seed=seed,
+        )
+    except ValueError as exc:
+        raise OpError(str(exc)) from exc
+    obj.data.materials.clear()
+    mat_lib.assign(obj, material)
+    ctx.note(
+        f"'{material.name}' is a Cycles layer stack and cannot export as-is. Run "
+        f"material.bake_pbr object='{obj.name}' to turn it into real PBR maps."
+    )
+    return {"object": obj.name, "material": material.name, "gltf_safe": False,
+            "layers": ["base", "micro-detail", "edge wear", "cavity dirt"]}
+
+
+@op(
+    "material.bake_pbr",
+    summary="Bake a layered material into a real PBR texture set (base colour, normal, roughness, AO) and rewire it as glTF-safe image textures. This is the step that makes a procedurally-surfaced asset actually shippable.",
+    params={
+        "object": ("str", None, "Object to bake"),
+        "stem": ("str", "", "Filename stem (defaults to the object name)"),
+        "out_dir": ("path", "textures", "Directory for the PNGs"),
+        "size": ("int", 1024, "Texture resolution per map"),
+        "samples": ("int", 24, "Cycles samples; AO and normal want more than base colour"),
+        "maps": ("str[]", ["base_color", "normal", "roughness", "ao"], "Which maps to bake"),
+        "unwrap": ("bool", True, "Auto-unwrap first — baking needs non-overlapping UVs"),
+        "margin": ("int", 10, "Bake margin in pixels; prevents seams at low mips"),
+    },
+    tags=["material", "bake", "pbr"],
+)
+def material_bake_pbr(ctx, object, stem, out_dir, size, samples, maps, unwrap, margin):
+    obj = _get(object)
+    if obj.type != "MESH":
+        raise OpError(f"'{object}' is a {obj.type}, not a mesh")
+    if not obj.data.materials or all(m is None for m in obj.data.materials):
+        raise OpError(f"'{object}' has no material — run material.pbr first")
+
+    if unwrap:
+        uv_lib.smart_project(obj, margin=0.02)
+        uv_lib.pack(obj, margin=0.02)
+    overlap = uv_lib.overlap_estimate(obj)
+    if overlap > 0.02:
+        ctx.note(
+            f"UV overlap is {overlap:.0%} on '{obj.name}'; baked texels will fight. "
+            "Re-run with unwrap=true."
+        )
+
+    label = scene_lib.sanitize(stem or obj.name)
+    directory = ctx.out_path(f"{out_dir}/{label}.png", ".png").parent
+    try:
+        produced = mat_lib.bake_pbr_set(
+            obj, str(directory), label, size=size, samples=samples, margin=margin,
+            maps=tuple(maps),
+        )
+    except (RuntimeError, ValueError) as exc:
+        raise OpError(f"PBR bake failed: {exc}") from exc
+    if not produced:
+        raise OpError(f"no maps baked — check `maps` ({maps})")
+    wired = mat_lib.wire_pbr_set(obj, produced)
+
+    return {
+        "object": obj.name,
+        "maps": {k: ctx.rel(v[1]) for k, v in produced.items()},
+        "size": size,
+        "materials": wired,
+        "uv_overlap_ratio": overlap,
+        "gltf_safe": True,
+    }
 
 
 @op(

@@ -221,6 +221,7 @@ def build_lathe(ctx, name, profile, segments, location, material, color, uv, uv_
     summary="Sweep a 2D cross-section along a path — the workhorse for level geometry. Racetracks, grandstands, roads, ramparts, rails, tunnels, mouldings and pipes are all one profile plus one path. Frames use parallel transport, so a closed loop does not twist.",
     params=_params(
         profile=("num[]", None, "Flat [lateral0, vertical0, lateral1, vertical1, ...] cross-section in metres, relative to the path"),
+        profile_scales=("num[]", [], "Flat [lateral0, vertical0, ...] multipliers applied to the cross-section ALONG the path, interpolated to fit. This is what turns a uniform tube into an anatomy — a barrel that swells at the girth, a neck that tapers to the poll. Give a few key values, not one per point"),
         path=("num[]", [], "Flat [x0,y0,z0, x1,y1,z1, ...] path points; leave empty and use path_shape instead"),
         path_shape=("enum:custom|oval|circle|line|arc", "custom", "Built-in path generator"),
         straight=("num", 40.0, "oval: length of each straight in metres"),
@@ -237,9 +238,9 @@ def build_lathe(ctx, name, profile, segments, location, material, color, uv, uv_
     ),
     tags=["build", "architecture"],
 )
-def build_sweep(ctx, name, profile, path, path_shape, straight, radius, length, arc_degrees,
-                segments, closed_path, closed_profile, location, material, color, uv, uv_scale,
-                origin, smooth):
+def build_sweep(ctx, name, profile, profile_scales, path, path_shape, straight, radius, length,
+                arc_degrees, segments, closed_path, closed_profile, location, material, color, uv,
+                uv_scale, origin, smooth):
     import math
 
     if len(profile) < 4 or len(profile) % 2 != 0:
@@ -279,10 +280,16 @@ def build_sweep(ctx, name, profile, path, path_shape, straight, radius, length, 
         points = [(-length * 0.5 + length * i / segments, 0.0, 0.0) for i in range(segments + 1)]
         closed_path = False
 
+    if len(profile_scales) % 2 != 0:
+        raise OpError("profile_scales must be an even-length list of (lateral, vertical) pairs")
+    scales = [
+        (profile_scales[i], profile_scales[i + 1]) for i in range(0, len(profile_scales), 2)
+    ]
+
     bm = mesh_lib.new_bmesh()
     try:
         mesh_lib.sweep(bm, points, section, closed_path=closed_path,
-                       closed_profile=closed_profile)
+                       closed_profile=closed_profile, scales=scales or None)
     except ValueError as exc:
         bm.free()
         raise OpError(str(exc)) from exc

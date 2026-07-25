@@ -297,8 +297,30 @@ def loft(bm, sections, closed_ends=True):
     return [f for f in bm.faces if f not in before]
 
 
+def resample(values, count):
+    """Stretch a short list of control values across `count` samples.
+
+    Lets a caller give five key cross-section scales for a forty-point path
+    instead of forty, which is the difference between describing a horse's
+    barrel and typing out a spreadsheet.
+    """
+    if not values:
+        return [(1.0, 1.0)] * count
+    if len(values) == 1:
+        return [values[0]] * count
+    out = []
+    span = len(values) - 1
+    for index in range(count):
+        t = (index / max(1, count - 1)) * span
+        low = min(int(t), span - 1)
+        frac = t - low
+        a, b = values[low], values[low + 1]
+        out.append((a[0] + (b[0] - a[0]) * frac, a[1] + (b[1] - a[1]) * frac))
+    return out
+
+
 def sweep(bm, path_points, profile, closed_path=False, closed_profile=True, cap_ends=True,
-          up=(0.0, 0.0, 1.0)):
+          up=(0.0, 0.0, 1.0), scales=None):
     """Sweep a 2D cross-section along a 3D polyline.
 
     `profile` is [(lateral, vertical), ...] in the plane perpendicular to the
@@ -359,14 +381,25 @@ def sweep(bm, path_points, profile, closed_path=False, closed_profile=True, cap_
         binormal = tangent.cross(normal).normalized()
         frames.append((normal, binormal))
 
+    # Per-point cross-section scaling is what turns a uniform tube into an
+    # anatomy: a horse's barrel swells at the girth and tapers to the loin, and
+    # a neck is deep and narrow where the body is wide and shallow. Without it
+    # every swept form is a pipe.
+    ramp = resample(list(scales), count) if scales else [(1.0, 1.0)] * count
+
     before = set(bm.faces)
     rings = []
     for index, origin in enumerate(points):
         normal, binormal = frames[index]
+        scale_lateral, scale_vertical = ramp[index]
         # `binormal` is lateral, `normal` is vertical: a profile authored as
         # (width, height) reads the way an artist expects.
         rings.append([
-            bm.verts.new(origin + binormal * lateral + normal * vertical)
+            bm.verts.new(
+                origin
+                + binormal * (lateral * scale_lateral)
+                + normal * (vertical * scale_vertical)
+            )
             for lateral, vertical in profile
         ])
 
@@ -390,6 +423,43 @@ def sweep(bm, path_points, profile, closed_path=False, closed_profile=True, cap_
             except ValueError:
                 pass
     return [f for f in bm.faces if f not in before]
+
+
+def sample_path(points, count, closed=False):
+    """Resample a polyline at `count` equal arc-length stations.
+
+    Returns [(position, tangent, normal)] with `normal` the horizontal outward
+    direction, which is what you need to stand a wall, a column or an arch bay
+    on a curve. Placing bays by index instead of by arc length bunches them at
+    the ends of an oval — the giveaway that a colonnade was faked.
+    """
+    pts = [Vector(p) for p in points]
+    if closed and (pts[0] - pts[-1]).length > 1e-6:
+        pts.append(pts[0].copy())
+
+    lengths = [0.0]
+    for a, b in zip(pts, pts[1:]):
+        lengths.append(lengths[-1] + (b - a).length)
+    total = lengths[-1]
+    if total < 1e-9:
+        raise ValueError("path has zero length")
+
+    out = []
+    for index in range(count):
+        target = total * index / count if closed else total * index / max(1, count - 1)
+        seg = 0
+        while seg < len(lengths) - 2 and lengths[seg + 1] < target:
+            seg += 1
+        span = max(1e-9, lengths[seg + 1] - lengths[seg])
+        t = (target - lengths[seg]) / span
+        position = pts[seg].lerp(pts[seg + 1], t)
+        tangent = (pts[seg + 1] - pts[seg]).normalized()
+        # Outward horizontal normal: rotate the tangent 90 degrees about Z.
+        normal = Vector((tangent.y, -tangent.x, 0.0))
+        if normal.length < 1e-9:
+            normal = Vector((1.0, 0.0, 0.0))
+        out.append((position, tangent, normal.normalized()))
+    return out
 
 
 def oval_path(straight, radius, segments_per_turn=24, lane_offset=0.0):

@@ -15,9 +15,10 @@ Supported types::
 
     num int str bool path
     vec2 vec3 color        (color is RGB or RGBA, 0..1)
-    num[] int[] str[]
+    num[] int[] str[] obj[]
     enum:a|b|c
     obj                    (free-form dict, used sparingly)
+    colorref               (palette name, "#rrggbb", or [r,g,b(,a)] linear)
 
 This module must stay importable inside Blender's Python (3.11+) with no
 third-party dependencies.
@@ -143,6 +144,8 @@ def _type_to_schema(type_spec: str) -> dict:
         return {"type": "array", "items": {"type": "integer"}}
     if type_spec == "str[]":
         return {"type": "array", "items": {"type": "string"}}
+    if type_spec == "obj[]":
+        return {"type": "array", "items": {"type": "object"}}
     if type_spec == "num":
         return {"type": "number"}
     if type_spec == "int":
@@ -151,6 +154,17 @@ def _type_to_schema(type_spec: str) -> dict:
         return {"type": "boolean"}
     if type_spec == "obj":
         return {"type": "object"}
+    if type_spec == "colorref":
+        # Either form must work: meta.palette reports linear triples and
+        # documents that they can be passed back verbatim, so a string-only
+        # colour parameter breaks its own contract.
+        return {
+            "oneOf": [
+                {"type": "string"},
+                {"type": "array", "items": {"type": "number"},
+                 "minItems": 3, "maxItems": 4},
+            ]
+        }
     if type_spec in ("str", "path"):
         return {"type": "string"}
     raise RuntimeError(f"unknown param type: {type_spec}")
@@ -209,6 +223,13 @@ def _coerce(op_name: str, key: str, type_spec: str, value):
         if not isinstance(value, dict):
             bad("an object")
         return value
+    if type_spec == "colorref":
+        if isinstance(value, (list, tuple)):
+            nums = [float(v) for v in value]
+            if len(nums) not in (3, 4):
+                bad("3 or 4 numbers (linear RGB or RGBA), a palette name, or #rrggbb")
+            return nums
+        return str(value)
     return str(value)
 
 

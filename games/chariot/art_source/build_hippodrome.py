@@ -31,6 +31,19 @@ GAME = REPO / "games" / "chariot"
 SPEC_PATH = GAME / "project" / "assets" / "track_spec.json"
 MODEL_PATH = GAME / "project" / "assets" / "models" / "colosseum_track.glb"
 
+# Travertine, not concrete. A Roman venue is warm limestone in hard sunlight:
+# bright cream where the sun hits, ochre in the middle, deep warm grey in the
+# shade. A single flat light grey is why the first pass looked like a car park.
+STONE_SUN = "#d6c4a0"
+STONE_MID = "#c2ab84"
+STONE_SHADE = "#9c8763"
+# Bright raked sand, near-white in full sun — the value anchor of the whole
+# frame and the thing the crowd and architecture read against.
+HARENA = "#d9bd8e"
+# Faction banners in deep madder, the only strong colour in the building.
+BANNER_RED = "#7a201a"
+ARCADE_H = 9.5
+
 
 def flat(pairs):
     return [value for pair in pairs for value in pair]
@@ -61,30 +74,48 @@ def stadium_point(s, straight, radius):
     return (-half - math.sin(theta) * radius, math.cos(theta) * radius)
 
 
-def cavea_profile(start, rows, depth, rise, back_thickness=3.2, arcade_height=9.0):
-    """Stepped grandstand cross-section: up-and-outward, then a back wall down.
+def cavea_profile(stands, podium_offset):
+    """Stepped grandstand cross-section, derived from the SHARED stands spec.
 
     Real cavea seating is what sells the scale of a circus, and scale is the
     whole point — the Circus Maximus stands were ~30 m tall against a 600 m
     track. Get this wrong and the building reads as a kerb around a car park.
 
+    Every dimension here comes from `track_spec.json`, because
+    `crowd_director.gd` seats spectators using the same numbers. When this
+    function invented its own row depth and rise instead, the top third of the
+    crowd ended up hovering in the air behind the building.
+
     Each row costs two profile points (riser, tread), so triangle cost scales
-    with path resolution rather than with seat count. The arcade above the back
-    wall is what makes the silhouette read as Roman rather than as a modern
-    stadium bowl.
+    with path resolution rather than with seat count.
     """
-    points = [(start, 0.0)]
-    lateral, vertical = start, 0.0
-    for _ in range(rows):
-        vertical += rise
-        points.append((lateral, vertical))  # riser
-        lateral += depth
-        points.append((lateral, vertical))  # tread
-    # Upper arcade wall, then back down the outside face.
-    points.append((lateral, vertical + arcade_height))
-    points.append((lateral + back_thickness, vertical + arcade_height))
-    points.append((lateral + back_thickness, 0.0))
-    return points
+    tiers = int(stands["tiers"])
+    depth = float(stands["tier_depth_m"])
+    rise = float(stands["tier_rise_m"])
+    riser = float(stands["tier_riser_m"])
+    rows = max(1, int(stands["rows_per_tier"]))
+
+    # Solid podium wall from the sand up to the first seating course.
+    points = [(podium_offset, 0.0), (podium_offset, float(stands["podium_height_m"]))]
+    lateral, vertical = podium_offset, float(stands["podium_height_m"])
+    for _tier in range(tiers):
+        vertical += riser  # praecinctio wall between tiers
+        points.append((lateral, vertical))
+        for _row in range(rows):
+            lateral += depth / rows
+            points.append((lateral, vertical))  # tread
+            vertical += rise / rows
+            points.append((lateral, vertical))  # riser
+    top = vertical
+    points.append((lateral, top + float(stands["arcade_height_m"])))
+    points.append(
+        (
+            lateral + float(stands["back_thickness_m"]),
+            top + float(stands["arcade_height_m"]),
+        )
+    )
+    points.append((lateral + float(stands["back_thickness_m"]), 0.0))
+    return points, lateral, top
 
 
 def build(forge, spec, quality):
@@ -98,7 +129,9 @@ def build(forge, spec, quality):
     inner = (inner_lane - 1.0) * lane_width
     outer = (outer_lane - 1.0) * lane_width
     segments = {"low": 12, "medium": 20, "high": 32}[quality]
-    rows = {"low": 10, "medium": 16, "high": 22}[quality]
+    stands = spec["stands"]
+    # The crowd director derives seat positions from exactly this offset.
+    podium_offset = (outer_lane - 1.0) * lane_width + float(stands["podium_extra_m"])
 
     forge.call("session.reset")
     parts = []
@@ -161,10 +194,11 @@ def build(forge, spec, quality):
     parts += ["rail_inner", "rail_outer"]
 
     # --- cavea (tiered seating) -----------------------------------------
+    cavea_points, stand_back, stand_top = cavea_profile(stands, podium_offset)
     forge.call(
         "build.sweep",
         name="cavea",
-        profile=flat(cavea_profile(outer + 1.1, rows, depth=2.15, rise=1.15)),
+        profile=flat(cavea_points),
         path_shape="oval",
         straight=straight,
         radius=radius,
@@ -177,31 +211,116 @@ def build(forge, spec, quality):
         _timeout=900,
     )
     parts.append("cavea")
+    print(
+        f"cavea    : podium at {podium_offset:.1f} m, back at {stand_back:.1f} m, "
+        f"top course {stand_top:.1f} m"
+    )
 
-    # Arcade columns around the outside — the detail that reads as Roman from
-    # the broadcast camera, and cheap because they are one instanced pillar.
-    stand_depth = rows * 2.15 + 3.2
-    stand_top = rows * 1.15
-    arch_count = {"low": 24, "medium": 44, "high": 72}[quality]
-    arcade_radius = radius + outer + stand_depth
-    arcade_perimeter = 2.0 * straight + 2.0 * math.pi * arcade_radius
-    for index in range(arch_count):
-        x, y = stadium_point(
-            arcade_perimeter * index / arch_count, straight, arcade_radius
-        )
+    # --- the Roman elevation --------------------------------------------
+    # What makes a venue read as the Colosseum rather than as a stadium bowl
+    # is arches, and a vertical rhythm cutting the seating into wedges. A
+    # smooth stone ramp reads as a retaining wall no matter how big it is.
+    stand_depth = stand_back - outer
+    bays = {"low": 28, "medium": 44, "high": 68}[quality]
+
+    # Upper arcade ring, standing on the back of the cavea. This is the storey
+    # you actually see from the sand, framing the top of the bowl.
+    forge.call(
+        "arch.arcade",
+        name="upper_arcade",
+        path_shape="oval",
+        straight=straight,
+        radius=radius + stand_back,
+        resolution=segments * 2,
+        bays=bays,
+        height=ARCADE_H,
+        thickness=2.4,
+        opening=0.60,
+        springing=0.44,
+        voussoirs=7,
+        plinth=0.7,
+        cornice=0.9,
+        engaged_columns=True,
+        material="stone",
+        color=STONE_SUN,
+        uv_scale=3.0,
+        z=stand_top,
+        _timeout=1800,
+    )
+    parts.append("upper_arcade")
+
+    # Crowning colonnade with statues — the Colosseum's attic storey.
+    forge.call(
+        "arch.colonnade",
+        name="attic_colonnade",
+        path_shape="oval",
+        straight=straight,
+        radius=radius + stand_back - 0.6,
+        resolution=segments * 2,
+        columns=bays,
+        height=5.2,
+        column_radius=0.46,
+        segments=8,
+        entablature=1.1,
+        statues=True,
+        material="stone",
+        color=STONE_MID,
+        uv_scale=3.0,
+        z=stand_top + ARCADE_H,
+        _timeout=1800,
+    )
+    parts.append("attic_colonnade")
+
+    # Vomitoria: the stair wedges that divide the seating into cunei. This
+    # vertical rhythm is half of what the eye reads as "Roman amphitheatre".
+    wedges = {"low": 10, "medium": 18, "high": 26}[quality]
+    wedge_radius = radius + podium_offset
+    wedge_perimeter = 2.0 * straight + 2.0 * math.pi * wedge_radius
+    for index in range(wedges):
+        x, y = stadium_point(wedge_perimeter * index / wedges, straight, wedge_radius)
+        heading = math.degrees(math.atan2(y, x))
         forge.call(
             "build.box",
-            name=f"arcade_{index}",
-            size=[2.0, 2.0, 9.0],
-            location=[x, y, stand_top],
-            bevel=0.08,
+            name=f"vomitorium_{index}",
+            size=[1.8, stand_depth * 0.96, stand_top * 1.02],
+            location=[x, y, 0.0],
+            bevel=0.06,
             material="stone",
-            color="stone_warm",
+            color=STONE_SHADE,
             uv="box",
             uv_scale=3.0,
             origin="bottom",
         )
-        parts.append(f"arcade_{index}")
+        forge.call(
+            "object.transform",
+            name=f"vomitorium_{index}",
+            rotation=[0, 0, heading],
+            apply=True,
+        )
+        parts.append(f"vomitorium_{index}")
+
+    # Velarium masts: the awning rig along the rim. Even bare, the ring of
+    # masts against the sky is an instantly Roman silhouette.
+    mast_radius = radius + stand_back + 1.4
+    mast_perimeter = 2.0 * straight + 2.0 * math.pi * mast_radius
+    masts = {"low": 16, "medium": 30, "high": 48}[quality]
+    for index in range(masts):
+        x, y = stadium_point(mast_perimeter * index / masts, straight, mast_radius)
+        forge.call(
+            "build.cylinder",
+            name=f"mast_{index}",
+            radius=0.28,
+            radius_top=0.16,
+            depth=11.0,
+            segments=6,
+            location=[x, y, stand_top + ARCADE_H + 5.2],
+            material="wood",
+            color="#6b5335",
+            uv="cylinder",
+            origin="bottom",
+            smooth=False,
+        )
+        parts.append(f"mast_{index}")
 
     # --- spina: the central barrier -------------------------------------
     spina_length = straight * 0.82
@@ -327,7 +446,9 @@ def build(forge, spec, quality):
     # fixed landmarks to navigate by at speed.
     faction_colors = ["#8c2020", "#d8d2c4", "#2e6b34", "#22447e"]
     banner_count = {"low": 12, "medium": 24, "high": 40}[quality]
-    banner_radius = radius + outer + 2.6
+    # On the arcade parapet at the BACK of the stands, not floating over the
+    # seating where they read as coloured slabs hanging in mid-air.
+    banner_radius = radius + stand_back - 1.0
     banner_perimeter = 2.0 * straight + 2.0 * math.pi * banner_radius
     for index in range(banner_count):
         x, y = stadium_point(

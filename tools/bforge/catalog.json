@@ -2,6 +2,353 @@
   "version": 1,
   "ops": [
     {
+      "name": "arch.arcade",
+      "summary": "A wall of repeating arched bays following a path \u2014 THE Roman building block. Stack these to turn a stadium bowl into a colosseum, or run one along a line for an aqueduct or a cloister. Bays are spaced by arc length so an oval colonnade stays even through the turns.",
+      "tags": [
+        "build",
+        "architecture"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name",
+            "default": "arcade"
+          },
+          "path": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "description": "Flat [x0,y0,z0, ...] path; leave empty and use path_shape",
+            "default": []
+          },
+          "path_shape": {
+            "type": "string",
+            "enum": [
+              "custom",
+              "oval",
+              "circle",
+              "line",
+              "arc"
+            ],
+            "description": "Built-in path generator",
+            "default": "oval"
+          },
+          "straight": {
+            "type": "number",
+            "description": "oval: length of each straight in metres",
+            "default": 40.0
+          },
+          "radius": {
+            "type": "number",
+            "description": "oval/circle/arc radius in metres",
+            "default": 20.0
+          },
+          "length": {
+            "type": "number",
+            "description": "line: total length in metres along X",
+            "default": 30.0
+          },
+          "arc_degrees": {
+            "type": "number",
+            "description": "arc: sweep angle in degrees",
+            "default": 180.0
+          },
+          "resolution": {
+            "type": "integer",
+            "description": "Path sampling resolution",
+            "default": 48
+          },
+          "material": {
+            "type": "string",
+            "description": "Material preset",
+            "default": "stone"
+          },
+          "color": {
+            "type": "string",
+            "description": "Override colour",
+            "default": ""
+          },
+          "uv_scale": {
+            "type": "number",
+            "description": "Metres per UV tile",
+            "default": 3.0
+          },
+          "z": {
+            "type": "number",
+            "description": "Base height in metres",
+            "default": 0.0
+          },
+          "bays": {
+            "type": "integer",
+            "description": "Number of arched openings around the path",
+            "default": 32
+          },
+          "height": {
+            "type": "number",
+            "description": "Storey height in metres, plinth to cornice",
+            "default": 9.0
+          },
+          "thickness": {
+            "type": "number",
+            "description": "Wall depth in metres",
+            "default": 1.6
+          },
+          "opening": {
+            "type": "number",
+            "description": "Fraction of each bay that is opening rather than pier (0.3-0.75)",
+            "default": 0.58
+          },
+          "arch_rise": {
+            "type": "number",
+            "description": "Height of the arch semicircle; 0 makes it a true semicircle (half the opening width)",
+            "default": 0.0
+          },
+          "springing": {
+            "type": "number",
+            "description": "Height where the arch starts, as a fraction of storey height",
+            "default": 0.42
+          },
+          "voussoirs": {
+            "type": "integer",
+            "description": "Segments per arch \u2014 7 reads as an arch, more is wasted at distance",
+            "default": 7
+          },
+          "plinth": {
+            "type": "number",
+            "description": "Base band height in metres",
+            "default": 0.5
+          },
+          "cornice": {
+            "type": "number",
+            "description": "Top band height in metres",
+            "default": 0.6
+          },
+          "cornice_jut": {
+            "type": "number",
+            "description": "How far the cornice projects past the wall",
+            "default": 0.35
+          },
+          "engaged_columns": {
+            "type": "boolean",
+            "description": "Half-columns on the piers \u2014 the Colosseum's storey articulation",
+            "default": true
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "arch.colonnade",
+      "summary": "A ring or run of free-standing columns with an entablature \u2014 temple fronts, stadium rims, forum porticos. Cheaper than an arcade and the right silhouette for a top storey.",
+      "tags": [
+        "build",
+        "architecture"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name",
+            "default": "arcade"
+          },
+          "path": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "description": "Flat [x0,y0,z0, ...] path; leave empty and use path_shape",
+            "default": []
+          },
+          "path_shape": {
+            "type": "string",
+            "enum": [
+              "custom",
+              "oval",
+              "circle",
+              "line",
+              "arc"
+            ],
+            "description": "Built-in path generator",
+            "default": "oval"
+          },
+          "straight": {
+            "type": "number",
+            "description": "oval: length of each straight in metres",
+            "default": 40.0
+          },
+          "radius": {
+            "type": "number",
+            "description": "oval/circle/arc radius in metres",
+            "default": 20.0
+          },
+          "length": {
+            "type": "number",
+            "description": "line: total length in metres along X",
+            "default": 30.0
+          },
+          "arc_degrees": {
+            "type": "number",
+            "description": "arc: sweep angle in degrees",
+            "default": 180.0
+          },
+          "resolution": {
+            "type": "integer",
+            "description": "Path sampling resolution",
+            "default": 48
+          },
+          "material": {
+            "type": "string",
+            "description": "Material preset",
+            "default": "stone"
+          },
+          "color": {
+            "type": "string",
+            "description": "Override colour",
+            "default": ""
+          },
+          "uv_scale": {
+            "type": "number",
+            "description": "Metres per UV tile",
+            "default": 3.0
+          },
+          "z": {
+            "type": "number",
+            "description": "Base height in metres",
+            "default": 0.0
+          },
+          "columns": {
+            "type": "integer",
+            "description": "Number of columns",
+            "default": 40
+          },
+          "height": {
+            "type": "number",
+            "description": "Column height in metres",
+            "default": 6.5
+          },
+          "column_radius": {
+            "type": "number",
+            "description": "Shaft radius",
+            "default": 0.42
+          },
+          "segments": {
+            "type": "integer",
+            "description": "Sides per column",
+            "default": 8
+          },
+          "entablature": {
+            "type": "number",
+            "description": "Depth of the beam carried across the tops; 0 for none",
+            "default": 0.9
+          },
+          "flutes": {
+            "type": "boolean",
+            "description": "Fluted shafts (costs triangles, only reads up close)",
+            "default": false
+          },
+          "statues": {
+            "type": "boolean",
+            "description": "Blocky statue silhouettes above every fourth column",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "arch.gateway",
+      "summary": "A monumental arched gate \u2014 the triumphal entrance every Roman venue frames its far end with. One big central arch, optional flanking arches, an attic storey above.",
+      "tags": [
+        "build",
+        "architecture"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name",
+            "default": "gateway"
+          },
+          "width": {
+            "type": "number",
+            "description": "Overall width in metres",
+            "default": 14.0
+          },
+          "height": {
+            "type": "number",
+            "description": "Overall height in metres",
+            "default": 16.0
+          },
+          "thickness": {
+            "type": "number",
+            "description": "Depth in metres",
+            "default": 3.0
+          },
+          "side_arches": {
+            "type": "boolean",
+            "description": "Smaller arches either side of the main opening",
+            "default": true
+          },
+          "attic": {
+            "type": "number",
+            "description": "Attic storey height above the cornice; 0 for none",
+            "default": 4.0
+          },
+          "voussoirs": {
+            "type": "integer",
+            "description": "Segments in the main arch",
+            "default": 9
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World position",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "rotation": {
+            "type": "number",
+            "description": "Yaw in degrees",
+            "default": 0.0
+          },
+          "material": {
+            "type": "string",
+            "description": "Material preset",
+            "default": "stone"
+          },
+          "color": {
+            "type": "string",
+            "description": "Override colour",
+            "default": ""
+          },
+          "uv_scale": {
+            "type": "number",
+            "description": "Metres per UV tile",
+            "default": 3.0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "build.array",
       "summary": "Repeat an object along a vector, or in a 2D/3D grid. Fences, columns, pipes, city blocks, crowd props.",
       "tags": [
@@ -977,6 +1324,14 @@
             },
             "description": "Flat [lateral0, vertical0, lateral1, vertical1, ...] cross-section in metres, relative to the path"
           },
+          "profile_scales": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "description": "Flat [lateral0, vertical0, ...] multipliers applied to the cross-section ALONG the path, interpolated to fit. This is what turns a uniform tube into an anatomy \u2014 a barrel that swells at the girth, a neck that tapers to the poll. Give a few key values, not one per point",
+            "default": []
+          },
           "path": {
             "type": "array",
             "items": {
@@ -1556,6 +1911,46 @@
       }
     },
     {
+      "name": "check.image",
+      "summary": "Measure an image instead of eyeballing it: luminance range, blown highlights, crushed blacks, contrast, saturation, dominant colours and subject coverage. Reading a render is slow and cannot tell 'the asset is wrong' from 'the render is over-lit'. These numbers can, in a fraction of the time.",
+      "tags": [
+        "check",
+        "inspect"
+      ],
+      "mutates": false,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "PNG to analyse \u2014 a render, a contact sheet, or a baked texture"
+          },
+          "colors": {
+            "type": "integer",
+            "description": "How many dominant colours to report",
+            "default": 6
+          },
+          "background": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 4,
+            "description": "Backdrop colour, excluded from subject stats",
+            "default": [
+              0.05,
+              0.055,
+              0.065,
+              1.0
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "check.silhouette",
       "summary": "Score how readable an object's silhouette is from the standard game camera angles. A prop that fails here will not read at gameplay distance no matter how good its texture is.",
       "tags": [
@@ -1575,6 +1970,156 @@
             "type": "integer",
             "description": "Rays per axis for the projected-area estimate",
             "default": 64
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "env.amphitheatre",
+      "summary": "A complete Roman venue in one call: raked cavea, podium, arched arcade storey, statued attic colonnade, vomitoria stair wedges, velarium masts, hanging banners and gateways. This is the difference between a stone bowl and the Colosseum \u2014 arches and vertical rhythm. Use shape='oval' for a circus/hippodrome, 'circle' for an amphitheatre.",
+      "tags": [
+        "env",
+        "architecture"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name",
+            "default": "amphitheatre"
+          },
+          "shape": {
+            "type": "string",
+            "enum": [
+              "oval",
+              "circle"
+            ],
+            "description": "oval = circus/hippodrome, circle = amphitheatre",
+            "default": "circle"
+          },
+          "arena_radius": {
+            "type": "number",
+            "description": "Arena half-width in metres (short axis)",
+            "default": 40.0
+          },
+          "straight": {
+            "type": "number",
+            "description": "oval only: length of each straight in metres",
+            "default": 0.0
+          },
+          "arena_margin": {
+            "type": "number",
+            "description": "Flat run-off between the arena edge and the podium wall",
+            "default": 6.0
+          },
+          "podium_height": {
+            "type": "number",
+            "description": "Height of the solid wall between arena and first seats",
+            "default": 4.0
+          },
+          "tiers": {
+            "type": "integer",
+            "description": "Seating tiers (maenianum), separated by walkway walls",
+            "default": 3
+          },
+          "tier_depth": {
+            "type": "number",
+            "description": "Depth of each tier in metres",
+            "default": 9.0
+          },
+          "tier_rise": {
+            "type": "number",
+            "description": "Height gained across each tier",
+            "default": 5.4
+          },
+          "tier_riser": {
+            "type": "number",
+            "description": "Walkway wall height between tiers",
+            "default": 2.4
+          },
+          "rows_per_tier": {
+            "type": "integer",
+            "description": "Seat steps cut per tier",
+            "default": 7
+          },
+          "arcade_height": {
+            "type": "number",
+            "description": "Height of the arched storey crowning the stands; 0 for none",
+            "default": 9.5
+          },
+          "arcade_bays": {
+            "type": "integer",
+            "description": "Arch count; 0 auto-sizes to roughly one arch per 8 m",
+            "default": 0
+          },
+          "colonnade": {
+            "type": "boolean",
+            "description": "Statued attic colonnade above the arcade",
+            "default": true
+          },
+          "vomitoria": {
+            "type": "integer",
+            "description": "Stair wedges dividing the seating; 0 auto-sizes",
+            "default": 0
+          },
+          "masts": {
+            "type": "integer",
+            "description": "Velarium masts on the rim; 0 auto-sizes, -1 for none",
+            "default": 0
+          },
+          "gateways": {
+            "type": "integer",
+            "description": "Monumental arched gates cut through the podium",
+            "default": 2
+          },
+          "banners": {
+            "type": "integer",
+            "description": "Hanging banners between arcade bays; 0 auto-sizes",
+            "default": 0
+          },
+          "stone": {
+            "type": "string",
+            "description": "Sunlit stone colour (travertine, not concrete)",
+            "default": "#d6c4a0"
+          },
+          "stone_shade": {
+            "type": "string",
+            "description": "Shadowed stone colour",
+            "default": "#9c8763"
+          },
+          "sand": {
+            "type": "string",
+            "description": "Arena floor colour",
+            "default": "#d9bd8e"
+          },
+          "banner_color": {
+            "type": "string",
+            "description": "Banner cloth colour",
+            "default": "#7a201a"
+          },
+          "quality": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ],
+            "description": "Path and detail resolution",
+            "default": "medium"
+          },
+          "join": {
+            "type": "boolean",
+            "description": "Merge into one object",
+            "default": true
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Random seed",
+            "default": 0
           }
         },
         "additionalProperties": false
@@ -2188,6 +2733,10 @@
             "type": "boolean",
             "description": "Fail on problems that would corrupt the import instead of warning",
             "default": true
+          },
+          "rename": {
+            "type": "object",
+            "description": "Names to apply IN THE EXPORTED FILE ONLY, e.g. {\"horse\": \"Horse\", \"m_coat\": \"Coat\", \"gallop\": \"Gallop\"}. Game code often looks up nodes and materials by exact name, and those names break the studio's snake_case rule \u2014 this satisfies both without renaming the master"
           }
         },
         "additionalProperties": false
@@ -2941,6 +3490,70 @@
       }
     },
     {
+      "name": "material.bake_pbr",
+      "summary": "Bake a layered material into a real PBR texture set (base colour, normal, roughness, AO) and rewire it as glTF-safe image textures. This is the step that makes a procedurally-surfaced asset actually shippable.",
+      "tags": [
+        "material",
+        "bake",
+        "pbr"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "object": {
+            "type": "string",
+            "description": "Object to bake"
+          },
+          "stem": {
+            "type": "string",
+            "description": "Filename stem (defaults to the object name)",
+            "default": ""
+          },
+          "out_dir": {
+            "type": "string",
+            "description": "Directory for the PNGs",
+            "default": "textures"
+          },
+          "size": {
+            "type": "integer",
+            "description": "Texture resolution per map",
+            "default": 1024
+          },
+          "samples": {
+            "type": "integer",
+            "description": "Cycles samples; AO and normal want more than base colour",
+            "default": 24
+          },
+          "maps": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Which maps to bake",
+            "default": [
+              "base_color",
+              "normal",
+              "roughness",
+              "ao"
+            ]
+          },
+          "unwrap": {
+            "type": "boolean",
+            "description": "Auto-unwrap first \u2014 baking needs non-overlapping UVs",
+            "default": true
+          },
+          "margin": {
+            "type": "integer",
+            "description": "Bake margin in pixels; prevents seams at low mips",
+            "default": 10
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "material.consolidate",
       "summary": "Merge materials that render identically into one shared material. Composing a scene from many prop recipes leaves a pile of near-duplicate materials, and every distinct material is a draw call \u2014 this collapses them without changing how anything looks.",
       "tags": [
@@ -3041,6 +3654,122 @@
       }
     },
     {
+      "name": "material.pbr",
+      "summary": "Apply a layered AAA-grade surface: base albedo, curvature-driven EDGE WEAR, ambient-occlusion-driven CAVITY DIRT, two octaves of micro-detail and non-constant roughness. This is the single biggest jump in perceived quality \u2014 flat-coloured geometry never reads as AAA no matter how good the silhouette. Bake it with material.bake_pbr before export.",
+      "tags": [
+        "material",
+        "pbr"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "object": {
+            "type": "string",
+            "description": "Object to surface"
+          },
+          "base_color": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 4
+              }
+            ],
+            "description": "Base albedo: palette name or #rrggbb",
+            "default": "stone_grey"
+          },
+          "roughness": {
+            "type": "number",
+            "description": "Mid roughness; the layers vary around it",
+            "default": 0.75
+          },
+          "metallic": {
+            "type": "number",
+            "description": "Metallic 0..1",
+            "default": 0.0
+          },
+          "detail_scale": {
+            "type": "number",
+            "description": "Micro-detail frequency \u2014 higher is finer grain",
+            "default": 14.0
+          },
+          "grain": {
+            "type": "number",
+            "description": "How strongly the noise tints the albedo",
+            "default": 0.55
+          },
+          "edge_wear": {
+            "type": "number",
+            "description": "Abrasion on convex edges (0..1). Real objects are worn where they stick out",
+            "default": 0.55
+          },
+          "edge_color": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 4
+              }
+            ],
+            "description": "Colour of worn edges; defaults to a lighter base",
+            "default": ""
+          },
+          "cavity_dirt": {
+            "type": "number",
+            "description": "Grime settled in crevices (0..1)",
+            "default": 0.5
+          },
+          "dirt_color": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 4
+              }
+            ],
+            "description": "Colour of the grime",
+            "default": "#2b2118"
+          },
+          "bump": {
+            "type": "number",
+            "description": "Surface relief strength",
+            "default": 0.35
+          },
+          "name": {
+            "type": "string",
+            "description": "Material name",
+            "default": ""
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Random seed for the noise",
+            "default": 0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "material.procedural",
       "summary": "Build a noise/voronoi/wave/gradient material. Gives surfaces real variation instead of flat colour \u2014 but it must be baked (material.bake) before it can export to glTF.",
       "tags": [
@@ -3137,8 +3866,20 @@
             "default": ""
           },
           "color": {
-            "type": "string",
-            "description": "Override colour: palette name or #rrggbb",
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 4
+              }
+            ],
+            "description": "Override colour: palette name, #rrggbb, or a linear [r,g,b] triple",
             "default": ""
           },
           "roughness": {
@@ -4700,8 +5441,8 @@
           },
           "world_light": {
             "type": "number",
-            "description": "Ambient strength",
-            "default": 0.6
+            "description": "Ambient dome strength. Higher fills shadows but piles white specular sheen onto every surface, which washes out saturated albedo",
+            "default": 0.32
           }
         },
         "additionalProperties": false
@@ -4899,8 +5640,188 @@
           },
           "world_light": {
             "type": "number",
-            "description": "Ambient strength",
-            "default": 0.6
+            "description": "Ambient dome strength. Higher fills shadows but piles white specular sheen onto every surface, which washes out saturated albedo",
+            "default": 0.32
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "rig.keyframe",
+      "summary": "Author an animation clip from explicit per-frame bone poses. Give the poses that define the motion and let the interpolation do the rest \u2014 this is how a real cycle is built, not by driving bones with sine waves.",
+      "tags": [
+        "rig",
+        "anim",
+        "char"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "rig": {
+            "type": "string",
+            "description": "Armature object"
+          },
+          "action": {
+            "type": "string",
+            "description": "Action (clip) name",
+            "default": "action"
+          },
+          "keys": {
+            "type": "object",
+            "description": "{\"1\": {\"spine\": [rx, ry, rz]}, \"12\": {...}} \u2014 frame -> bone -> XYZ degrees"
+          },
+          "locations": {
+            "type": "object",
+            "description": "Optional {\"frame\": {\"bone\": [x, y, z]}} bone translations in metres"
+          },
+          "length": {
+            "type": "integer",
+            "description": "Clip length in frames",
+            "default": 24
+          },
+          "loop": {
+            "type": "boolean",
+            "description": "Match the last frame to the first so the clip cycles seamlessly",
+            "default": true
+          },
+          "interpolation": {
+            "type": "string",
+            "enum": [
+              "BEZIER",
+              "LINEAR",
+              "CONSTANT"
+            ],
+            "description": "Keyframe interpolation",
+            "default": "BEZIER"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "rig.mirror_bones",
+      "summary": "Duplicate a set of bones mirrored across an axis, renaming _l to _r (or vice versa). Halves the work of describing a symmetrical skeleton.",
+      "tags": [
+        "rig"
+      ],
+      "mutates": false,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "bones": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "Bone specs to mirror, same shape as rig.skeleton"
+          },
+          "axis": {
+            "type": "string",
+            "enum": [
+              "x",
+              "y",
+              "z"
+            ],
+            "description": "Axis to mirror across",
+            "default": "x"
+          },
+          "from_suffix": {
+            "type": "string",
+            "description": "Suffix on the source bones",
+            "default": "_l"
+          },
+          "to_suffix": {
+            "type": "string",
+            "description": "Suffix for the mirrored copies",
+            "default": "_r"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "rig.skeleton",
+      "summary": "Build an armature from an explicit bone list \u2014 any creature, not just humanoids. Each bone is {name, head:[x,y,z], tail:[x,y,z], parent}. Exactly one bone may be parentless, because engines and the studio validator both require a single root.",
+      "tags": [
+        "rig",
+        "char"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Armature object name",
+            "default": "rig"
+          },
+          "bones": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "Bones: [{\"name\": \"spine\", \"head\": [0,0,1], \"tail\": [0,0.3,1], \"parent\": \"\"}, ...]"
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "Armature position in metres",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "rig.skin",
+      "summary": "Bind a mesh to an armature using distance-to-bone falloff weights. Works on any skeleton and never fails the way Blender's bone-heat solver does on a non-watertight mesh.",
+      "tags": [
+        "rig",
+        "char"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "mesh": {
+            "type": "string",
+            "description": "Mesh object to bind"
+          },
+          "rig": {
+            "type": "string",
+            "description": "Armature object"
+          },
+          "falloff": {
+            "type": "number",
+            "description": "Weight sharpness; higher is more rigid, lower is smoother",
+            "default": 2.0
+          },
+          "influences": {
+            "type": "integer",
+            "description": "Bones influencing each vertex (2 is right for game skins)",
+            "default": 2
+          },
+          "only_bones": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Restrict binding to these bones (empty = all deform bones)",
+            "default": []
           }
         },
         "additionalProperties": false

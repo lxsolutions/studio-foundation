@@ -1,0 +1,32 @@
+{
+  "asset_id": "crowd_cheering",
+  "category": "character",
+  "license": "proprietary",
+  "source": {
+    "origin": "generated"
+  },
+  "creator": "studio-foundation (tools/bforge)",
+  "provenance": {
+    "method": "ai_generated",
+    "commercial_use_allowed": true,
+    "modified": false,
+    "ai": {
+      "system": "bforge (headless Blender, allowlisted ops)",
+      "tool": "bforge",
+      "workflow": "games/chariot/art_source/build_spectators.py",
+      "description": "Crowd figure for MultiMesh stands: human silhouette at crowd LOD",
+      "deterministic": true,
+      "human_review": "pending"
+    }
+  },
+  "games": "chariot",
+  "lod_policy": "none",
+  "collision_policy": "none",
+  "texture_policy": "compressed",
+  "animation_set": "none",
+  "budgets": {
+    "triangles": 120,
+    "materials": 2,
+    "texture_max_px": 256
+  }
+}

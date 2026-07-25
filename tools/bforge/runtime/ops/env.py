@@ -483,6 +483,248 @@ def env_arena(ctx, name, radius, wall_height, sides, entrances, tiers, material,
     return result
 
 
+@op(
+    "env.amphitheatre",
+    summary="A complete Roman venue in one call: raked cavea, podium, arched arcade storey, statued attic colonnade, vomitoria stair wedges, velarium masts, hanging banners and gateways. This is the difference between a stone bowl and the Colosseum — arches and vertical rhythm. Use shape='oval' for a circus/hippodrome, 'circle' for an amphitheatre.",
+    params={
+        "name": ("str", "amphitheatre", "Object name"),
+        "shape": ("enum:oval|circle", "circle", "oval = circus/hippodrome, circle = amphitheatre"),
+        "arena_radius": ("num", 40.0, "Arena half-width in metres (short axis)"),
+        "straight": ("num", 0.0, "oval only: length of each straight in metres"),
+        "arena_margin": ("num", 6.0, "Flat run-off between the arena edge and the podium wall"),
+        "podium_height": ("num", 4.0, "Height of the solid wall between arena and first seats"),
+        "tiers": ("int", 3, "Seating tiers (maenianum), separated by walkway walls"),
+        "tier_depth": ("num", 9.0, "Depth of each tier in metres"),
+        "tier_rise": ("num", 5.4, "Height gained across each tier"),
+        "tier_riser": ("num", 2.4, "Walkway wall height between tiers"),
+        "rows_per_tier": ("int", 7, "Seat steps cut per tier"),
+        "arcade_height": ("num", 9.5, "Height of the arched storey crowning the stands; 0 for none"),
+        "arcade_bays": ("int", 0, "Arch count; 0 auto-sizes to roughly one arch per 8 m"),
+        "colonnade": ("bool", True, "Statued attic colonnade above the arcade"),
+        "vomitoria": ("int", 0, "Stair wedges dividing the seating; 0 auto-sizes"),
+        "masts": ("int", 0, "Velarium masts on the rim; 0 auto-sizes, -1 for none"),
+        "gateways": ("int", 2, "Monumental arched gates cut through the podium"),
+        "banners": ("int", 0, "Hanging banners between arcade bays; 0 auto-sizes"),
+        "stone": ("str", "#d6c4a0", "Sunlit stone colour (travertine, not concrete)"),
+        "stone_shade": ("str", "#9c8763", "Shadowed stone colour"),
+        "sand": ("str", "#d9bd8e", "Arena floor colour"),
+        "banner_color": ("str", "#7a201a", "Banner cloth colour"),
+        "quality": ("enum:low|medium|high", "medium", "Path and detail resolution"),
+        "join": ("bool", True, "Merge into one object"),
+        "seed": ("int", 0, "Random seed"),
+    },
+    tags=["env", "architecture"],
+)
+def env_amphitheatre(ctx, name, shape, arena_radius, straight, arena_margin, podium_height,
+                     tiers, tier_depth, tier_rise, tier_riser, rows_per_tier, arcade_height,
+                     arcade_bays, colonnade, vomitoria, masts, gateways, banners, stone,
+                     stone_shade, sand, banner_color, quality, join, seed):
+    from .arch import arch_arcade, arch_colonnade, arch_gateway
+
+    ctx.reseed(seed)
+    segments = {"low": 14, "medium": 24, "high": 40}[quality]
+    straight = max(0.0, straight) if shape == "oval" else 0.0
+    podium_r = arena_radius + arena_margin
+    stand_depth = tiers * tier_depth
+    back_r = podium_r + stand_depth
+    stand_top = podium_height + tiers * (tier_rise + tier_riser)
+    perimeter = 2.0 * straight + 2.0 * math.pi * back_r
+
+    if arcade_bays <= 0:
+        arcade_bays = max(8, int(perimeter / 8.0))
+    if vomitoria <= 0:
+        vomitoria = max(6, int(perimeter / 34.0))
+    if masts == 0:
+        masts = max(8, int(perimeter / 16.0))
+    if banners <= 0:
+        banners = max(4, arcade_bays // 4)
+
+    def oval(extra=0.0):
+        return dict(path_shape="oval" if shape == "oval" else "circle",
+                    straight=straight, radius=arena_radius + extra)
+
+    parts = []
+
+    # --- arena floor -----------------------------------------------------
+    floor = mesh_lib.new_bmesh()
+    if shape == "oval":
+        mesh_lib.sweep(
+            floor,
+            mesh_lib.oval_path(straight, arena_radius * 0.5, segments),
+            [(-arena_radius * 0.5 - arena_margin, -0.3),
+             (arena_radius * 0.5 + arena_margin, -0.3),
+             (arena_radius * 0.5 + arena_margin, 0.0),
+             (-arena_radius * 0.5 - arena_margin, 0.0)],
+            closed_path=True,
+        )
+    else:
+        mesh_lib.add_cylinder(floor, radius=podium_r, depth=0.6, segments=segments * 2,
+                              center=(0.0, 0.0, -0.3))
+    mesh_lib.cleanup(floor)
+    sand_obj = mesh_lib.to_object(floor, scene_lib.unique_name(f"{name}_sand"))
+    finish_lib.finish(ctx, sand_obj, material="sand", color=sand, uv="box", uv_scale=10.0,
+                      origin="world", smooth=False)
+    parts.append(sand_obj.name)
+
+    # --- cavea: podium wall then stepped seating -------------------------
+    profile = [(podium_r, 0.0), (podium_r, podium_height)]
+    lateral, vertical = podium_r, podium_height
+    rows = max(1, rows_per_tier)
+    for _tier in range(max(1, tiers)):
+        vertical += tier_riser
+        profile.append((lateral, vertical))
+        for _row in range(rows):
+            lateral += tier_depth / rows
+            profile.append((lateral, vertical))
+            vertical += tier_rise / rows
+            profile.append((lateral, vertical))
+    profile.append((lateral, vertical + 1.2))
+    profile.append((lateral + 3.0, vertical + 1.2))
+    profile.append((lateral + 3.0, 0.0))
+
+    cavea = mesh_lib.new_bmesh()
+    path = (
+        mesh_lib.oval_path(straight, arena_radius, segments)
+        if shape == "oval"
+        else [
+            (math.cos(2 * math.pi * i / (segments * 2)) * arena_radius,
+             math.sin(2 * math.pi * i / (segments * 2)) * arena_radius, 0.0)
+            for i in range(segments * 2)
+        ]
+    )
+    # Profile laterals are absolute radii; the sweep wants them relative.
+    mesh_lib.sweep(
+        cavea, path,
+        [(lat - arena_radius, vert) for lat, vert in profile],
+        closed_path=True,
+    )
+    mesh_lib.cleanup(cavea)
+    cavea_obj = mesh_lib.to_object(cavea, scene_lib.unique_name(f"{name}_cavea"))
+    finish_lib.finish(ctx, cavea_obj, material="stone", color=stone, uv="box", uv_scale=4.0,
+                      origin="world", smooth=False)
+    parts.append(cavea_obj.name)
+
+    # --- the Roman elevation --------------------------------------------
+    if arcade_height > 0.0:
+        arch_arcade(
+            ctx, name=f"{name}_arcade", path=[], **oval(back_r - arena_radius),
+            length=0.0, arc_degrees=180.0, resolution=segments * 2, bays=arcade_bays,
+            height=arcade_height, thickness=2.4, opening=0.60, arch_rise=0.0,
+            springing=0.44, voussoirs=7, plinth=0.7, cornice=0.9, cornice_jut=0.35,
+            engaged_columns=True, material="stone", color=stone, uv_scale=3.0, z=stand_top,
+        )
+        parts.append(f"{name}_arcade")
+    if colonnade:
+        arch_colonnade(
+            ctx, name=f"{name}_attic", path=[], **oval(back_r - arena_radius - 0.6),
+            length=0.0, arc_degrees=180.0, resolution=segments * 2, columns=arcade_bays,
+            height=5.2, column_radius=0.46, segments=8, entablature=1.1, flutes=False,
+            statues=True, material="stone", color=stone_shade, uv_scale=3.0,
+            z=stand_top + arcade_height,
+        )
+        parts.append(f"{name}_attic")
+
+    # Vomitoria are stair wedges that FOLLOW the seating rake. Building them as
+    # upright slabs centred on the arena edge walls the bowl off completely —
+    # they must be swept along the same profile as the cavea, raised a step, and
+    # kept narrow.
+    seat_profile = [(lat - arena_radius, vert + 0.75) for lat, vert in profile[:-3]]
+    total_path = len(path)
+    for index in range(max(1, vomitoria)):
+        centre = total_path * index / max(1, vomitoria)
+        lo = int(math.floor(centre)) % total_path
+        hi = (lo + 1) % total_path
+        nxt = (lo + 2) % total_path
+        wedge = mesh_lib.new_bmesh()
+        mesh_lib.sweep(wedge, [path[lo], path[hi], path[nxt]], seat_profile,
+                       closed_path=False, closed_profile=False, cap_ends=False)
+        obj = mesh_lib.to_object(wedge, scene_lib.unique_name(f"{name}_vom{index}"))
+        finish_lib.finish(ctx, obj, material="stone", color=stone_shade, uv="box",
+                          uv_scale=3.0, origin=None, smooth=False)
+        parts.append(obj.name)
+
+    if masts > 0:
+        rim = mesh_lib.sample_path(path, masts, closed=True)
+        for index, (position, _t, normal) in enumerate(rim):
+            at = position + normal * (back_r - arena_radius + 1.4)
+            mast = mesh_lib.new_bmesh()
+            mesh_lib.add_cylinder(mast, radius=0.28, radius_top=0.16, depth=11.0,
+                                  segments=6, center=(0.0, 0.0, 5.5))
+            obj = mesh_lib.to_object(mast, scene_lib.unique_name(f"{name}_mast{index}"))
+            obj.location = (at.x, at.y, stand_top + arcade_height + (5.2 if colonnade else 0.0))
+            finish_lib.finish(ctx, obj, material="wood", color="#6b5335", uv="cylinder",
+                              origin=None, smooth=False)
+            parts.append(obj.name)
+
+    if banners > 0 and arcade_height > 0.0:
+        hang = mesh_lib.sample_path(path, banners, closed=True)
+        for index, (position, tangent, normal) in enumerate(hang):
+            at = position + normal * (back_r - arena_radius - 1.3)
+            cloth = mesh_lib.new_bmesh()
+            mesh_lib.sweep(
+                cloth,
+                [(0.0, 0.0, 0.0), (0.0, 0.12, -arcade_height * 0.72),
+                 (0.0, 0.05, -arcade_height * 0.95)],
+                [(-1.1, -0.06), (1.1, -0.06), (1.1, 0.06), (-1.1, 0.06)],
+            )
+            obj = mesh_lib.to_object(cloth, scene_lib.unique_name(f"{name}_banner{index}"))
+            obj.location = (at.x, at.y, stand_top + arcade_height * 0.94)
+            obj.rotation_euler = (
+                0.0, 0.0, math.atan2(tangent.y, tangent.x)
+            )
+            finish_lib.finish(ctx, obj, material="cloth", color=banner_color, uv="box",
+                              uv_scale=2.0, origin=None, smooth=False)
+            parts.append(obj.name)
+
+    for index in range(max(0, gateways)):
+        angle = math.pi * index + math.pi * 0.5 if gateways == 2 else 2 * math.pi * index / max(1, gateways)
+        gx = math.cos(angle) * (podium_r + 1.0)
+        gy = math.sin(angle) * (podium_r + 1.0)
+        if shape == "oval":
+            gx = (straight * 0.5 + arena_radius) * (1 if index % 2 == 0 else -1)
+            gy = 0.0
+        arch_gateway(
+            ctx, name=f"{name}_gate{index}", width=15.0, height=17.0, thickness=3.2,
+            side_arches=True, attic=4.0, voussoirs=9,
+            location=[gx, gy, 0.0],
+            rotation=math.degrees(math.atan2(gy, gx)) + 90.0,
+            material="stone", color=stone, uv_scale=3.0,
+        )
+        parts.append(f"{name}_gate{index}")
+
+    from .material import material_consolidate
+
+    material_consolidate(ctx, tolerance=0.02, objects=[], dry_run=False)
+
+    if not join:
+        return {"objects": parts, "count": len(parts), "stand_top_m": round(stand_top, 2)}
+
+    try:
+        merged = scene_lib.join([scene_lib.get_object(p) for p in parts],
+                                scene_lib.sanitize(name))
+    except ValueError as exc:
+        raise OpError(str(exc)) from exc
+    scene_lib.set_origin(merged, "world")
+    scene_lib.apply_transforms(merged)
+    result = finish_lib.report(ctx, merged)
+    result.update({
+        "arena_radius_m": arena_radius,
+        "podium_radius_m": round(podium_r, 2),
+        "stand_back_m": round(back_r, 2),
+        "stand_top_m": round(stand_top, 2),
+        "total_height_m": round(stand_top + arcade_height + (5.2 if colonnade else 0.0), 2),
+        "arcade_bays": arcade_bays,
+        "vomitoria": vomitoria,
+        "masts": masts,
+    })
+    ctx.note(
+        f"Seating surface runs {podium_r:.1f} m to {back_r:.1f} m out, {podium_height:.1f} m "
+        f"to {stand_top:.1f} m high. Seat a crowd on exactly that band or it will float."
+    )
+    finish_lib.budget_note(ctx, merged, 45000)
+    return result
+
+
 def _absorb(target_bm, source_bm):
     import bpy
 

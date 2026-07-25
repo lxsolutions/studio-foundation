@@ -18,12 +18,14 @@ Layering, low to high:
 
 from . import session  # noqa: F401  (import order = registration order)
 from . import build  # noqa: F401
+from . import arch  # noqa: F401
 from . import material  # noqa: F401
 from . import uv  # noqa: F401
 from . import prop  # noqa: F401
 from . import kit  # noqa: F401
 from . import env  # noqa: F401
 from . import char  # noqa: F401
+from . import rig  # noqa: F401
 from . import gameready  # noqa: F401
 from . import render  # noqa: F401
 from . import export  # noqa: F401
