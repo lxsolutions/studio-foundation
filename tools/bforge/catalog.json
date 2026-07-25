@@ -3490,6 +3490,73 @@
       }
     },
     {
+      "name": "material.bake_detail",
+      "summary": "Bake high-poly detail onto a low-poly mesh as a tangent-space normal (or AO) map. This is what makes a cheap mesh read as an expensive one: the silhouette stays low-poly but the surface gets its detail back. Use this instead of material.bake when the detail lives in a separate dense mesh -- material.bake bakes an object onto itself, so its normal pass just reproduces the low-poly's own flat normals.",
+      "tags": [
+        "material",
+        "bake"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "low": {
+            "type": "string",
+            "description": "Low-poly object that receives the texture (needs UVs)"
+          },
+          "high": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "High-poly source object(s) the detail is projected from"
+          },
+          "pass_name": {
+            "type": "string",
+            "enum": [
+              "normal",
+              "ao",
+              "base_color"
+            ],
+            "description": "Which channel to transfer",
+            "default": "normal"
+          },
+          "size": {
+            "type": "integer",
+            "description": "Texture resolution in pixels",
+            "default": 2048
+          },
+          "samples": {
+            "type": "integer",
+            "description": "Cycles samples; raise for AO, 32 is plenty for normals",
+            "default": 32
+          },
+          "cage_extrusion": {
+            "type": "number",
+            "description": "Metres to push the low-poly out before casting rays",
+            "default": 0.02
+          },
+          "max_ray_distance": {
+            "type": "number",
+            "description": "Metres to search for the high-poly surface",
+            "default": 0.05
+          },
+          "out": {
+            "type": "string",
+            "description": "PNG output path (defaults to textures/<low>_<pass>_detail.png)",
+            "default": ""
+          },
+          "attach": {
+            "type": "boolean",
+            "description": "Link the baked map into the low-poly's existing material",
+            "default": true
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "material.bake_pbr",
       "summary": "Bake a layered material into a real PBR texture set (base colour, normal, roughness, AO) and rewire it as glTF-safe image textures. This is the step that makes a procedurally-surfaced asset actually shippable.",
       "tags": [

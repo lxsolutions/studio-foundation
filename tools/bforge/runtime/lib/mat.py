@@ -772,3 +772,156 @@ def rewire_baked(obj, image, pass_name="base_color"):
         material.pop("bforge_procedural", None)
         rewired.append(material.name)
     return rewired
+
+
+DETAIL_PASSES = {
+    "normal": ("NORMAL", True),
+    "ao": ("AO", True),
+    "base_color": ("DIFFUSE", False),
+}
+
+
+def bake_detail(
+    low_obj, high_objs, out_path, *, pass_name="normal", size=2048, samples=32,
+    cage_extrusion=0.02, max_ray_distance=0.05, margin=8,
+):
+    """Bake detail from high-poly `high_objs` onto low-poly `low_obj` (selected-to-active).
+
+    This is the transfer that makes a cheap mesh read as an expensive one: the
+    silhouette stays low-poly, the surface detail arrives as a tangent-space
+    normal map. `bake_material` cannot do it -- it bakes an object onto itself,
+    so a normal pass there just reproduces the mesh's own flat normals.
+    """
+    if pass_name not in DETAIL_PASSES:
+        raise ValueError(f"unknown detail pass '{pass_name}' ({', '.join(DETAIL_PASSES)})")
+    if not high_objs:
+        raise ValueError("bake_detail needs at least one high-poly source object")
+    if low_obj in high_objs:
+        raise ValueError(f"'{low_obj.name}' is both the low-poly target and a high-poly source")
+    if not low_obj.data.uv_layers:
+        raise ValueError(
+            f"'{low_obj.name}' has no UVs -- a detail bake needs a unique layout. "
+            "Run uv.unwrap with style='smart_packed' first."
+        )
+    if not low_obj.data.materials or low_obj.data.materials[0] is None:
+        raise ValueError(f"'{low_obj.name}' has no material to hold the baked map")
+
+    scene = bpy.context.scene
+    previous_engine = scene.render.engine
+    scene.render.engine = "CYCLES"
+    scene.cycles.samples = max(1, samples)
+    if hasattr(scene.cycles, "device"):
+        scene.cycles.device = "CPU"
+
+    bake_type, is_data = DETAIL_PASSES[pass_name]
+    image = bpy.data.images.new(
+        f"{low_obj.name}_{pass_name}_detail", width=size, height=size,
+        alpha=False, float_buffer=False, is_data=is_data,
+    )
+
+    targets = []
+    for material in low_obj.data.materials:
+        if material is None or not material.use_nodes:
+            continue
+        node = material.node_tree.nodes.new("ShaderNodeTexImage")
+        node.image = image
+        node.location = (-1200, 400)
+        node.select = True
+        material.node_tree.nodes.active = node
+        targets.append((material, node))
+    if not targets:
+        bpy.data.images.remove(image)
+        scene.render.engine = previous_engine
+        raise ValueError(f"'{low_obj.name}' has no node-based material to bake into")
+
+    bake = scene.render.bake
+    previous_sta = bake.use_selected_to_active
+    previous_cage = bake.cage_extrusion
+    previous_ray = bake.max_ray_distance
+    previous_margin = bake.margin
+
+    view_layer = bpy.context.view_layer
+    previous_selection = [o for o in scene.objects if o.select_get()]
+    previous_active = view_layer.objects.active
+    try:
+        bake.use_selected_to_active = True
+        bake.cage_extrusion = cage_extrusion
+        bake.max_ray_distance = max_ray_distance
+        bake.margin = margin
+        bake.use_clear = True
+        if pass_name == "normal":
+            # Tangent space is what glTF and every engine expect; object space would
+            # bake correctly and then light completely wrong once the mesh moves.
+            bake.normal_space = "TANGENT"
+
+        for other in scene.objects:
+            other.select_set(False)
+        for high in high_objs:
+            high.select_set(True)
+        # Selected-to-active bakes FROM the selected objects INTO the active one,
+        # and the active object must itself be selected.
+        low_obj.select_set(True)
+        view_layer.objects.active = low_obj
+
+        bpy.ops.object.bake(type=bake_type, use_clear=True, margin=margin)
+        image.filepath_raw = str(out_path)
+        image.file_format = "PNG"
+        image.save()
+    finally:
+        # Leaving use_selected_to_active on would silently corrupt every later
+        # bake_material call in the same session -- it would try to project from
+        # whatever happened to be selected. Always put it back.
+        bake.use_selected_to_active = previous_sta
+        bake.cage_extrusion = previous_cage
+        bake.max_ray_distance = previous_ray
+        bake.margin = previous_margin
+        for other in scene.objects:
+            other.select_set(False)
+        for other in previous_selection:
+            if other.name in scene.objects:
+                other.select_set(True)
+        view_layer.objects.active = previous_active
+        scene.render.engine = previous_engine
+
+    return {"image": image, "nodes": targets, "path": str(out_path)}
+
+
+def attach_baked_map(obj, image, pass_name="normal"):
+    """Link a baked map into the existing material without demolishing it.
+
+    `rewire_baked` deletes the procedural graph on purpose, because that is the
+    whole point of baking a procedural material down. A detail bake is additive:
+    the low-poly already has an albedo worth keeping, so only the new node and
+    its link are introduced.
+    """
+    attached = []
+    for material in obj.data.materials:
+        if material is None or not material.use_nodes:
+            continue
+        tree = material.node_tree
+        bsdf = next((n for n in tree.nodes if n.type == "BSDF_PRINCIPLED"), None)
+        if bsdf is None:
+            continue
+        tex = next((n for n in tree.nodes if n.type == "TEX_IMAGE" and n.image == image), None)
+        if tex is None:
+            tex = tree.nodes.new("ShaderNodeTexImage")
+            tex.image = image
+        tex.location = (-700, -200)
+        if pass_name == "normal":
+            normal_map = next(
+                (n for n in tree.nodes if n.type == "NORMAL_MAP"
+                 and n.inputs["Color"].is_linked
+                 and n.inputs["Color"].links[0].from_node is tex),
+                None,
+            )
+            if normal_map is None:
+                normal_map = tree.nodes.new("ShaderNodeNormalMap")
+                normal_map.location = (-400, -240)
+                tree.links.new(tex.outputs["Color"], normal_map.inputs["Color"])
+            tree.links.new(normal_map.outputs["Normal"], bsdf.inputs["Normal"])
+        elif pass_name == "base_color":
+            tree.links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
+        # AO has no Principled socket; it is carried as a texture for the engine
+        # to consume (and for ORM packing later), so the node is left unlinked.
+        attached.append(material.name)
+    return attached
