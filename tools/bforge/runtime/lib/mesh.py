@@ -297,6 +297,123 @@ def loft(bm, sections, closed_ends=True):
     return [f for f in bm.faces if f not in before]
 
 
+def sweep(bm, path_points, profile, closed_path=False, closed_profile=True, cap_ends=True,
+          up=(0.0, 0.0, 1.0)):
+    """Sweep a 2D cross-section along a 3D polyline.
+
+    `profile` is [(lateral, vertical), ...] in the plane perpendicular to the
+    path; `path_points` is [(x, y, z), ...].
+
+    Frames are carried along the path by parallel transport rather than
+    recomputed from a fixed up-vector at each step. A fresh Frenet frame flips
+    at inflection points and spins the cross-section, which on a closed oval
+    shows up as the track surface twisting into a Mobius strip halfway round.
+
+    This is the highest-leverage primitive for level geometry: racetracks,
+    grandstands, roads, ramparts, rails, pipes, tunnels and mouldings are all
+    one profile plus one path.
+    """
+    if len(path_points) < 2:
+        raise ValueError("sweep needs at least two path points")
+    if len(profile) < 2:
+        raise ValueError("sweep needs at least two profile points")
+
+    points = [Vector(p) for p in path_points]
+    if closed_path and (points[0] - points[-1]).length < 1e-6:
+        points.pop()
+
+    count = len(points)
+    tangents = []
+    for index in range(count):
+        if closed_path:
+            ahead = points[(index + 1) % count]
+            behind = points[(index - 1) % count]
+        else:
+            ahead = points[min(index + 1, count - 1)]
+            behind = points[max(index - 1, 0)]
+        tangent = ahead - behind
+        if tangent.length < 1e-9:
+            tangent = Vector((1.0, 0.0, 0.0))
+        tangents.append(tangent.normalized())
+
+    world_up = Vector(up).normalized()
+    # Seed the first frame, then rotate it along the path minimally.
+    reference = world_up
+    if abs(tangents[0].dot(reference)) > 0.999:
+        reference = Vector((1.0, 0.0, 0.0))
+    normal = (reference - tangents[0] * tangents[0].dot(reference)).normalized()
+
+    frames = []
+    for index in range(count):
+        tangent = tangents[index]
+        if index > 0:
+            previous = tangents[index - 1]
+            axis = previous.cross(tangent)
+            if axis.length > 1e-9:
+                angle = math.atan2(axis.length, previous.dot(tangent))
+                normal = normal @ Matrix.Rotation(-angle, 3, axis.normalized())
+            normal = (normal - tangent * tangent.dot(normal))
+            if normal.length < 1e-9:
+                normal = Vector((0.0, 0.0, 1.0))
+            normal = normal.normalized()
+        binormal = tangent.cross(normal).normalized()
+        frames.append((normal, binormal))
+
+    before = set(bm.faces)
+    rings = []
+    for index, origin in enumerate(points):
+        normal, binormal = frames[index]
+        # `binormal` is lateral, `normal` is vertical: a profile authored as
+        # (width, height) reads the way an artist expects.
+        rings.append([
+            bm.verts.new(origin + binormal * lateral + normal * vertical)
+            for lateral, vertical in profile
+        ])
+
+    width = len(profile)
+    span = count if closed_path else count - 1
+    for index in range(span):
+        current = rings[index]
+        nxt = rings[(index + 1) % count]
+        limit = width if closed_profile else width - 1
+        for j in range(limit):
+            k = (j + 1) % width
+            try:
+                bm.faces.new((current[j], current[k], nxt[k], nxt[j]))
+            except ValueError:
+                pass  # duplicate face where the path doubles back; skip it
+
+    if cap_ends and not closed_path and closed_profile:
+        for ring_verts in (list(reversed(rings[0])), rings[-1]):
+            try:
+                bm.faces.new(ring_verts)
+            except ValueError:
+                pass
+    return [f for f in bm.faces if f not in before]
+
+
+def oval_path(straight, radius, segments_per_turn=24, lane_offset=0.0):
+    """Points around a hippodrome/stadium oval, matching a straight+radius spec.
+
+    Returns Godot-friendly XY-plane points (Z=0); the glTF exporter maps Y to
+    -Z, which is the convention the games' track maths already assumes.
+    """
+    points = []
+    half = straight * 0.5
+    r = radius + lane_offset
+    points.append((-half, -r, 0.0))
+    points.append((half, -r, 0.0))
+    for step in range(1, segments_per_turn):
+        theta = math.pi * step / segments_per_turn
+        points.append((half + math.sin(theta) * r, -math.cos(theta) * r, 0.0))
+    points.append((half, r, 0.0))
+    points.append((-half, r, 0.0))
+    for step in range(1, segments_per_turn):
+        theta = math.pi * step / segments_per_turn
+        points.append((-half - math.sin(theta) * r, math.cos(theta) * r, 0.0))
+    return points
+
+
 def ring(radius, height, sides, jitter=None, rng=None, squash=1.0):
     """A single loft section: a polygon ring, optionally noised."""
     points = []

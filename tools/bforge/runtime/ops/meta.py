@@ -65,7 +65,21 @@ def meta_help(ctx, name):
     mutates=False,
 )
 def meta_palette(ctx):
+    # `colors` reports LINEAR values — the same numbers a material actually gets
+    # — so feeding one straight back as a colour list reproduces the named
+    # colour exactly. Reporting the authored sRGB here instead would mean
+    # colour=[...] and colour="name" quietly disagreed. `hex` carries the
+    # human-readable form for the hex parameter.
     return {
-        "colors": {k: [round(c, 4) for c in v] for k, v in mat_lib.PALETTE.items()},
+        "colors": {
+            name: [round(c, 4) for c in mat_lib.resolve_color(name)]
+            for name in mat_lib.PALETTE
+        },
+        "hex": {name: _hex_of(rgba) for name, rgba in mat_lib.PALETTE.items()},
         "presets": mat_lib.PRESETS,
+        "note": "colors are linear (pass them back verbatim); hex is sRGB (pass to a hex colour param)",
     }
+
+
+def _hex_of(rgba) -> str:
+    return "#" + "".join(f"{max(0, min(255, round(c * 255))):02x}" for c in rgba[:3])

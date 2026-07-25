@@ -78,11 +78,15 @@ def check_asset(ctx, triangle_budget, material_budget, require_collision, requir
         )
 
     for obj in [o for o in render_meshes if o.parent is None]:
+        # ERROR, not warn: tools/blender/validate.py fails the build on this, and
+        # a pre-flight check that is more lenient than the real gate is worse
+        # than no check at all — it tells you you are fine right up until CI
+        # says otherwise.
         record(
             f"origin:{obj.name}",
             all(abs(c) < 1e-4 for c in obj.location),
-            f"Root object '{obj.name}' must sit at the world origin — run gameready.pivot",
-            level="warn",
+            f"Root object '{obj.name}' must sit at the world origin — run "
+            "gameready.pivot with to_origin=true",
         )
 
     for obj in render_meshes:

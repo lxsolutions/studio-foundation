@@ -1,6 +1,6 @@
 # bforge op reference
 
-89 operations.
+93 operations.
 
 ## `build.*`
 
@@ -201,6 +201,31 @@ Subdivide all faces. Use sparingly — subdivision multiplies triangles fast.
 | `name` | string | None | Object name |
 | `cuts` | integer | 1 | Cuts per edge |
 | `smooth` | number | 0.0 | Smoothing factor (0 keeps the silhouette) |
+
+### `build.sweep`
+
+Sweep a 2D cross-section along a path — the workhorse for level geometry. Racetracks, grandstands, roads, ramparts, rails, tunnels, mouldings and pipes are all one profile plus one path. Frames use parallel transport, so a closed loop does not twist.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `name` | string | 'part' | Object name (coerced to snake_case) |
+| `location` | array | [0.0, 0.0, 0.0] | World position in metres |
+| `material` | string | 'stone' | Material preset name, or '' for none. See meta.palette |
+| `color` | string | '' | Override colour: palette name or #rrggbb |
+| `uv` | box \| cylinder \| smart \| smart_packed \| none | 'box' | UV strategy |
+| `uv_scale` | number | 4.0 | Metres per UV tile |
+| `origin` | bottom \| center \| center_xy \| world | 'world' | Pivot placement |
+| `smooth` | boolean | False | Smooth shading |
+| `profile` | array | None | Flat [lateral0, vertical0, lateral1, vertical1, ...] cross-section in metres, relative to the path |
+| `path` | array | [] | Flat [x0,y0,z0, x1,y1,z1, ...] path points; leave empty and use path_shape instead |
+| `path_shape` | custom \| oval \| circle \| line \| arc | 'custom' | Built-in path generator |
+| `straight` | number | 40.0 | oval: length of each straight in metres |
+| `radius` | number | 12.0 | oval/circle/arc radius in metres |
+| `length` | number | 20.0 | line: total length in metres along X |
+| `arc_degrees` | number | 180.0 | arc: sweep angle in degrees |
+| `segments` | integer | 24 | Path resolution (per turn for an oval) |
+| `closed_path` | boolean | True | Close the path into a loop (oval and circle are always closed) |
+| `closed_profile` | boolean | True | Treat the cross-section as a closed outline (a solid tube) rather than an open strip |
 
 ### `build.torus`
 
@@ -566,6 +591,7 @@ Fix pivots and transforms across many objects at once — the two things engines
 | `origin` | bottom \| center \| center_xy \| world \| none | 'bottom' | Pivot placement |
 | `apply_transforms` | boolean | True | Bake rotation and scale into the mesh |
 | `snap_to_ground` | boolean | False | Move each object so its lowest point sits at Z=0 |
+| `to_origin` | boolean | False | Also move the object itself to (0,0,0). Required for a single-asset master file — the studio validator rejects a root object that is not at the world origin |
 
 ### `gameready.socket`
 
@@ -652,6 +678,16 @@ Bake procedural shading down to an image texture and rewire the material to use 
 | `out` | string | '' | PNG output path (defaults to textures/<object>_<pass>.png) |
 | `unwrap` | boolean | True | Auto-unwrap first — baking needs non-overlapping UVs |
 | `rewire` | boolean | True | Replace the procedural graph with the baked texture |
+
+### `material.consolidate`
+
+Merge materials that render identically into one shared material. Composing a scene from many prop recipes leaves a pile of near-duplicate materials, and every distinct material is a draw call — this collapses them without changing how anything looks.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `tolerance` | number | 0.02 | How close two materials' colour/roughness/metallic must be to count as the same |
+| `objects` | array | [] | Limit to these objects (empty = whole scene) |
+| `dry_run` | boolean | False | Report what would merge without changing anything |
 
 ### `material.face_assign`
 
@@ -1052,6 +1088,23 @@ Sword, axe, spear, hammer or shield built from a blade/haft/grip breakdown. ~400
 
 ## `render.*`
 
+### `render.camera`
+
+Render from an explicit camera position and target. Auto-framing always fits the WHOLE subject, which is useless on a 700 m stadium or a 40 m terrain — this is how you get a close-up, an eye-level gameplay view, or a hero shot.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `out` | string | 'shot.png' | PNG output path |
+| `position` | array | None | Camera position in metres |
+| `target` | array | [0.0, 0.0, 0.0] | Point to look at |
+| `lens` | number | 50.0 | Focal length in mm — 24 is wide, 50 neutral, 105 compressed |
+| `resolution` | integer | 640 | Width in pixels |
+| `aspect` | number | 1.0 | Width / height. Use 1.78 for a 16:9 gameplay framing |
+| `samples` | integer | 32 | Render samples |
+| `engine` | auto \| cycles \| eevee | 'auto' | Render engine |
+| `light_distance` | number | 0.0 | Light rig scale in metres; 0 fits it to the whole scene |
+| `world_light` | number | 0.6 | Ambient strength |
+
 ### `render.contact_sheet`
 
 THE review image. Renders hero/front/side/top plus a wireframe pass (shows topology and wasted triangles) and a checker pass (shows UV stretch and texel-density mismatches), composited into one PNG. Look at this after generating anything — it is how you catch problems a triangle count cannot show.
@@ -1096,6 +1149,17 @@ Render one framed view of the scene or of specific objects. The camera and a thr
 | `world_light` | number | 0.6 | Ambient strength |
 
 ## `session.*`
+
+### `session.import`
+
+Import an existing glTF/GLB, OBJ, FBX or .blend into the current scene. Use this to inspect, critique, fix or extend assets a game already ships — not just ones you generated.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `path` | string | None | File to import (.glb/.gltf/.obj/.fbx/.blend) |
+| `prefix` | string | '' | Rename imported objects with this prefix (keeps names snake_case) |
+| `location` | array | [0.0, 0.0, 0.0] | Offset to place the import at |
+| `reset_first` | boolean | False | Clear the scene before importing |
 
 ### `session.info`
 

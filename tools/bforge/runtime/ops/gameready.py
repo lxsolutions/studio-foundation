@@ -313,10 +313,11 @@ def gameready_atlas(ctx, objects, name, margin, material, color):
         "origin": ("enum:bottom|center|center_xy|world|none", "bottom", "Pivot placement"),
         "apply_transforms": ("bool", True, "Bake rotation and scale into the mesh"),
         "snap_to_ground": ("bool", False, "Move each object so its lowest point sits at Z=0"),
+        "to_origin": ("bool", False, "Also move the object itself to (0,0,0). Required for a single-asset master file — the studio validator rejects a root object that is not at the world origin"),
     },
     tags=["gameready", "transform"],
 )
-def gameready_pivot(ctx, objects, origin, apply_transforms, snap_to_ground):
+def gameready_pivot(ctx, objects, origin, apply_transforms, snap_to_ground, to_origin):
     targets = [_get(n) for n in objects] if objects else scene_lib.mesh_objects()
     fixed = []
     for obj in targets:
@@ -326,11 +327,13 @@ def gameready_pivot(ctx, objects, origin, apply_transforms, snap_to_ground):
             scene_lib.set_origin(obj, origin)
         if apply_transforms:
             scene_lib.apply_transforms(obj)
+        if to_origin and obj.parent is None:
+            obj.location = (0.0, 0.0, 0.0)
         if snap_to_ground:
             low = mesh_lib.bounds(obj)["min"][2]
             obj.location.z -= low
         fixed.append({"name": obj.name, "location": [round(v, 5) for v in obj.location]})
-    return {"fixed": fixed, "count": len(fixed), "origin": origin}
+    return {"fixed": fixed, "count": len(fixed), "origin": origin, "moved_to_origin": to_origin}
 
 
 @op(

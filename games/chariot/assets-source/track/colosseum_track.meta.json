@@ -1,0 +1,26 @@
+{
+  "asset_id": "colosseum_track",
+  "category": "environment",
+  "license": "proprietary",
+  "source": { "origin": "generated" },
+  "creator": "studio-foundation (tools/bforge)",
+  "provenance": {
+    "method": "ai_generated",
+    "commercial_use_allowed": true,
+    "modified": false,
+    "ai": {
+      "system": "bforge (headless Blender, allowlisted ops, deterministic)",
+      "tool": "bforge",
+      "workflow": "games/chariot/art_source/build_hippodrome.py",
+      "description": "Roman hippodrome built from project/assets/track_spec.json: racing surface, inner and outer rails, tiered cavea, arcade, spina with obelisk, metae and dolphins, corner towers, torches, faction banners",
+      "deterministic": true,
+      "human_review": "pending"
+    }
+  },
+  "games": "chariot",
+  "lod_policy": "auto",
+  "collision_policy": "auto",
+  "texture_policy": "compressed",
+  "animation_set": "none",
+  "budgets": { "triangles": 16000, "materials": 12, "texture_max_px": 2048 }
+}

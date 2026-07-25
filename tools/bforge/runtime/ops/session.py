@@ -133,6 +133,72 @@ def session_open(ctx, path):
 
 
 @op(
+    "session.import",
+    summary="Import an existing glTF/GLB, OBJ, FBX or .blend into the current scene. Use this to inspect, critique, fix or extend assets a game already ships — not just ones you generated.",
+    params={
+        "path": ("path", None, "File to import (.glb/.gltf/.obj/.fbx/.blend)"),
+        "prefix": ("str", "", "Rename imported objects with this prefix (keeps names snake_case)"),
+        "location": ("vec3", [0.0, 0.0, 0.0], "Offset to place the import at"),
+        "reset_first": ("bool", False, "Clear the scene before importing"),
+    },
+    tags=["session", "io"],
+)
+def session_import(ctx, path, prefix, location, reset_first):
+    target = ctx.resolve(path)
+    if not target.is_file():
+        raise OpError(f"no file at {target}")
+    if reset_first:
+        reset_scene(ctx)
+
+    before = {o.name for o in bpy.context.scene.objects}
+    suffix = target.suffix.lower()
+    try:
+        if suffix in (".glb", ".gltf"):
+            bpy.ops.import_scene.gltf(filepath=str(target))
+        elif suffix == ".obj":
+            bpy.ops.wm.obj_import(filepath=str(target))
+        elif suffix == ".fbx":
+            bpy.ops.import_scene.fbx(filepath=str(target))
+        elif suffix == ".blend":
+            # Append every object from the file's scenes rather than opening it,
+            # so an import composes with whatever is already loaded.
+            with bpy.data.libraries.load(str(target), link=False) as (source, dest):
+                dest.objects = list(source.objects)
+            for obj in dest.objects:
+                if obj is not None:
+                    bpy.context.scene.collection.objects.link(obj)
+        else:
+            raise OpError(
+                f"cannot import '{suffix}' — supported: .glb .gltf .obj .fbx .blend"
+            )
+    except RuntimeError as exc:
+        raise OpError(f"import failed for {target.name}: {exc}") from exc
+
+    imported = [o for o in bpy.context.scene.objects if o.name not in before]
+    if not imported:
+        raise OpError(f"{target.name} imported no objects — the file may be empty")
+
+    for obj in imported:
+        if prefix:
+            obj.name = scene_lib.unique_name(f"{prefix}_{obj.name}")
+        elif not scene_lib.check_name(obj.name):
+            obj.name = scene_lib.unique_name(obj.name)
+        if obj.parent is None and any(location):
+            obj.location = [obj.location[i] + location[i] for i in range(3)]
+
+    meshes = [o for o in imported if o.type == "MESH"]
+    return {
+        "path": str(target),
+        "objects": [o.name for o in imported],
+        "meshes": len(meshes),
+        "triangles": sum(mesh_lib.tri_count(o) for o in meshes),
+        "materials": sorted({m.name for o in meshes for m in o.data.materials if m}),
+        "armatures": [o.name for o in imported if o.type == "ARMATURE"],
+        "actions": [a.name for a in bpy.data.actions],
+    }
+
+
+@op(
     "object.list",
     summary="List object names in the scene, optionally filtered by a name prefix.",
     params={"prefix": ("str", "", "Only return names starting with this")},

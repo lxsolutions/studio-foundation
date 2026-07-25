@@ -41,6 +41,41 @@ triangle spend), UV checker (stretch and texel density).
 
 ![barrel review sheet](../../docs/bforge/img/barrel.png)
 
+### In the studio's own games
+
+**The Chariot Club** shipped a `colosseum_track.glb` that was a flat oval slab:
+1,038 objects, 25,796 triangles, 12 materials, no UVs anywhere, and no building
+around the racing surface. `session.import` + `check.critique` found that in one
+pass. [`games/chariot/art_source/build_hippodrome.py`](../../games/chariot/art_source/build_hippodrome.py)
+replaces it with a real circus — banked surface, rails, tiered cavea, arcade,
+spina with obelisk, metae and lap-counting dolphins, corner towers, torches and
+faction banners — driven entirely from the game's own `track_spec.json`, so the
+mesh cannot drift from the race maths in `track_geometry.gd`.
+
+| | before | after |
+| --- | --- | --- |
+| triangles | 25,796 | 14,084 |
+| materials / draw calls | 12 | 11 (from 26, via `material.consolidate`) |
+| file size | 1,630 KB | 763 KB |
+| UVs | none | every surface |
+| actual architecture | none | stands, spina, towers, banners |
+
+![chariot spina](../../docs/bforge/img/chariot_spina.png)
+
+**The Deep** got an 8-asset underground pack
+([`games/asha_world/art_source/build_deep_pack.py`](../../games/asha_world/art_source/build_deep_pack.py)):
+ore vein, crystal cluster, stalactite, pit-prop frame, mine cart, lantern,
+rubble and drill head — 2,134 triangles for the whole set, each with a convex
+collision proxy. It writes `.blend` masters and `.meta.json` sidecars into
+`assets-source/`, so the assets go *through* the ADR 0006 pipeline rather than
+around it: all 11 masters pass `just asset-validate`.
+
+![deep ore vein](../../docs/bforge/img/deep_ore_vein.png)
+
+The ore seam is painted onto a band of the rock's own faces with
+`material.face_assign` — zero extra triangles, impossible to bury inside the
+rock, and it reads as "valuable" at 20 px tall.
+
 ---
 
 ## Why this exists
@@ -185,13 +220,21 @@ wrong" that no metric shows.
   armatures with distance-falloff skinning, keyframed idle/walk/run/attack/
   jump/death/wave clips, bone attachment for weapons
 - **`build.*`** — parametric primitives, lathe, loft, greeble, extrude, bevel,
-  array, mirror, deform
+  array, mirror, deform, and **`build.sweep`**: a cross-section along a path
+  (oval / circle / line / arc / custom), which is how racetracks, grandstands,
+  roads, ramparts, rails and tunnels get made. Frames use parallel transport, so
+  a closed loop does not twist.
 - **`material.*` / `uv.*`** — PBR presets, procedural node graphs, bake-to-texture,
   box/cylinder/smart unwrapping, lightmap channels, texel-density reports
 - **`gameready.*`** — LOD chains, collision proxies, platform budgets, atlasing,
   pivots, attachment sockets
-- **`render.*` / `check.*` / `export.*`** — contact sheets, turntables, studio
-  validation, critique, silhouette scoring, glTF/blend/meta export
+- **`render.*` / `check.*` / `export.*`** — contact sheets, turntables,
+  **`render.camera`** (explicit position/target/lens, because auto-framing is
+  useless on a 700 m stadium), studio validation, critique, silhouette scoring,
+  glTF/blend/meta export
+- **`session.import`** — pull in an existing GLB/glTF/OBJ/FBX/blend to inspect,
+  critique, fix or extend assets a game already ships. This is how the Chariot
+  audit above was done.
 
 ---
 

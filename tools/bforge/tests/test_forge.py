@@ -157,6 +157,24 @@ class Transforms(ForgeCase):
         result = self.forge.call("object.transform", name="b", scale=[3, 3, 3], apply=True)
         self.assertAlmostEqual(result["bounds"]["size"][0], 3.0, places=3)
 
+    def test_pivot_to_origin_satisfies_the_studio_validator(self):
+        """Regression: a master whose root object is not at (0,0,0) is rejected
+        by tools/blender/validate.py, and check.asset used to only warn."""
+        self.forge.call("prop.crate", name="crate", location=[3.0, 2.0, 0.0])
+        self.forge.call("gameready.pivot", objects=["crate"], origin="bottom", to_origin=True)
+        report = self.forge.call("check.asset", triangle_budget=5000)
+        origin_checks = [c for c in report["checks"] if c["id"].startswith("origin:")]
+        self.assertTrue(origin_checks)
+        self.assertTrue(all(c["level"] == "ok" for c in origin_checks), origin_checks)
+
+    def test_off_origin_root_is_an_error_not_a_warning(self):
+        self.forge.call("prop.crate", name="crate", location=[5.0, 0.0, 0.0])
+        report = self.forge.call("check.asset", triangle_budget=5000)
+        origin_fail = [f for f in report["failures"] if f["id"].startswith("origin:")]
+        self.assertTrue(origin_fail, "an off-origin root must be reported")
+        self.assertEqual(origin_fail[0]["level"], "error")
+        self.assertFalse(report["ok"])
+
     def test_multi_part_recipe_keeps_its_full_extent(self):
         """Regression: a stale matrix_world used to collapse assemblies to a point."""
         room = self.forge.call("kit.room", name="room", size=[2, 2], grid=4.0)
@@ -186,6 +204,159 @@ class Transforms(ForgeCase):
         self.forge.call("object.join", names=["a", "b"], into="m")
         info = self.forge.call("object.inspect", name="m")
         self.assertAlmostEqual(info["location"][0], 4.0, places=4)
+
+
+class Sweep(ForgeCase):
+    def test_oval_sweep_closes_without_twisting(self):
+        """A Frenet frame flips at inflections and Mobius-strips a closed loop."""
+        result = self.forge.call(
+            "build.sweep",
+            name="track",
+            profile=[-10, 0, 10, 0, 10, 0.5, -10, 0.5],
+            path_shape="oval",
+            straight=40,
+            radius=12,
+            segments=16,
+        )
+        size = result["bounds"]["size"]
+        self.assertAlmostEqual(size[0], 40 + 2 * 22, delta=0.5)  # straight + 2*(r+width)
+        self.assertAlmostEqual(size[2], 0.5, delta=0.05)  # stays flat: no twist
+
+    def test_line_sweep_matches_requested_length(self):
+        result = self.forge.call(
+            "build.sweep",
+            name="wall",
+            profile=[-0.5, 0, 0.5, 0, 0.5, 3, -0.5, 3],
+            path_shape="line",
+            length=20.0,
+            segments=8,
+        )
+        self.assertAlmostEqual(result["bounds"]["size"][0], 20.0, delta=0.1)
+
+    def test_bad_profile_is_rejected_with_an_example(self):
+        with self.assertRaises(ForgeError) as ctx:
+            self.forge.call("build.sweep", name="x", profile=[1, 2, 3])
+        self.assertIn("pairs", str(ctx.exception))
+
+    def test_custom_path_requires_points(self):
+        with self.assertRaises(ForgeError):
+            self.forge.call(
+                "build.sweep", name="x", profile=[0, 0, 1, 0, 1, 1], path_shape="custom", path=[]
+            )
+
+
+class Materials(ForgeCase):
+    def test_same_preset_with_different_colours_stays_different(self):
+        """Regression: a name-keyed material cache silently returned the FIRST
+        colour for every later request, so a whole scene came out one shade."""
+        self.forge.call("build.box", name="warm", material="stone", color="wood_oak")
+        self.forge.call(
+            "build.box", name="cool", material="stone", color="ice_blue", location=[3, 0, 0]
+        )
+        warm = self.forge.call("object.inspect", name="warm")["materials"]
+        cool = self.forge.call("object.inspect", name="cool")["materials"]
+        self.assertNotEqual(warm, cool, "distinct colours must not share a material")
+
+    def test_identical_requests_still_share_one_material(self):
+        self.forge.call("build.box", name="a", material="stone", color="stone_grey")
+        self.forge.call(
+            "build.box", name="b", material="stone", color="stone_grey", location=[3, 0, 0]
+        )
+        self.assertEqual(
+            self.forge.call("object.inspect", name="a")["materials"],
+            self.forge.call("object.inspect", name="b")["materials"],
+        )
+
+    def test_palette_names_are_gamma_converted_like_hex(self):
+        """Palette entries are authored in sRGB; Blender sockets are linear.
+        Converting only hex colours would make the two disagree visibly."""
+        palette = self.forge.call("meta.palette")
+        leaf = palette["colors"]["leaf_green"]
+        # sRGB 0.19/0.36/0.14 -> linear is markedly darker; if the conversion is
+        # skipped the authored value comes straight back out.
+        self.assertLess(leaf[1], 0.20, f"leaf_green looks unconverted: {leaf}")
+        self.assertTrue(palette["hex"]["leaf_green"].startswith("#"))
+
+    def test_reported_palette_colour_round_trips(self):
+        """meta.palette's numbers must reproduce the named colour when passed
+        back verbatim, or an agent reading the palette gets a different shade
+        than one that used the name."""
+        reported = self.forge.call("meta.palette")["colors"]["ice_blue"]
+        hex_form = self.forge.call("meta.palette")["hex"]["ice_blue"]
+
+        self.forge.call("build.box", name="by_name", material="stone", color="ice_blue")
+        self.forge.call(
+            "build.box", name="by_value", material="stone", color=hex_form, location=[3, 0, 0]
+        )
+        # Same colour by two routes must collapse to a single material.
+        merged = self.forge.call("material.consolidate", tolerance=0.01)
+        self.assertEqual(
+            merged["materials_after"],
+            1,
+            f"palette name and its reported hex disagree: {reported} / {hex_form} "
+            f"-> {merged['remaining']}",
+        )
+
+    def test_consolidate_merges_duplicates_only(self):
+        self.forge.call("build.box", name="a", material="stone", color="stone_grey")
+        self.forge.call(
+            "build.box", name="b", material="stone", color="stone_grey", location=[3, 0, 0]
+        )
+        self.forge.call("build.box", name="c", material="gold", location=[6, 0, 0])
+        result = self.forge.call("material.consolidate")
+        self.assertEqual(result["materials_after"], 2, result["remaining"])
+
+    def test_consolidate_dry_run_changes_nothing(self):
+        self.forge.call("build.box", name="a", material="stone", color="stone_grey")
+        self.forge.call(
+            "build.box", name="b", material="stone", color="stone_grey", location=[3, 0, 0]
+        )
+        before = self.forge.call("material.list")["count"]
+        self.forge.call("material.consolidate", dry_run=True)
+        self.assertEqual(self.forge.call("material.list")["count"], before)
+
+
+class ImportExisting(ForgeCase):
+    def test_round_trip_through_glb_preserves_geometry(self):
+        source = self.forge.call("prop.barrel", name="barrel", seed=3)
+        exported = self.forge.call("export.gltf", out="roundtrip.glb", strict=False)
+        self.forge.call("session.reset")
+        imported = self.forge.call("session.import", path=exported["path"])
+        self.assertEqual(imported["triangles"], source["triangles"])
+
+    def test_import_of_a_missing_file_is_a_clear_error(self):
+        with self.assertRaises(ForgeError) as ctx:
+            self.forge.call("session.import", path="does/not/exist.glb")
+        self.assertIn("no file at", str(ctx.exception))
+
+    def test_unsupported_extension_lists_what_is_supported(self):
+        target = Path(TEMP.name) / "thing.xyz"
+        target.write_text("not a model", encoding="utf-8")
+        with self.assertRaises(ForgeError) as ctx:
+            self.forge.call("session.import", path=str(target))
+        self.assertIn(".glb", str(ctx.exception))
+
+
+class ExplicitCamera(ForgeCase):
+    def test_camera_render_writes_an_image_at_the_requested_aspect(self):
+        self.forge.call("prop.crate", name="crate", seed=1)
+        result = self.forge.call(
+            "render.camera",
+            out="cam.png",
+            position=[4, -4, 3],
+            target=[0, 0, 0.5],
+            resolution=192,
+            aspect=1.78,
+            samples=4,
+            _timeout=600,
+        )
+        self.assertEqual(result["resolution"][0], 192)
+        self.assertEqual(result["resolution"][1], int(192 / 1.78))
+        self.assertTrue(Path(result["path"]).is_file())
+
+    def test_camera_render_of_an_empty_scene_errors(self):
+        with self.assertRaises(ForgeError):
+            self.forge.call("render.camera", out="x.png", position=[1, 1, 1], samples=1)
 
 
 class UVs(ForgeCase):
