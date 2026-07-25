@@ -122,11 +122,54 @@ def stage_tests(project: Path, timeout: int) -> int:
     return code
 
 
+def main_scene_of(project: Path) -> str:
+    """Read run/main_scene out of project.godot so the gate audits what ships."""
+    config = project / "project.godot"
+    if not config.is_file():
+        return ""
+    for line in config.read_text(encoding="utf-8", errors="replace").splitlines():
+        if line.startswith("run/main_scene="):
+            return line.split("=", 1)[1].strip().strip('"')
+    return ""
+
+
+def stage_budget(project: Path, profile: str, scene: str, frames: int, timeout: int) -> int:
+    """Fail when a scene exceeds the budgets its render profile declares.
+
+    Runs the scene rather than reading the .tscn: these games build their worlds
+    in code, so a packed-scene reading reports nothing and passes vacuously.
+    """
+    target = scene or main_scene_of(project)
+    if not target:
+        print("no scene given and project.godot has no run/main_scene", file=sys.stderr)
+        return 2
+    code, output = run_godot(
+        [
+            "--headless", "--path", str(project),
+            "--script", "res://addons/studio_core/tools/audit_scene_budget.gd",
+            "--", f"--scene={target}", f"--profile={profile}", f"--frames={frames}",
+        ],
+        project,
+        timeout,
+        isolate_user_data=True,
+    )
+    print(output)
+    return code
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--game", default="templates/godot-game")
     parser.add_argument("--import-only", action="store_true")
     parser.add_argument("--tests", action="store_true")
+    parser.add_argument("--budget", action="store_true",
+                        help="audit the main scene against its render profile budgets")
+    parser.add_argument("--profile", default="browser_webgpu",
+                        help="render profile to apply and audit against")
+    parser.add_argument("--scene", default="",
+                        help="scene to audit (defaults to the project's main scene)")
+    parser.add_argument("--frames", type=int, default=30,
+                        help="frames to let the scene build before measuring")
     parser.add_argument("--timeout", type=int, default=300)
     args = parser.parse_args()
 
@@ -143,7 +186,11 @@ def main() -> int:
     if code != 0 or args.import_only:
         return code
     if args.tests:
-        return stage_tests(project, args.timeout)
+        code = stage_tests(project, args.timeout)
+        if code != 0:
+            return code
+    if args.budget:
+        return stage_budget(project, args.profile, args.scene, args.frames, args.timeout)
     return 0
 
 

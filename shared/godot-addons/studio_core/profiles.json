@@ -31,7 +31,7 @@
     "post_processing": true,
     "msaa_3d": 0,
     "actor_limit": 120,
-    "crowd_density": 0.5
+    "crowd_density": 0.431
   },
   "browser_webgl": {
     "resolution_scale": 0.9,
@@ -48,7 +48,7 @@
     "post_processing": false,
     "msaa_3d": 0,
     "actor_limit": 60,
-    "crowd_density": 0.2
+    "crowd_density": 0.135
   },
   "mobile_high": {
     "resolution_scale": 1.0,
@@ -65,7 +65,7 @@
     "post_processing": true,
     "msaa_3d": 0,
     "actor_limit": 90,
-    "crowd_density": 0.35
+    "crowd_density": 0.17
   },
   "mobile_low": {
     "resolution_scale": 0.75,
@@ -82,6 +82,6 @@
     "post_processing": false,
     "msaa_3d": 0,
     "actor_limit": 40,
-    "crowd_density": 0.15
+    "crowd_density": 0.066
   }
 }
