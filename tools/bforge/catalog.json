@@ -5449,6 +5449,179 @@
       }
     },
     {
+      "name": "render.cinematic",
+      "summary": "A film-grade beauty render: physical sun and sky, global illumination, atmospheric haze, depth of field and a filmic tonemap. render.view and render.camera are flat REVIEW rigs built to judge albedo honestly; this one is built to show the asset at its best, and it is the render that tells you whether the art actually holds up.",
+      "tags": [
+        "render"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "out": {
+            "type": "string",
+            "description": "PNG output path",
+            "default": "hero.png"
+          },
+          "position": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "Camera position in metres"
+          },
+          "target": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "Point to look at",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "lens": {
+            "type": "number",
+            "description": "Focal length in mm",
+            "default": 40.0
+          },
+          "resolution": {
+            "type": "integer",
+            "description": "Width in pixels",
+            "default": 1280
+          },
+          "aspect": {
+            "type": "number",
+            "description": "Width / height. 2.39 is anamorphic, 1.78 is 16:9",
+            "default": 2.39
+          },
+          "samples": {
+            "type": "integer",
+            "description": "Path-tracing samples. This is a beauty render; it costs time",
+            "default": 96
+          },
+          "sun_energy": {
+            "type": "number",
+            "description": "Sun strength in W/m2. 3-6 reads as hard daylight",
+            "default": 4.0
+          },
+          "sun_angle": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2,
+            "maxItems": 2,
+            "description": "Sun elevation and azimuth in degrees. Low sun = long shadows",
+            "default": [
+              52.0,
+              35.0
+            ]
+          },
+          "sun_color": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 4
+              }
+            ],
+            "description": "Sunlight colour; warmer at low elevation",
+            "default": "#fff2dc"
+          },
+          "sky_color": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 4
+              }
+            ],
+            "description": "Zenith sky colour, which is also the fill light",
+            "default": "#6fa3dc"
+          },
+          "horizon_color": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 4
+              }
+            ],
+            "description": "Horizon haze colour",
+            "default": "#e8dcc0"
+          },
+          "sky_strength": {
+            "type": "number",
+            "description": "Sky/ambient strength",
+            "default": 1.1
+          },
+          "haze": {
+            "type": "number",
+            "description": "Volumetric atmosphere density. 0.0005-0.004 separates distant forms; costs render time",
+            "default": 0.0
+          },
+          "focus": {
+            "type": "number",
+            "description": "Depth of field focus distance; 0 measures it to the target",
+            "default": 0.0
+          },
+          "aperture": {
+            "type": "number",
+            "description": "f-stop. 0 disables depth of field. 2.8 is shallow, 8 is deep",
+            "default": 0.0
+          },
+          "bounces": {
+            "type": "integer",
+            "description": "Light bounces. GI is most of what makes a render look expensive",
+            "default": 6
+          },
+          "exposure": {
+            "type": "number",
+            "description": "Exposure compensation in stops",
+            "default": 0.0
+          },
+          "look": {
+            "type": "string",
+            "enum": [
+              "filmic",
+              "agx",
+              "standard",
+              "contrast"
+            ],
+            "description": "View transform. Filmic/AgX roll off highlights like film; standard clips them",
+            "default": "agx"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "render.contact_sheet",
       "summary": "THE review image. Renders hero/front/side/top plus a wireframe pass (shows topology and wasted triangles) and a checker pass (shows UV stretch and texel-density mismatches), composited into one PNG. Look at this after generating anything \u2014 it is how you catch problems a triangle count cannot show.",
       "tags": [

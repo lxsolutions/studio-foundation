@@ -219,6 +219,31 @@ def _render_to(path):
     return path
 
 
+def _camera_is_buried(eye, target):
+    """Is the camera inside solid geometry? Returns the object name, or None.
+
+    Placing a camera inside a wall renders pure black, which looks identical to
+    a lighting failure and costs a full render to diagnose. It is also the most
+    common spatial mistake there is: a stadium camera at radius 55 sounds
+    reasonable and sits squarely inside a stand that spans 44 to 71.
+
+    Cast a ray along the view direction and inspect the first hit's normal. If
+    it faces the SAME way we are looking, we are seeing a backface, which means
+    we started inside the mesh.
+    """
+    direction = (Vector(target) - Vector(eye))
+    if direction.length < 1e-6:
+        return None
+    direction.normalize()
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    hit, _location, normal, _index, obj, _matrix = bpy.context.scene.ray_cast(
+        depsgraph, Vector(eye), direction
+    )
+    if hit and normal.dot(direction) > 0.0:
+        return obj.name if obj else "solid geometry"
+    return None
+
+
 def _analyse(ctx, path):
     """Attach measured stats to every render.
 
@@ -356,6 +381,184 @@ def render_camera(ctx, out, position, target, lens, resolution, aspect, samples,
         "path": str(path), "rel": ctx.rel(path), "engine": used,
         "position": [round(v, 3) for v in eye], "target": [round(v, 3) for v in centre],
         "lens_mm": lens, "resolution": [scene.render.resolution_x, scene.render.resolution_y],
+        "analysis": _analyse(ctx, path),
+    }
+
+
+@op(
+    "render.cinematic",
+    summary="A film-grade beauty render: physical sun and sky, global illumination, atmospheric haze, depth of field and a filmic tonemap. render.view and render.camera are flat REVIEW rigs built to judge albedo honestly; this one is built to show the asset at its best, and it is the render that tells you whether the art actually holds up.",
+    params={
+        "out": ("path", "hero.png", "PNG output path"),
+        "position": ("vec3", None, "Camera position in metres"),
+        "target": ("vec3", [0.0, 0.0, 0.0], "Point to look at"),
+        "lens": ("num", 40.0, "Focal length in mm"),
+        "resolution": ("int", 1280, "Width in pixels"),
+        "aspect": ("num", 2.39, "Width / height. 2.39 is anamorphic, 1.78 is 16:9"),
+        "samples": ("int", 96, "Path-tracing samples. This is a beauty render; it costs time"),
+        "sun_energy": ("num", 4.0, "Sun strength in W/m2. 3-6 reads as hard daylight"),
+        "sun_angle": ("vec2", [52.0, 35.0], "Sun elevation and azimuth in degrees. Low sun = long shadows"),
+        "sun_color": ("colorref", "#fff2dc", "Sunlight colour; warmer at low elevation"),
+        "sky_color": ("colorref", "#6fa3dc", "Zenith sky colour, which is also the fill light"),
+        "horizon_color": ("colorref", "#e8dcc0", "Horizon haze colour"),
+        "sky_strength": ("num", 1.1, "Sky/ambient strength"),
+        "haze": ("num", 0.0, "Volumetric atmosphere density. 0.0005-0.004 separates distant forms; costs render time"),
+        "focus": ("num", 0.0, "Depth of field focus distance; 0 measures it to the target"),
+        "aperture": ("num", 0.0, "f-stop. 0 disables depth of field. 2.8 is shallow, 8 is deep"),
+        "bounces": ("int", 6, "Light bounces. GI is most of what makes a render look expensive"),
+        "exposure": ("num", 0.0, "Exposure compensation in stops"),
+        "look": ("enum:filmic|agx|standard|contrast", "agx", "View transform. Filmic/AgX roll off highlights like film; standard clips them"),
+    },
+    tags=["render"],
+)
+def render_cinematic(ctx, out, position, target, lens, resolution, aspect, samples, sun_energy,
+                     sun_angle, sun_color, sky_color, horizon_color, sky_strength, haze, focus,
+                     aperture, bounces, exposure, look):
+    from lib import mat as mat_lib
+
+    if not [o for o in bpy.context.scene.objects if o.type == "MESH"]:
+        raise OpError("nothing to render — the scene has no mesh objects")
+
+    scene = bpy.context.scene
+    centre = Vector(target)
+    eye = Vector(position)
+
+    # --- sky: a real gradient environment, not a flat backdrop -----------
+    if scene.world is None:
+        scene.world = bpy.data.worlds.new("World")
+    world = scene.world
+    world.use_nodes = True
+    tree = world.node_tree
+    tree.nodes.clear()
+    output = tree.nodes.new("ShaderNodeOutputWorld")
+    background = tree.nodes.new("ShaderNodeBackground")
+    background.inputs["Strength"].default_value = sky_strength
+    gradient = tree.nodes.new("ShaderNodeTexGradient")
+    gradient.gradient_type = "EASING"
+    mapping = tree.nodes.new("ShaderNodeMapping")
+    mapping.inputs["Rotation"].default_value = (0.0, math.radians(90.0), 0.0)
+    coord = tree.nodes.new("ShaderNodeTexCoord")
+    ramp = tree.nodes.new("ShaderNodeValToRGB")
+    ramp.color_ramp.elements[0].color = mat_lib.resolve_color(horizon_color)
+    ramp.color_ramp.elements[1].color = mat_lib.resolve_color(sky_color)
+    ramp.color_ramp.elements[0].position = 0.42
+    ramp.color_ramp.elements[1].position = 0.62
+    tree.links.new(coord.outputs["Generated"], mapping.inputs["Vector"])
+    tree.links.new(mapping.outputs["Vector"], gradient.inputs["Vector"])
+    tree.links.new(gradient.outputs["Fac"], ramp.inputs["Fac"])
+    tree.links.new(ramp.outputs["Color"], background.inputs["Color"])
+    tree.links.new(background.outputs["Background"], output.inputs["Surface"])
+
+    # --- sun: a real SUN lamp with angular size --------------------------
+    for obj in [o for o in scene.objects if o.type == "LIGHT"]:
+        scene_lib.delete(obj)
+    sun_data = bpy.data.lights.new("_bforge_sun", type="SUN")
+    sun_data.energy = sun_energy
+    sun_data.color = mat_lib.resolve_color(sun_color)[:3]
+    # ~0.53 degrees is the real sun. Slightly wider softens contact shadows
+    # without turning them to mush.
+    sun_data.angle = math.radians(1.2)
+    sun = bpy.data.objects.new("_bforge_sun", sun_data)
+    scene.collection.objects.link(sun)
+    elevation = math.radians(max(2.0, min(88.0, sun_angle[0])))
+    azimuth = math.radians(sun_angle[1])
+    direction = Vector((
+        math.cos(elevation) * math.cos(azimuth),
+        math.cos(elevation) * math.sin(azimuth),
+        math.sin(elevation),
+    ))
+    sun.rotation_euler = (-direction).to_track_quat("-Z", "Y").to_euler()
+
+    # --- atmosphere -------------------------------------------------------
+    haze_volume = None
+    if haze > 0.0:
+        extent = max(200.0, (eye - centre).length * 8.0)
+        haze_bm = mesh_lib.new_bmesh()
+        mesh_lib.add_box(haze_bm, size=(extent, extent, extent * 0.5),
+                         center=(centre.x, centre.y, centre.z))
+        haze_volume = mesh_lib.to_object(haze_bm, "_bforge_haze")
+        material = bpy.data.materials.new("_bforge_haze")
+        material.use_nodes = True
+        volume_tree = material.node_tree
+        volume_tree.nodes.clear()
+        volume_out = volume_tree.nodes.new("ShaderNodeOutputMaterial")
+        scatter = volume_tree.nodes.new("ShaderNodeVolumeScatter")
+        scatter.inputs["Density"].default_value = haze
+        scatter.inputs["Anisotropy"].default_value = 0.4
+        volume_tree.links.new(scatter.outputs["Volume"], volume_out.inputs["Volume"])
+        haze_volume.data.materials.append(material)
+
+    # --- camera ------------------------------------------------------------
+    camera_data = bpy.data.cameras.new("_bforge_cine")
+    camera = bpy.data.objects.new("_bforge_cine", camera_data)
+    scene.collection.objects.link(camera)
+    scene.camera = camera
+    camera_data.lens = max(8.0, lens)
+    camera.location = eye
+    camera.rotation_euler = (centre - eye).to_track_quat("-Z", "Y").to_euler()
+    distance = max(0.1, (eye - centre).length)
+    camera_data.clip_start = max(0.01, distance * 0.001)
+    camera_data.clip_end = distance * 40.0
+    if aperture > 0.0:
+        camera_data.dof.use_dof = True
+        camera_data.dof.focus_distance = focus if focus > 0 else distance
+        camera_data.dof.aperture_fstop = aperture
+
+    # --- engine ------------------------------------------------------------
+    scene.render.engine = "CYCLES"
+    scene.cycles.device = "CPU"
+    scene.cycles.samples = max(8, samples)
+    scene.cycles.max_bounces = max(2, bounces)
+    scene.cycles.diffuse_bounces = max(2, bounces)
+    scene.cycles.glossy_bounces = max(2, bounces)
+    scene.cycles.transmission_bounces = max(2, bounces)
+    scene.cycles.volume_bounces = 2 if haze > 0 else 0
+    scene.cycles.use_denoising = True
+    scene.render.resolution_x = resolution
+    scene.render.resolution_y = max(1, int(resolution / max(0.1, aspect)))
+    scene.render.resolution_percentage = 100
+    scene.render.film_transparent = False
+    scene.render.image_settings.file_format = "PNG"
+    scene.render.image_settings.color_mode = "RGB"
+
+    view = scene.view_settings
+    transform = {"filmic": "Filmic", "agx": "AgX", "standard": "Standard",
+                 "contrast": "Standard"}[look]
+    for candidate in (transform, "AgX", "Filmic", "Standard"):
+        try:
+            view.view_transform = candidate
+            break
+        except TypeError:
+            continue
+    try:
+        view.look = "AgX - Punchy" if look == "agx" else (
+            "Medium High Contrast" if look == "contrast" else "None"
+        )
+    except TypeError:
+        pass
+    view.exposure = exposure
+    view.gamma = 1.0
+
+    bpy.context.view_layer.update()
+    buried = _camera_is_buried(eye, centre)
+    if buried:
+        ctx.note(
+            f"the camera at {[round(v, 1) for v in eye]} is INSIDE '{buried}' — the frame "
+            "will render black. Move it into open space; for a stadium or a room that "
+            "means inside the bowl or outside the outer wall, not within the wall itself."
+        )
+
+    path = ctx.out_path(out, ".png")
+    try:
+        _render_to(path)
+    finally:
+        _cleanup_rig([sun, camera] + ([haze_volume] if haze_volume else []))
+
+    return {
+        "path": str(path), "rel": ctx.rel(path),
+        "resolution": [scene.render.resolution_x, scene.render.resolution_y],
+        "samples": samples, "bounces": bounces, "look": view.view_transform,
+        "haze": haze, "depth_of_field": aperture > 0.0,
         "analysis": _analyse(ctx, path),
     }
 
