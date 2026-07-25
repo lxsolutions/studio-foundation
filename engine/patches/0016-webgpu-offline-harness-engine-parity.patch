@@ -189,23 +189,82 @@ index 0000000..3ed80f8
 +echo ""
 +echo "Built: bin/glsl2spv ($(du -h bin/glsl2spv | cut -f1))"
 diff --git a/drivers/webgpu/tint_cli/glsl2spv.cpp b/drivers/webgpu/tint_cli/glsl2spv.cpp
-index 1e8ea45..ef5d77e 100644
---- a/drivers/webgpu/tint_cli/glsl2spv.cpp
+new file mode 100644
+--- /dev/null
 +++ b/drivers/webgpu/tint_cli/glsl2spv.cpp
-@@ -3,6 +3,7 @@
- //   glsl2spv <vert|frag|comp> <in.glsl> <out.spv>
- //   tint_convert_cli <out.spv>            # hang == the runtime bug, no GPU needed
- #include <cstdio>
+@@ -0,0 +1,110 @@
++// Minimal GLSL -> SPIR-V compiler using Godot's vendored glslang (CPU only, no
++// GPU). Companion to tint_convert_cli for the offline WebGPU-3D-hang repro:
++//   glsl2spv <vert|frag|comp> <in.glsl> <out.spv>
++//   tint_convert_cli <out.spv>            # hang == the runtime bug, no GPU needed
++#include <cstdio>
 +#include <cstdlib>
- #include <fstream>
- #include <sstream>
- #include <string>
-@@ -69,8 +70,24 @@ int main(int argc, char **argv) {
- 	glslang::TShader shader(stage);
- 	shader.setStrings(srcs, 1);
- 	shader.setEnvInput(glslang::EShSourceGlsl, stage, glslang::EShClientVulkan, 100);
--	shader.setEnvClient(glslang::EShClientVulkan, glslang::EShTargetVulkan_1_0);
--	shader.setEnvTarget(glslang::EShTargetSpv, glslang::EShTargetSpv_1_0);
++#include <fstream>
++#include <sstream>
++#include <string>
++#include <vector>
++
++#include <glslang/Public/ResourceLimits.h>
++#include <glslang/Public/ShaderLang.h>
++#include <SPIRV/GlslangToSpv.h>
++
++static std::string read_file(const char *path) {
++	std::ifstream f(path, std::ios::binary);
++	std::stringstream ss;
++	ss << f.rdbuf();
++	return ss.str();
++}
++
++int main(int argc, char **argv) {
++	// Accept two arg styles:
++	//   positional:            glsl2spv <vert|frag|comp> <in.glsl> <out.spv>
++	//   glslangValidator-like: glsl2spv -V -S <stage> -o <out.spv> <in.glsl>
++	// The latter lets it drop in as `glslangValidator` for wgsl_precompile.py.
++	std::string stage_s, in_path, out_path;
++	bool glslang_style = false;
++	for (int i = 1; i < argc; i++) {
++		if (std::string(argv[i]).rfind("-", 0) == 0) glslang_style = true;
++	}
++	if (glslang_style) {
++		for (int i = 1; i < argc; i++) {
++			std::string a = argv[i];
++			if (a == "-S" && i + 1 < argc) { stage_s = argv[++i]; }
++			else if (a == "-o" && i + 1 < argc) { out_path = argv[++i]; }
++			else if (a.rfind("-", 0) == 0) { /* ignore -V, --target-env, etc. */ }
++			else { in_path = a; }
++		}
++	} else if (argc >= 4) {
++		stage_s = argv[1]; in_path = argv[2]; out_path = argv[3];
++	}
++	if (stage_s.empty() || in_path.empty() || out_path.empty()) {
++		fprintf(stderr, "Usage: glsl2spv <vert|frag|comp> <in.glsl> <out.spv>\n"
++		                "   or: glsl2spv -V -S <stage> -o <out.spv> <in.glsl>\n");
++		return 2;
++	}
++	EShLanguage stage;
++	std::string s = stage_s;
++	if (s == "vert") {
++		stage = EShLangVertex;
++	} else if (s == "frag") {
++		stage = EShLangFragment;
++	} else if (s == "comp") {
++		stage = EShLangCompute;
++	} else {
++		fprintf(stderr, "bad stage '%s' (want vert|frag|comp)\n", argv[1]);
++		return 2;
++	}
++
++	std::string src = read_file(in_path.c_str());
++	if (src.empty()) {
++		fprintf(stderr, "empty/missing input: %s\n", in_path.c_str());
++		return 2;
++	}
++	const char *srcs[1] = { src.c_str() };
++
++	glslang::InitializeProcess();
++	glslang::TShader shader(stage);
++	shader.setStrings(srcs, 1);
++	shader.setEnvInput(glslang::EShSourceGlsl, stage, glslang::EShClientVulkan, 100);
 +
 +	// Match the engine, not an arbitrary default. RenderingShaderContainerWebGPU
 +	// reports SHADER_LANGUAGE_VULKAN_VERSION_1_1 + SHADER_SPIRV_VERSION_1_3, and
@@ -224,9 +283,26 @@ index 1e8ea45..ef5d77e 100644
 +	}
 +	shader.setEnvClient(glslang::EShClientVulkan, client_ver);
 +	shader.setEnvTarget(glslang::EShTargetSpv, spv_ver);
- 
- 	if (!shader.parse(GetDefaultResources(), 450, false, EShMsgDefault)) {
- 		fprintf(stderr, "GLSL parse error:\n%s\n%s\n", shader.getInfoLog(), shader.getInfoDebugLog());
++
++	if (!shader.parse(GetDefaultResources(), 450, false, EShMsgDefault)) {
++		fprintf(stderr, "GLSL parse error:\n%s\n%s\n", shader.getInfoLog(), shader.getInfoDebugLog());
++		return 3;
++	}
++	glslang::TProgram program;
++	program.addShader(&shader);
++	if (!program.link(EShMsgDefault)) {
++		fprintf(stderr, "link error:\n%s\n", program.getInfoLog());
++		return 4;
++	}
++	std::vector<unsigned int> spirv;
++	glslang::GlslangToSpv(*program.getIntermediate(stage), spirv);
++	glslang::FinalizeProcess();
++
++	std::ofstream out(out_path.c_str(), std::ios::binary);
++	out.write(reinterpret_cast<const char *>(spirv.data()), spirv.size() * sizeof(unsigned int));
++	fprintf(stderr, "OK: %zu SPIR-V words -> %s\n", spirv.size(), out_path.c_str());
++	return 0;
++}
 diff --git a/drivers/webgpu/tint_cli/probe_one.py b/drivers/webgpu/tint_cli/probe_one.py
 new file mode 100644
 index 0000000..b4379a3
