@@ -27,7 +27,8 @@ packages = ["pylib/studio_tools"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-extend-exclude = ["blender"]  # bpy scripts run inside Blender's interpreter
+# bpy scripts run inside Blender's own interpreter, with its own sys.path
+extend-exclude = ["blender", "bforge/runtime"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B"]

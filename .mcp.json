@@ -3,6 +3,10 @@
     "studio": {
       "command": "uv",
       "args": ["run", "--project", "tools", "python", "tools/studio-mcp/server.py"]
+    },
+    "bforge": {
+      "command": "uv",
+      "args": ["run", "--project", "tools", "python", "tools/bforge/bforge/mcp_server.py"]
     }
   }
 }

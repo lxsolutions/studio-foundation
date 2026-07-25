@@ -16,6 +16,10 @@ NAME := ""
 DISPLAY_NAME := ""
 GAME := "templates/godot-game"
 PROFILE := "desktop_high"
+# bforge (ADR 0014): `just NAME=crate_a RECIPE=prop.crate bforge-make`
+RECIPE := "prop.crate"
+TAG := ""
+SEARCH := ""
 FILE := ""
 
 default:
@@ -107,6 +111,8 @@ test-rust:
 test-python:
     uv run --project tools python -m unittest discover -s tools/studio-mcp/tests -p "test_*.py" -v
     uv run --project tools python -m unittest discover -s tools/infra/tests -p "test_*.py" -v
+    uv run --project tools python -m unittest discover -s tools/bforge/tests -p "test_schema.py" -v
+    uv run --project tools python -m unittest discover -s tools/bforge/tests -p "test_mcp.py" -v
 
 # Cross-language protocol golden-fixture checks (Rust side runs in test-rust too)
 test-protocol:
@@ -183,13 +189,44 @@ asset-preview:
 asset-report:
     uv run --project tools python tools/asset-pipeline/pipeline.py report
 
+# ------------------------------------------------------------------ bforge (agent asset authoring, ADR 0014)
+
+# Verify the whole Blender chain: daemon, build, render, validate, export.
+bforge-doctor:
+    uv run --project tools python tools/bforge/bforge/cli.py doctor
+
+# List operations. Filter with TAG=prop or SEARCH=rock.
+bforge-ops:
+    uv run --project tools python tools/bforge/bforge/cli.py ops --tag "{{TAG}}" --search "{{SEARCH}}"
+
+# Recipe -> validated, collided, exported asset. Example:
+#   just NAME=crate_a RECIPE=prop.crate bforge-make
+bforge-make:
+    uv run --project tools python tools/bforge/bforge/cli.py make "{{NAME}}" --recipe "{{RECIPE}}" --export
+
+# Fast suites: catalog/schema + MCP protocol. No Blender needed.
+bforge-test:
+    uv run --project tools python -m unittest discover -s tools/bforge/tests -p "test_schema.py" -v
+    uv run --project tools python -m unittest discover -s tools/bforge/tests -p "test_mcp.py" -v
+
+# Live Blender integration suite (skips cleanly when Blender is absent).
+bforge-test-live:
+    uv run --project tools python -m unittest discover -s tools/bforge/tests -p "test_forge.py" -v
+
+# Regenerate the visual review gallery + the committed op catalog.
+bforge-gallery:
+    uv run --project tools python tools/bforge/tests/gallery.py
+
+bforge-catalog:
+    uv run --project tools python tools/bforge/bforge/cli.py catalog --refresh --reference docs/bforge/OPS.md
+
 # ------------------------------------------------------------------ exports
 
 # WebGL2 Compatibility export — works with official installed templates
 export-browser-webgl:
     {{PY}} tools/godot/export_game.py --game "{{GAME}}" --preset web-webgl
 
-# WebGPU export — requires fork templates built via `just engine-build`
+# WebGPU export — requires patched templates built via `just engine-build`
 export-browser-webgpu:
     {{PY}} tools/godot/export_game.py --game "{{GAME}}" --preset web-webgpu
 
@@ -231,7 +268,7 @@ compare-screenshots BASELINE CANDIDATE *ARGS:
 engine-versions:
     {{PY}} engine/scripts/engine.py versions
 
-# Fetch pinned official+fork sources into engine/.cache and apply patch series
+# Fetch pinned official Godot and apply the verified local patch series
 engine-fetch:
     {{PY}} engine/scripts/engine.py fetch
 
@@ -239,11 +276,11 @@ engine-fetch:
 engine-build *ARGS:
     {{PY}} engine/scripts/engine.py build {{ARGS}}
 
-# Start a rebase workspace for updating the fork pin (see runbook godot-fork-rebase)
+# Test the patch series on another official ref (see godot-webgpu-update runbook)
 engine-rebase *ARGS:
     {{PY}} engine/scripts/engine.py rebase {{ARGS}}
 
-# Triage fork merge conflicts (mechanical/base-lag/fork-touched); --apply-safe resolves safe ones
+# Classify patch-application conflicts for manual review
 engine-classify-conflicts *ARGS:
     {{PY}} engine/scripts/classify_conflicts.py {{ARGS}}
 

@@ -1,4 +1,32 @@
 #!/bin/sh
 # Fast guardrails only — expensive checks live in CI. See tools/hooks/pre_commit.py.
-if command -v python >/dev/null 2>&1; then PY=python; else PY=python3; fi
+#
+# Interpreter lookup is deliberately stubborn. Git for Windows runs hooks under
+# its bundled sh with a PATH of only /mingw64/... and /usr/bin — no C:\Windows,
+# no user PATH — so `python`, `python3` and `py` can ALL be missing here even
+# though they work fine in a normal shell. Falling back to the Windows launcher
+# by absolute path via $SYSTEMROOT is what makes commits work on Windows.
+for candidate in python3 python py; do
+    if command -v "$candidate" >/dev/null 2>&1; then
+        PY=$candidate
+        break
+    fi
+done
+
+if [ -z "${PY:-}" ] && [ -n "${SYSTEMROOT:-}" ]; then
+    winroot=$(printf '%s' "$SYSTEMROOT" | tr '\\' '/')
+    for candidate in "$winroot/py.exe" "$winroot/System32/py.exe"; do
+        if [ -x "$candidate" ]; then
+            PY=$candidate
+            break
+        fi
+    done
+fi
+
+if [ -z "${PY:-}" ]; then
+    echo "pre-commit: no Python interpreter found (tried python3, python, py," >&2
+    echo "  and \$SYSTEMROOT/py.exe). Install Python 3.11+ and put it on PATH." >&2
+    exit 1
+fi
+
 exec "$PY" "$(git rev-parse --show-toplevel)/tools/hooks/pre_commit.py"
