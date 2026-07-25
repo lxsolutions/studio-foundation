@@ -119,6 +119,17 @@ browser WebGPU template build. They apply to the official Godot commit in
     compiles. Forward+ still does not *render* - the remaining 106 are
     bind-group-layout description bugs, the `0013`/`0014` lineage continuing.
 
+19. `0019-webgpu-integer-texture-sample-types.patch` - derive a sampled texture's
+    BGL `sampleType` from the WGSL component type. The driver scanned Tint's output
+    for each binding's dimension, depth-ness and multisampled-ness but never its
+    component type, so every sampled binding was declared `Float` -- including the
+    ones the shader reads as integers. Forward Mobile samples almost nothing as an
+    integer; Forward+ reads cluster data, VoxelGI and SDFGI that way, making this
+    32 of its 106 remaining validation failures and the largest single class.
+    `texture_2d<u32>` is now Uint, `<i32>` Sint, `<f32>` Float, with depth and
+    MSAA-float precedence preserved, and samplers paired with integer textures
+    forced to NonFiltering. Measured on a Tesla P40: `GPUValidationError` 106 -> 42.
+
 The WebGPU implementation originated in `dwalter/godotwebgpu`. Studio
 Foundation owns the 4.7.1 port, scoped patch curation, preparation/build tooling,
 and validation. See `../../docs/architecture/webgpu-integration.md` for the

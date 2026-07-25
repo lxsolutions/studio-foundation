@@ -76,6 +76,7 @@ series = [
   { file = "patches/0016-webgpu-offline-harness-engine-parity.patch", sha256 = "b374826c0ce2b5b2b4c1300c5bf36635a4eafddf22eae096c698849835272364" },
   { file = "patches/0017-webgpu-ssr-filter-storage-format.patch", sha256 = "3fc9535c727dc81ba27acf60961d652a78bd0350654ab479dab4a968e583bd64" },
   { file = "patches/0018-webgpu-forward-plus-runtime.patch", sha256 = "e5321ec65b868de498796c368fa6dea319fa907c19952eb9d026b4cbb22597d1" },
+  { file = "patches/0019-webgpu-integer-texture-sample-types.patch", sha256 = "2888377fe462ec8895f8f269e452b3c1296819f22e31d2be0cf5cc9d8fd3d75b" },
 ]
 
 [artifacts.export_templates]
