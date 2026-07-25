@@ -124,6 +124,21 @@ func podium_offset() -> float:
 		+ float(stands.podium_extra_m)
 
 
+## How full the house is on the active render profile. Falls back to a full
+## stadium when the Studio autoload is missing — headless asset tools and unit
+## tests build this director in isolation, and a silently empty colosseum would
+## be a much worse failure than an over-budget one.
+func crowd_density() -> float:
+	var studio: Node = get_node_or_null(^"/root/Studio")
+	if studio == null:
+		return 1.0
+	var raw: Variant = studio.get("profiles")
+	if raw == null or not (raw is StudioRenderProfiles):
+		return 1.0
+	var profiles: StudioRenderProfiles = raw
+	return clampf(profiles.budget("crowd_density", 1.0), 0.05, 1.0)
+
+
 func build() -> void:
 	seat_positions.clear()
 	seat_colors.clear()
@@ -137,6 +152,14 @@ func build() -> void:
 	var loop: float = TrackGeometry.loop_length()
 	var base_off := podium_offset() + 1.2
 	var base_h := float(stands.podium_height_m) + 1.0
+
+	# The crowd is the single largest triangle contributor in the game, and until
+	# now it was built identically on every render profile -- a phone drew the same
+	# ~107,600 instanced figures as a desktop. Widening the spacing thins the stands
+	# evenly rather than speckling them with gaps, so a sparser house still reads as
+	# a house. Seeded the same way, so a given profile is still reproducible.
+	var density := crowd_density()
+	var spacing: float = SPACING / maxf(density, 0.01)
 
 	var by_pose := {}
 	var colors_by_pose := {}
@@ -152,7 +175,7 @@ func build() -> void:
 		for f in fractions:
 			var off := base_off + tier * tier_depth + float(f) * tier_depth
 			var h := h_lo + float(f) * tier_rise + 0.55
-			var count := int((loop + TAU * off) / SPACING)
+			var count := int((loop + TAU * off) / spacing)
 			for i in count:
 				if rng.randf() < EMPTY_SEAT_ODDS:
 					continue

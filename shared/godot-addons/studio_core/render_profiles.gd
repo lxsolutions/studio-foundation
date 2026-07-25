@@ -4,11 +4,13 @@ extends RefCounted
 ## games query budgets (`budget("particle_budget")`) instead of sniffing platforms.
 
 const PROFILES_PATH: String = "res://addons/studio_core/profiles.json"
+## Godot's stock Viewport.mesh_lod_threshold, in pixels. Profiles scale this.
+const DEFAULT_LOD_THRESHOLD: float = 1.0
 const REQUIRED_KEYS: Array[String] = [
 	"resolution_scale", "shadow_quality", "shadow_distance", "shadow_atlas_size",
 	"texture_profile", "mesh_lod_bias", "vegetation_density", "particle_budget",
 	"dynamic_light_budget", "anim_update_distance", "physics_detail",
-	"post_processing", "msaa_3d", "actor_limit",
+	"post_processing", "msaa_3d", "actor_limit", "crowd_density",
 ]
 
 var profiles: Dictionary = {}
@@ -64,6 +66,12 @@ func apply(profile_name: String, viewport: Viewport, platform: Dictionary = {}) 
 	var atlas: int = int(current.get("shadow_atlas_size", 2048))
 	viewport.positional_shadow_atlas_size = atlas
 	RenderingServer.directional_shadow_atlas_set_size(atlas, true)
+	# mesh_lod_bias was declared in every profile and applied to nothing, so the
+	# profiles scaled resolution and shadows while every tier still drew identical
+	# geometry -- the dominant GPU cost went untiered. A higher threshold makes the
+	# renderer drop to cheaper LODs sooner, which is exactly what the mobile and
+	# browser profiles are asking for with their 1.25 / 1.5 bias.
+	viewport.mesh_lod_threshold = DEFAULT_LOD_THRESHOLD * float(current.get("mesh_lod_bias", 1.0))
 	return true
 
 
