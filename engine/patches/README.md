@@ -141,6 +141,16 @@ browser WebGPU template build. They apply to the official Godot commit in
     scanned component type now wins. Measured on a Tesla P40:
     `GPUValidationError` 42 -> 38.
 
+21. `0021-webgpu-storage-texture-formats.patch` - add the storage-texture formats
+    Forward+ uses. The tables mapping Tint's `texture_storage_*<FORMAT, ...>` onto a
+    `WGPUTextureFormat` initialise `tf` to `RGBA8Unorm` and then RECORD it when no
+    branch matches, so an unrecognised format is not merely unknown - the lookup
+    succeeds and returns the wrong answer. `rgb10a2unorm` appears 26 times in the
+    WGSL Forward+ produces and was missing; Forward Mobile never noticed because it
+    barely uses storage textures. Only formats present in the pinned Dawn header are
+    added (the 16-bit *norm* variants are not core WebGPU and do not compile).
+    Measured on a Tesla P40: format mismatches 6 -> 0, `GPUValidationError` 38 -> 26.
+
 The WebGPU implementation originated in `dwalter/godotwebgpu`. Studio
 Foundation owns the 4.7.1 port, scoped patch curation, preparation/build tooling,
 and validation. See `../../docs/architecture/webgpu-integration.md` for the

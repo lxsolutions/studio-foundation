@@ -78,6 +78,7 @@ series = [
   { file = "patches/0018-webgpu-forward-plus-runtime.patch", sha256 = "e5321ec65b868de498796c368fa6dea319fa907c19952eb9d026b4cbb22597d1" },
   { file = "patches/0019-webgpu-integer-texture-sample-types.patch", sha256 = "2888377fe462ec8895f8f269e452b3c1296819f22e31d2be0cf5cc9d8fd3d75b" },
   { file = "patches/0020-webgpu-lod-clamp-and-storage-sample-type.patch", sha256 = "627a913efc6ee78a5ca4fc9ac562f29d0b015e3f44f25bc6d040e8af885c9131" },
+  { file = "patches/0021-webgpu-storage-texture-formats.patch", sha256 = "3e1e4a1ce9283988c735846c0059293fb4820cdb522c7a0f8e0bc803a3a36ca8" },
 ]
 
 [artifacts.export_templates]

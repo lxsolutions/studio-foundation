@@ -1,0 +1,65 @@
+Subject: [PATCH] webgpu: add the storage-texture formats Forward+ uses
+
+The tables mapping Tint's texture_storage_*<FORMAT, ...> onto a WGPUTextureFormat
+initialise `tf` to RGBA8Unorm and then RECORD that value when no branch matches. An
+unrecognised format is therefore not merely unknown -- it is stored as RGBA8Unorm,
+so the lookup succeeds and returns the wrong answer:
+
+  The layout's binding format (TextureFormat::RGBA8Unorm) doesn't match the
+  shader's binding format (TextureFormat::RGB10A2Unorm)
+
+rgb10a2unorm appears 26 times in the WGSL Forward+ produces, and was missing.
+Forward Mobile never noticed because it barely uses storage textures.
+
+Only formats present in the pinned Dawn header are added. The 16-bit *norm*
+variants (r16unorm/snorm, rg16unorm/snorm, rgba16unorm/snorm) are NOT core WebGPU
+and do not compile.
+
+Measured on a Tesla P40 through Chrome/WebGPU, Chariot on Forward+:
+
+  format mismatches    6 -> 0
+  GPUValidationError  38 -> 26
+  aborts / wasm traps  still 0
+
+A note on how long this took to confirm, because the trap is worth recording. The
+first three attempts at this fix all reported "no change", and I twice reverted it
+as unproven. The build script piped `engine.py build` through `tail`, so the
+pipeline's exit status was tail's and a FAILED build looked successful; the export
+and probe then ran happily against the PREVIOUS templates. Every measurement was of
+a stale binary. A later version used `set -e`, which aborted before the exit code
+could be read, hiding it again. The repo's own CLAUDE.md warns about exactly this:
+"Piping cargo/npm through tail eats exit codes -- capture to a file and echo $?".
+
+diff --git a/drivers/webgpu/rendering_device_driver_webgpu.cpp b/drivers/webgpu/rendering_device_driver_webgpu.cpp
+--- a/drivers/webgpu/rendering_device_driver_webgpu.cpp
++++ b/drivers/webgpu/rendering_device_driver_webgpu.cpp
+@@ -3822,6 +3822,14 @@
+ 						else if (info.fmt == "rg8uint") tf = WGPUTextureFormat_RG8Uint;
+ 						else if (info.fmt == "rg8sint") tf = WGPUTextureFormat_RG8Sint;
+ 						else if (info.fmt == "bgra8unorm") tf = WGPUTextureFormat_BGRA8Unorm;
++						else if (info.fmt == "rgb10a2unorm") tf = WGPUTextureFormat_RGB10A2Unorm;
++						else if (info.fmt == "rgb10a2uint") tf = WGPUTextureFormat_RGB10A2Uint;
++						else if (info.fmt == "rg11b10ufloat") tf = WGPUTextureFormat_RG11B10Ufloat;
++						else if (info.fmt == "r16uint") tf = WGPUTextureFormat_R16Uint;
++						else if (info.fmt == "r16sint") tf = WGPUTextureFormat_R16Sint;
++						else if (info.fmt == "rg16uint") tf = WGPUTextureFormat_RG16Uint;
++						else if (info.fmt == "rg16sint") tf = WGPUTextureFormat_RG16Sint;
++						else if (info.fmt == "rg16float") tf = WGPUTextureFormat_RG16Float;
+ 						wgsl_storage_tex_format[key] = tf;
+ 					}
+ 				}
+@@ -4268,6 +4276,14 @@
+ 									else if (strncmp(fmt, "rgba16snorm,", 12) == 0) tf = WGPUTextureFormat_RGBA16Float; // Fallback
+ 									else if (strncmp(fmt, "rgba16unorm,", 12) == 0) tf = WGPUTextureFormat_RGBA16Float; // Fallback
+ 									else if (strncmp(fmt, "bgra8unorm,", 11) == 0) tf = WGPUTextureFormat_BGRA8Unorm;
++									else if (strncmp(fmt, "rgb10a2unorm,", 13) == 0) tf = WGPUTextureFormat_RGB10A2Unorm;
++									else if (strncmp(fmt, "rgb10a2uint,", 12) == 0) tf = WGPUTextureFormat_RGB10A2Uint;
++									else if (strncmp(fmt, "rg11b10ufloat,", 14) == 0) tf = WGPUTextureFormat_RG11B10Ufloat;
++									else if (strncmp(fmt, "r16uint,", 8) == 0) tf = WGPUTextureFormat_R16Uint;
++									else if (strncmp(fmt, "r16sint,", 8) == 0) tf = WGPUTextureFormat_R16Sint;
++									else if (strncmp(fmt, "rg16uint,", 9) == 0) tf = WGPUTextureFormat_RG16Uint;
++									else if (strncmp(fmt, "rg16sint,", 9) == 0) tf = WGPUTextureFormat_RG16Sint;
++									else if (strncmp(fmt, "rg16float,", 10) == 0) tf = WGPUTextureFormat_RG16Float;
+ 									wgsl_storage_tex_format[key] = tf;
+ 									// Parse access mode (after comma, skip space)
+ 									const char *acc = comma + 1;
