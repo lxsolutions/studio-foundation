@@ -1,7 +1,11 @@
 # WebGPU integration provenance
 
-This document separates upstream Godot, historical backend lineage, third-party
-source, and Studio Foundation maintenance.
+Last reconciled: 2026-07-25
+
+This document separates official upstream, historical backend lineage,
+third-party source, and current Studio Foundation maintenance. Runtime claims
+and reproduction commands are indexed in
+[webgpu-evidence.md](webgpu-evidence.md).
 
 ## Source model
 
@@ -11,77 +15,113 @@ Studio Foundation builds from one active engine upstream:
 - Version: Godot 4.7.1 stable
 - Commit: `a13da4feb8d8aefc283c3763d33a2f170a18d541`
 
-`engine-fetch` clones that repository and applies the ordered patches recorded
-in [engine-lock.toml](../../engine/engine-lock.toml). The patched tree is
+`engine-fetch` clones that repository and applies the ordered patches in
+[`engine-lock.toml`](../../engine/engine-lock.toml). The patched tree is
 disposable build state. No LX Solutions engine fork, Git submodule, or secondary
 upstream is used.
 
-## Historical lineage
+## Historical backend lineage
 
-The initial Godot WebGPU backend code came from the MIT-licensed
-[dwalter/godotwebgpu](https://github.com/dwalter/godotwebgpu) project at commit
-`f329e39ce8db7acaa5c9d6628a530fb769969228`. That commit is retained for
-attribution and engineering traceability only; it is not fetched by the build.
+The initial Godot WebGPU backend code came from David Walter's MIT-licensed
+[`dwalter/godotwebgpu`](https://github.com/dwalter/godotwebgpu) project at commit
+`f329e39ce8db7acaa5c9d6628a530fb769969228`. The selected historical backend
+targeted Godot 4.6.2.
 
-The available backend line targeted Godot 4.6.2. Studio Foundation's current
-series adapts the selected backend code to the pinned Godot 4.7.1 source. The
-port included resolution of the conflicts recorded in
-[rebase-4.7.1-conflicts.txt](../../engine/rebase-4.7.1-conflicts.txt), support
-for the 4.7.1 pack format, and subsequent API and renderer build fixes.
+That commit is retained for attribution and engineering traceability only. It is
+not fetched by the build, and this repository does not claim that Studio
+Foundation originated all backend code.
 
-## Maintained patch series
+## Studio Foundation maintenance boundary
 
-| Patch | Scope | Files | Added | Deleted |
-|---|---|---:|---:|---:|
-| `0001-studio-webgpu-engine.patch` | Godot renderer, WebGPU driver, web platform, resource, and build integration | 72 | 18,888 | 188 |
-| `0002-studio-webgpu-spirv.patch` | Required vendored SPIR-V headers and tools | 397 | 155,766 | 10 |
-| `0003-studio-webgpu-tint.patch` | Required vendored Tint source and license | 824 | 202,514 | 0 |
-| `0004-godot-4.7.1-webgpu-interfaces.patch` | 4.7.1 API adaptation and Windows shader build reproducibility | 6 | 189 | 17 |
-| `0005-webgpu-shell-capability-gate.patch` | Fail-closed browser WebGPU capability gate | 1 | 13 | 8 |
-| `0006-webgpu-single-thread-stdio.patch` | No-threads web build compatibility | 1 | 1 | 0 |
-| `0007-tint-storage-buffer-access.patch` | SPIR-V/Tint storage-buffer access compatibility | 1 | 1 | 1 |
-| `0008-tint-image-ordering.patch` | SPIR-V/Tint image-value lowering order | 1 | 10 | 3 |
+Studio Foundation owns and maintains:
+
+- the port to official Godot 4.7.1, including the conflict resolution recorded
+  in [`rebase-4.7.1-conflicts.txt`](../../engine/rebase-4.7.1-conflicts.txt);
+- the scoped, ordered, checksum-locked patch series;
+- later SPIR-V/Tint, shader, sampler, texture, bind-group-layout, and Forward+
+  investigation fixes;
+- the pinned Emdawn namespace backport and engine build pipeline;
+- browser export handoff tooling and official WebGL 2 fallback;
+- browser context probes, visual gates, render counters, benchmarks, and release
+  evidence;
+- MCP tooling, agent workflows, and the AI-native distribution layer.
+
+Godot itself remains work maintained by the Godot contributors. Copyright and
+license notices remain with their respective authors and projects.
+
+## Patch scope and release boundary
+
+| Range | Scope | Public status |
+|---|---|---|
+| `0001–0003` | Initial WebGPU integration plus required vendored SPIR-V and Tint sources/licenses | Historical backend-derived source, carried under its original licenses |
+| `0004–0008` | Godot 4.7.1 API/build adaptation, browser gate, no-threads support, and early translation/toolchain fixes | Included in p0014 |
+| `0009–0014` | Forward Mobile translation and bind-group fixes that produced lit, shadowed 3D | Included in p0014 and hardware-verified |
+| `0015–0017` | Forward+ shader variants and corrected offline harness | Current-main source only; not in p0014 |
+| `0018–0022` | Forward+ hardware investigation, abort/device-limit fixes, and bind-group-layout corrections | Current-main source only; 18 validation errors remain and no frame renders |
+
+The published
+[`godot-4.7.1-webgpu-p0014`](https://github.com/lxsolutions/studio-foundation/releases/tag/godot-4.7.1-webgpu-p0014)
+archives contain only patches `0001–0014` and use Forward Mobile. Current
+`main` contains patches `0001–0022`, but no p0022 templates are published.
 
 The large third-party source patches are listed separately so their line counts
-are not presented as Studio Foundation-authored implementation. Copyright and
-license notices remain with their respective projects.
+are not presented as Studio Foundation-authored implementation.
+[`engine/patches/README.md`](../../engine/patches/README.md) documents every
+patch's defect and evidence.
 
-Studio Foundation maintains the 4.7.1 integration delta, patch packaging,
-source-preparation commands, template build, WebGL fallback, browser runtime
-checks, visual comparison, and release evidence. Godot itself remains upstream
-work maintained by the Godot contributors.
+## Build and artifact identity
 
-The locked template build explicitly enables `webgpu=yes`, disables `opengl3`,
-and uses `threads=no`; an archive name is never treated as proof of its
-renderer. On Windows, the optional host-generated WGSL lookup table defaults to
-an empty table and the compiled runtime Tint path converts cache misses.
+The template build explicitly enables `webgpu=yes`, disables `opengl3`, and uses
+`threads=no`. An archive name or HTML setting is never treated as proof of its
+renderer.
+
+The lock retains two artifact identities:
+
+- `[releases.godot_4_7_1_webgpu_p0014]` records the byte counts and hashes of the
+  downloadable GitHub release.
+- `[artifacts.export_templates]` records a separate locally accepted build pair
+  written by `engine-record-artifacts`.
+
+The hashes differ and are not interchangeable. Current-main patch count does not
+flow into either p0014 identity.
 
 ## Current runtime status
 
-The no-threads build reaches a browser WebGPU adapter, device, canvas context,
-and Godot's Mobile renderer without requesting WebGL. Startup then fails in the
-vendored Tint SPIR-V reader at `texture.cc:606` while lowering a texture
-operation. Patch 0007 removed the preceding illegal write-only storage-buffer
-errors, but the texture assertion remains. Consequently, there are no accepted
-WebGPU template artifacts or public game proof at this checkpoint.
+- Published p0014 Forward Mobile renders the minimal lit/shadowed scene,
+  Chariot, Riftline, and The Deep on an NVIDIA Tesla P40 with 0
+  `GPUValidationError`.
+- Current-main Forward+ has been run on the P40. Patch 0022 leaves 18
+  `GPUValidationError` entries, and no frame renders.
+- Forward+ hardware execution is investigation evidence, not a rendering or
+  release claim.
+
+See [webgpu-runtime-status.md](webgpu-runtime-status.md) for the dated
+investigation log and [webgpu-performance.md](webgpu-performance.md) for p0014
+measurements.
+
+## Historical provenance checkpoint
+
+The following state is retained as a dated checkpoint rather than presented as
+current:
+
+> On 2026-07-22, after patches `0001–0008`, startup still failed in Tint texture
+> lowering and there were no accepted WebGPU templates or public game proof at
+> that checkpoint. Later patches and hardware work superseded that status:
+> p0014 was published on 2026-07-24, and the patch series reached 0022 on
+> 2026-07-25.
 
 ## Reproduce and inspect
 
 ```sh
 just engine-versions
+just engine-verify-patches
 just engine-fetch
 git -C engine/.cache/studio-webgpu status --short
-git apply --numstat engine/patches/0001-studio-webgpu-engine.patch
 just engine-build
 just engine-validate
-just engine-record-artifacts
+just public-evidence-validate
 ```
 
-Before preparing source, `engine-fetch` rejects missing patches, path traversal,
-and any patch whose SHA-256 differs from the lock. `engine-record-artifacts`
-accepts only a complete release/debug pair and records exact filenames, byte
-counts, and SHA-256 values.
-
-Current verification results are in
-[BOOTSTRAP_REPORT.md](../../BOOTSTRAP_REPORT.md). Attribution is also summarized
-in [NOTICE.md](../../NOTICE.md).
+`engine-fetch` rejects missing patches, path traversal, and checksum drift before
+preparing source. `verify_patch_apply.py` separately checks that the full series
+applies to a clean official tree.

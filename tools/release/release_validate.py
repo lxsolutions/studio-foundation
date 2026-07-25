@@ -52,6 +52,7 @@ EXPECTED_ENGINE_ARTIFACTS = {
     "web_webgpu_release": "godot.web.template_release.webgpu.zip",
     "web_webgpu_debug": "godot.web.template_debug.webgpu.zip",
 }
+PUBLISHED_WEBGPU_RELEASE = "godot_4_7_1_webgpu_p0014"
 
 
 def validate_engine_artifacts(root: Path, records: object) -> list[str]:
@@ -102,6 +103,62 @@ def validate_engine_artifacts(root: Path, records: object) -> list[str]:
                 problems.append(
                     f"engine artifact checksum mismatch for {expected_file}: expected {raw_sha}, got {actual_sha}"
                 )
+    return problems
+
+
+def validate_published_webgpu_release(lock: dict, patch_count: int) -> list[str]:
+    """Validate the public p0014 identity separately from local accepted builds."""
+    problems: list[str] = []
+    provenance = lock.get("artifacts", {}).get("export_templates_provenance", {})
+    release = lock.get("releases", {}).get(PUBLISHED_WEBGPU_RELEASE, {})
+    official = lock.get("godot", {}).get("official", {}).get("commit")
+
+    if provenance.get("patch_through") != 14:
+        problems.append("accepted template provenance must record patch_through = 14")
+    if provenance.get("renderer") != "Forward Mobile":
+        problems.append("accepted template provenance renderer must be Forward Mobile")
+    if release.get("tag") != "godot-4.7.1-webgpu-p0014":
+        problems.append("published WebGPU release tag must identify p0014")
+    if release.get("patch_through") != 14:
+        problems.append("published p0014 release must record patch_through = 14")
+    if release.get("patch_through", patch_count + 1) > patch_count:
+        problems.append("published release patch range exceeds the locked patch series")
+    if release.get("official_commit") != official:
+        problems.append("published p0014 official commit must match godot.official.commit")
+    if release.get("renderer") != "Forward Mobile":
+        problems.append("published p0014 renderer must be Forward Mobile")
+
+    for key, expected_file in EXPECTED_ENGINE_ARTIFACTS.items():
+        record = release.get(key)
+        if not isinstance(record, dict):
+            problems.append(f"published p0014 artifact record is missing: {key}")
+            continue
+        if record.get("file") != expected_file:
+            problems.append(f"published p0014 {key}.file must be {expected_file}")
+        byte_count = record.get("bytes")
+        if not isinstance(byte_count, int) or isinstance(byte_count, bool) or byte_count <= 0:
+            problems.append(f"published p0014 {key}.bytes must be a positive integer")
+        digest = str(record.get("sha256", ""))
+        if not re.fullmatch(r"[0-9a-f]{64}", digest):
+            problems.append(f"published p0014 {key}.sha256 must be lowercase SHA-256")
+    return problems
+
+
+def validate_forward_plus_development(lock: dict, patch_count: int) -> list[str]:
+    """Validate the measured current-main Forward+ boundary."""
+    state = lock.get("development", {}).get("webgpu_forward_plus", {})
+    problems: list[str] = []
+    if state.get("patch_through") != patch_count:
+        problems.append("Forward+ development patch_through must match the patch series")
+    if state.get("hardware_tested") is not True:
+        problems.append("Forward+ development state must record hardware_tested = true")
+    errors = state.get("gpu_validation_errors")
+    if not isinstance(errors, int) or isinstance(errors, bool) or errors < 0:
+        problems.append("Forward+ gpu_validation_errors must be a non-negative integer")
+    if state.get("rendered_frame") is not False:
+        problems.append("Forward+ development state must record rendered_frame = false")
+    if state.get("published_templates") is not False:
+        problems.append("Forward+ development state must record published_templates = false")
     return problems
 
 
@@ -232,6 +289,8 @@ def validate_engine_lock(root: Path) -> list[str]:
     problems.extend(
         validate_engine_artifacts(root, lock.get("artifacts", {}).get("export_templates", {}))
     )
+    problems.extend(validate_published_webgpu_release(lock, len(series)))
+    problems.extend(validate_forward_plus_development(lock, len(series)))
     return problems
 
 

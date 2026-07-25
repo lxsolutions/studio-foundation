@@ -4,6 +4,12 @@ These ordered patches are the additional source inputs used to prepare the
 browser WebGPU template build. They apply to the official Godot commit in
 `../engine-lock.toml` and are verified by SHA-256 before use.
 
+Current `main` contains patches `0001–0022`. The published
+`godot-4.7.1-webgpu-p0014` templates contain only `0001–0014` and use Forward
+Mobile; patches `0015–0022` are current-main Forward+ investigation work and
+are not in those downloads. The latest Forward+ hardware run ended with 18
+`GPUValidationError` entries and no rendered frame.
+
 1. `0001-studio-webgpu-engine.patch` - WebGPU engine, renderer, browser platform,
    resource, and build integration.
 2. `0002-studio-webgpu-spirv.patch` - required vendored SPIR-V headers and tools.
@@ -189,7 +195,10 @@ separately under `engine/toolchain/patches/`. It isolates Dawn's private
 `RefCounted` type from Godot's type of the same name and is independently
 checksum-locked in `engine-lock.toml`.
 
-As of 2026-07-24 the release/debug rebuild and the engine-owned browser WebGPU
-probe (active canvas context + 1.2% visual diff vs the WebGL baseline) both pass;
-the accepted templates are checksum-locked in
-`engine-lock.toml [artifacts.export_templates]`.
+The 2026-07-24 p0014 release/debug build and engine-owned browser WebGPU probe
+(active canvas context + 1.2% visual difference from the WebGL baseline) passed
+for Forward Mobile. The downloadable release assets are checksum-locked in
+`engine-lock.toml [releases.godot_4_7_1_webgpu_p0014]`.
+`[artifacts.export_templates]` retains a separate locally accepted build pair
+with different bytes; it is not the p0014 release identity. Current-main p0022
+templates have not been published.

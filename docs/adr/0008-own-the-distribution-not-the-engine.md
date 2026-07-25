@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-07-20
-- Last amended: 2026-07-22
+- Last amended: 2026-07-25
 - Constrains: engine strategy, `engine/engine-lock.toml`, ADR 0002
 
 ## Context
@@ -32,6 +32,9 @@ boundary.
   checksums. It contains no active dependency on a deleted LX Solutions fork.
 - Studio Foundation accepts maintenance responsibility for the exact local
   patches it ships, while retaining attribution to the original backend.
+- Release identity is explicit: the published p0014 Forward Mobile archives
+  stop at patch 0014, while later current-main patches remain development
+  inputs until rebuilt, validated, recorded, and separately released.
 - Godot version updates follow
   `docs/runbooks/godot-webgpu-update.md`.
 - Public claims describe measured capabilities and current evidence, not

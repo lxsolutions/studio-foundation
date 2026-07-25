@@ -1,0 +1,45 @@
+name: publish Pages source
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/pages.yml"
+      - "docs/pages/index.html"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: github-pages-source
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Sync the canonical landing page to the legacy Pages branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --branch main \
+            "https://github.com/${GITHUB_REPOSITORY}.git" source
+          git -C source fetch --depth 1 origin gh-pages
+          git -C source worktree add ../pages origin/gh-pages
+
+          cp source/docs/pages/index.html pages/index.html
+          git -C pages add index.html
+          if git -C pages diff --cached --quiet; then
+            echo "Pages landing page already matches the canonical source."
+            exit 0
+          fi
+
+          git -C pages config user.name "github-actions[bot]"
+          git -C pages config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C pages commit -m "docs: sync public evidence landing page"
+          gh auth setup-git
+          git -C pages push origin HEAD:gh-pages

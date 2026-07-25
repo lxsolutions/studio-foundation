@@ -36,3 +36,15 @@ just engine-verify-patches
 The checker's own failure paths are covered by
 `engine/scripts/tests/test_verify_patch_series.py`, which runs under
 `just engine-test`.
+
+## Public evidence drift
+
+`tools/ci/validate_public_evidence.py` is part of `just lint` and therefore
+`just ci-local`. It derives current-main patch count, official/lineage pins,
+p0014 release boundary, and published hashes from `engine/engine-lock.toml`;
+checks the designated README current-status section and canonical Pages source;
+and validates local links in the public evidence documents.
+
+Historical checkpoint sections are intentionally outside the stale-phrase
+scope, so dated 8-, 13-, 14-, 17-, or 18-patch investigation states can remain
+available when clearly labeled.

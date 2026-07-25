@@ -1,68 +1,120 @@
 # Studio Foundation verification report
 
-Last updated: 2026-07-22
+Last updated: 2026-07-25
 
-This report separates verified repository behavior from work still in progress.
-It is not a product roadmap.
+This report summarizes current evidence and keeps older investigation results
+dated. The canonical claim-level record is
+[`docs/architecture/webgpu-evidence.md`](docs/architecture/webgpu-evidence.md).
 
-## Public scope
+## Current public state
 
-Studio Foundation contains reusable Godot integration, a neutral project
-template, asset/export/release tooling, mechanics-neutral transport and service
-scaffolding, optional provider adapters, and their tests.
-
-It does not define a game's content, entities, mechanics, domain schema,
-identity policy, persistence semantics, or production deployment. The optional
-server and Nakama adapter carry opaque application payloads supplied by a
-consumer.
-
-## Verified in this change
-
-| Area | Evidence |
+| Area | Current evidence |
 |---|---|
-| Official engine source | Godot 4.7.1 stable commit `a13da4feb8d8aefc283c3763d33a2f170a18d541` is the sole active upstream pin |
-| WebGPU source preparation | Eight checksum-pinned patches pass path-containment, reusable-source preparation, candidate-isolation, dry-run, resume, and conflict-handling tests |
-| Build configuration | WebGPU templates explicitly use `webgpu=yes`, `opengl3=no`, and `threads=no` |
-| Template installation | The installer selects only the archive matching the lock's thread mode and rejects archives missing the WebGPU loader bridge or compiled backend marker |
-| Browser evidence | The smoke test instruments engine-owned adapter, device, and canvas-context requests and rejects any WebGL/WebGL 2 request |
-| Artifact acceptance | The recorder requires a complete release/debug pair; on 2026-07-24 the release and debug WebGPU templates were recorded by byte count and SHA-256 in `engine-lock.toml` after passing the runtime gate |
-| Current engine result | A no-threads build reaches a WebGPU adapter, device, and active canvas context under the Forward Mobile renderer without requesting WebGL, and **renders 2D/Control UI**: it passes the browser probe and a visual comparison of the neutral template's 2D menu against the WebGL baseline (1.2% diff). **The 3D-black bug is root-caused and fixed (patch 0009).** 3D was black because Tint's SPIR-V reader aborts (`TINT_UNIMPLEMENTED` decoration 21 = `Volatile`) on Godot's coherent compute shaders (`volumetric_fog.glsl`, compiled during 3D init) — a wasm trap that freezes the page. Patch 0009 strips that decoration. Verified offline (native reproducer over all 182 engine shaders: 0 crash, was 1); in-browser render verification pending a GPU-capable machine (this box has no hardware GPU). Earlier `texture.cc:606` + Emdawn `RefCounted` issues also fixed. **Lit, shadowed 3D now renders in-browser on a Tesla P40 (patches 0013 + 0014):** 0013 gives sampler/texture bind-group entries precise per-stage visibility (Forward Mobile over-declared 18 samplers per stage vs WebGPU's hard 16-per-stage limit), which made an unshaded mesh draw; 0014 then fixes the two defects that still blacked out real scenes — bindings reached only through helper-function parameters were wrongly demoted to no visibility, and depth textures were paired with Filtering samplers, which WebGPU forbids. A scene with six PBR meshes, a directional light, and real-time shadow mapping now renders at 59–60 fps, 36 draws/frame, with 0 `GPUValidationError` (was 2283) |
-| WebGPU shader translation coverage | 177 of 182 engine shaders translate to valid WGSL under the offline native reproducer (was 174). Patch 0010 makes the combined image-sampler split transitive across function call chains, so a `sampler2D` forwarded from a wrapper into a deeper helper (tonemap bicubic glow, `taa_resolve`) no longer emits invalid SPIR-V that silently fails Tint. Each fixed shader is confirmed by SPIRV-Tools validation plus a correct-WGSL spot check (separate `texture_2d` + `sampler`, `textureSampleLevel` wired to the split pair). The 5 remaining failures are fundamental WGSL feature gaps (subpass `input_attachment` ×2, storage-texture format inference, vertex-stage `read_write` storage, vertex `@builtin(position)`), not crashes |
-| Optional Nakama bridge | The bridge carries opaque consumer-owned payloads and remains optional |
+| Official engine source | Godot 4.7.1 stable commit `a13da4feb8d8aefc283c3763d33a2f170a18d541` is the sole active upstream |
+| Backend lineage | David Walter's MIT-licensed `dwalter/godotwebgpu` commit `f329e39ce8db7acaa5c9d6628a530fb769969228` is the historical origin of the initial backend |
+| Current maintenance | Studio Foundation owns the 4.7.1 port, 22-patch curation, later renderer/shader fixes, build/export tooling, validation, release evidence, MCP tooling, and distribution layer |
+| Current-main source | Patches `0001–0022` are checksum-locked; all 22 applied to a pristine official checkout at the latest recorded clean-tree gate |
+| Published release | `godot-4.7.1-webgpu-p0014` contains patches `0001–0014`, uses Forward Mobile, and publishes release/debug templates; it does not contain patches `0015–0022` |
+| Published artifact identity | Release `9f137f0b…edea9b` (11,910,848 bytes); debug `659ad2ee…fe539` (11,729,626 bytes), recorded in `[releases.godot_4_7_1_webgpu_p0014]` |
+| Browser context | The p0014 runtime gate observed adapter, device, and active WebGPU canvas-context requests and rejected any WebGL/WebGL 2 request |
+| Forward Mobile rendering | The p0014 minimal lit/shadowed scene, Chariot, Riftline, and The Deep rendered on an NVIDIA Tesla P40 with 0 `GPUValidationError` |
+| Forward+ investigation | Current main has been run on the P40. Patch 0022 reduced the remaining validation-error count to 18, but Forward+ still produces no rendered frame |
+| Fallback | Official Godot WebGL 2 Compatibility remains the maintained browser fallback |
 
-## Engine lineage
+The current-main 22-patch tree has no published template release. The p0014
+download must not be described as a p0022 build.
 
-Official Godot is upstream. Studio Foundation has no active dependency on a
-separate LX Solutions engine fork. Historical MIT-licensed WebGPU lineage is
-retained in [NOTICE.md](NOTICE.md); the maintained 4.7.1 delta, patch curation,
-build commands, fallback, and validation live in this repository.
+## Artifact provenance
 
-## External game status
+`engine/engine-lock.toml` intentionally retains two byte identities:
 
-OSWT is an external demo candidate, not accepted WebGPU proof. Independent live
-inspection found that the current Asha Arena OSWT route requests WebGL 2. It has
-not been overwritten or relabeled. A future proof release must use a clean
-locked template, pass the engine-owned context instrumentation, and publish
-matching source and artifact provenance.
+- `[releases.godot_4_7_1_webgpu_p0014]` identifies the archives actually
+  attached to the public p0014 GitHub release.
+- `[artifacts.export_templates]` identifies a separately accepted local build
+  pair recorded by `engine-record-artifacts`.
 
-## Not yet claimed
+The byte counts and hashes differ. Neither set was rewritten during this
+documentation reconciliation.
 
-- A published OSWT (or other real-game) WebGPU capture and deployment produced from the accepted templates
-- Safari/iOS WebGPU behavior
-- Native Android and iOS device runs
-- Database-backed integration tests against a live disposable PostgreSQL stack
-- Console support beyond the documented licensed-provider path
+## Verified Forward Mobile evidence
+
+- Minimal scene: six PBR meshes, directional light, real-time shadows,
+  59–60 fps, 36 draws/frame, 0 `GPUValidationError`.
+- Chariot: 60 fps, 489–631 draws/frame, ~23.0M primitives/frame,
+  0 `GPUValidationError`.
+- Riftline: 58–60 fps, 139–140 draws/frame, ~63.3K primitives/frame,
+  0 `GPUValidationError`.
+- The Deep: 60 fps, 64–65 draws/frame, ~37.7K primitives/frame,
+  0 `GPUValidationError`.
+- The Deep A/B: p0014 Forward Mobile WebGPU measured 60 fps / 64–65 draws;
+  official 4.7.1 Compatibility WebGL 2 measured 20–25 fps / 124–125 draws,
+  with the same scene, GPU, browser, and harness.
+
+The A/B changes renderer and engine build together. It is a product-path
+comparison, not a single-variable renderer benchmark. All figures above are
+p0014 measurements; they are not p0022 measurements.
+
+## Current Forward+ evidence
+
+Patches `0015–0017` established offline translation coverage. Hardware runs
+beginning with patch `0018` then exposed runtime compiler aborts, device-limit
+requests, and bind-group-layout mismatches. Patches `0018–0022` reduced the
+observed `GPUValidationError` progression from 168 to 106, 42, 38, 26, and
+finally 18.
+
+Current claim boundary:
+
+- Hardware was used.
+- Pipeline warm-up no longer aborts.
+- Forward+ still does not render a frame.
+- No p0022 release/debug templates have been published or accepted as a public
+  release.
+
+## Historical checkpoints
+
+These statements describe their dated states and are retained so the
+investigation is auditable:
+
+- **2026-07-22:** a shallow release browser proof reached WebGPU adapter/device/
+  canvas setup, but later ASAN work found the Emdawn/Godot `RefCounted`
+  collision. That proof was not sufficient release evidence by itself.
+- **2026-07-24, before the P40 3D run:** the offline reproducer reported
+  177/182 shader modules translating after patch 0010. Browser 3D verification
+  was still pending at that checkpoint.
+- **2026-07-24, p0014 close:** patches `0013–0014` resolved the Forward Mobile
+  binding defects; lit and shadowed 3D then rendered on the P40 with no
+  validation errors.
+- **2026-07-25, after patches `0015–0017`:** the corrected offline harness
+  reported 199 translated modules, 6 Tint failures, and 3 skipped variants at
+  Vulkan 1.1 / SPIR-V 1.3. This was translation evidence, not a hardware render.
+- **2026-07-25, after patch `0018`:** Forward+ was hardware-run but still did
+  not render; 106 validation errors remained.
+
+Full investigation detail is retained in
+[`webgpu-runtime-status.md`](docs/architecture/webgpu-runtime-status.md).
+
+## Known limitations and unverified claims
+
+- The p0014 Jolt web build failed one concave terrain collider that the official
+  WebGL 2 control accepted. Rendering was unaffected; physics behavior was not.
+- Safari/iOS WebGPU is unverified.
+- Native Android and iOS device runs are unverified.
+- AMD, Intel, Apple, Qualcomm, and other non-NVIDIA GPU vendors are unverified.
+- The GPU evidence was not produced by independent third-party validation.
+- Database-backed integration tests and console-provider paths are outside this
+  WebGPU release evidence.
 
 ## Reproduce the fast evidence
 
 ```sh
-just test
+just engine-verify-patches
+just public-evidence-validate
+just test-python
 just lint
-just test-generated
 just release-validate --allow-dirty
 ```
 
-The longer engine sequence is:
+The long source/build sequence is:
 
 ```sh
 just engine-fetch
@@ -72,5 +124,6 @@ just engine-record-artifacts
 just release-validate --allow-dirty
 ```
 
-A WebGPU screenshot is accepted only when the runtime probe confirms engine-owned
-adapter, device, and WebGPU canvas-context requests with no WebGL request.
+`engine-record-artifacts` records a local accepted pair. Publishing or replacing
+a GitHub release requires a separate release manifest update and complete
+browser/hardware validation.

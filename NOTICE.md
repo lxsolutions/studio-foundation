@@ -15,7 +15,7 @@ Technical source lineage:
 
 - Official Godot base: `godotengine/godot` commit
   `a13da4feb8d8aefc283c3763d33a2f170a18d541`
-- Original WebGPU backend: `dwalter/godotwebgpu` commit
+- Original WebGPU backend by David Walter: `dwalter/godotwebgpu` commit
   `f329e39ce8db7acaa5c9d6628a530fb769969228`
 - Historical, validated Studio Foundation 4.7.1 integration tree:
   `14f5effb72ae440a3aa575c801e4aae1a5da7fb8`
@@ -32,9 +32,18 @@ source branch are not part of Studio Foundation's integration. Third-party
 license files required by the patched source are carried in the corresponding
 patches.
 
-The historical source repository is an attribution and engineering reference only.
-Studio Foundation maintains the current 4.7.1 integration, patch curation, build
-tooling, browser validation, and release evidence.
+The historical source repository is an attribution and engineering reference
+only. Studio Foundation maintains the current Godot 4.7.1 port, scoped patch
+curation (22 patches on current `main`), later renderer and shader fixes, build
+pipeline, browser export tooling, validation, release evidence, MCP tooling, and
+AI-native distribution layer. This maintenance boundary does not imply that
+Studio Foundation originated all backend code.
+
+The published `godot-4.7.1-webgpu-p0014` templates contain patches `0001–0014`
+and use Forward Mobile. Current-main patches `0015–0022`, including unfinished
+Forward+ browser work, are not part of those downloadable archives. Public
+release hashes and the separate locally accepted build hashes are both retained
+in `engine/engine-lock.toml`.
 
 ## Godot Engine
 

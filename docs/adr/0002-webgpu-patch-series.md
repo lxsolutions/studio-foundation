@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-07-19
-- Last amended: 2026-07-23
+- Last amended: 2026-07-25
 
 ## Context
 
@@ -59,6 +59,13 @@ error) and the visual comparison against the WebGL baseline (1.2% diff, 3%
 threshold). Both templates are now recorded with byte counts and SHA-256 values
 in `engine-lock.toml [artifacts.export_templates]`; the artifact lock is no
 longer blocked. See `docs/architecture/webgpu-runtime-status.md`.
+
+That table records the locally accepted build pair. The archives subsequently
+attached to `godot-4.7.1-webgpu-p0014` have separate byte identities recorded in
+`[releases.godot_4_7_1_webgpu_p0014]`. The release stops at patch 0014 and uses
+Forward Mobile. Current main contains patches through 0022, but the Forward+
+path still emits 18 validation errors and does not render; no p0022 templates
+are published.
 
 ## Update procedure
 
