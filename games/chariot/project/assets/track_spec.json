@@ -1,0 +1,11 @@
+{
+  "comment": "Single source of truth for the hippodrome oval. art_source/blender/generate_assets.py builds the meshes from this file and src/core/track_geometry.gd positions horses with the same constants. Loop length = 2*straight_m + 2*PI*turn_radius_m at the lane-1 centerline.",
+  "straight_m": 380.0,
+  "turn_radius_m": 110.0,
+  "lane_width_m": 2.5,
+  "lanes": 10,
+  "finish_s_m": 342.0,
+  "rail_inner_offset_lanes": -0.6,
+  "rail_outer_offset_lanes": 10.6,
+  "post_every_m": 12.0
+}
