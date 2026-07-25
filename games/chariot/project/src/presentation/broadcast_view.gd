@@ -124,28 +124,16 @@ func _switch_scene(path: String) -> void:
 func _build_world() -> void:
 	# A Mediterranean afternoon: warm sky, golden haze at the horizon, and
 	# sun the color of travertine.
+	# Tonemapping, ambient occlusion, indirect bounce, bloom and atmosphere —
+	# see cinematic_env.gd. The scene previously shipped a sky, a flat ambient
+	# term and one hard-shadowed sun with a LINEAR tonemap, which is why good
+	# geometry and correct materials still read as chalk.
+	var profile: String = Studio.profiles.current_name
 	var environment := WorldEnvironment.new()
-	var env := Environment.new()
-	var sky := Sky.new()
-	var sky_material := ProceduralSkyMaterial.new()
-	sky_material.sky_top_color = Color(0.286, 0.478, 0.769)
-	sky_material.sky_horizon_color = Color(0.882, 0.835, 0.706)
-	sky_material.ground_bottom_color = Color(0.404, 0.345, 0.263)
-	sky_material.ground_horizon_color = Color(0.741, 0.671, 0.541)
-	sky.sky_material = sky_material
-	env.background_mode = Environment.BG_SKY
-	env.sky = sky
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_energy = 1.15
-	environment.environment = env
+	environment.name = "Cinematic"
+	environment.environment = CinematicEnv.build(profile)
 	add_child(environment)
-
-	var sun := DirectionalLight3D.new()
-	sun.rotation_degrees = Vector3(-48.0, -32.0, 0.0)
-	sun.light_color = Color(1.0, 0.956, 0.878)
-	sun.light_energy = 1.3
-	sun.shadow_enabled = true
-	add_child(sun)
+	add_child(CinematicEnv.build_sun(profile))
 
 	var track: Node3D = _track_scene.instantiate()
 	track.name = "Track"

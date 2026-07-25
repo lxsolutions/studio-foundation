@@ -1,0 +1,6384 @@
+{
+  "version": 1,
+  "ops": [
+    {
+      "name": "arch.arcade",
+      "summary": "A wall of repeating arched bays following a path \u2014 THE Roman building block. Stack these to turn a stadium bowl into a colosseum, or run one along a line for an aqueduct or a cloister. Bays are spaced by arc length so an oval colonnade stays even through the turns.",
+      "tags": [
+        "build",
+        "architecture"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name",
+            "default": "arcade"
+          },
+          "path": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "description": "Flat [x0,y0,z0, ...] path; leave empty and use path_shape",
+            "default": []
+          },
+          "path_shape": {
+            "type": "string",
+            "enum": [
+              "custom",
+              "oval",
+              "circle",
+              "line",
+              "arc"
+            ],
+            "description": "Built-in path generator",
+            "default": "oval"
+          },
+          "straight": {
+            "type": "number",
+            "description": "oval: length of each straight in metres",
+            "default": 40.0
+          },
+          "radius": {
+            "type": "number",
+            "description": "oval/circle/arc radius in metres",
+            "default": 20.0
+          },
+          "length": {
+            "type": "number",
+            "description": "line: total length in metres along X",
+            "default": 30.0
+          },
+          "arc_degrees": {
+            "type": "number",
+            "description": "arc: sweep angle in degrees",
+            "default": 180.0
+          },
+          "resolution": {
+            "type": "integer",
+            "description": "Path sampling resolution",
+            "default": 48
+          },
+          "material": {
+            "type": "string",
+            "description": "Material preset",
+            "default": "stone"
+          },
+          "color": {
+            "type": "string",
+            "description": "Override colour",
+            "default": ""
+          },
+          "uv_scale": {
+            "type": "number",
+            "description": "Metres per UV tile",
+            "default": 3.0
+          },
+          "z": {
+            "type": "number",
+            "description": "Base height in metres",
+            "default": 0.0
+          },
+          "bays": {
+            "type": "integer",
+            "description": "Number of arched openings around the path",
+            "default": 32
+          },
+          "height": {
+            "type": "number",
+            "description": "Storey height in metres, plinth to cornice",
+            "default": 9.0
+          },
+          "thickness": {
+            "type": "number",
+            "description": "Wall depth in metres",
+            "default": 1.6
+          },
+          "opening": {
+            "type": "number",
+            "description": "Fraction of each bay that is opening rather than pier (0.3-0.75)",
+            "default": 0.58
+          },
+          "arch_rise": {
+            "type": "number",
+            "description": "Height of the arch semicircle; 0 makes it a true semicircle (half the opening width)",
+            "default": 0.0
+          },
+          "springing": {
+            "type": "number",
+            "description": "Height where the arch starts, as a fraction of storey height",
+            "default": 0.42
+          },
+          "voussoirs": {
+            "type": "integer",
+            "description": "Segments per arch \u2014 7 reads as an arch, more is wasted at distance",
+            "default": 7
+          },
+          "plinth": {
+            "type": "number",
+            "description": "Base band height in metres",
+            "default": 0.5
+          },
+          "cornice": {
+            "type": "number",
+            "description": "Top band height in metres",
+            "default": 0.6
+          },
+          "cornice_jut": {
+            "type": "number",
+            "description": "How far the cornice projects past the wall",
+            "default": 0.35
+          },
+          "engaged_columns": {
+            "type": "boolean",
+            "description": "Half-columns on the piers \u2014 the Colosseum's storey articulation",
+            "default": true
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "arch.colonnade",
+      "summary": "A ring or run of free-standing columns with an entablature \u2014 temple fronts, stadium rims, forum porticos. Cheaper than an arcade and the right silhouette for a top storey.",
+      "tags": [
+        "build",
+        "architecture"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name",
+            "default": "arcade"
+          },
+          "path": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "description": "Flat [x0,y0,z0, ...] path; leave empty and use path_shape",
+            "default": []
+          },
+          "path_shape": {
+            "type": "string",
+            "enum": [
+              "custom",
+              "oval",
+              "circle",
+              "line",
+              "arc"
+            ],
+            "description": "Built-in path generator",
+            "default": "oval"
+          },
+          "straight": {
+            "type": "number",
+            "description": "oval: length of each straight in metres",
+            "default": 40.0
+          },
+          "radius": {
+            "type": "number",
+            "description": "oval/circle/arc radius in metres",
+            "default": 20.0
+          },
+          "length": {
+            "type": "number",
+            "description": "line: total length in metres along X",
+            "default": 30.0
+          },
+          "arc_degrees": {
+            "type": "number",
+            "description": "arc: sweep angle in degrees",
+            "default": 180.0
+          },
+          "resolution": {
+            "type": "integer",
+            "description": "Path sampling resolution",
+            "default": 48
+          },
+          "material": {
+            "type": "string",
+            "description": "Material preset",
+            "default": "stone"
+          },
+          "color": {
+            "type": "string",
+            "description": "Override colour",
+            "default": ""
+          },
+          "uv_scale": {
+            "type": "number",
+            "description": "Metres per UV tile",
+            "default": 3.0
+          },
+          "z": {
+            "type": "number",
+            "description": "Base height in metres",
+            "default": 0.0
+          },
+          "columns": {
+            "type": "integer",
+            "description": "Number of columns",
+            "default": 40
+          },
+          "height": {
+            "type": "number",
+            "description": "Column height in metres",
+            "default": 6.5
+          },
+          "column_radius": {
+            "type": "number",
+            "description": "Shaft radius",
+            "default": 0.42
+          },
+          "segments": {
+            "type": "integer",
+            "description": "Sides per column",
+            "default": 8
+          },
+          "entablature": {
+            "type": "number",
+            "description": "Depth of the beam carried across the tops; 0 for none",
+            "default": 0.9
+          },
+          "flutes": {
+            "type": "boolean",
+            "description": "Fluted shafts (costs triangles, only reads up close)",
+            "default": false
+          },
+          "statues": {
+            "type": "boolean",
+            "description": "Blocky statue silhouettes above every fourth column",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "arch.gateway",
+      "summary": "A monumental arched gate \u2014 the triumphal entrance every Roman venue frames its far end with. One big central arch, optional flanking arches, an attic storey above.",
+      "tags": [
+        "build",
+        "architecture"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name",
+            "default": "gateway"
+          },
+          "width": {
+            "type": "number",
+            "description": "Overall width in metres",
+            "default": 14.0
+          },
+          "height": {
+            "type": "number",
+            "description": "Overall height in metres",
+            "default": 16.0
+          },
+          "thickness": {
+            "type": "number",
+            "description": "Depth in metres",
+            "default": 3.0
+          },
+          "side_arches": {
+            "type": "boolean",
+            "description": "Smaller arches either side of the main opening",
+            "default": true
+          },
+          "attic": {
+            "type": "number",
+            "description": "Attic storey height above the cornice; 0 for none",
+            "default": 4.0
+          },
+          "voussoirs": {
+            "type": "integer",
+            "description": "Segments in the main arch",
+            "default": 9
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World position",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "rotation": {
+            "type": "number",
+            "description": "Yaw in degrees",
+            "default": 0.0
+          },
+          "material": {
+            "type": "string",
+            "description": "Material preset",
+            "default": "stone"
+          },
+          "color": {
+            "type": "string",
+            "description": "Override colour",
+            "default": ""
+          },
+          "uv_scale": {
+            "type": "number",
+            "description": "Metres per UV tile",
+            "default": 3.0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "build.array",
+      "summary": "Repeat an object along a vector, or in a 2D/3D grid. Fences, columns, pipes, city blocks, crowd props.",
+      "tags": [
+        "build"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object to repeat"
+          },
+          "counts": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "description": "Repeat count per axis, e.g. [5] or [4,4] or [3,3,2]",
+            "default": [
+              3
+            ]
+          },
+          "spacing": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "Distance between copies in metres",
+            "default": [
+              1.0,
+              1.0,
+              1.0
+            ]
+          },
+          "join": {
+            "type": "boolean",
+            "description": "Merge into a single mesh (fewer draw calls)",
+            "default": true
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "build.bevel",
+      "summary": "Chamfer an object's sharp edges. The single highest-impact polish step for hard-surface props.",
+      "tags": [
+        "build",
+        "polish"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name"
+          },
+          "width": {
+            "type": "number",
+            "description": "Chamfer width in metres",
+            "default": 0.015
+          },
+          "segments": {
+            "type": "integer",
+            "description": "Chamfer resolution",
+            "default": 2
+          },
+          "angle": {
+            "type": "number",
+            "description": "Only bevel edges sharper than this (degrees)",
+            "default": 30.0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "build.box",
+      "summary": "Chamfered box. The chamfer is what makes a box read as a solid object under game lighting instead of a flat card.",
+      "tags": [
+        "build"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name (coerced to snake_case)",
+            "default": "part"
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World position in metres",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "material": {
+            "type": "string",
+            "description": "Material preset name, or '' for none. See meta.palette",
+            "default": "stone"
+          },
+          "color": {
+            "type": "string",
+            "description": "Override colour: palette name or #rrggbb",
+            "default": ""
+          },
+          "uv": {
+            "type": "string",
+            "enum": [
+              "box",
+              "cylinder",
+              "smart",
+              "smart_packed",
+              "none"
+            ],
+            "description": "UV strategy",
+            "default": "box"
+          },
+          "uv_scale": {
+            "type": "number",
+            "description": "Metres per UV tile for box projection",
+            "default": 1.0
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "bottom",
+              "center",
+              "center_xy",
+              "world"
+            ],
+            "description": "Pivot placement",
+            "default": "center"
+          },
+          "smooth": {
+            "type": "boolean",
+            "description": "Smooth shading with a sharp-edge threshold",
+            "default": false
+          },
+          "size": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "Outer dimensions in metres",
+            "default": [
+              1.0,
+              1.0,
+              1.0
+            ]
+          },
+          "bevel": {
+            "type": "number",
+            "description": "Chamfer width in metres; 0 disables",
+            "default": 0.02
+          },
+          "bevel_segments": {
+            "type": "integer",
+            "description": "Chamfer resolution (2 is plenty for game assets)",
+            "default": 2
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "build.cleanup",
+      "summary": "Weld duplicate vertices and optionally dissolve coplanar faces. Run before measuring or exporting.",
+      "tags": [
+        "build",
+        "polish"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name"
+          },
+          "merge_distance": {
+            "type": "number",
+            "description": "Weld threshold in metres",
+            "default": 0.0001
+          },
+          "dissolve_flat": {
+            "type": "boolean",
+            "description": "Merge coplanar faces (cuts triangles, can create n-gons)",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "build.cylinder",
+      "summary": "Cylinder, cone or truncated cone (set radius_top). Pillars, pipes, barrels, tent poles.",
+      "tags": [
+        "build"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name (coerced to snake_case)",
+            "default": "part"
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World position in metres",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "material": {
+            "type": "string",
+            "description": "Material preset name, or '' for none. See meta.palette",
+            "default": "stone"
+          },
+          "color": {
+            "type": "string",
+            "description": "Override colour: palette name or #rrggbb",
+            "default": ""
+          },
+          "uv": {
+            "type": "string",
+            "enum": [
+              "box",
+              "cylinder",
+              "smart",
+              "smart_packed",
+              "none"
+            ],
+            "description": "UV strategy",
+            "default": "cylinder"
+          },
+          "uv_scale": {
+            "type": "number",
+            "description": "Metres per UV tile for box projection",
+            "default": 1.0
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "bottom",
+              "center",
+              "center_xy",
+              "world"
+            ],
+            "description": "Pivot placement",
+            "default": "center"
+          },
+          "smooth": {
+            "type": "boolean",
+            "description": "Smooth shading (usually right for round shapes)",
+            "default": true
+          },
+          "radius": {
+            "type": "number",
+            "description": "Bottom radius in metres",
+            "default": 0.5
+          },
+          "radius_top": {
+            "type": "number",
+            "description": "Top radius; -1 means same as bottom, 0 makes a cone",
+            "default": -1.0
+          },
+          "depth": {
+            "type": "number",
+            "description": "Height in metres",
+            "default": 1.0
+          },
+          "segments": {
+            "type": "integer",
+            "description": "Radial segments \u2014 12-16 is the game-asset sweet spot",
+            "default": 16
+          },
+          "cap": {
+            "type": "boolean",
+            "description": "Close the ends",
+            "default": true
+          },
+          "bevel": {
+            "type": "number",
+            "description": "Chamfer the rim edges",
+            "default": 0.0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "build.deform",
+      "summary": "Taper, twist or noise-displace a mesh. Turns generic primitives into things with character.",
+      "tags": [
+        "build"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "taper",
+              "noise",
+              "jitter",
+              "squash"
+            ],
+            "description": "Deformation type",
+            "default": "taper"
+          },
+          "amount": {
+            "type": "number",
+            "description": "taper: top scale factor. noise/jitter: displacement in metres. squash: Z scale",
+            "default": 0.5
+          },
+          "frequency": {
+            "type": "number",
+            "description": "noise: spatial frequency",
+            "default": 3.0
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Random seed",
+            "default": 0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "build.extrude",
+      "summary": "Inset-and-extrude faces selected by their normal direction. Makes panels, ledges, windows and recesses.",
+      "tags": [
+        "build"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name"
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "up",
+              "down",
+              "north",
+              "south",
+              "east",
+              "west",
+              "all",
+              "outward"
+            ],
+            "description": "Which faces to affect",
+            "default": "up"
+          },
+          "distance": {
+            "type": "number",
+            "description": "Extrude distance in metres (negative recesses)",
+            "default": 0.1
+          },
+          "inset": {
+            "type": "number",
+            "description": "Inset before extruding \u2014 this is what makes a panel not a spike",
+            "default": 0.05
+          },
+          "threshold": {
+            "type": "number",
+            "description": "Normal alignment required to count as facing that direction",
+            "default": 0.7
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "build.greeble",
+      "summary": "Scatter panel detail across faces \u2014 sci-fi hulls, machinery, city blocks, tech walls. Deterministic for a given seed.",
+      "tags": [
+        "build",
+        "hardsurface"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name"
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Random seed; same seed gives the same result forever",
+            "default": 0
+          },
+          "density": {
+            "type": "number",
+            "description": "Fraction of faces that get a panel (0..1)",
+            "default": 0.35
+          },
+          "depth": {
+            "type": "number",
+            "description": "Maximum panel depth in metres",
+            "default": 0.03
+          },
+          "cuts": {
+            "type": "integer",
+            "description": "Subdivision passes before panelling \u2014 more cuts, finer greeble",
+            "default": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "build.lathe",
+      "summary": "Revolve a 2D profile into a solid. The highest value-per-parameter op here: bottles, vases, columns, goblets, chess pieces, tree trunks, fountains.",
+      "tags": [
+        "build"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name (coerced to snake_case)",
+            "default": "part"
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World position in metres",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "material": {
+            "type": "string",
+            "description": "Material preset name, or '' for none. See meta.palette",
+            "default": "stone"
+          },
+          "color": {
+            "type": "string",
+            "description": "Override colour: palette name or #rrggbb",
+            "default": ""
+          },
+          "uv": {
+            "type": "string",
+            "enum": [
+              "box",
+              "cylinder",
+              "smart",
+              "smart_packed",
+              "none"
+            ],
+            "description": "UV strategy",
+            "default": "cylinder"
+          },
+          "uv_scale": {
+            "type": "number",
+            "description": "Metres per UV tile for box projection",
+            "default": 1.0
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "bottom",
+              "center",
+              "center_xy",
+              "world"
+            ],
+            "description": "Pivot placement",
+            "default": "center"
+          },
+          "smooth": {
+            "type": "boolean",
+            "description": "Smooth shading",
+            "default": true
+          },
+          "profile": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "description": "Flat [radius0, height0, radius1, height1, ...] pairs, bottom to top"
+          },
+          "segments": {
+            "type": "integer",
+            "description": "Radial segments",
+            "default": 16
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "build.mirror",
+      "summary": "Mirror geometry across an axis. Halves the modelling work for anything symmetrical \u2014 characters, vehicles, buildings.",
+      "tags": [
+        "build"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name"
+          },
+          "axis": {
+            "type": "string",
+            "enum": [
+              "X",
+              "Y",
+              "Z"
+            ],
+            "description": "Mirror axis",
+            "default": "X"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "build.plane",
+      "summary": "Flat quad, optionally grid-subdivided. Floors, walls, water, billboards, terrain bases.",
+      "tags": [
+        "build"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name (coerced to snake_case)",
+            "default": "part"
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World position in metres",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "material": {
+            "type": "string",
+            "description": "Material preset name, or '' for none. See meta.palette",
+            "default": "stone"
+          },
+          "color": {
+            "type": "string",
+            "description": "Override colour: palette name or #rrggbb",
+            "default": ""
+          },
+          "uv": {
+            "type": "string",
+            "enum": [
+              "box",
+              "cylinder",
+              "smart",
+              "smart_packed",
+              "none"
+            ],
+            "description": "UV strategy",
+            "default": "box"
+          },
+          "uv_scale": {
+            "type": "number",
+            "description": "Metres per UV tile for box projection",
+            "default": 1.0
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "bottom",
+              "center",
+              "center_xy",
+              "world"
+            ],
+            "description": "Pivot placement",
+            "default": "center"
+          },
+          "smooth": {
+            "type": "boolean",
+            "description": "Smooth shading with a sharp-edge threshold",
+            "default": false
+          },
+          "size": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2,
+            "maxItems": 2,
+            "description": "Dimensions in metres",
+            "default": [
+              1.0,
+              1.0
+            ]
+          },
+          "cuts": {
+            "type": "integer",
+            "description": "Grid subdivisions per edge",
+            "default": 0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "build.prism",
+      "summary": "N-sided prism. Hex tiles, crystals, columns, low-poly trunks.",
+      "tags": [
+        "build"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name (coerced to snake_case)",
+            "default": "part"
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World position in metres",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "material": {
+            "type": "string",
+            "description": "Material preset name, or '' for none. See meta.palette",
+            "default": "stone"
+          },
+          "color": {
+            "type": "string",
+            "description": "Override colour: palette name or #rrggbb",
+            "default": ""
+          },
+          "uv": {
+            "type": "string",
+            "enum": [
+              "box",
+              "cylinder",
+              "smart",
+              "smart_packed",
+              "none"
+            ],
+            "description": "UV strategy",
+            "default": "box"
+          },
+          "uv_scale": {
+            "type": "number",
+            "description": "Metres per UV tile for box projection",
+            "default": 1.0
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "bottom",
+              "center",
+              "center_xy",
+              "world"
+            ],
+            "description": "Pivot placement",
+            "default": "center"
+          },
+          "smooth": {
+            "type": "boolean",
+            "description": "Smooth shading with a sharp-edge threshold",
+            "default": false
+          },
+          "radius": {
+            "type": "number",
+            "description": "Circumradius in metres",
+            "default": 0.5
+          },
+          "depth": {
+            "type": "number",
+            "description": "Height in metres",
+            "default": 1.0
+          },
+          "sides": {
+            "type": "integer",
+            "description": "Number of sides",
+            "default": 6
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "build.sphere",
+      "summary": "UV sphere or icosphere. Icospheres have even topology and are better bases for rocks and organic shapes.",
+      "tags": [
+        "build"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name (coerced to snake_case)",
+            "default": "part"
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World position in metres",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "material": {
+            "type": "string",
+            "description": "Material preset name, or '' for none. See meta.palette",
+            "default": "stone"
+          },
+          "color": {
+            "type": "string",
+            "description": "Override colour: palette name or #rrggbb",
+            "default": ""
+          },
+          "uv": {
+            "type": "string",
+            "enum": [
+              "box",
+              "cylinder",
+              "smart",
+              "smart_packed",
+              "none"
+            ],
+            "description": "UV strategy",
+            "default": "smart"
+          },
+          "uv_scale": {
+            "type": "number",
+            "description": "Metres per UV tile for box projection",
+            "default": 1.0
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "bottom",
+              "center",
+              "center_xy",
+              "world"
+            ],
+            "description": "Pivot placement",
+            "default": "center"
+          },
+          "smooth": {
+            "type": "boolean",
+            "description": "Smooth shading",
+            "default": true
+          },
+          "radius": {
+            "type": "number",
+            "description": "Radius in metres",
+            "default": 0.5
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "uv",
+              "ico"
+            ],
+            "description": "Topology type",
+            "default": "ico"
+          },
+          "segments": {
+            "type": "integer",
+            "description": "UV sphere: radial segments",
+            "default": 16
+          },
+          "rings": {
+            "type": "integer",
+            "description": "UV sphere: vertical rings",
+            "default": 8
+          },
+          "subdivisions": {
+            "type": "integer",
+            "description": "Icosphere: subdivision level (2 = 320 tris)",
+            "default": 2
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "build.subdivide",
+      "summary": "Subdivide all faces. Use sparingly \u2014 subdivision multiplies triangles fast.",
+      "tags": [
+        "build"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name"
+          },
+          "cuts": {
+            "type": "integer",
+            "description": "Cuts per edge",
+            "default": 1
+          },
+          "smooth": {
+            "type": "number",
+            "description": "Smoothing factor (0 keeps the silhouette)",
+            "default": 0.0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "build.sweep",
+      "summary": "Sweep a 2D cross-section along a path \u2014 the workhorse for level geometry. Racetracks, grandstands, roads, ramparts, rails, tunnels, mouldings and pipes are all one profile plus one path. Frames use parallel transport, so a closed loop does not twist.",
+      "tags": [
+        "build",
+        "architecture"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name (coerced to snake_case)",
+            "default": "part"
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World position in metres",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "material": {
+            "type": "string",
+            "description": "Material preset name, or '' for none. See meta.palette",
+            "default": "stone"
+          },
+          "color": {
+            "type": "string",
+            "description": "Override colour: palette name or #rrggbb",
+            "default": ""
+          },
+          "uv": {
+            "type": "string",
+            "enum": [
+              "box",
+              "cylinder",
+              "smart",
+              "smart_packed",
+              "none"
+            ],
+            "description": "UV strategy",
+            "default": "box"
+          },
+          "uv_scale": {
+            "type": "number",
+            "description": "Metres per UV tile",
+            "default": 4.0
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "bottom",
+              "center",
+              "center_xy",
+              "world"
+            ],
+            "description": "Pivot placement",
+            "default": "world"
+          },
+          "smooth": {
+            "type": "boolean",
+            "description": "Smooth shading",
+            "default": false
+          },
+          "profile": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "description": "Flat [lateral0, vertical0, lateral1, vertical1, ...] cross-section in metres, relative to the path"
+          },
+          "profile_scales": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "description": "Flat [lateral0, vertical0, ...] multipliers applied to the cross-section ALONG the path, interpolated to fit. This is what turns a uniform tube into an anatomy \u2014 a barrel that swells at the girth, a neck that tapers to the poll. Give a few key values, not one per point",
+            "default": []
+          },
+          "path": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "description": "Flat [x0,y0,z0, x1,y1,z1, ...] path points; leave empty and use path_shape instead",
+            "default": []
+          },
+          "path_shape": {
+            "type": "string",
+            "enum": [
+              "custom",
+              "oval",
+              "circle",
+              "line",
+              "arc"
+            ],
+            "description": "Built-in path generator",
+            "default": "custom"
+          },
+          "straight": {
+            "type": "number",
+            "description": "oval: length of each straight in metres",
+            "default": 40.0
+          },
+          "radius": {
+            "type": "number",
+            "description": "oval/circle/arc radius in metres",
+            "default": 12.0
+          },
+          "length": {
+            "type": "number",
+            "description": "line: total length in metres along X",
+            "default": 20.0
+          },
+          "arc_degrees": {
+            "type": "number",
+            "description": "arc: sweep angle in degrees",
+            "default": 180.0
+          },
+          "segments": {
+            "type": "integer",
+            "description": "Path resolution (per turn for an oval)",
+            "default": 24
+          },
+          "closed_path": {
+            "type": "boolean",
+            "description": "Close the path into a loop (oval and circle are always closed)",
+            "default": true
+          },
+          "closed_profile": {
+            "type": "boolean",
+            "description": "Treat the cross-section as a closed outline (a solid tube) rather than an open strip",
+            "default": true
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "build.torus",
+      "summary": "Torus. Rings, handles, hoops, portal frames.",
+      "tags": [
+        "build"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name (coerced to snake_case)",
+            "default": "part"
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World position in metres",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "material": {
+            "type": "string",
+            "description": "Material preset name, or '' for none. See meta.palette",
+            "default": "stone"
+          },
+          "color": {
+            "type": "string",
+            "description": "Override colour: palette name or #rrggbb",
+            "default": ""
+          },
+          "uv": {
+            "type": "string",
+            "enum": [
+              "box",
+              "cylinder",
+              "smart",
+              "smart_packed",
+              "none"
+            ],
+            "description": "UV strategy",
+            "default": "smart"
+          },
+          "uv_scale": {
+            "type": "number",
+            "description": "Metres per UV tile for box projection",
+            "default": 1.0
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "bottom",
+              "center",
+              "center_xy",
+              "world"
+            ],
+            "description": "Pivot placement",
+            "default": "center"
+          },
+          "smooth": {
+            "type": "boolean",
+            "description": "Smooth shading",
+            "default": true
+          },
+          "major": {
+            "type": "number",
+            "description": "Ring radius in metres",
+            "default": 0.5
+          },
+          "minor": {
+            "type": "number",
+            "description": "Tube radius in metres",
+            "default": 0.12
+          },
+          "major_segments": {
+            "type": "integer",
+            "description": "Segments around the ring",
+            "default": 20
+          },
+          "minor_segments": {
+            "type": "integer",
+            "description": "Segments around the tube",
+            "default": 8
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "build.wedge",
+      "summary": "Right-triangle prism. Ramps, roof sections, chamfer blockouts.",
+      "tags": [
+        "build"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name (coerced to snake_case)",
+            "default": "part"
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World position in metres",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "material": {
+            "type": "string",
+            "description": "Material preset name, or '' for none. See meta.palette",
+            "default": "stone"
+          },
+          "color": {
+            "type": "string",
+            "description": "Override colour: palette name or #rrggbb",
+            "default": ""
+          },
+          "uv": {
+            "type": "string",
+            "enum": [
+              "box",
+              "cylinder",
+              "smart",
+              "smart_packed",
+              "none"
+            ],
+            "description": "UV strategy",
+            "default": "box"
+          },
+          "uv_scale": {
+            "type": "number",
+            "description": "Metres per UV tile for box projection",
+            "default": 1.0
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "bottom",
+              "center",
+              "center_xy",
+              "world"
+            ],
+            "description": "Pivot placement",
+            "default": "center"
+          },
+          "smooth": {
+            "type": "boolean",
+            "description": "Smooth shading with a sharp-edge threshold",
+            "default": false
+          },
+          "size": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "Bounding dimensions in metres",
+            "default": [
+              1.0,
+              1.0,
+              1.0
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "char.animate",
+      "summary": "Author a keyframed animation clip on a rig: idle, walk, run, attack, jump, death or wave. Real pose-to-pose keys at contact/passing frames, not sine-wave wiggle \u2014 the difference between a walk and a shuffle.",
+      "tags": [
+        "char",
+        "anim"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "rig": {
+            "type": "string",
+            "description": "Armature object name (from char.rig)"
+          },
+          "clip": {
+            "type": "string",
+            "enum": [
+              "idle",
+              "walk",
+              "run",
+              "attack",
+              "jump",
+              "death",
+              "wave"
+            ],
+            "description": "Which clip to author",
+            "default": "idle"
+          },
+          "length": {
+            "type": "integer",
+            "description": "Clip length in frames (24 frames at 30 fps = 0.8 s)",
+            "default": 24
+          },
+          "amplitude": {
+            "type": "number",
+            "description": "Motion scale \u2014 0.6 is subtle, 1.4 is exaggerated",
+            "default": 1.0
+          },
+          "loop": {
+            "type": "boolean",
+            "description": "Match the last frame to the first so the clip cycles",
+            "default": true
+          },
+          "action_name": {
+            "type": "string",
+            "description": "Action name (defaults to the clip name)",
+            "default": ""
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "char.attach",
+      "summary": "Parent a prop to a character bone \u2014 a sword to hand_r, a shield to hand_l, a helmet to head. Keeps the prop's own pivot, so it animates with the character.",
+      "tags": [
+        "char",
+        "rig"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "prop": {
+            "type": "string",
+            "description": "Object to attach"
+          },
+          "rig": {
+            "type": "string",
+            "description": "Armature object name"
+          },
+          "bone": {
+            "type": "string",
+            "description": "Bone to attach to",
+            "default": "hand_r"
+          },
+          "offset": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "Local offset in metres",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "rotation": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "Local rotation in degrees",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "char.humanoid",
+      "summary": "Proportioned humanoid blockout using classic figure-drawing head ratios (7.5 realistic, 8 heroic, 4 chibi). ~1400 tris. Pair with char.rig and char.animate for a complete animated character.",
+      "tags": [
+        "char"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name",
+            "default": "character"
+          },
+          "height": {
+            "type": "number",
+            "description": "Total height in metres",
+            "default": 1.8
+          },
+          "build": {
+            "type": "string",
+            "enum": [
+              "realistic",
+              "heroic",
+              "stylized",
+              "chibi",
+              "lithe"
+            ],
+            "description": "Body proportions",
+            "default": "heroic"
+          },
+          "bulk": {
+            "type": "number",
+            "description": "Extra muscle/armour thickness multiplier",
+            "default": 1.0
+          },
+          "detail": {
+            "type": "integer",
+            "description": "Limb cross-section segments (6-10 is the game range)",
+            "default": 8
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World position",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "skin": {
+            "type": "string",
+            "description": "Body colour",
+            "default": "#c08a6a"
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Random seed",
+            "default": 0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "char.pose",
+      "summary": "Set a static pose on a rig \u2014 T-pose, A-pose, sitting, or a custom per-bone rotation. Useful for reference renders and for fixing an import rest pose.",
+      "tags": [
+        "char",
+        "rig"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "rig": {
+            "type": "string",
+            "description": "Armature object name"
+          },
+          "preset": {
+            "type": "string",
+            "enum": [
+              "rest",
+              "a_pose",
+              "t_pose",
+              "sit",
+              "crouch",
+              "custom"
+            ],
+            "description": "Pose preset",
+            "default": "a_pose"
+          },
+          "bones": {
+            "type": "object",
+            "description": "custom only: {\"bone_name\": [rx, ry, rz], ...} in degrees"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "char.rig",
+      "summary": "Build a humanoid armature fitted to a mesh and skin it with distance-falloff weights. Single 'hips' root, snake_case bone names, glTF/Godot-compatible. No GUI needed.",
+      "tags": [
+        "char",
+        "rig"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Mesh object to rig"
+          },
+          "height": {
+            "type": "number",
+            "description": "Character height; 0 measures it from the mesh bounds",
+            "default": 0.0
+          },
+          "build": {
+            "type": "string",
+            "enum": [
+              "realistic",
+              "heroic",
+              "stylized",
+              "chibi",
+              "lithe"
+            ],
+            "description": "Proportions the rig assumes \u2014 match char.humanoid",
+            "default": "heroic"
+          },
+          "falloff": {
+            "type": "number",
+            "description": "Weight blend sharpness; higher is more rigid",
+            "default": 1.6
+          },
+          "armature_name": {
+            "type": "string",
+            "description": "Armature object name (defaults to <mesh>_rig)",
+            "default": ""
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "check.asset",
+      "summary": "Run the studio's ADR 0006 asset rules against the open scene: naming, units, applied transforms, origins, UVs, budgets, bone conventions, collision, textures, glTF-safe shaders. Same checks as `just asset-validate`, but before you write the file.",
+      "tags": [
+        "check",
+        "inspect"
+      ],
+      "mutates": false,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "triangle_budget": {
+            "type": "integer",
+            "description": "Triangle ceiling for the check",
+            "default": 2000
+          },
+          "material_budget": {
+            "type": "integer",
+            "description": "Material ceiling",
+            "default": 2
+          },
+          "require_collision": {
+            "type": "boolean",
+            "description": "Fail when no -col/-convcol proxy exists",
+            "default": false
+          },
+          "require_lods": {
+            "type": "boolean",
+            "description": "Fail when no _lod1 object exists",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "check.critique",
+      "summary": "Quality critique with specific, actionable findings: triangle-density hot spots, degenerate and n-gon faces, UV stretch, texel-density mismatch between objects, non-manifold edges, unused material slots. Pair it with render.contact_sheet \u2014 numbers plus eyes.",
+      "tags": [
+        "check",
+        "inspect"
+      ],
+      "mutates": false,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "objects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Objects to critique (empty = every mesh)",
+            "default": []
+          },
+          "texture_size": {
+            "type": "integer",
+            "description": "Texture resolution the texel-density figures assume",
+            "default": 1024
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "check.image",
+      "summary": "Measure an image instead of eyeballing it: luminance range, blown highlights, crushed blacks, contrast, saturation, dominant colours and subject coverage. Reading a render is slow and cannot tell 'the asset is wrong' from 'the render is over-lit'. These numbers can, in a fraction of the time.",
+      "tags": [
+        "check",
+        "inspect"
+      ],
+      "mutates": false,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "PNG to analyse \u2014 a render, a contact sheet, or a baked texture"
+          },
+          "colors": {
+            "type": "integer",
+            "description": "How many dominant colours to report",
+            "default": 6
+          },
+          "background": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 4,
+            "description": "Backdrop colour, excluded from subject stats",
+            "default": [
+              0.05,
+              0.055,
+              0.065,
+              1.0
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "check.silhouette",
+      "summary": "Score how readable an object's silhouette is from the standard game camera angles. A prop that fails here will not read at gameplay distance no matter how good its texture is.",
+      "tags": [
+        "check",
+        "inspect"
+      ],
+      "mutates": false,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object to test"
+          },
+          "samples": {
+            "type": "integer",
+            "description": "Rays per axis for the projected-area estimate",
+            "default": 64
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "env.amphitheatre",
+      "summary": "A complete Roman venue in one call: raked cavea, podium, arched arcade storey, statued attic colonnade, vomitoria stair wedges, velarium masts, hanging banners and gateways. This is the difference between a stone bowl and the Colosseum \u2014 arches and vertical rhythm. Use shape='oval' for a circus/hippodrome, 'circle' for an amphitheatre.",
+      "tags": [
+        "env",
+        "architecture"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name",
+            "default": "amphitheatre"
+          },
+          "shape": {
+            "type": "string",
+            "enum": [
+              "oval",
+              "circle"
+            ],
+            "description": "oval = circus/hippodrome, circle = amphitheatre",
+            "default": "circle"
+          },
+          "arena_radius": {
+            "type": "number",
+            "description": "Arena half-width in metres (short axis)",
+            "default": 40.0
+          },
+          "straight": {
+            "type": "number",
+            "description": "oval only: length of each straight in metres",
+            "default": 0.0
+          },
+          "arena_margin": {
+            "type": "number",
+            "description": "Flat run-off between the arena edge and the podium wall",
+            "default": 6.0
+          },
+          "podium_height": {
+            "type": "number",
+            "description": "Height of the solid wall between arena and first seats",
+            "default": 4.0
+          },
+          "tiers": {
+            "type": "integer",
+            "description": "Seating tiers (maenianum), separated by walkway walls",
+            "default": 3
+          },
+          "tier_depth": {
+            "type": "number",
+            "description": "Depth of each tier in metres",
+            "default": 9.0
+          },
+          "tier_rise": {
+            "type": "number",
+            "description": "Height gained across each tier",
+            "default": 5.4
+          },
+          "tier_riser": {
+            "type": "number",
+            "description": "Walkway wall height between tiers",
+            "default": 2.4
+          },
+          "rows_per_tier": {
+            "type": "integer",
+            "description": "Seat steps cut per tier",
+            "default": 7
+          },
+          "arcade_height": {
+            "type": "number",
+            "description": "Height of the arched storey crowning the stands; 0 for none",
+            "default": 9.5
+          },
+          "arcade_bays": {
+            "type": "integer",
+            "description": "Arch count; 0 auto-sizes to roughly one arch per 8 m",
+            "default": 0
+          },
+          "colonnade": {
+            "type": "boolean",
+            "description": "Statued attic colonnade above the arcade",
+            "default": true
+          },
+          "vomitoria": {
+            "type": "integer",
+            "description": "Stair wedges dividing the seating; 0 auto-sizes",
+            "default": 0
+          },
+          "masts": {
+            "type": "integer",
+            "description": "Velarium masts on the rim; 0 auto-sizes, -1 for none",
+            "default": 0
+          },
+          "gateways": {
+            "type": "integer",
+            "description": "Monumental arched gates cut through the podium",
+            "default": 2
+          },
+          "banners": {
+            "type": "integer",
+            "description": "Hanging banners between arcade bays; 0 auto-sizes",
+            "default": 0
+          },
+          "stone": {
+            "type": "string",
+            "description": "Sunlit stone colour (travertine, not concrete)",
+            "default": "#d6c4a0"
+          },
+          "stone_shade": {
+            "type": "string",
+            "description": "Shadowed stone colour",
+            "default": "#9c8763"
+          },
+          "sand": {
+            "type": "string",
+            "description": "Arena floor colour",
+            "default": "#d9bd8e"
+          },
+          "banner_color": {
+            "type": "string",
+            "description": "Banner cloth colour",
+            "default": "#7a201a"
+          },
+          "quality": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ],
+            "description": "Path and detail resolution",
+            "default": "medium"
+          },
+          "join": {
+            "type": "boolean",
+            "description": "Merge into one object",
+            "default": true
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Random seed",
+            "default": 0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "env.arena",
+      "summary": "Complete combat arena in one call: floor, tiered walls, entrance arches and corner towers. A whole playable space from a single op.",
+      "tags": [
+        "env",
+        "architecture"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name",
+            "default": "arena"
+          },
+          "radius": {
+            "type": "number",
+            "description": "Arena floor radius in metres",
+            "default": 16.0
+          },
+          "wall_height": {
+            "type": "number",
+            "description": "Perimeter wall height",
+            "default": 6.0
+          },
+          "sides": {
+            "type": "integer",
+            "description": "Perimeter segments (higher is rounder)",
+            "default": 16
+          },
+          "entrances": {
+            "type": "integer",
+            "description": "Number of gate openings",
+            "default": 2
+          },
+          "tiers": {
+            "type": "integer",
+            "description": "Spectator tiers stepping up behind the wall",
+            "default": 2
+          },
+          "material": {
+            "type": "string",
+            "description": "Material preset",
+            "default": "stone"
+          },
+          "color": {
+            "type": "string",
+            "description": "Override colour",
+            "default": ""
+          },
+          "uv_scale": {
+            "type": "number",
+            "description": "Metres per UV tile",
+            "default": 3.0
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Random seed",
+            "default": 0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "env.cliff",
+      "summary": "Rock cliff wall or canyon face with stratified layers. Blocks sightlines and frames a play space without the cost of terrain.",
+      "tags": [
+        "env",
+        "nature"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name",
+            "default": "cliff"
+          },
+          "length": {
+            "type": "number",
+            "description": "Length along X in metres",
+            "default": 20.0
+          },
+          "height": {
+            "type": "number",
+            "description": "Height in metres",
+            "default": 8.0
+          },
+          "depth": {
+            "type": "number",
+            "description": "Depth variation in metres",
+            "default": 3.0
+          },
+          "segments": {
+            "type": "integer",
+            "description": "Horizontal segments",
+            "default": 20
+          },
+          "layers": {
+            "type": "integer",
+            "description": "Vertical strata",
+            "default": 6
+          },
+          "strata": {
+            "type": "number",
+            "description": "How pronounced the rock layering is",
+            "default": 0.35
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Random seed",
+            "default": 0
+          },
+          "material": {
+            "type": "string",
+            "description": "Material preset",
+            "default": "rock"
+          },
+          "color": {
+            "type": "string",
+            "description": "Override colour",
+            "default": ""
+          },
+          "uv_scale": {
+            "type": "number",
+            "description": "Metres per UV tile",
+            "default": 3.0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "env.road",
+      "summary": "Road, path or river bed following a polyline, conformed to a terrain surface if given.",
+      "tags": [
+        "env"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name",
+            "default": "road"
+          },
+          "points": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "description": "Flat [x0,y0, x1,y1, ...] control points",
+            "default": [
+              -15.0,
+              0.0,
+              0.0,
+              0.0,
+              15.0,
+              6.0
+            ]
+          },
+          "width": {
+            "type": "number",
+            "description": "Road width in metres",
+            "default": 3.0
+          },
+          "target": {
+            "type": "string",
+            "description": "Terrain to drape onto (empty = flat at Z=0)",
+            "default": ""
+          },
+          "offset": {
+            "type": "number",
+            "description": "Height above the surface, to avoid z-fighting",
+            "default": 0.06
+          },
+          "segments_per_span": {
+            "type": "integer",
+            "description": "Subdivisions between control points",
+            "default": 8
+          },
+          "material": {
+            "type": "string",
+            "description": "Material preset",
+            "default": "stone"
+          },
+          "color": {
+            "type": "string",
+            "description": "Override colour",
+            "default": ""
+          },
+          "uv_scale": {
+            "type": "number",
+            "description": "Metres per UV tile",
+            "default": 3.0
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Random seed",
+            "default": 0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "env.scatter",
+      "summary": "Scatter copies of an object over a surface with Poisson-ish spacing, aligned to the surface normal. The op that turns bare terrain into a forest, a rockfield or a graveyard.",
+      "tags": [
+        "env",
+        "nature"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "description": "Object to scatter"
+          },
+          "target": {
+            "type": "string",
+            "description": "Surface to scatter onto (empty = scatter on the Z=0 plane)",
+            "default": ""
+          },
+          "count": {
+            "type": "integer",
+            "description": "Number of instances to attempt",
+            "default": 30
+          },
+          "area": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2,
+            "maxItems": 2,
+            "description": "Scatter area in metres when there is no target",
+            "default": [
+              20.0,
+              20.0
+            ]
+          },
+          "min_spacing": {
+            "type": "number",
+            "description": "Minimum distance between instances",
+            "default": 1.2
+          },
+          "scale_range": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2,
+            "maxItems": 2,
+            "description": "Random uniform scale range",
+            "default": [
+              0.75,
+              1.35
+            ]
+          },
+          "align_to_normal": {
+            "type": "number",
+            "description": "0 = always upright, 1 = fully follow the surface tilt",
+            "default": 0.0
+          },
+          "max_slope": {
+            "type": "number",
+            "description": "Skip spots steeper than this (degrees)",
+            "default": 40.0
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Random seed",
+            "default": 0
+          },
+          "join": {
+            "type": "boolean",
+            "description": "Merge into one mesh \u2014 critical for draw calls",
+            "default": true
+          },
+          "name": {
+            "type": "string",
+            "description": "Name for the merged result",
+            "default": ""
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "env.terrain",
+      "summary": "Heightfield terrain with fBm noise, optional plateaus and erosion-like smoothing. Deterministic across machines, so CI can regenerate and diff it.",
+      "tags": [
+        "env",
+        "nature"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name",
+            "default": "terrain"
+          },
+          "size": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2,
+            "maxItems": 2,
+            "description": "Terrain extents in metres",
+            "default": [
+              40.0,
+              40.0
+            ]
+          },
+          "resolution": {
+            "type": "integer",
+            "description": "Grid subdivisions per side (48 = ~4600 tris)",
+            "default": 48
+          },
+          "height": {
+            "type": "number",
+            "description": "Peak-to-trough height in metres",
+            "default": 5.0
+          },
+          "scale": {
+            "type": "number",
+            "description": "Noise frequency \u2014 lower is broader hills",
+            "default": 0.12
+          },
+          "octaves": {
+            "type": "integer",
+            "description": "Noise detail levels",
+            "default": 4
+          },
+          "style": {
+            "type": "string",
+            "enum": [
+              "hills",
+              "mountains",
+              "plateau",
+              "dunes",
+              "island"
+            ],
+            "description": "Terrain character",
+            "default": "hills"
+          },
+          "flatten_center": {
+            "type": "number",
+            "description": "Radius in metres of a flat buildable area at the origin",
+            "default": 0.0
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Random seed",
+            "default": 0
+          },
+          "material": {
+            "type": "string",
+            "description": "Material preset",
+            "default": "sand"
+          },
+          "color": {
+            "type": "string",
+            "description": "Override colour",
+            "default": ""
+          },
+          "uv_scale": {
+            "type": "number",
+            "description": "Metres per UV tile",
+            "default": 4.0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "env.water",
+      "summary": "Water plane with a gentle wave mesh and a translucent material. Fills moats, lakes and canals.",
+      "tags": [
+        "env",
+        "nature"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name",
+            "default": "water"
+          },
+          "size": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2,
+            "maxItems": 2,
+            "description": "Extents in metres",
+            "default": [
+              30.0,
+              30.0
+            ]
+          },
+          "resolution": {
+            "type": "integer",
+            "description": "Grid subdivisions",
+            "default": 16
+          },
+          "wave_height": {
+            "type": "number",
+            "description": "Wave amplitude in metres",
+            "default": 0.08
+          },
+          "level": {
+            "type": "number",
+            "description": "Z height of the water surface",
+            "default": 0.0
+          },
+          "color": {
+            "type": "string",
+            "description": "Water colour",
+            "default": "#20465e"
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Random seed",
+            "default": 0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "export.asset",
+      "summary": "One call: save the .blend master, export the GLB, write the .meta.json sidecar and render a contact sheet. The complete hand-off for a finished asset.",
+      "tags": [
+        "export",
+        "io"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "asset_id": {
+            "type": "string",
+            "description": "snake_case asset identifier \u2014 names every output file"
+          },
+          "out_dir": {
+            "type": "string",
+            "description": "Directory for the outputs (defaults to the session output dir)",
+            "default": ""
+          },
+          "objects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Objects to export (empty = whole scene)",
+            "default": []
+          },
+          "engine": {
+            "type": "string",
+            "enum": [
+              "godot",
+              "unity",
+              "unreal",
+              "threejs",
+              "raw"
+            ],
+            "description": "Target engine preset",
+            "default": "godot"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "prop",
+              "character",
+              "environment",
+              "weapon",
+              "architecture",
+              "vfx",
+              "ui"
+            ],
+            "description": "Asset category",
+            "default": "prop"
+          },
+          "ai_prompt": {
+            "type": "string",
+            "description": "What the asset was asked for \u2014 recorded in provenance",
+            "default": ""
+          },
+          "contact_sheet": {
+            "type": "boolean",
+            "description": "Also render a review contact sheet",
+            "default": true
+          },
+          "strict": {
+            "type": "boolean",
+            "description": "Block export on problems that would corrupt the import",
+            "default": true
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "export.blend",
+      "summary": "Save the .blend master. Under ADR 0006 the .blend is the committed source of truth and the GLB is a derived artefact \u2014 always save both.",
+      "tags": [
+        "export",
+        "io"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "out": {
+            "type": "string",
+            "description": "Output .blend path",
+            "default": "asset.blend"
+          },
+          "compress": {
+            "type": "boolean",
+            "description": "Compress the file",
+            "default": true
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "export.gltf",
+      "summary": "Export to GLB/glTF with an engine-specific preset. Checks for the things that silently break an import first \u2014 unapplied scale, missing UVs, procedural materials \u2014 and tells you rather than shipping a broken file.",
+      "tags": [
+        "export",
+        "io"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "out": {
+            "type": "string",
+            "description": "Output path (.glb binary or .gltf text)",
+            "default": "asset.glb"
+          },
+          "objects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Objects to export (empty = whole scene)",
+            "default": []
+          },
+          "engine": {
+            "type": "string",
+            "enum": [
+              "godot",
+              "unity",
+              "unreal",
+              "threejs",
+              "raw"
+            ],
+            "description": "Target engine preset",
+            "default": "godot"
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "glb",
+              "gltf"
+            ],
+            "description": "Binary GLB (one file) or text glTF (separate assets)",
+            "default": "glb"
+          },
+          "animations": {
+            "type": "boolean",
+            "description": "Include armature actions",
+            "default": true
+          },
+          "draco": {
+            "type": "boolean",
+            "description": "Draco mesh compression \u2014 smaller files, slower load, not all importers support it",
+            "default": false
+          },
+          "strict": {
+            "type": "boolean",
+            "description": "Fail on problems that would corrupt the import instead of warning",
+            "default": true
+          },
+          "rename": {
+            "type": "object",
+            "description": "Names to apply IN THE EXPORTED FILE ONLY, e.g. {\"horse\": \"Horse\", \"m_coat\": \"Coat\", \"gallop\": \"Gallop\"}. Game code often looks up nodes and materials by exact name, and those names break the studio's snake_case rule \u2014 this satisfies both without renaming the master"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "export.meta",
+      "summary": "Write the .meta.json sidecar the studio asset pipeline requires \u2014 id, licence, provenance including AI-generation disclosure, budgets and policies. Without this, `just asset-validate` rejects the asset.",
+      "tags": [
+        "export",
+        "io"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "out": {
+            "type": "string",
+            "description": "Output .meta.json path",
+            "default": "asset.meta.json"
+          },
+          "asset_id": {
+            "type": "string",
+            "description": "snake_case asset identifier"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "prop",
+              "character",
+              "environment",
+              "weapon",
+              "architecture",
+              "vfx",
+              "ui"
+            ],
+            "description": "Asset category",
+            "default": "prop"
+          },
+          "license": {
+            "type": "string",
+            "description": "Licence identifier",
+            "default": "CC-BY-4.0"
+          },
+          "creator": {
+            "type": "string",
+            "description": "Creator name",
+            "default": "bforge"
+          },
+          "source": {
+            "type": "string",
+            "description": "Where the asset came from",
+            "default": "procedural"
+          },
+          "ai_tool": {
+            "type": "string",
+            "description": "AI tool used \u2014 required for honest provenance",
+            "default": "bforge"
+          },
+          "ai_model": {
+            "type": "string",
+            "description": "Model that drove the generation, if any",
+            "default": ""
+          },
+          "ai_prompt": {
+            "type": "string",
+            "description": "Prompt or intent that produced the asset",
+            "default": ""
+          },
+          "triangles": {
+            "type": "integer",
+            "description": "Triangle budget; 0 measures the scene",
+            "default": 0
+          },
+          "materials": {
+            "type": "integer",
+            "description": "Material budget",
+            "default": 2
+          },
+          "collision_policy": {
+            "type": "string",
+            "enum": [
+              "explicit",
+              "auto",
+              "none"
+            ],
+            "description": "Collision policy",
+            "default": "explicit"
+          },
+          "lod_policy": {
+            "type": "string",
+            "enum": [
+              "explicit",
+              "auto",
+              "none"
+            ],
+            "description": "LOD policy",
+            "default": "auto"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "gameready.atlas",
+      "summary": "Merge several objects into one mesh with one shared material and a repacked UV atlas. The most effective draw-call reduction available \u2014 a room of 20 props becomes 1 draw call.",
+      "tags": [
+        "gameready"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "objects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Objects to atlas together"
+          },
+          "name": {
+            "type": "string",
+            "description": "Name for the merged object",
+            "default": "atlas_group"
+          },
+          "margin": {
+            "type": "number",
+            "description": "UV island padding",
+            "default": 0.015
+          },
+          "material": {
+            "type": "string",
+            "description": "Material preset for the merged result",
+            "default": "stone"
+          },
+          "color": {
+            "type": "string",
+            "description": "Override colour",
+            "default": ""
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "gameready.budget",
+      "summary": "Check the scene against a platform triangle/texture budget and say what to do about anything over. Run this before export, every time.",
+      "tags": [
+        "gameready",
+        "inspect"
+      ],
+      "mutates": false,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "profile": {
+            "type": "string",
+            "enum": [
+              "mobile_low",
+              "mobile_high",
+              "browser_webgl",
+              "browser_webgpu",
+              "desktop_high"
+            ],
+            "description": "Target platform profile",
+            "default": "browser_webgpu"
+          },
+          "asset_class": {
+            "type": "string",
+            "enum": [
+              "prop",
+              "character",
+              "environment",
+              "hero"
+            ],
+            "description": "What kind of asset this is",
+            "default": "prop"
+          },
+          "objects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Objects to check (empty = every mesh in the scene)",
+            "default": []
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "gameready.collision",
+      "summary": "Generate a physics collision proxy. Convex hulls are what you want for anything a character walks into; box is cheapest; simplified trimesh is for concave shapes like arenas and rooms. Named <object>-convcol / <object>-col per the studio import convention.",
+      "tags": [
+        "gameready",
+        "physics"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Source object"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "box",
+              "convex",
+              "simplified",
+              "cylinder",
+              "sphere",
+              "capsule"
+            ],
+            "description": "Proxy shape",
+            "default": "convex"
+          },
+          "ratio": {
+            "type": "number",
+            "description": "simplified only: decimation ratio for the trimesh proxy",
+            "default": 0.12
+          },
+          "inflate": {
+            "type": "number",
+            "description": "Grow the proxy by this many metres (stops geometry poking through)",
+            "default": 0.0
+          },
+          "hide": {
+            "type": "boolean",
+            "description": "Hide the proxy from rendering",
+            "default": true
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "gameready.lod",
+      "summary": "Generate a level-of-detail chain by decimation. Ratios are chosen so each level roughly halves the triangle count, which is what LOD switching expects. Named <object>_lod1..N to match the studio import convention.",
+      "tags": [
+        "gameready"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Source object (becomes LOD0)"
+          },
+          "levels": {
+            "type": "integer",
+            "description": "Number of reduced levels to create",
+            "default": 3
+          },
+          "ratios": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "description": "Explicit decimation ratios, e.g. [0.5, 0.25, 0.1]. Empty auto-generates",
+            "default": []
+          },
+          "keep_uvs": {
+            "type": "boolean",
+            "description": "Preserve UV layout while decimating",
+            "default": true
+          },
+          "layout": {
+            "type": "boolean",
+            "description": "Offset each LOD along X for side-by-side review",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "gameready.optimize",
+      "summary": "One-call cleanup pass: weld doubles, drop degenerate faces, recalculate normals, and report what it saved. Safe to run on anything.",
+      "tags": [
+        "gameready",
+        "polish"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "objects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Objects to optimise (empty = every mesh)",
+            "default": []
+          },
+          "merge_distance": {
+            "type": "number",
+            "description": "Vertex weld threshold in metres",
+            "default": 0.0001
+          },
+          "dissolve_flat": {
+            "type": "boolean",
+            "description": "Merge coplanar faces \u2014 cuts triangles but can create n-gons",
+            "default": false
+          },
+          "triangulate": {
+            "type": "boolean",
+            "description": "Triangulate (engines do this anyway; useful for exact counts)",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "gameready.pivot",
+      "summary": "Fix pivots and transforms across many objects at once \u2014 the two things engines get wrong on import and nobody notices until a prop spins about its ankle.",
+      "tags": [
+        "gameready",
+        "transform"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "objects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Objects to fix (empty = every mesh)",
+            "default": []
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "bottom",
+              "center",
+              "center_xy",
+              "world",
+              "none"
+            ],
+            "description": "Pivot placement",
+            "default": "bottom"
+          },
+          "apply_transforms": {
+            "type": "boolean",
+            "description": "Bake rotation and scale into the mesh",
+            "default": true
+          },
+          "snap_to_ground": {
+            "type": "boolean",
+            "description": "Move each object so its lowest point sits at Z=0",
+            "default": false
+          },
+          "to_origin": {
+            "type": "boolean",
+            "description": "Also move the object itself to (0,0,0). Required for a single-asset master file \u2014 the studio validator rejects a root object that is not at the world origin",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "gameready.socket",
+      "summary": "Add a named empty as an attachment socket \u2014 muzzle points, hardpoints, spawn markers, VFX anchors. Engines import empties as nodes you can query by name.",
+      "tags": [
+        "gameready"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Socket name (prefix it, e.g. 'socket_muzzle')"
+          },
+          "parent": {
+            "type": "string",
+            "description": "Object to parent the socket to",
+            "default": ""
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "Position in metres",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "rotation": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "Rotation in degrees",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "size": {
+            "type": "number",
+            "description": "Display size of the empty",
+            "default": 0.1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "kit.piece",
+      "summary": "One modular kit piece with its origin at the grid corner, ready to snap. Build a whole set with kit.set instead if you want more than one.",
+      "tags": [
+        "kit",
+        "architecture"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "floor",
+              "wall",
+              "wall_door",
+              "wall_window",
+              "wall_half",
+              "corner",
+              "pillar",
+              "stairs",
+              "ramp",
+              "roof",
+              "arch",
+              "railing"
+            ],
+            "description": "Piece type",
+            "default": "wall"
+          },
+          "name": {
+            "type": "string",
+            "description": "Object name",
+            "default": ""
+          },
+          "grid": {
+            "type": "number",
+            "description": "Grid module size in metres \u2014 use ONE value across the whole kit",
+            "default": 4.0
+          },
+          "height": {
+            "type": "number",
+            "description": "Wall/storey height in metres",
+            "default": 3.0
+          },
+          "thickness": {
+            "type": "number",
+            "description": "Wall thickness in metres",
+            "default": 0.25
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World position",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "material": {
+            "type": "string",
+            "description": "Material preset",
+            "default": "stone"
+          },
+          "color": {
+            "type": "string",
+            "description": "Override colour",
+            "default": ""
+          },
+          "uv_scale": {
+            "type": "number",
+            "description": "Metres per UV tile \u2014 MUST match across the kit",
+            "default": 2.0
+          },
+          "detail": {
+            "type": "boolean",
+            "description": "Extra edge loops for later greebling",
+            "default": false
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Random seed",
+            "default": 0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "kit.room",
+      "summary": "Assemble a closed room from kit pieces: floor, four walls with a door and windows, optional pillars and roof. Produces a playable space, not just parts.",
+      "tags": [
+        "kit",
+        "architecture"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Name for the assembled room",
+            "default": "room"
+          },
+          "size": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "description": "Room size in grid modules [x, y]",
+            "default": [
+              3,
+              3
+            ]
+          },
+          "grid": {
+            "type": "number",
+            "description": "Grid module size in metres",
+            "default": 4.0
+          },
+          "height": {
+            "type": "number",
+            "description": "Wall height in metres",
+            "default": 3.0
+          },
+          "thickness": {
+            "type": "number",
+            "description": "Wall thickness in metres",
+            "default": 0.25
+          },
+          "doors": {
+            "type": "integer",
+            "description": "Number of doorway modules to cut into the walls",
+            "default": 1
+          },
+          "windows": {
+            "type": "integer",
+            "description": "Number of window modules",
+            "default": 2
+          },
+          "pillars": {
+            "type": "boolean",
+            "description": "Corner pillars",
+            "default": true
+          },
+          "roof": {
+            "type": "boolean",
+            "description": "Add a pitched roof",
+            "default": false
+          },
+          "material": {
+            "type": "string",
+            "description": "Material preset",
+            "default": "stone"
+          },
+          "color": {
+            "type": "string",
+            "description": "Override colour",
+            "default": ""
+          },
+          "uv_scale": {
+            "type": "number",
+            "description": "Metres per UV tile",
+            "default": 2.0
+          },
+          "join": {
+            "type": "boolean",
+            "description": "Merge into one mesh (recommended \u2014 one draw call)",
+            "default": true
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Random seed",
+            "default": 0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "kit.set",
+      "summary": "Generate a complete, texel-consistent modular kit in one call \u2014 floor, walls, door, window, corner, pillar, stairs, roof. This is the fastest path from nothing to a level a designer can actually build with.",
+      "tags": [
+        "kit",
+        "architecture"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "prefix": {
+            "type": "string",
+            "description": "Name prefix for every piece",
+            "default": "kit"
+          },
+          "pieces": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Which pieces to generate",
+            "default": [
+              "floor",
+              "wall",
+              "wall_door",
+              "wall_window",
+              "corner",
+              "pillar",
+              "stairs",
+              "roof"
+            ]
+          },
+          "grid": {
+            "type": "number",
+            "description": "Grid module size in metres",
+            "default": 4.0
+          },
+          "height": {
+            "type": "number",
+            "description": "Storey height in metres",
+            "default": 3.0
+          },
+          "thickness": {
+            "type": "number",
+            "description": "Wall thickness in metres",
+            "default": 0.25
+          },
+          "material": {
+            "type": "string",
+            "description": "Shared material preset",
+            "default": "stone"
+          },
+          "color": {
+            "type": "string",
+            "description": "Override colour",
+            "default": ""
+          },
+          "uv_scale": {
+            "type": "number",
+            "description": "Shared metres-per-UV-tile across the whole set",
+            "default": 2.0
+          },
+          "layout": {
+            "type": "boolean",
+            "description": "Lay the pieces out in a row for review rendering",
+            "default": true
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Random seed",
+            "default": 0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "material.bake",
+      "summary": "Bake procedural shading down to an image texture and rewire the material to use it. This is what makes procedural materials shippable.",
+      "tags": [
+        "material",
+        "bake"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "object": {
+            "type": "string",
+            "description": "Object to bake"
+          },
+          "pass_name": {
+            "type": "string",
+            "enum": [
+              "base_color",
+              "normal",
+              "roughness",
+              "ao",
+              "emit",
+              "combined"
+            ],
+            "description": "Which channel to bake",
+            "default": "base_color"
+          },
+          "size": {
+            "type": "integer",
+            "description": "Texture resolution in pixels",
+            "default": 1024
+          },
+          "samples": {
+            "type": "integer",
+            "description": "Cycles samples; 16 is plenty for base colour, raise for AO",
+            "default": 16
+          },
+          "out": {
+            "type": "string",
+            "description": "PNG output path (defaults to textures/<object>_<pass>.png)",
+            "default": ""
+          },
+          "unwrap": {
+            "type": "boolean",
+            "description": "Auto-unwrap first \u2014 baking needs non-overlapping UVs",
+            "default": true
+          },
+          "rewire": {
+            "type": "boolean",
+            "description": "Replace the procedural graph with the baked texture",
+            "default": true
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "material.bake_detail",
+      "summary": "Bake high-poly detail onto a low-poly mesh as a tangent-space normal (or AO) map. This is what makes a cheap mesh read as an expensive one: the silhouette stays low-poly but the surface gets its detail back. Use this instead of material.bake when the detail lives in a separate dense mesh -- material.bake bakes an object onto itself, so its normal pass just reproduces the low-poly's own flat normals.",
+      "tags": [
+        "material",
+        "bake"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "low": {
+            "type": "string",
+            "description": "Low-poly object that receives the texture (needs UVs)"
+          },
+          "high": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "High-poly source object(s) the detail is projected from"
+          },
+          "pass_name": {
+            "type": "string",
+            "enum": [
+              "normal",
+              "ao",
+              "base_color"
+            ],
+            "description": "Which channel to transfer",
+            "default": "normal"
+          },
+          "size": {
+            "type": "integer",
+            "description": "Texture resolution in pixels",
+            "default": 2048
+          },
+          "samples": {
+            "type": "integer",
+            "description": "Cycles samples; raise for AO, 32 is plenty for normals",
+            "default": 32
+          },
+          "cage_extrusion": {
+            "type": "number",
+            "description": "Metres to push the low-poly out before casting rays",
+            "default": 0.02
+          },
+          "max_ray_distance": {
+            "type": "number",
+            "description": "Metres to search for the high-poly surface",
+            "default": 0.05
+          },
+          "out": {
+            "type": "string",
+            "description": "PNG output path (defaults to textures/<low>_<pass>_detail.png)",
+            "default": ""
+          },
+          "attach": {
+            "type": "boolean",
+            "description": "Link the baked map into the low-poly's existing material",
+            "default": true
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "material.bake_pbr",
+      "summary": "Bake a layered material into a real PBR texture set (base colour, normal, roughness, AO) and rewire it as glTF-safe image textures. This is the step that makes a procedurally-surfaced asset actually shippable.",
+      "tags": [
+        "material",
+        "bake",
+        "pbr"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "object": {
+            "type": "string",
+            "description": "Object to bake"
+          },
+          "stem": {
+            "type": "string",
+            "description": "Filename stem (defaults to the object name)",
+            "default": ""
+          },
+          "out_dir": {
+            "type": "string",
+            "description": "Directory for the PNGs",
+            "default": "textures"
+          },
+          "size": {
+            "type": "integer",
+            "description": "Texture resolution per map",
+            "default": 1024
+          },
+          "samples": {
+            "type": "integer",
+            "description": "Cycles samples; AO and normal want more than base colour",
+            "default": 24
+          },
+          "maps": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Which maps to bake",
+            "default": [
+              "base_color",
+              "normal",
+              "roughness",
+              "ao"
+            ]
+          },
+          "unwrap": {
+            "type": "boolean",
+            "description": "Auto-unwrap first \u2014 baking needs non-overlapping UVs",
+            "default": true
+          },
+          "margin": {
+            "type": "integer",
+            "description": "Bake margin in pixels; prevents seams at low mips",
+            "default": 10
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "material.consolidate",
+      "summary": "Merge materials that render identically into one shared material. Composing a scene from many prop recipes leaves a pile of near-duplicate materials, and every distinct material is a draw call \u2014 this collapses them without changing how anything looks.",
+      "tags": [
+        "material",
+        "gameready"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "tolerance": {
+            "type": "number",
+            "description": "How close two materials' colour/roughness/metallic must be to count as the same",
+            "default": 0.02
+          },
+          "objects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Limit to these objects (empty = whole scene)",
+            "default": []
+          },
+          "dry_run": {
+            "type": "boolean",
+            "description": "Report what would merge without changing anything",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "material.face_assign",
+      "summary": "Give a subset of faces its own material \u2014 trim strips, emissive panels, painted details. Selected by world-space direction or height.",
+      "tags": [
+        "material"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "object": {
+            "type": "string",
+            "description": "Object name"
+          },
+          "preset": {
+            "type": "string",
+            "description": "Material preset for the selected faces",
+            "default": "gold"
+          },
+          "select": {
+            "type": "string",
+            "enum": [
+              "up",
+              "down",
+              "sides",
+              "top_band",
+              "bottom_band"
+            ],
+            "description": "Face selection rule",
+            "default": "up"
+          },
+          "band_min": {
+            "type": "number",
+            "description": "top_band/bottom_band: lower bound as a fraction of height",
+            "default": 0.0
+          },
+          "band_max": {
+            "type": "number",
+            "description": "top_band/bottom_band: upper bound as a fraction of height",
+            "default": 1.0
+          },
+          "color": {
+            "type": "string",
+            "description": "Override colour",
+            "default": ""
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "material.list",
+      "summary": "List materials in the file and flag any that glTF cannot export.",
+      "tags": [
+        "material",
+        "inspect"
+      ],
+      "mutates": false,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "material.pbr",
+      "summary": "Apply a layered AAA-grade surface: base albedo, curvature-driven EDGE WEAR, ambient-occlusion-driven CAVITY DIRT, two octaves of micro-detail and non-constant roughness. This is the single biggest jump in perceived quality \u2014 flat-coloured geometry never reads as AAA no matter how good the silhouette. Bake it with material.bake_pbr before export.",
+      "tags": [
+        "material",
+        "pbr"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "object": {
+            "type": "string",
+            "description": "Object to surface"
+          },
+          "base_color": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 4
+              }
+            ],
+            "description": "Base albedo: palette name or #rrggbb",
+            "default": "stone_grey"
+          },
+          "roughness": {
+            "type": "number",
+            "description": "Mid roughness; the layers vary around it",
+            "default": 0.75
+          },
+          "metallic": {
+            "type": "number",
+            "description": "Metallic 0..1",
+            "default": 0.0
+          },
+          "detail_scale": {
+            "type": "number",
+            "description": "Micro-detail frequency \u2014 higher is finer grain",
+            "default": 14.0
+          },
+          "grain": {
+            "type": "number",
+            "description": "How strongly the noise tints the albedo",
+            "default": 0.55
+          },
+          "edge_wear": {
+            "type": "number",
+            "description": "Abrasion on convex edges (0..1). Real objects are worn where they stick out",
+            "default": 0.55
+          },
+          "edge_color": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 4
+              }
+            ],
+            "description": "Colour of worn edges; defaults to a lighter base",
+            "default": ""
+          },
+          "cavity_dirt": {
+            "type": "number",
+            "description": "Grime settled in crevices (0..1)",
+            "default": 0.5
+          },
+          "dirt_color": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 4
+              }
+            ],
+            "description": "Colour of the grime",
+            "default": "#2b2118"
+          },
+          "bump": {
+            "type": "number",
+            "description": "Surface relief strength",
+            "default": 0.35
+          },
+          "name": {
+            "type": "string",
+            "description": "Material name",
+            "default": ""
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Random seed for the noise",
+            "default": 0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "material.procedural",
+      "summary": "Build a noise/voronoi/wave/gradient material. Gives surfaces real variation instead of flat colour \u2014 but it must be baked (material.bake) before it can export to glTF.",
+      "tags": [
+        "material"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "object": {
+            "type": "string",
+            "description": "Object to assign to"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "noise",
+              "voronoi",
+              "wave",
+              "gradient",
+              "checker"
+            ],
+            "description": "Pattern type: noise=rock/dirt, voronoi=cracked stone/scales, wave=wood grain/strata, gradient=vertical fade, checker=UV debug",
+            "default": "noise"
+          },
+          "name": {
+            "type": "string",
+            "description": "Material name",
+            "default": ""
+          },
+          "color_a": {
+            "type": "string",
+            "description": "Low colour: palette name or #rrggbb",
+            "default": "stone_grey"
+          },
+          "color_b": {
+            "type": "string",
+            "description": "High colour: palette name or #rrggbb",
+            "default": "stone_warm"
+          },
+          "scale": {
+            "type": "number",
+            "description": "Pattern scale \u2014 higher is finer",
+            "default": 5.0
+          },
+          "detail": {
+            "type": "number",
+            "description": "Fractal detail levels",
+            "default": 2.0
+          },
+          "roughness": {
+            "type": "number",
+            "description": "Base roughness; the pattern modulates around it",
+            "default": 0.7
+          },
+          "metallic": {
+            "type": "number",
+            "description": "Metallic 0..1",
+            "default": 0.0
+          },
+          "distortion": {
+            "type": "number",
+            "description": "Warps the pattern; makes wood grain and marble believable",
+            "default": 0.0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "material.set",
+      "summary": "Create and assign a PBR material. Prefer a preset name (stone, wood, metal, gold, crystal...) \u2014 the presets have physically sane roughness/metallic values.",
+      "tags": [
+        "material"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "object": {
+            "type": "string",
+            "description": "Object to assign to"
+          },
+          "preset": {
+            "type": "string",
+            "description": "Material preset; see meta.palette for the list",
+            "default": "stone"
+          },
+          "name": {
+            "type": "string",
+            "description": "Material name (defaults to m_<preset>)",
+            "default": ""
+          },
+          "color": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 4
+              }
+            ],
+            "description": "Override colour: palette name, #rrggbb, or a linear [r,g,b] triple",
+            "default": ""
+          },
+          "roughness": {
+            "type": "number",
+            "description": "Override roughness 0..1; -1 keeps the preset value",
+            "default": -1.0
+          },
+          "metallic": {
+            "type": "number",
+            "description": "Override metallic 0..1; -1 keeps the preset value",
+            "default": -1.0
+          },
+          "emission": {
+            "type": "number",
+            "description": "Emission strength; -1 keeps the preset value",
+            "default": -1.0
+          },
+          "slot": {
+            "type": "integer",
+            "description": "Material slot index",
+            "default": 0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "meta.help",
+      "summary": "Full parameter schema and defaults for one operation.",
+      "tags": [
+        "meta"
+      ],
+      "mutates": false,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Op name, e.g. 'prop.crate'"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "meta.ops",
+      "summary": "List every available operation with its parameters. Call this first if you are unsure what exists.",
+      "tags": [
+        "meta"
+      ],
+      "mutates": false,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "tag": {
+            "type": "string",
+            "description": "Filter by tag (session, build, prop, kit, env, char, gameready, render, export, check)",
+            "default": ""
+          },
+          "search": {
+            "type": "string",
+            "description": "Filter by substring in the op name or summary",
+            "default": ""
+          },
+          "detail": {
+            "type": "string",
+            "enum": [
+              "names",
+              "summary",
+              "schema"
+            ],
+            "description": "How much to return per op",
+            "default": "summary"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "meta.palette",
+      "summary": "The studio colour palette and material presets. Use these names instead of inventing colours \u2014 palette discipline is what makes a set of assets look like one game.",
+      "tags": [
+        "meta"
+      ],
+      "mutates": false,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "object.delete",
+      "summary": "Remove objects from the scene.",
+      "tags": [
+        "transform"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "names": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Objects to delete"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "object.duplicate",
+      "summary": "Copy an object, optionally placing the copy in one call.",
+      "tags": [
+        "transform"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Source object"
+          },
+          "new_name": {
+            "type": "string",
+            "description": "Name for the copy (auto-derived when empty)",
+            "default": ""
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "Where to put the copy"
+          },
+          "rotation": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "Copy's rotation in degrees"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "object.inspect",
+      "summary": "Detailed report for one object: topology, UV quality, texel density, materials, bounds.",
+      "tags": [
+        "inspect"
+      ],
+      "mutates": false,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name"
+          },
+          "texture_size": {
+            "type": "integer",
+            "description": "Texture resolution used for the texel-density figure",
+            "default": 1024
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "object.join",
+      "summary": "Merge several meshes into one object, de-duplicating material slots. Fewer objects means fewer draw calls.",
+      "tags": [
+        "transform"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "names": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Objects to merge (the first one's transform wins)"
+          },
+          "into": {
+            "type": "string",
+            "description": "Name for the merged result",
+            "default": ""
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "object.list",
+      "summary": "List object names in the scene, optionally filtered by a name prefix.",
+      "tags": [
+        "inspect"
+      ],
+      "mutates": false,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "prefix": {
+            "type": "string",
+            "description": "Only return names starting with this",
+            "default": ""
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "object.origin",
+      "summary": "Set an object's pivot. Use 'bottom' for floor props, 'center' for pickups, 'world' for modular kit pieces.",
+      "tags": [
+        "transform"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "bottom",
+              "center",
+              "center_xy",
+              "world"
+            ],
+            "description": "Where the pivot goes",
+            "default": "bottom"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "object.rename",
+      "summary": "Rename an object, coercing the new name to the studio's snake_case convention.",
+      "tags": [
+        "transform"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Current name"
+          },
+          "to": {
+            "type": "string",
+            "description": "Desired name"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "object.shade",
+      "summary": "Set smooth or flat shading. Smooth shading with an angle threshold is what makes curved props read as curved.",
+      "tags": [
+        "shading"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "smooth",
+              "flat"
+            ],
+            "description": "Shading mode",
+            "default": "smooth"
+          },
+          "angle": {
+            "type": "number",
+            "description": "Edges sharper than this angle (degrees) stay hard",
+            "default": 35.0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "object.transform",
+      "summary": "Move, rotate or scale an object. Rotation is in degrees.",
+      "tags": [
+        "transform"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name"
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World position in metres"
+          },
+          "rotation": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "Euler XYZ rotation in degrees"
+          },
+          "scale": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "Per-axis scale multiplier"
+          },
+          "apply": {
+            "type": "boolean",
+            "description": "Bake rotation+scale into mesh data (required before export)",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "prop.banner",
+      "summary": "Hanging banner or flag with a cloth wave. ~180 tris. Cheap way to add faction identity and colour to grey architecture.",
+      "tags": [
+        "prop",
+        "architecture"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name (defaults to the recipe name)",
+            "default": ""
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World position in metres",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Random seed \u2014 same seed always gives the same asset",
+            "default": 0
+          },
+          "size": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2,
+            "maxItems": 2,
+            "description": "Cloth width and drop in metres",
+            "default": [
+              0.9,
+              1.8
+            ]
+          },
+          "wave": {
+            "type": "number",
+            "description": "Wave amplitude in metres",
+            "default": 0.09
+          },
+          "segments": {
+            "type": "integer",
+            "description": "Vertical cloth segments",
+            "default": 8
+          },
+          "pole": {
+            "type": "boolean",
+            "description": "Include a crossbar pole",
+            "default": true
+          },
+          "material": {
+            "type": "string",
+            "description": "Cloth material preset",
+            "default": "cloth"
+          },
+          "color": {
+            "type": "string",
+            "description": "Cloth colour",
+            "default": "cloth_red"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "prop.barrel",
+      "summary": "Lathed barrel with a belly and iron bands. ~500 tris. Bands get their own material slot so they can read as metal.",
+      "tags": [
+        "prop"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name (defaults to the recipe name)",
+            "default": ""
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World position in metres",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Random seed \u2014 same seed always gives the same asset",
+            "default": 0
+          },
+          "height": {
+            "type": "number",
+            "description": "Height in metres",
+            "default": 1.0
+          },
+          "radius": {
+            "type": "number",
+            "description": "Radius at the widest point",
+            "default": 0.32
+          },
+          "belly": {
+            "type": "number",
+            "description": "How much the middle bulges (0 = straight cylinder)",
+            "default": 0.18
+          },
+          "segments": {
+            "type": "integer",
+            "description": "Radial segments",
+            "default": 14
+          },
+          "bands": {
+            "type": "integer",
+            "description": "Number of iron hoops",
+            "default": 2
+          },
+          "band_material": {
+            "type": "string",
+            "description": "Hoop material preset",
+            "default": "iron"
+          },
+          "material": {
+            "type": "string",
+            "description": "Barrel material preset",
+            "default": "wood"
+          },
+          "color": {
+            "type": "string",
+            "description": "Override colour",
+            "default": ""
+          },
+          "open_top": {
+            "type": "boolean",
+            "description": "Hollow out the top (for water butts, planters)",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "prop.chest",
+      "summary": "Treasure chest with a curved lid, iron banding and a lock plate. ~700 tris. Lid is a separate object so it can be hinged and animated.",
+      "tags": [
+        "prop"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name (defaults to the recipe name)",
+            "default": ""
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World position in metres",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Random seed \u2014 same seed always gives the same asset",
+            "default": 0
+          },
+          "size": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "Base dimensions (lid adds height on top)",
+            "default": [
+              0.9,
+              0.55,
+              0.45
+            ]
+          },
+          "lid_height": {
+            "type": "number",
+            "description": "Height of the curved lid",
+            "default": 0.22
+          },
+          "lid_segments": {
+            "type": "integer",
+            "description": "Lid curvature resolution",
+            "default": 8
+          },
+          "separate_lid": {
+            "type": "boolean",
+            "description": "Keep the lid as its own object for hinge animation",
+            "default": true
+          },
+          "material": {
+            "type": "string",
+            "description": "Body material preset",
+            "default": "wood"
+          },
+          "trim_material": {
+            "type": "string",
+            "description": "Banding and lock material preset",
+            "default": "iron"
+          },
+          "color": {
+            "type": "string",
+            "description": "Override body colour",
+            "default": ""
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "prop.crate",
+      "summary": "Wooden crate with a recessed-panel frame. ~350 tris. The frame is what makes it read as a crate rather than a box.",
+      "tags": [
+        "prop"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name (defaults to the recipe name)",
+            "default": ""
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World position in metres",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Random seed \u2014 same seed always gives the same asset",
+            "default": 0
+          },
+          "size": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "Outer dimensions in metres",
+            "default": [
+              0.8,
+              0.8,
+              0.8
+            ]
+          },
+          "frame_width": {
+            "type": "number",
+            "description": "Width of the corner/edge framing",
+            "default": 0.07
+          },
+          "panel_depth": {
+            "type": "number",
+            "description": "How far the panels recess",
+            "default": 0.03
+          },
+          "planks": {
+            "type": "integer",
+            "description": "Horizontal plank divisions per panel (0 for plain)",
+            "default": 2
+          },
+          "bevel": {
+            "type": "number",
+            "description": "Edge chamfer width",
+            "default": 0.012
+          },
+          "material": {
+            "type": "string",
+            "description": "Material preset",
+            "default": "wood"
+          },
+          "color": {
+            "type": "string",
+            "description": "Override colour",
+            "default": ""
+          },
+          "uv_scale": {
+            "type": "number",
+            "description": "Metres per UV tile",
+            "default": 1.0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "prop.crystal",
+      "summary": "Crystal cluster: several tapered prisms fanned from a common base. ~300 tris. Emissive by default \u2014 reads as a light source and a landmark.",
+      "tags": [
+        "prop",
+        "nature"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name (defaults to the recipe name)",
+            "default": ""
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World position in metres",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Random seed \u2014 same seed always gives the same asset",
+            "default": 0
+          },
+          "count": {
+            "type": "integer",
+            "description": "Number of shards",
+            "default": 5
+          },
+          "height": {
+            "type": "number",
+            "description": "Tallest shard height in metres",
+            "default": 1.0
+          },
+          "radius": {
+            "type": "number",
+            "description": "Shard base radius",
+            "default": 0.16
+          },
+          "sides": {
+            "type": "integer",
+            "description": "Shard cross-section sides",
+            "default": 6
+          },
+          "spread": {
+            "type": "number",
+            "description": "Maximum lean from vertical, in degrees",
+            "default": 28.0
+          },
+          "material": {
+            "type": "string",
+            "description": "Material preset",
+            "default": "crystal"
+          },
+          "color": {
+            "type": "string",
+            "description": "Override colour",
+            "default": ""
+          },
+          "emission": {
+            "type": "number",
+            "description": "Glow strength",
+            "default": 1.2
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "prop.debris",
+      "summary": "Scattered rubble field: broken stone, planks and dust chunks around a point. ~50 tris per piece. Turns a clean floor into a fought-over one.",
+      "tags": [
+        "prop",
+        "nature"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name (defaults to the recipe name)",
+            "default": ""
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World position in metres",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Random seed \u2014 same seed always gives the same asset",
+            "default": 0
+          },
+          "count": {
+            "type": "integer",
+            "description": "Number of pieces",
+            "default": 9
+          },
+          "radius": {
+            "type": "number",
+            "description": "Scatter radius in metres",
+            "default": 1.5
+          },
+          "piece_size": {
+            "type": "number",
+            "description": "Average piece size",
+            "default": 0.22
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "stone",
+              "wood",
+              "mixed"
+            ],
+            "description": "Debris type",
+            "default": "stone"
+          },
+          "material": {
+            "type": "string",
+            "description": "Material preset override",
+            "default": ""
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "prop.fence",
+      "summary": "Fence run with posts and rails. ~40 tris per metre. Blocks player movement and sells scale better than almost any other cheap prop.",
+      "tags": [
+        "prop",
+        "architecture"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name (defaults to the recipe name)",
+            "default": ""
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World position in metres",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Random seed \u2014 same seed always gives the same asset",
+            "default": 0
+          },
+          "length": {
+            "type": "number",
+            "description": "Total run length in metres",
+            "default": 4.0
+          },
+          "height": {
+            "type": "number",
+            "description": "Fence height",
+            "default": 1.1
+          },
+          "style": {
+            "type": "string",
+            "enum": [
+              "picket",
+              "rail",
+              "palisade",
+              "iron"
+            ],
+            "description": "Fence style",
+            "default": "rail"
+          },
+          "post_spacing": {
+            "type": "number",
+            "description": "Distance between posts",
+            "default": 1.3
+          },
+          "material": {
+            "type": "string",
+            "description": "Material preset",
+            "default": "wood"
+          },
+          "color": {
+            "type": "string",
+            "description": "Override colour",
+            "default": ""
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "prop.furniture",
+      "summary": "Table, bench, stool, shelf or bed frame. ~200 tris. The set dressing that makes an interior look inhabited.",
+      "tags": [
+        "prop",
+        "furniture"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name (defaults to the recipe name)",
+            "default": ""
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World position in metres",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Random seed \u2014 same seed always gives the same asset",
+            "default": 0
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "table",
+              "bench",
+              "stool",
+              "shelf",
+              "bed"
+            ],
+            "description": "Furniture type",
+            "default": "table"
+          },
+          "size": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "Overall dimensions in metres",
+            "default": [
+              1.6,
+              0.8,
+              0.78
+            ]
+          },
+          "leg_radius": {
+            "type": "number",
+            "description": "Leg thickness",
+            "default": 0.05
+          },
+          "round_legs": {
+            "type": "boolean",
+            "description": "Turned/round legs instead of square",
+            "default": false
+          },
+          "material": {
+            "type": "string",
+            "description": "Material preset",
+            "default": "wood"
+          },
+          "color": {
+            "type": "string",
+            "description": "Override colour",
+            "default": ""
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "prop.pillar",
+      "summary": "Classical column: base, tapered shaft, capital, optional fluting. ~600 tris. Instant architecture.",
+      "tags": [
+        "prop",
+        "architecture"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name (defaults to the recipe name)",
+            "default": ""
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World position in metres",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Random seed \u2014 same seed always gives the same asset",
+            "default": 0
+          },
+          "height": {
+            "type": "number",
+            "description": "Total height in metres",
+            "default": 3.0
+          },
+          "radius": {
+            "type": "number",
+            "description": "Shaft radius",
+            "default": 0.28
+          },
+          "style": {
+            "type": "string",
+            "enum": [
+              "doric",
+              "tuscan",
+              "square",
+              "broken"
+            ],
+            "description": "Column style",
+            "default": "doric"
+          },
+          "flutes": {
+            "type": "integer",
+            "description": "Vertical grooves (0 = smooth). 16-20 is classical",
+            "default": 0
+          },
+          "segments": {
+            "type": "integer",
+            "description": "Radial segments",
+            "default": 16
+          },
+          "material": {
+            "type": "string",
+            "description": "Material preset",
+            "default": "stone"
+          },
+          "color": {
+            "type": "string",
+            "description": "Override colour",
+            "default": ""
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "prop.rock",
+      "summary": "Irregular rock with a flat base so it sits on the ground instead of floating. ~200 tris at detail 2. The single most reused environment prop in any game.",
+      "tags": [
+        "prop",
+        "nature"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name (defaults to the recipe name)",
+            "default": ""
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World position in metres",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Random seed \u2014 same seed always gives the same asset",
+            "default": 0
+          },
+          "size": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "Bounding dimensions in metres",
+            "default": [
+              1.0,
+              0.85,
+              0.7
+            ]
+          },
+          "detail": {
+            "type": "integer",
+            "description": "Icosphere subdivisions: 1=80 tris, 2=320, 3=1280",
+            "default": 2
+          },
+          "roughness": {
+            "type": "number",
+            "description": "Surface irregularity (0 = smooth boulder, 0.5 = jagged)",
+            "default": 0.28
+          },
+          "flatten_base": {
+            "type": "boolean",
+            "description": "Cut a flat bottom so it beds into terrain",
+            "default": true
+          },
+          "angular": {
+            "type": "boolean",
+            "description": "Faceted/low-poly look instead of smooth",
+            "default": false
+          },
+          "material": {
+            "type": "string",
+            "description": "Material preset",
+            "default": "rock"
+          },
+          "color": {
+            "type": "string",
+            "description": "Override colour",
+            "default": ""
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "prop.sack",
+      "summary": "Cloth sack, cinched at the neck. ~400 tris. Good filler for markets, camps and storerooms.",
+      "tags": [
+        "prop"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name (defaults to the recipe name)",
+            "default": ""
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World position in metres",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Random seed \u2014 same seed always gives the same asset",
+            "default": 0
+          },
+          "height": {
+            "type": "number",
+            "description": "Height in metres",
+            "default": 0.7
+          },
+          "radius": {
+            "type": "number",
+            "description": "Body radius",
+            "default": 0.26
+          },
+          "segments": {
+            "type": "integer",
+            "description": "Radial segments",
+            "default": 12
+          },
+          "slump": {
+            "type": "number",
+            "description": "How much the body sags and spreads at the base",
+            "default": 0.25
+          },
+          "material": {
+            "type": "string",
+            "description": "Material preset",
+            "default": "cloth"
+          },
+          "color": {
+            "type": "string",
+            "description": "Colour",
+            "default": "sand"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "prop.torch",
+      "summary": "Wall torch or standing brazier with an emissive flame. ~250 tris. Emissive props double as level-design landmarks.",
+      "tags": [
+        "prop",
+        "architecture",
+        "light"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name (defaults to the recipe name)",
+            "default": ""
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World position in metres",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Random seed \u2014 same seed always gives the same asset",
+            "default": 0
+          },
+          "style": {
+            "type": "string",
+            "enum": [
+              "wall",
+              "standing",
+              "brazier"
+            ],
+            "description": "Mounting style",
+            "default": "wall"
+          },
+          "height": {
+            "type": "number",
+            "description": "Length or height in metres",
+            "default": 0.6
+          },
+          "flame_color": {
+            "type": "string",
+            "description": "Flame colour",
+            "default": "ember"
+          },
+          "emission": {
+            "type": "number",
+            "description": "Flame emission strength",
+            "default": 6.0
+          },
+          "material": {
+            "type": "string",
+            "description": "Body material preset",
+            "default": "iron"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "prop.tree",
+      "summary": "Stylised low-poly tree: tapered trunk plus layered canopy. ~450 tris. Canopy is a separate material slot so it can take a foliage/alpha shader.",
+      "tags": [
+        "prop",
+        "nature"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name (defaults to the recipe name)",
+            "default": ""
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World position in metres",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Random seed \u2014 same seed always gives the same asset",
+            "default": 0
+          },
+          "height": {
+            "type": "number",
+            "description": "Total height in metres",
+            "default": 4.0
+          },
+          "trunk_radius": {
+            "type": "number",
+            "description": "Trunk radius at the base",
+            "default": 0.18
+          },
+          "canopy_style": {
+            "type": "string",
+            "enum": [
+              "cone",
+              "blob",
+              "layered",
+              "palm"
+            ],
+            "description": "Canopy shape",
+            "default": "layered"
+          },
+          "canopy_layers": {
+            "type": "integer",
+            "description": "layered style: number of tiers",
+            "default": 3
+          },
+          "canopy_radius": {
+            "type": "number",
+            "description": "Canopy spread in metres",
+            "default": 1.4
+          },
+          "lean": {
+            "type": "number",
+            "description": "Trunk lean in degrees \u2014 a perfectly vertical tree looks fake",
+            "default": 4.0
+          },
+          "trunk_material": {
+            "type": "string",
+            "description": "Trunk material preset",
+            "default": "wood"
+          },
+          "leaf_material": {
+            "type": "string",
+            "description": "Canopy material preset",
+            "default": "leaf"
+          },
+          "leaf_color": {
+            "type": "string",
+            "description": "Override canopy colour",
+            "default": ""
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "prop.weapon",
+      "summary": "Sword, axe, spear, hammer or shield built from a blade/haft/grip breakdown. ~400 tris. Pivot sits at the grip so it parents straight to a hand bone.",
+      "tags": [
+        "prop",
+        "weapon"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name (defaults to the recipe name)",
+            "default": ""
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World position in metres",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Random seed \u2014 same seed always gives the same asset",
+            "default": 0
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "sword",
+              "axe",
+              "spear",
+              "hammer",
+              "shield",
+              "dagger"
+            ],
+            "description": "Weapon type",
+            "default": "sword"
+          },
+          "length": {
+            "type": "number",
+            "description": "Overall length in metres",
+            "default": 1.0
+          },
+          "blade_width": {
+            "type": "number",
+            "description": "Blade or head width",
+            "default": 0.09
+          },
+          "metal": {
+            "type": "string",
+            "description": "Blade material preset",
+            "default": "iron"
+          },
+          "grip": {
+            "type": "string",
+            "description": "Handle material preset",
+            "default": "wood"
+          },
+          "color": {
+            "type": "string",
+            "description": "Override blade colour",
+            "default": ""
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "render.camera",
+      "summary": "Render from an explicit camera position and target. Auto-framing always fits the WHOLE subject, which is useless on a 700 m stadium or a 40 m terrain \u2014 this is how you get a close-up, an eye-level gameplay view, or a hero shot.",
+      "tags": [
+        "render"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "out": {
+            "type": "string",
+            "description": "PNG output path",
+            "default": "shot.png"
+          },
+          "position": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "Camera position in metres"
+          },
+          "target": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "Point to look at",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "lens": {
+            "type": "number",
+            "description": "Focal length in mm \u2014 24 is wide, 50 neutral, 105 compressed",
+            "default": 50.0
+          },
+          "resolution": {
+            "type": "integer",
+            "description": "Width in pixels",
+            "default": 640
+          },
+          "aspect": {
+            "type": "number",
+            "description": "Width / height. Use 1.78 for a 16:9 gameplay framing",
+            "default": 1.0
+          },
+          "samples": {
+            "type": "integer",
+            "description": "Render samples",
+            "default": 32
+          },
+          "engine": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "cycles",
+              "eevee"
+            ],
+            "description": "Render engine",
+            "default": "auto"
+          },
+          "light_distance": {
+            "type": "number",
+            "description": "Light rig scale in metres; 0 fits it to the whole scene",
+            "default": 0.0
+          },
+          "world_light": {
+            "type": "number",
+            "description": "Ambient dome strength. Higher fills shadows but piles white specular sheen onto every surface, which washes out saturated albedo",
+            "default": 0.32
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "render.cinematic",
+      "summary": "A film-grade beauty render: physical sun and sky, global illumination, atmospheric haze, depth of field and a filmic tonemap. render.view and render.camera are flat REVIEW rigs built to judge albedo honestly; this one is built to show the asset at its best, and it is the render that tells you whether the art actually holds up.",
+      "tags": [
+        "render"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "out": {
+            "type": "string",
+            "description": "PNG output path",
+            "default": "hero.png"
+          },
+          "position": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "Camera position in metres"
+          },
+          "target": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "Point to look at",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "lens": {
+            "type": "number",
+            "description": "Focal length in mm",
+            "default": 40.0
+          },
+          "resolution": {
+            "type": "integer",
+            "description": "Width in pixels",
+            "default": 1280
+          },
+          "aspect": {
+            "type": "number",
+            "description": "Width / height. 2.39 is anamorphic, 1.78 is 16:9",
+            "default": 2.39
+          },
+          "samples": {
+            "type": "integer",
+            "description": "Path-tracing samples. This is a beauty render; it costs time",
+            "default": 96
+          },
+          "sun_energy": {
+            "type": "number",
+            "description": "Sun strength in W/m2. 3-6 reads as hard daylight",
+            "default": 4.0
+          },
+          "sun_angle": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2,
+            "maxItems": 2,
+            "description": "Sun elevation and azimuth in degrees. Low sun = long shadows",
+            "default": [
+              52.0,
+              35.0
+            ]
+          },
+          "sun_color": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 4
+              }
+            ],
+            "description": "Sunlight colour; warmer at low elevation",
+            "default": "#fff2dc"
+          },
+          "sky_color": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 4
+              }
+            ],
+            "description": "Zenith sky colour, which is also the fill light",
+            "default": "#6fa3dc"
+          },
+          "horizon_color": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 4
+              }
+            ],
+            "description": "Horizon haze colour",
+            "default": "#e8dcc0"
+          },
+          "sky_strength": {
+            "type": "number",
+            "description": "Sky/ambient strength",
+            "default": 1.1
+          },
+          "haze": {
+            "type": "number",
+            "description": "Volumetric atmosphere density. 0.0005-0.004 separates distant forms; costs render time",
+            "default": 0.0
+          },
+          "focus": {
+            "type": "number",
+            "description": "Depth of field focus distance; 0 measures it to the target",
+            "default": 0.0
+          },
+          "aperture": {
+            "type": "number",
+            "description": "f-stop. 0 disables depth of field. 2.8 is shallow, 8 is deep",
+            "default": 0.0
+          },
+          "bounces": {
+            "type": "integer",
+            "description": "Light bounces. GI is most of what makes a render look expensive",
+            "default": 6
+          },
+          "exposure": {
+            "type": "number",
+            "description": "Exposure compensation in stops",
+            "default": 0.0
+          },
+          "look": {
+            "type": "string",
+            "enum": [
+              "filmic",
+              "agx",
+              "standard",
+              "contrast"
+            ],
+            "description": "View transform. Filmic/AgX roll off highlights like film; standard clips them",
+            "default": "agx"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "render.contact_sheet",
+      "summary": "THE review image. Renders hero/front/side/top plus a wireframe pass (shows topology and wasted triangles) and a checker pass (shows UV stretch and texel-density mismatches), composited into one PNG. Look at this after generating anything \u2014 it is how you catch problems a triangle count cannot show.",
+      "tags": [
+        "render",
+        "inspect"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "out": {
+            "type": "string",
+            "description": "PNG output path",
+            "default": "contact_sheet.png"
+          },
+          "objects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Objects to review (empty = whole scene)",
+            "default": []
+          },
+          "tile": {
+            "type": "integer",
+            "description": "Pixel size of each tile",
+            "default": 400
+          },
+          "samples": {
+            "type": "integer",
+            "description": "Render samples per tile",
+            "default": 20
+          },
+          "engine": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "cycles",
+              "eevee"
+            ],
+            "description": "Render engine",
+            "default": "auto"
+          },
+          "panels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Which panels to include",
+            "default": [
+              "hero",
+              "front",
+              "left",
+              "top",
+              "wireframe",
+              "checker"
+            ]
+          },
+          "columns": {
+            "type": "integer",
+            "description": "Tiles per row",
+            "default": 3
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "render.turntable",
+      "summary": "Render an orbit of frames around the subject. Use when a single angle cannot settle whether a silhouette works.",
+      "tags": [
+        "render"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "out_dir": {
+            "type": "string",
+            "description": "Directory for the frames",
+            "default": "turntable"
+          },
+          "objects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Objects to frame (empty = whole scene)",
+            "default": []
+          },
+          "frames": {
+            "type": "integer",
+            "description": "Number of orbit steps",
+            "default": 8
+          },
+          "resolution": {
+            "type": "integer",
+            "description": "Square resolution per frame",
+            "default": 384
+          },
+          "samples": {
+            "type": "integer",
+            "description": "Render samples",
+            "default": 16
+          },
+          "elevation": {
+            "type": "number",
+            "description": "Camera elevation in degrees",
+            "default": 22.0
+          },
+          "engine": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "cycles",
+              "eevee"
+            ],
+            "description": "Render engine",
+            "default": "auto"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "render.view",
+      "summary": "Render one framed view of the scene or of specific objects. The camera and a three-point light rig are auto-fitted to the subject, so you never get an empty or blown-out frame.",
+      "tags": [
+        "render"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "out": {
+            "type": "string",
+            "description": "PNG output path",
+            "default": "preview.png"
+          },
+          "objects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Objects to frame and show (empty = whole scene)",
+            "default": []
+          },
+          "view": {
+            "type": "string",
+            "enum": [
+              "hero",
+              "front",
+              "back",
+              "left",
+              "right",
+              "top",
+              "low"
+            ],
+            "description": "Camera angle",
+            "default": "hero"
+          },
+          "resolution": {
+            "type": "integer",
+            "description": "Square render resolution in pixels",
+            "default": 512
+          },
+          "samples": {
+            "type": "integer",
+            "description": "Render samples \u2014 24 is enough to judge form",
+            "default": 24
+          },
+          "engine": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "cycles",
+              "eevee"
+            ],
+            "description": "Render engine. 'auto' means Cycles/CPU, which is the only one that works without a GPU context; 'eevee' is faster but crashes headless on machines with no display server",
+            "default": "auto"
+          },
+          "ortho": {
+            "type": "boolean",
+            "description": "Orthographic projection (right for front/side/top reference)",
+            "default": false
+          },
+          "world_light": {
+            "type": "number",
+            "description": "Ambient dome strength. Higher fills shadows but piles white specular sheen onto every surface, which washes out saturated albedo",
+            "default": 0.32
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "rig.keyframe",
+      "summary": "Author an animation clip from explicit per-frame bone poses. Give the poses that define the motion and let the interpolation do the rest \u2014 this is how a real cycle is built, not by driving bones with sine waves.",
+      "tags": [
+        "rig",
+        "anim",
+        "char"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "rig": {
+            "type": "string",
+            "description": "Armature object"
+          },
+          "action": {
+            "type": "string",
+            "description": "Action (clip) name",
+            "default": "action"
+          },
+          "keys": {
+            "type": "object",
+            "description": "{\"1\": {\"spine\": [rx, ry, rz]}, \"12\": {...}} \u2014 frame -> bone -> XYZ degrees"
+          },
+          "locations": {
+            "type": "object",
+            "description": "Optional {\"frame\": {\"bone\": [x, y, z]}} bone translations in metres"
+          },
+          "length": {
+            "type": "integer",
+            "description": "Clip length in frames",
+            "default": 24
+          },
+          "loop": {
+            "type": "boolean",
+            "description": "Match the last frame to the first so the clip cycles seamlessly",
+            "default": true
+          },
+          "interpolation": {
+            "type": "string",
+            "enum": [
+              "BEZIER",
+              "LINEAR",
+              "CONSTANT"
+            ],
+            "description": "Keyframe interpolation",
+            "default": "BEZIER"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "rig.mirror_bones",
+      "summary": "Duplicate a set of bones mirrored across an axis, renaming _l to _r (or vice versa). Halves the work of describing a symmetrical skeleton.",
+      "tags": [
+        "rig"
+      ],
+      "mutates": false,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "bones": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "Bone specs to mirror, same shape as rig.skeleton"
+          },
+          "axis": {
+            "type": "string",
+            "enum": [
+              "x",
+              "y",
+              "z"
+            ],
+            "description": "Axis to mirror across",
+            "default": "x"
+          },
+          "from_suffix": {
+            "type": "string",
+            "description": "Suffix on the source bones",
+            "default": "_l"
+          },
+          "to_suffix": {
+            "type": "string",
+            "description": "Suffix for the mirrored copies",
+            "default": "_r"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "rig.skeleton",
+      "summary": "Build an armature from an explicit bone list \u2014 any creature, not just humanoids. Each bone is {name, head:[x,y,z], tail:[x,y,z], parent}. Exactly one bone may be parentless, because engines and the studio validator both require a single root.",
+      "tags": [
+        "rig",
+        "char"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Armature object name",
+            "default": "rig"
+          },
+          "bones": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "Bones: [{\"name\": \"spine\", \"head\": [0,0,1], \"tail\": [0,0.3,1], \"parent\": \"\"}, ...]"
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "Armature position in metres",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "rig.skin",
+      "summary": "Bind a mesh to an armature using distance-to-bone falloff weights. Works on any skeleton and never fails the way Blender's bone-heat solver does on a non-watertight mesh.",
+      "tags": [
+        "rig",
+        "char"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "mesh": {
+            "type": "string",
+            "description": "Mesh object to bind"
+          },
+          "rig": {
+            "type": "string",
+            "description": "Armature object"
+          },
+          "falloff": {
+            "type": "number",
+            "description": "Weight sharpness; higher is more rigid, lower is smoother",
+            "default": 2.0
+          },
+          "influences": {
+            "type": "integer",
+            "description": "Bones influencing each vertex (2 is right for game skins)",
+            "default": 2
+          },
+          "only_bones": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Restrict binding to these bones (empty = all deform bones)",
+            "default": []
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "session.import",
+      "summary": "Import an existing glTF/GLB, OBJ, FBX or .blend into the current scene. Use this to inspect, critique, fix or extend assets a game already ships \u2014 not just ones you generated.",
+      "tags": [
+        "session",
+        "io"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "File to import (.glb/.gltf/.obj/.fbx/.blend)"
+          },
+          "prefix": {
+            "type": "string",
+            "description": "Rename imported objects with this prefix (keeps names snake_case)",
+            "default": ""
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "Offset to place the import at",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "reset_first": {
+            "type": "boolean",
+            "description": "Clear the scene before importing",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "session.info",
+      "summary": "Full scene report: every object with triangle counts, materials, UVs and bounds. Cheap; call it often.",
+      "tags": [
+        "session",
+        "inspect"
+      ],
+      "mutates": false,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "detail": {
+            "type": "string",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "description": "'full' adds per-object UV statistics",
+            "default": "summary"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "session.open",
+      "summary": "Load an existing .blend so you can inspect, fix or extend an asset instead of rebuilding it.",
+      "tags": [
+        "session",
+        "io"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Path to a .blend file"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "session.reset",
+      "summary": "Clear the scene to a deterministic empty metric-unit state. Start every new asset with this.",
+      "tags": [
+        "session"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "unit_scale": {
+            "type": "number",
+            "description": "Blender unit scale; keep 1.0 = 1 metre for game engines",
+            "default": 1.0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "session.restore",
+      "summary": "Roll the scene back to a snapshot taken earlier in this session.",
+      "tags": [
+        "session"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Checkpoint label passed to session.snapshot",
+            "default": "default"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "session.save",
+      "summary": "Write the scene to a .blend master file (the committed source of truth in ADR 0006).",
+      "tags": [
+        "session",
+        "io"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Output .blend path; relative paths land under the output dir",
+            "default": "asset.blend"
+          },
+          "compress": {
+            "type": "boolean",
+            "description": "Zstd-compress the .blend",
+            "default": true
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "session.snapshot",
+      "summary": "Save an in-memory scene checkpoint you can roll back to. Take one before any risky or destructive edit.",
+      "tags": [
+        "session"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Checkpoint label",
+            "default": "default"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "uv.lightmap",
+      "summary": "Add a second, non-overlapping UV channel for baked lighting. Godot and Unity both require this for static lightmaps.",
+      "tags": [
+        "uv"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "object": {
+            "type": "string",
+            "description": "Object name"
+          },
+          "name": {
+            "type": "string",
+            "description": "Name of the new UV layer",
+            "default": "UVLightmap"
+          },
+          "margin": {
+            "type": "number",
+            "description": "Island padding \u2014 lightmaps need more than base textures",
+            "default": 0.03
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "uv.normalize",
+      "summary": "Fit existing UVs into the 0..1 square, preserving proportions.",
+      "tags": [
+        "uv"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "object": {
+            "type": "string",
+            "description": "Object name"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "uv.pack",
+      "summary": "Repack existing UV islands into 0..1 without re-unwrapping. Use after joining objects or editing seams.",
+      "tags": [
+        "uv"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "object": {
+            "type": "string",
+            "description": "Object name"
+          },
+          "margin": {
+            "type": "number",
+            "description": "Island padding",
+            "default": 0.02
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "uv.report",
+      "summary": "Measure UV quality: texel density, coverage, island count, overlap. Texel density is the number to match across an asset set \u2014 mismatched density is the most common reason AI-made assets look wrong together.",
+      "tags": [
+        "uv",
+        "inspect"
+      ],
+      "mutates": false,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "object": {
+            "type": "string",
+            "description": "Object name"
+          },
+          "texture_size": {
+            "type": "integer",
+            "description": "Texture resolution the density figure assumes",
+            "default": 1024
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "uv.unwrap",
+      "summary": "Generate UVs. Use 'box' with a shared uv_scale for anything using a tiling or trim texture (keeps texel density uniform across a whole kit); use 'smart_packed' for props that need their own baked texture.",
+      "tags": [
+        "uv"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "object": {
+            "type": "string",
+            "description": "Object name"
+          },
+          "style": {
+            "type": "string",
+            "enum": [
+              "box",
+              "cylinder",
+              "smart",
+              "smart_packed",
+              "none"
+            ],
+            "description": "Unwrap strategy",
+            "default": "smart_packed"
+          },
+          "scale": {
+            "type": "number",
+            "description": "box only: metres per UV tile. Use the SAME value across a kit",
+            "default": 1.0
+          },
+          "margin": {
+            "type": "number",
+            "description": "smart only: island padding, prevents bleed at low mip levels",
+            "default": 0.02
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  ]
+}
