@@ -25,10 +25,13 @@ WebGPU. Verified on an NVIDIA Tesla P40 at a locked 60 fps, ~490–630 draw call
 ~23M primitives per frame, with **0 `GPUValidationError`**. The published demo was
 re-rendered from its own public URL on that GPU as a final check.*
 
-> **What you can rebuild:** the engine, the patch series, and the minimal scene below
-> are checksum-locked and reproducible from this repository. The Chariot Club's *game
-> content* is not published here, so that specific demo cannot be rebuilt from source —
-> use the showcase scene to reproduce the render path end to end.
+> **What you can rebuild:** all of it. The engine and the patch series are
+> checksum-locked, and both demos are now in this repository — the minimal scene below,
+> and The Chariot Club itself under [`games/chariot/`](games/chariot). Note the game is
+> published to make the demo reproducible and auditable, not to relicense it: per
+> [`games/LICENSE`](games/LICENSE) a game directory without its own LICENSE stays all
+> rights reserved. The Foundation itself (`engine/`, `tools/`, `shared/`, …) remains
+> under the repository root LICENSE.
 
 <details>
 <summary>Also published: a ~100-line minimal scene, for reproducing the render path from scratch</summary>
