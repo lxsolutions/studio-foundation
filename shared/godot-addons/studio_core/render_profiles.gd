@@ -10,7 +10,7 @@ const REQUIRED_KEYS: Array[String] = [
 	"resolution_scale", "shadow_quality", "shadow_distance", "shadow_atlas_size",
 	"texture_profile", "mesh_lod_bias", "vegetation_density", "particle_budget",
 	"dynamic_light_budget", "anim_update_distance", "physics_detail",
-	"post_processing", "msaa_3d", "actor_limit",
+	"post_processing", "msaa_3d", "actor_limit", "crowd_density",
 ]
 
 var profiles: Dictionary = {}
