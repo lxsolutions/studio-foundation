@@ -113,6 +113,13 @@ authorship and maintenance boundary.
 - Regenerate a patch from a reviewed candidate tree; do not silently hand-edit
   a locked patch.
 - Recalculate SHA-256 values and run release validation after regeneration.
+- **Verify a regenerated patch against a CLEAN tree**, not against the tree it
+  was generated from. `engine/scripts/verify_patch_apply.py` does this.
+  Reverse-applying a patch to its own source tree proves only self-consistency;
+  it cannot detect a hunk whose target exists solely because of uncommitted
+  local state. Patch 0016 shipped exactly that defect — checksums, ordering and
+  completeness all passed while `git apply` failed on every clean checkout and
+  `engine-fetch` stopped working entirely.
 - A checksum change requires review even when the filename is unchanged.
 
 `engine/.cache/studio-webgpu` is disposable output. This directory and
