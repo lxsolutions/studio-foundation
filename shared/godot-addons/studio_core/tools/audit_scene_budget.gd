@@ -49,6 +49,7 @@ var _as_json: bool = false
 var _warn_only: bool = false
 var _instance: Node = null
 var _frames_left: int = 0
+var _pending_attach: bool = false
 
 
 func _initialize() -> void:
@@ -110,15 +111,42 @@ func _initialize() -> void:
 		return
 
 	_frames_left = int(args.get("frames", 30))
-	# Attach so _ready() fires and the game builds whatever it builds, then let a
-	# few frames pass for anything deferred (call_deferred spawners, multimesh
-	# population, LOD setup) before taking the measurement.
-	root.add_child(instance)
+	# Attaching is deferred to the first frame so the Studio autoload exists and
+	# the requested profile can be applied BEFORE the scene builds itself. Without
+	# that the audit compares against a profile it never actually applied -- the
+	# game boots on its own auto-selected profile, every tier reports identical
+	# numbers, and profile-dependent scaling can never be validated.
+	_pending_attach = true
+
+
+func _apply_profile(root: Node) -> void:
+	var studio: Node = root.get_node_or_null(^"/root/Studio")
+	if studio == null:
+		printerr("audit_scene_budget: no /root/Studio autoload; measuring the "
+			+ "scene's default profile, NOT '%s'" % _profile_name)
+		return
+	var raw: Variant = studio.get("profiles")
+	if raw == null or not (raw is StudioRenderProfiles):
+		printerr("audit_scene_budget: Studio has no render profiles; measuring "
+			+ "the scene's default profile, NOT '%s'" % _profile_name)
+		return
+	var profiles: StudioRenderProfiles = raw
+	if profiles.profiles.is_empty():
+		profiles.load_profiles()
+	# headless=true: budgets only, no viewport writes -- which is all the scene
+	# needs to read crowd_density, particle_budget and friends.
+	if not profiles.apply(_profile_name, null, {"headless": true}):
+		printerr("audit_scene_budget: could not apply profile '%s'" % _profile_name)
 
 
 func _process(_delta: float) -> bool:
 	if _instance == null:
 		return true
+	if _pending_attach:
+		_pending_attach = false
+		_apply_profile(root)
+		root.add_child(_instance)
+		return false
 	if _frames_left > 0:
 		_frames_left -= 1
 		return false
