@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Studio Foundation — Godot 4.7.1 WebGPU release evidence</title>
+<meta name="description" content="The published Godot 4.7.1 p0014 Forward Mobile WebGPU demo, release templates, source, and evidence.">
+<style>
+  :root {
+    --bg: #0b0e14; --panel: #131824; --edge: #2a3346;
+    --fg: #e6ebf5; --muted: #a8b2c7; --accent: #f5903a;
+    --ok: #4ec98a; --warn: #f5c74b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 36px 20px 72px; }
+  h1 { font-size: clamp(1.8rem, 4vw, 2.8rem); line-height: 1.12; margin: 0 0 12px; }
+  h2 { font-size: 1.25rem; margin: 0 0 12px; }
+  .hl, a { color: var(--accent); }
+  .sub { color: var(--muted); font-size: 1.05rem; max-width: 850px; }
+  .card { background: var(--panel); border: 1px solid var(--edge); border-radius: 14px; padding: 22px; margin: 20px 0; }
+  .cta, .ghost { display: inline-block; border-radius: 10px; text-decoration: none; margin: 5px 8px 5px 0; }
+  .cta { background: var(--accent); color: #1b1205; font-weight: 700; padding: 13px 24px; }
+  .ghost { color: var(--fg); border: 1px solid var(--edge); padding: 12px 18px; }
+  .cta:hover, .ghost:hover { filter: brightness(1.1); border-color: var(--accent); }
+  .cta.disabled { background: #3a4152; color: var(--muted); pointer-events: none; }
+  .badge { display: inline-block; font-size: .78rem; padding: 3px 10px; border-radius: 999px;
+           border: 1px solid var(--edge); color: var(--muted); margin: 0 6px 6px 0; }
+  .shot { width: 100%; border-radius: 12px; border: 1px solid var(--edge); display: block; margin: 20px 0; }
+  .muted { color: var(--muted); }
+  .ok { color: var(--ok); } .warn { color: var(--warn); }
+  .note { border-left: 3px solid var(--warn); padding: 8px 0 8px 14px; color: var(--muted); }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: .93rem; }
+  th, td { border-bottom: 1px solid var(--edge); text-align: left; vertical-align: top; padding: 10px 9px; }
+  th { color: var(--muted); font-weight: 600; }
+  code { background: #090c12; border: 1px solid var(--edge); border-radius: 5px; padding: 2px 5px; }
+  footer { color: var(--muted); font-size: .9rem; border-top: 1px solid var(--edge); margin-top: 36px; padding-top: 20px; }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <p>
+    <span class="badge">Godot 4.7.1</span>
+    <span class="badge">p0014 published</span>
+    <span class="badge">Forward Mobile</span>
+    <span class="badge">WebGPU beta</span>
+  </p>
+
+  <h1>A published Godot game running through <span class="hl">WebGPU</span>.</h1>
+  <p class="sub">
+    The initial backend lineage is David Walter's MIT-licensed
+    <a href="https://github.com/dwalter/godotwebgpu">dwalter/godotwebgpu</a>
+    work. Studio Foundation maintains the Godot 4.7.1 port, scoped patches,
+    renderer fixes, build/export tooling, validation, release evidence, MCP
+    tooling, and AI-native distribution layer. Official Godot remains upstream.
+  </p>
+
+  <img class="shot" src="chariot.png" alt="A Roman colosseum with crowded stands and chariots rendered by Godot through WebGPU">
+
+  <section class="card">
+    <h2>Run and inspect</h2>
+    <p>WebGPU support: <strong id="gpu-status">checking…</strong></p>
+    <p id="gpu-detail" class="muted"></p>
+    <a class="cta" id="launch" href="demo/index.html">Enter the colosseum</a>
+    <a class="ghost" href="showcase/index.html">Minimal showcase</a>
+    <a class="ghost" href="https://github.com/lxsolutions/studio-foundation">Repository</a>
+    <a class="ghost" href="https://github.com/lxsolutions/studio-foundation/releases/tag/godot-4.7.1-webgpu-p0014">p0014 templates</a>
+    <a class="ghost" href="https://github.com/lxsolutions/studio-foundation/blob/main/docs/architecture/webgpu-evidence.md">Evidence matrix</a>
+    <p class="note">
+      Initial load downloads a ~45.8 MB wasm (~12.0 MB over GitHub Pages gzip).
+      In the recorded 12 Mbps p0014 run, frames appeared around 13 seconds and
+      pipeline construction occupied about 2 seconds of engine startup.
+    </p>
+  </section>
+
+  <section class="card" data-current-main-patches="22" data-published-patch-through="14">
+    <h2>Published release versus current main</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>State</th><th>Patches</th><th>Renderer</th><th>Artifacts</th><th>Hardware status</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Published <code>godot-4.7.1-webgpu-p0014</code></td>
+            <td><code>0001–0014</code></td>
+            <td>WebGPU Forward Mobile</td>
+            <td>Release/debug downloads available</td>
+            <td>Minimal scene and three game scenes rendered on an NVIDIA Tesla P40 with 0 <code>GPUValidationError</code></td>
+          </tr>
+          <tr>
+            <td>Current <code>main</code></td>
+            <td><code>0001–0022</code></td>
+            <td>Forward Mobile plus unfinished Forward+ investigation</td>
+            <td>No p0022 templates published</td>
+            <td>Forward+ was hardware-run on the P40; 18 validation errors remain and no frame renders</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="muted">
+      Patches 0015–0022 are not in the p0014 downloads. Forward+ hardware
+      execution is investigation evidence, not a successful-render claim.
+    </p>
+  </section>
+
+  <section class="card">
+    <h2>What the published demo proves</h2>
+    <ul>
+      <li>Official Godot 4.7.1 commit <code>a13da4feb8d8aefc283c3763d33a2f170a18d541</code> is the base.</li>
+      <li>The p0014 archives use the checksum-locked patch range <code>0001–0014</code> and Forward Mobile.</li>
+      <li>The browser probe observes an active WebGPU canvas context and rejects WebGL/WebGL 2 requests.</li>
+      <li>On the recorded P40 run, Chariot held 60 fps at ~489–631 draws and ~23M primitives/frame with 0 validation errors.</li>
+    </ul>
+    <p class="muted">
+      WebGPU support is beta. Safari/iOS, native mobile devices, and non-NVIDIA
+      GPU vendors remain unverified. The p0014 Jolt web build also has a known
+      concave-collider regression documented in the evidence matrix.
+    </p>
+  </section>
+
+  <section class="card">
+    <h2>Reproduce it</h2>
+    <p>
+      The engine integration, minimal scene, and Chariot source are available in
+      the repository. Chariot is public for reproducibility but remains all
+      rights reserved under <code>games/LICENSE</code>.
+    </p>
+    <p>
+      Download both p0014 templates, verify their SHA-256 values from the
+      evidence matrix, and export with <code>just export-browser-webgpu</code>.
+      That command applies the WebGPU shell handoff the official editor cannot
+      emit for these templates.
+    </p>
+  </section>
+
+  <section class="card">
+    <h2>AI-native positioning</h2>
+    <p>
+      “AI-native” describes how Studio Foundation is operated: an MCP server,
+      agent workflows, Blender asset tooling, and public validation commands.
+      It is separate from the renderer claims above, which are scoped to named
+      artifacts, hardware, scenes, and measured caveats.
+    </p>
+  </section>
+
+  <footer>
+    <a href="https://github.com/lxsolutions/studio-foundation">lxsolutions/studio-foundation</a>
+    · official Godot remains upstream · WebGPU support is beta
+  </footer>
+</main>
+
+<script>
+(function () {
+  var status = document.getElementById('gpu-status');
+  var detail = document.getElementById('gpu-detail');
+  var launch = document.getElementById('launch');
+
+  if (!('gpu' in navigator)) {
+    status.textContent = 'not exposed by this browser';
+    status.className = 'warn';
+    detail.textContent = 'The live demos require a browser and adapter that expose WebGPU.';
+    launch.classList.add('disabled');
+    launch.textContent = 'WebGPU required';
+    return;
+  }
+
+  navigator.gpu.requestAdapter().then(function (adapter) {
+    if (!adapter) {
+      status.textContent = 'exposed, but no adapter is available';
+      status.className = 'warn';
+      detail.textContent = 'A blocked GPU, driver policy, or virtualized environment can cause this result.';
+      return;
+    }
+    status.textContent = 'adapter available';
+    status.className = 'ok';
+    detail.textContent = 'This capability check does not replace the engine-owned runtime probe.';
+  }).catch(function () {
+    status.textContent = 'adapter request failed';
+    status.className = 'warn';
+  });
+}());
+</script>
+</body>
+</html>
