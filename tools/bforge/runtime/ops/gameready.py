@@ -15,6 +15,7 @@ from __future__ import annotations
 import math
 
 import bmesh
+import bpy
 from lib import finish as finish_lib
 from lib import mesh as mesh_lib
 from lib import scene as scene_lib
@@ -254,6 +255,92 @@ def gameready_budget(ctx, profile, asset_class, objects):
 
 def _is_proxy(name):
     return name.endswith("-col") or name.endswith("-convcol")
+
+
+# Uncompressed GPU cost per texel, plus a third again for the mip chain.
+_BYTES_PER_TEXEL = 4
+_MIP_FACTOR = 4.0 / 3.0
+# What each platform can afford to hold in texture memory at once. Browsers are
+# the tight case: the WASM heap and the GPU budget share a device that is often
+# running a dozen other tabs.
+TEXTURE_BUDGETS_MB = {
+    "mobile_low": 32,
+    "mobile_high": 96,
+    "browser_webgl": 96,
+    "browser_webgpu": 192,
+    "desktop_high": 1024,
+}
+
+
+@op(
+    "gameready.texture_budget",
+    summary="Measure what the textures actually cost in GPU memory and flag any over the platform's resolution cap. Triangle budgets are half the story — a scene can be trivially cheap to draw and still fail to load because its textures do not fit in VRAM.",
+    params={
+        "profile": (f"enum:{'|'.join(PROFILES)}", "browser_webgpu", "Target platform profile"),
+        "assume_compressed": ("bool", False, "Report cost after KTX2/Basis transcoding (~8:1) instead of raw RGBA. Only set this once the cook step actually compresses, or the number is fiction"),
+    },
+    tags=["gameready", "inspect"],
+    mutates=False,
+)
+def gameready_texture_budget(ctx, profile, assume_compressed):
+    cap = PROFILES[profile]["texture"]
+    budget_mb = TEXTURE_BUDGETS_MB[profile]
+    ratio = 8.0 if assume_compressed else 1.0
+
+    rows = []
+    total_bytes = 0.0
+    oversized = []
+    for image in bpy.data.images:
+        if image.name == "Render Result":
+            continue
+        width, height = image.size
+        if width == 0 or height == 0:
+            continue
+        cost = (width * height * _BYTES_PER_TEXEL * _MIP_FACTOR) / ratio
+        total_bytes += cost
+        row = {
+            "name": image.name,
+            "size": [width, height],
+            "mb": round(cost / (1024 * 1024), 3),
+            "over_cap": max(width, height) > cap,
+        }
+        rows.append(row)
+        if row["over_cap"]:
+            oversized.append(row)
+
+    total_mb = total_bytes / (1024 * 1024)
+    advice = [
+        f"'{row['name']}' is {row['size'][0]}x{row['size'][1]} against a {cap} cap for "
+        f"{profile} — re-bake at size={cap}."
+        for row in oversized
+    ]
+    if total_mb > budget_mb:
+        advice.append(
+            f"{total_mb:.1f} MB of texture memory against a {budget_mb} MB budget for "
+            f"{profile}. Lower resolutions, share one tiling map across surfaces "
+            "(material.tileable with reuse=true), or atlas."
+        )
+    if rows and not assume_compressed:
+        # The sidecars this pipeline writes declare texture_policy=compressed.
+        # Until the cook step actually runs KTX2/Basis that claim is aspirational,
+        # and the honest number is the uncompressed one reported here.
+        ctx.note(
+            f"Measured as UNCOMPRESSED RGBA ({total_mb:.1f} MB). Assets declaring "
+            "texture_policy=compressed are not compressed until the cook step runs "
+            f"KTX2/Basis; with it this set would cost about {total_mb / 8.0:.1f} MB."
+        )
+
+    return {
+        "profile": profile,
+        "textures": rows,
+        "count": len(rows),
+        "total_mb": round(total_mb, 2),
+        "budget_mb": budget_mb,
+        "resolution_cap": cap,
+        "compressed": assume_compressed,
+        "within_budget": total_mb <= budget_mb and not oversized,
+        "advice": advice,
+    }
 
 
 @op(

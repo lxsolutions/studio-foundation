@@ -1,6 +1,6 @@
 # bforge op reference
 
-106 operations.
+108 operations.
 
 ## `arch.*`
 
@@ -726,6 +726,15 @@ Add a named empty as an attachment socket — muzzle points, hardpoints, spawn m
 | `rotation` | array | [0.0, 0.0, 0.0] | Rotation in degrees |
 | `size` | number | 0.1 | Display size of the empty |
 
+### `gameready.texture_budget`
+
+Measure what the textures actually cost in GPU memory and flag any over the platform's resolution cap. Triangle budgets are half the story — a scene can be trivially cheap to draw and still fail to load because its textures do not fit in VRAM.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `profile` | mobile_low \| mobile_high \| browser_webgl \| browser_webgpu \| desktop_high | 'browser_webgpu' | Target platform profile |
+| `assume_compressed` | boolean | False | Report cost after KTX2/Basis transcoding (~8:1) instead of raw RGBA. Only set this once the cook step actually compresses, or the number is fiction |
+
 ## `kit.*`
 
 ### `kit.piece`
@@ -909,6 +918,29 @@ Create and assign a PBR material. Prefer a preset name (stone, wood, metal, gold
 | `metallic` | number | -1.0 | Override metallic 0..1; -1 keeps the preset value |
 | `emission` | number | -1.0 | Emission strength; -1 keeps the preset value |
 | `slot` | integer | 0 | Material slot index |
+
+### `material.tileable`
+
+Bake a SEAMLESS PBR texture set and apply it repeating across a surface. This is how architecture gets textured: a unique bake for a 725 m stadium works out to ~3 px/m, which is no texture at all, whereas one 1k tiling map gives real surface detail everywhere. Noise is sampled through a torus mapping so it tiles perfectly with no visible seam.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `object` | string | None | Object to texture |
+| `base_color` | any | 'stone_grey' | Base albedo |
+| `roughness` | number | 0.78 | Mid roughness |
+| `metallic` | number | 0.0 | Metallic 0..1 |
+| `detail_scale` | number | 6.0 | Feature size in the baked map — higher is finer |
+| `dirt` | number | 0.35 | Grime settled in the low spots (0..1) |
+| `dirt_color` | any | '#2b2118' | Grime colour |
+| `bump` | number | 0.4 | Surface relief strength |
+| `tiles` | number | 6.0 | How many times the map repeats across the object's UVs |
+| `uv_scale` | number | 0.0 | Metres per UV tile for box projection; 0 keeps existing UVs |
+| `size` | integer | 1024 | Texture resolution |
+| `samples` | integer | 16 | Cycles samples for the bake |
+| `stem` | string | '' | Filename stem (defaults to the object name) |
+| `out_dir` | string | 'textures' | Directory for the PNGs |
+| `reuse` | boolean | True | If this stem was already baked, assign the existing material instead of baking again. Bake once, apply to every stone surface in a building — same texture, one set of maps, one draw call |
+| `seed` | integer | 0 | Random seed |
 
 ## `meta.*`
 

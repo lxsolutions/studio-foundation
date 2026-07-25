@@ -3168,6 +3168,39 @@
       }
     },
     {
+      "name": "gameready.texture_budget",
+      "summary": "Measure what the textures actually cost in GPU memory and flag any over the platform's resolution cap. Triangle budgets are half the story \u2014 a scene can be trivially cheap to draw and still fail to load because its textures do not fit in VRAM.",
+      "tags": [
+        "gameready",
+        "inspect"
+      ],
+      "mutates": false,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "profile": {
+            "type": "string",
+            "enum": [
+              "mobile_low",
+              "mobile_high",
+              "browser_webgl",
+              "browser_webgpu",
+              "desktop_high"
+            ],
+            "description": "Target platform profile",
+            "default": "browser_webgpu"
+          },
+          "assume_compressed": {
+            "type": "boolean",
+            "description": "Report cost after KTX2/Basis transcoding (~8:1) instead of raw RGBA. Only set this once the cook step actually compresses, or the number is fiction",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "kit.piece",
       "summary": "One modular kit piece with its origin at the grid corner, ready to snap. Build a whole set with kit.set instead if you want more than one.",
       "tags": [
@@ -3967,6 +4000,126 @@
           "slot": {
             "type": "integer",
             "description": "Material slot index",
+            "default": 0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "material.tileable",
+      "summary": "Bake a SEAMLESS PBR texture set and apply it repeating across a surface. This is how architecture gets textured: a unique bake for a 725 m stadium works out to ~3 px/m, which is no texture at all, whereas one 1k tiling map gives real surface detail everywhere. Noise is sampled through a torus mapping so it tiles perfectly with no visible seam.",
+      "tags": [
+        "material",
+        "bake",
+        "pbr"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "object": {
+            "type": "string",
+            "description": "Object to texture"
+          },
+          "base_color": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 4
+              }
+            ],
+            "description": "Base albedo",
+            "default": "stone_grey"
+          },
+          "roughness": {
+            "type": "number",
+            "description": "Mid roughness",
+            "default": 0.78
+          },
+          "metallic": {
+            "type": "number",
+            "description": "Metallic 0..1",
+            "default": 0.0
+          },
+          "detail_scale": {
+            "type": "number",
+            "description": "Feature size in the baked map \u2014 higher is finer",
+            "default": 6.0
+          },
+          "dirt": {
+            "type": "number",
+            "description": "Grime settled in the low spots (0..1)",
+            "default": 0.35
+          },
+          "dirt_color": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 4
+              }
+            ],
+            "description": "Grime colour",
+            "default": "#2b2118"
+          },
+          "bump": {
+            "type": "number",
+            "description": "Surface relief strength",
+            "default": 0.4
+          },
+          "tiles": {
+            "type": "number",
+            "description": "How many times the map repeats across the object's UVs",
+            "default": 6.0
+          },
+          "uv_scale": {
+            "type": "number",
+            "description": "Metres per UV tile for box projection; 0 keeps existing UVs",
+            "default": 0.0
+          },
+          "size": {
+            "type": "integer",
+            "description": "Texture resolution",
+            "default": 1024
+          },
+          "samples": {
+            "type": "integer",
+            "description": "Cycles samples for the bake",
+            "default": 16
+          },
+          "stem": {
+            "type": "string",
+            "description": "Filename stem (defaults to the object name)",
+            "default": ""
+          },
+          "out_dir": {
+            "type": "string",
+            "description": "Directory for the PNGs",
+            "default": "textures"
+          },
+          "reuse": {
+            "type": "boolean",
+            "description": "If this stem was already baked, assign the existing material instead of baking again. Bake once, apply to every stone surface in a building \u2014 same texture, one set of maps, one draw call",
+            "default": true
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Random seed",
             "default": 0
           }
         },
