@@ -68,17 +68,37 @@ browser WebGPU template build. They apply to the official Godot commit in
     shader in the engine that uses subpasses, which WebGPU has no concept of.
 
 16. `0016-webgpu-offline-harness-engine-parity.patch` - make the GPU-free shader
-    harness reproduce the engine. `glsl2spv` hardcoded Vulkan 1.0 / SPIR-V 1.0
-    while `RenderingShaderContainerWebGPU` reports Vulkan 1.1 / SPIR-V 1.3, so
-    every offline result was measured against a target the runtime never uses -
-    and because subgroup ops cannot compile at 1.0, that mismatch actively hid
-    the `HelperInvocation` abort fixed in `0015`. Also stops one crashing module
-    from being reported as an all-modules failure (a Tint abort killed the whole
-    `--batch` process and the caller turned that into "everything failed"), names
-    failing shaders instead of only counting them, and teaches the harness the
-    real `cluster_render` variant set. Adds `build_glsl2spv.sh` (glslang-only
-    build, ~1 min instead of ~30, statically linked) and `probe_one.py`
-    (single-shader probe that prints the raw Tint error).
+    harness reproduce the engine; several of its "failures" were its own.
+    `glsl2spv` hardcoded Vulkan 1.0 / SPIR-V 1.0 while
+    `RenderingShaderContainerWebGPU` reports Vulkan 1.1 / SPIR-V 1.3, so every
+    offline result was measured against a target the runtime never uses - and
+    because subgroup ops cannot compile at 1.0, that mismatch actively hid the
+    `HelperInvocation` abort fixed in `0015`. Repo-relative `#include`s were
+    resolved against the CWD rather than the repo root, so AMD's FSR headers
+    silently vanished and `fsr_upscale.glsl` failed with a bare syntax error.
+    Several variant tables did not match the engine, leaving `ssao_blur`,
+    `ssil_blur` and `subsurface_scattering` - three shaders the high-end look
+    needs - uncompilable and therefore of unknown status; they all translate once
+    given the `MODE_`/`USE_*_SAMPLES` defines the C++ actually builds them with.
+    Also stops one crashing module from being reported as an all-modules failure
+    (a Tint abort killed the whole `--batch` process and the caller turned that
+    into "everything failed"), names failing shaders instead of only counting
+    them, stops counting skips as failures, and drops the dead `giprobe_write.glsl`
+    (no C++ references it; it uses the reserved word `output`). Adds
+    `build_glsl2spv.sh` (glslang-only build, ~1 min instead of ~30, statically
+    linked) and `probe_one.py` (single-shader probe that prints the raw Tint
+    error).
+
+17. `0017-webgpu-ssr-filter-storage-format.patch` - the last real feature gap.
+    `screen_space_reflection_filter.glsl` declared its output image with no format
+    qualifier, so glslang emitted `OpTypeImage` with format `Unknown` and Tint
+    rejected the module (`textureStore(texture_storage_2d<undefined, write>, ...)`)
+    - screen-space reflections were simply unavailable. `rgba16f` matches what the
+    sibling shaders in the same chain already declare for the same texture, and is
+    provably the format in use: the SSR buffers take `get_base_data_format()`,
+    which is `R16G16B16A16_SFLOAT` on every renderer that can reach this shader
+    (Forward Mobile overrides it to a packed 10-bit format but cannot run SSR at
+    all, since `_render_buffers_can_be_storage()` is false).
 
 The WebGPU implementation originated in `dwalter/godotwebgpu`. Studio
 Foundation owns the 4.7.1 port, scoped patch curation, preparation/build tooling,

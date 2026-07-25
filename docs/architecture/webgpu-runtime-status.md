@@ -97,24 +97,40 @@ concept WebGPU does not have. Mobile is designed around tile-based subpass
 merging; Forward+ is built on compute and storage buffers, which WebGPU has
 natively.
 
-**Measured after 0015 + 0016** (offline, GPU-free, at the engine's real target env
-of Vulkan 1.1 / SPIR‑V 1.3): **182 modules compiled, 6 Tint failures.** For a
-Forward+ render only **one** is real:
+**Measured after 0015–0017** (offline, GPU-free, at the engine's real target env of
+Vulkan 1.1 / SPIR‑V 1.3): **199 modules compiled, 0 GLSL failures, 6 Tint failures,
+3 skipped.** *None of the six blocks Forward+ under WebGPU:*
 
 | Failure | Blocks Forward+? |
 | --- | --- |
-| `screen_space_reflection_filter` (storage-texture format inference) | **Yes** — SSR unavailable |
-| `tonemap_mobile` `subpass` ×2 | No — Forward Mobile only |
-| `cluster_render` `subgroups` ×2 | No — not the variant WebGPU selects |
+| `tonemap_mobile` `subpass` ×2 | No — Forward Mobile only; WebGPU has no subpasses |
+| `fsr_upscale` `normal` (16-bit math) | No — the driver reports `SUPPORTS_HALF_FLOAT` false, so `fsr.cpp` selects `FALLBACK`, which translates |
+| `cluster_render` `subgroups` ×2 | No — WebGPU selects the no-subgroups variant added by 0015 |
 | `sdfgi_debug_probes` | No — editor debug visualisation |
 
-So SSAO, SSIL, SDFGI, VoxelGI, volumetric fog, TAA and the clustered scene shader
-all translate. **None of this is hardware-verified yet.** Forward+ also binds far
-more aggressively than Mobile, and patch 0013 exists because Mobile alone already
-tripped WebGPU's 16-samplers-per-stage limit — expect that to be the next thing to
-break. Export a Forward+ build with
+SSAO, SSIL, SDFGI, VoxelGI, volumetric fog, subsurface scattering, TAA, SSR and the
+clustered scene shader all translate. Note that `ssao_blur`, `ssil_blur` and
+`subsurface_scattering` were previously *assumed* to translate — they were in fact
+never compiled, because the harness enumerated them without the `MODE_`/
+`USE_*_SAMPLES` defines the engine actually builds them with (fixed in 0016).
+
+**None of this is hardware-verified.** Translating offline is not rendering.
+Forward+ also binds far more aggressively than Mobile, and patch 0013 exists
+because Mobile *alone* already tripped WebGPU's 16-samplers-per-stage limit —
+expect that to be the next thing to break. Export a Forward+ build with
 `export_game.py --preset web-webgpu --rendering-method forward_plus` and run it on
 the P40; `mobile` remains the default until that passes.
+
+### Reproducing the sweep
+
+```bash
+# ~1 minute; needs only Godot's vendored glslang, not the full Tint build.
+bash drivers/webgpu/tint_cli/build_glsl2spv.sh
+python drivers/webgpu/wgsl_precompile.py <engine-tree> /tmp/out.gen.h <engine-tree>/bin/glsl2spv
+```
+
+On Windows, `bin/tint_convert_cli` must also exist **without** the `.exe`
+suffix — Python's `os.path.isfile` does not auto-append it the way Git Bash does.
 
 ---
 

@@ -1,0 +1,56 @@
+Subject: [PATCH] webgpu: declare the SSR filter's storage image format
+
+Screen-space reflections were the last real feature gap under WebGPU. The filter
+pass declared its output image with no format qualifier:
+
+    layout(set = 0, binding = 1) uniform restrict writeonly image2D dest;
+
+so glslang emitted OpTypeImage with format Unknown, and WGSL has no textureStore
+overload for an unformatted storage texture. Tint rejected the module with
+
+    textureStore: no matching call to
+    'textureStore(texture_storage_2d<undefined, write>, vec2<i32>, vec4<f32>)'
+
+and SSR was simply unavailable, with no error a game developer could act on.
+
+rgba16f is not a guess. Its sibling shaders in the same effect chain --
+screen_space_reflection.glsl and screen_space_reflection_resolve.glsl -- already
+declare exactly that for this very texture, so the filter omitting it was an
+inconsistency rather than a deliberate choice. The format is also provably the
+one in use: the SSR buffers are allocated with get_base_data_format(), which is
+either R16G16B16A16_SFLOAT when force_hdr is set, or
+_render_buffers_get_preferred_color_format(), which RendererSceneRenderRD returns
+as R16G16B16A16_SFLOAT. Forward Mobile overrides that to a packed 10-bit format,
+but Mobile returns false from _render_buffers_can_be_storage() and therefore
+never runs SSR at all. On every renderer that can reach this shader, the texture
+is rgba16f.
+
+If the SSR chain ever needs to run at another colour format, all four SSR shaders
+must become format-parameterised together, the way copy_effects.cpp already does
+it with OCTMAP_FORMAT.
+
+Verified offline: screen_space_reflection_filter.glsl now translates to valid
+WGSL. Not yet hardware-verified.
+
+diff --git a/servers/rendering/renderer_rd/shaders/effects/screen_space_reflection_filter.glsl b/servers/rendering/renderer_rd/shaders/effects/screen_space_reflection_filter.glsl
+index 6ca626ee5b..fefc198cf6 100644
+--- a/servers/rendering/renderer_rd/shaders/effects/screen_space_reflection_filter.glsl
++++ b/servers/rendering/renderer_rd/shaders/effects/screen_space_reflection_filter.glsl
+@@ -7,7 +7,16 @@
+ layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+ 
+ layout(set = 0, binding = 0) uniform sampler2D source;
+-layout(set = 0, binding = 1) uniform restrict writeonly image2D dest;
++// The format qualifier is required, not decorative. Without it glslang emits
++// OpTypeImage with format Unknown, and WGSL has no textureStore overload for an
++// unformatted storage texture -- Tint rejects the module with
++// "textureStore(texture_storage_2d<undefined, write>, ...)" and SSR is silently
++// unavailable under WebGPU. rgba16f matches what the sibling shaders in this same
++// effect chain (screen_space_reflection.glsl, screen_space_reflection_resolve.glsl)
++// already declare for this very texture. If the SSR chain ever needs to run at a
++// different colour format, all of them must become format-parameterised together,
++// the way copy_effects.cpp does it with OCTMAP_FORMAT.
++layout(rgba16f, set = 0, binding = 1) uniform restrict writeonly image2D dest;
+ 
+ layout(push_constant, std430) uniform Params {
+ 	ivec2 screen_size;
