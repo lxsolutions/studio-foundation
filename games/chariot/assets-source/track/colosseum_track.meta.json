@@ -2,7 +2,9 @@
   "asset_id": "colosseum_track",
   "category": "environment",
   "license": "proprietary",
-  "source": { "origin": "generated" },
+  "source": {
+    "origin": "generated"
+  },
   "creator": "studio-foundation (tools/bforge)",
   "provenance": {
     "method": "ai_generated",
@@ -12,7 +14,7 @@
       "system": "bforge (headless Blender, allowlisted ops, deterministic)",
       "tool": "bforge",
       "workflow": "games/chariot/art_source/build_hippodrome.py",
-      "description": "Roman hippodrome built from project/assets/track_spec.json: racing surface, inner and outer rails, tiered cavea, arcade, spina with obelisk, metae and dolphins, corner towers, torches, faction banners",
+      "description": "Roman hippodrome built from project/assets/track_spec.json: racing surface, rails, tiered cavea, arched arcade, statued attic colonnade, raked vomitoria, velarium masts, banners, spina with obelisk/metae/dolphins, towers and torches; stone surfaced with one shared seamless tiling PBR set",
       "deterministic": true,
       "human_review": "pending"
     }
@@ -22,5 +24,10 @@
   "collision_policy": "auto",
   "texture_policy": "compressed",
   "animation_set": "none",
-  "budgets": { "triangles": 16000, "materials": 12, "texture_max_px": 2048 }
+  "budgets": {
+    "triangles": 30000,
+    "materials": 12,
+    "texture_max_px": 1024
+  },
+  "budget_note": "30k triangles is the whole venue as ONE object: 44 arcade bays, 44 attic columns, 18 vomitoria, 30 velarium masts, 24 banners, the spina with obelisk, metae and dolphins, 4 towers and 16 torches. The previous 16k was set when this was a bare oval with no Roman elevation on it. Note that gameready.budget still reports OVER here because it models a per-PROP ceiling, and a merged venue is a scene rather than a prop."
 }
