@@ -18,6 +18,12 @@ toolchain versions, ordered patch files, patch checksums, and build flags.
 worktrees; `engine/artifacts/` contains build outputs. Neither cache nor
 artifacts are source of truth.
 
+Current `main` locks patches `0001–0022`. The only published template release,
+`godot-4.7.1-webgpu-p0014`, stops at patch 0014 and uses Forward Mobile.
+`[releases.godot_4_7_1_webgpu_p0014]` records the public release bytes;
+`[artifacts.export_templates]` records a separate locally accepted build pair.
+See [`webgpu-evidence.md`](../docs/architecture/webgpu-evidence.md).
+
 ## Commands
 
 ```sh

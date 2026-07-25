@@ -1,329 +1,219 @@
-# WebGPU 4.7.1 runtime status & investigation checkpoint
+# WebGPU 4.7.1 runtime status and investigation log
 
-> **Purpose.** A single, evidence-based snapshot of where the browser WebGPU
-> runtime actually stands. Much of this state otherwise lives only in ephemeral
-> build/smoke logs under `engine/.cache/` and uncommitted edits in this worktree.
-> This file is the handoff — update it whenever the runtime status changes.
->
-> **Last reconciled:** 2026-07-23 (evening, local UTC−6), from
-> `codex/godot-webgpu-recenter` @ `d70a27e` + uncommitted WIP.
-> **Scope:** the ADR 0002 runtime-acceptance gate. The editor and WebGL fallback
-> are unaffected and green.
+Last reconciled: 2026-07-25 against current `main` commit
+`023563c068d8639747453425da91bcaa46a3577d`.
 
----
+This document is a dated engineering log. The concise current claim map is
+[webgpu-evidence.md](webgpu-evidence.md).
 
-## TL;DR
+## Current status
 
-> **✅ Updated 2026-07-24: 3D now renders in-browser on real hardware.** The
-> original symptom (a lit *or even unshaded* 3D mesh came out black; translation
-> stalled on the runtime-specialized scene shader) was a chain of shader-translation
-> and bind-group defects, not one bug. Patches 0009–0014 fix the whole chain —
-> verified on an NVIDIA Tesla P40 (headed Chrome/WebGPU): the 3D scene draws a lit,
-> perspective-projected mesh at 60 fps with **0 `GPUValidationError`** (was 2283).
-> The historical root-cause analysis is kept below in **§3D rendering gap** for the
-> record.
+| Track | Source | Renderer | Hardware result | Artifact status |
+|---|---|---|---|---|
+| Published release | Official Godot 4.7.1 plus patches `0001–0014` | WebGPU Forward Mobile | Renders lit/shadowed 3D and three game scenes on an NVIDIA Tesla P40 with 0 `GPUValidationError` | p0014 release/debug archives published |
+| Current `main` | Official Godot 4.7.1 plus patches `0001–0022` | Forward Mobile plus unfinished WebGPU Forward+ investigation | Forward+ pipeline warm-up completes, but 18 `GPUValidationError` entries remain and no frame renders | No p0022 archives published |
 
-The boot/RefCounted blocker was genuinely fixed and both templates are locked: the
-ADR 0002 gate — rebuild → export → browser WebGPU probe (active canvas context, no
-runtime error) → visual compare **1.2%** vs the WebGL baseline — is green **for the
-neutral template's 2D menu**, and `engine-lock.toml [artifacts.export_templates]`
-records `web_webgpu_release` (`3642cf5e…`) + `web_webgpu_debug` (`1f1ed2b5…`). The
-automated gate historically rendered only a 2D Control scene; 3D is now **verified
-manually on GPU hardware** (NVIDIA Tesla P40 — six PBR meshes with real-time shadows, 59–60 fps, 0 `GPUValidationError`).
-Folding that 3D render into the automated gate is the remaining CI task.
+The p0014 downloads do not contain patches `0015–0022`. Current main and the
+published release are different artifacts.
 
-| Gate | Status | Evidence |
-| --- | --- | --- |
-| Patch series (0001–0013) applies to official 4.7.1 `a13da4feb8` | ✅ | `just engine-versions` → "patch series: 13 patch(es)" |
-| Web templates compile (release + debug, `nothreads`, `webgpu=yes`) | ✅ | `bin/godot.web.template_*.wasm32.nothreads.*` |
-| Tint SPIR‑V→WGSL translation (storage‑buffer + OpImage ordering) | ✅ | patches 0007, 0008 |
-| **Emdawn/Godot `RefCounted` ODR collision** (the heap‑buffer‑overflow) | ✅ **fixed in source** | `engine/toolchain/patches/0001-emdawn-private-namespace.patch`, locked in `[toolchain.emdawnwebgpu]` |
-| Rebuild + browser probe (2D menu) with the backport | ✅ 2026‑07‑24 | 2D menu, 1.2% vs WebGL |
-| **3D render on GPU hardware** (NVIDIA Tesla P40) | ✅ 2026‑07‑24 — patches 0009–0014 | six PBR meshes + real-time shadows, 59–60 fps, 36 draws/frame, 0 `GPUValidationError` |
-| **3D rendering under WebGPU** | 🟢 **in-browser render VERIFIED on an NVIDIA Tesla P40 (patches 0009–0013)** — 3D scene draws a lit mesh at 60 fps, 0 GPUValidationError | §3D rendering gap |
-| **3D scene-shader translation** | 🟢 **177/182 translate offline** (was 174); the runtime-specialized scene shader also translates *and renders* after patches 0011–0013 | §3D rendering gap |
-| Template artifacts locked in `engine-lock.toml` | ✅ | `[artifacts.export_templates]`: release + debug + sha256 |
-| **Forward+ (clustered) shader translation** | 🟢 **translates offline** after patch 0015 — was impossible before | §Forward+ |
-| **Forward+ on hardware** | ⬜ **not yet tested** — needs a GPU box | §Forward+ |
+## Current Forward+ investigation
 
-Reference point: a **release** WebGPU export passed a (shallow, non‑ASAN) browser
-proof on 2026‑07‑22 — `navigator.gpu` + adapter + active canvas context + 103/103
-headless (`engine/.cache/oswt-proof/.studio/verification.json`). ASAN hardening
-then surfaced the `RefCounted` overflow that proof did not catch; that is now
-fixed and awaiting the re‑verified rebuild.
+Forward+ was selected and run on an NVIDIA Tesla P40 through Chrome/WebGPU. It
+has therefore been hardware-tested, but it has not rendered successfully.
 
----
+| Patch checkpoint | Measured result |
+|---|---|
+| `0015–0017` | Offline harness at Vulkan 1.1 / SPIR-V 1.3: 199 modules translated, 6 Tint failures, 3 skipped; no hardware render claim |
+| `0018` | Compiler aborts and wasm traps removed; device limits requested; `GPUValidationError` 168 → 106; still no frame |
+| `0019` | Integer sampled-texture types derived from WGSL; 106 → 42 |
+| `0020` | Negative LOD clamp and storage-to-sampled type fix; 42 → 38 |
+| `0021` | Required storage-texture formats added; 38 → 26 |
+| `0022` | Shadow-entry sample type derived from WGSL; 26 → 18 |
 
-## Forward+ — the renderer ceiling (2026‑07‑25)
+The remaining 18 errors are validation failures, not a measured rendered frame.
+No current-main templates have completed rebuild, browser acceptance, artifact
+recording, and publication as a p0022 release.
 
-Everything above was measured on **Forward Mobile**, because
-`tools/godot/export_game.py` hardcoded `--rendering-method mobile` for the
-`web-webgpu` preset. Per‑game `project.godot` values never mattered; that one
-string decided it for every export the studio has ever produced.
+### Why Forward+ was investigated
 
-That caps quality at a level no amount of art can lift. In this tree,
-`render_forward_mobile.cpp` returns `false` from `_render_buffers_can_be_storage()`
-(⇒ no SSAO, SSIL, SSR), `is_dynamic_gi_supported()` (⇒ no SDFGI, no VoxelGI) and
-`is_volumetric_supported()` (⇒ no volumetric fog), and hardcodes
-`get_max_elements()` to 256 clustered elements. Forward+ inherits the
-`RendererSceneRenderRD` base, which returns `true` to all three and reads
-`rendering/limits/cluster_builder/max_clustered_elements`.
+Every published WebGPU export used Forward Mobile because the WebGPU export path
+selected `--rendering-method mobile`. In this Godot tree, Forward Mobile
+hard-disables the Forward+ SSAO, SSIL, SSR, SDFGI, VoxelGI, and volumetric-fog
+paths. Forward+ is compiled into the template and can be selected for
+investigation with:
 
-Forward+ was already compiled into the same template (`forward_clustered/SCsub`
-is unconditional) and already a legal web value (`main.cpp` declares
-`rendering_method.web` as `forward_plus,mobile,gl_compatibility`; the web export
-plugin handles it). It had simply never been selected.
-
-**Two defects blocked it, both in `cluster_render.glsl`, both fixed by patch 0015:**
-
-1. **Subgroup ops with no fallback.** The cluster builder elects one writer per
-   cluster via `subgroupBallot`/`subgroupBroadcastFirst`/`subgroupOr`. WebGPU has
-   no subgroup support at all — the driver already reported `LIMIT_SUBGROUP_*` as
-   `0` — but **nothing in `servers/rendering/` ever read those limits.** 0015 adds
-   an appended `USE_SUBGROUPS` variant pair plus a plain-atomics fallback that is
-   bit-identical (every invocation the ballot would group writes the same word and
-   bit; `atomicOr` is idempotent), and makes the builder honour the limit.
-2. **A Tint abort on `gl_HelperInvocation`** —
-   `TINT_UNIMPLEMENTED unhandled SPIR-V BuiltIn: HelperInvocation (val = 23)`.
-   Same failure mode as the `Volatile` decoration fixed in 0009: an abort is a
-   wasm trap, i.e. a frozen page. `cluster_render.glsl` is the engine's only live
-   user of that builtin (the other, in `scene_forward_lights_inc.glsl`, is inside
-   `#if 0`), which is exactly why Forward Mobile was unaffected.
-
-**Why Forward+ is the better fit for WebGPU, not merely the prettier one:** Forward
-Mobile's single untranslatable shader, `tonemap_mobile.glsl`, is also the *only*
-shader in the engine using subpasses (`subpassLoad`/`input_attachment`) — a
-concept WebGPU does not have. Mobile is designed around tile-based subpass
-merging; Forward+ is built on compute and storage buffers, which WebGPU has
-natively.
-
-**Measured after 0015–0017** (offline, GPU-free, at the engine's real target env of
-Vulkan 1.1 / SPIR‑V 1.3): **199 modules compiled, 0 GLSL failures, 6 Tint failures,
-3 skipped.** *None of the six blocks Forward+ under WebGPU:*
-
-| Failure | Blocks Forward+? |
-| --- | --- |
-| `tonemap_mobile` `subpass` ×2 | No — Forward Mobile only; WebGPU has no subpasses |
-| `fsr_upscale` `normal` (16-bit math) | No — the driver reports `SUPPORTS_HALF_FLOAT` false, so `fsr.cpp` selects `FALLBACK`, which translates |
-| `cluster_render` `subgroups` ×2 | No — WebGPU selects the no-subgroups variant added by 0015 |
-| `sdfgi_debug_probes` | No — editor debug visualisation |
-
-SSAO, SSIL, SDFGI, VoxelGI, volumetric fog, subsurface scattering, TAA, SSR and the
-clustered scene shader all translate. Note that `ssao_blur`, `ssil_blur` and
-`subsurface_scattering` were previously *assumed* to translate — they were in fact
-never compiled, because the harness enumerated them without the `MODE_`/
-`USE_*_SAMPLES` defines the engine actually builds them with (fixed in 0016).
-
-**None of this is hardware-verified.** Translating offline is not rendering.
-Forward+ also binds far more aggressively than Mobile, and patch 0013 exists
-because Mobile *alone* already tripped WebGPU's 16-samplers-per-stage limit —
-expect that to be the next thing to break. Export a Forward+ build with
-`export_game.py --preset web-webgpu --rendering-method forward_plus` and run it on
-the P40; `mobile` remains the default until that passes.
-
-### Reproducing the sweep
-
-```bash
-# ~1 minute; needs only Godot's vendored glslang, not the full Tint build.
-bash drivers/webgpu/tint_cli/build_glsl2spv.sh
-python drivers/webgpu/wgsl_precompile.py <engine-tree> /tmp/out.gen.h <engine-tree>/bin/glsl2spv
+```sh
+python tools/godot/export_game.py --preset web-webgpu --rendering-method forward_plus
 ```
 
-On Windows, `bin/tint_convert_cli` must also exist **without** the `.exe`
-suffix — Python's `os.path.isfile` does not auto-append it the way Git Bash does.
+Forward+ also exposed bindings and shader variants that Forward Mobile does not
+exercise. Offline translation was necessary evidence but did not predict
+bind-group-layout validation on hardware.
 
----
+### Patch 0015: no-subgroup cluster builder
 
-## 3D rendering gap — RESOLVED; in-browser render verified (patches 0009–0013, 2026-07-24)
+WebGPU exposed no subgroup support, while the cluster builder used
+`subgroupBallot`, `subgroupBroadcastFirst`, `subgroupOr`, and
+`gl_HelperInvocation`. Patch 0015 added a plain-atomics fallback and selected it
+when subgroup limits are zero.
 
-**Fix:** Tint's SPIR-V reader (`Parser::EmitVar`) aborts with `TINT_UNIMPLEMENTED`
-"decoration 21" (`Volatile`) on Godot's coherent compute shaders — concretely
-`volumetric_fog.glsl`, compiled by Forward Mobile during 3D init. In the browser
-that abort is a wasm trap → frozen page → all 3D black. Patch 0009 strips the
-`Volatile` decoration in `spirv_preprocess.cpp` (same as `Restrict`). Found and
-verified **GPU-free** by building a native offline reproducer of the exact runtime
-path — `glsl2spv` (Godot's glslang) → the driver's 11 preprocess passes → Tint
-(`tint_convert_cli`): over all 182 engine shaders, `volumetric_fog` was the only
-crash, and with 0009 it translates with **0/182** crashes/hangs. In-browser render
-verification is still pending a GPU-capable machine (this dev box has none). The
-original investigation notes below are retained for context.
+The fallback preserves the operation's result because invocations in the
+elected group write the same word and bit and `atomicOr` is idempotent. This
+translation result did not establish runtime success.
 
-**Follow-up — patch 0010 (combined-sampler split is now transitive).** With the
-crash gone, 8 of 182 shaders still failed Tint *gracefully* (translation returns
-an error → the effect is skipped, 3D still renders). Three of those were the same
-class of bug: `split_combined_samplers` rewrites GLSL `sampler2D` into WebGPU's
-required separate texture + sampler, but only started that rewrite for functions
-called with a combined **global** variable. A combined sampler forwarded through a
-wrapper into a deeper helper (Godot's tonemap bicubic-glow `texture2D_bicubic`
-chain, and `taa_resolve`) left the wrapper's parameter split (`ptr(Image)`) while
-the callee stayed `ptr(SampledImage)` — an invalid `OpFunctionCall` argument-type
-mismatch that Tint rejects. Patch 0010 iterates the split to a fixpoint, following
-every forwarded combined value and splitting each callee back to the same
-underlying global sampler. Verified offline with the same reproducer **plus
-SPIRV-Tools validation**: the three shaders now pass validation and translate to
-correct WGSL (separate `texture_2d` + `sampler`, `textureSampleLevel` wired to the
-split pair), coverage 174 → **177/182**, still 0 crashes. The 5 remaining are
-fundamental WGSL feature gaps (subpass `input_attachment` ×2, storage-texture
-format inference on `ssr_filter`, vertex-stage `read_write` storage on
-`voxel_gi_debug`, vertex `@builtin(position)` on `sdfgi_debug_probes`), not
-combined-sampler issues.
+### Patch 0016: offline harness parity
 
-**Symptom (original).** WebGPU renders 2D/Control UI (menus) but any 3D scene is black. A
-minimal `Node3D` + `BoxMesh` + `Camera3D` probe — even with an **unshaded**
-material — renders correctly under WebGL and is black under WebGPU. So it is not a
-lighting/shadow issue; it is the base 3D draw path.
+The earlier harness used Vulkan 1.0 / SPIR-V 1.0 while the engine reports Vulkan
+1.1 / SPIR-V 1.3. It also resolved repo-relative includes from the working
+directory and enumerated several variants without the defines used by the
+engine. Patch 0016 corrected those inputs, isolated Tint aborts per module, and
+added the small `glsl2spv` build/probe tools.
 
-**Root cause (instrumented, 2026‑07‑24).** A `WEBGPU_VERBOSE` build shows WebGPU
-inits (`WebGPU 1.0 - Forward Mobile - Using Device`), submits ~3 frames, and
-translates the first ~50 shaders through Tint fine (2D `CanvasOcclusionShaderRD`
-pipelines get created). Then translation of the **~51st shader — the large 3D
-`SceneForwardMobile` uber‑shader — hangs and never completes** (`tint_misses`
-frozen at 50 after 90 s = a genuine hang, not slowness). The hang is in the
-synchronous SPIR‑V→WGSL step in `_translate_spirv_to_wgsl`
-(`rendering_device_driver_webgpu.cpp`): either one of the `spirv_preprocess::*`
-passes or `tint_wrapper_spirv_to_wgsl`. A per‑pass `[XLATE]` tracer build is in
-flight to name the exact step.
+After patch 0017's SSR storage-format fix, the dated offline result was:
 
-**Secondary problem.** `precompiled_hits=0` — `wgsl_precompiled.gen.h` is empty
-(`_wgsl_precompiled_count = 0`) because `bin/tint_convert_cli` was never built
-(`wgsl_precompile.py` errors out without it). So even once the hang is fixed, every
-shader hits slow runtime Tint until the precompile table is populated (build
-`drivers/webgpu/tint_cli/build.sh`).
+- 199 translated modules;
+- 0 GLSL compilation failures;
+- 6 Tint failures;
+- 3 skipped variants.
 
-**Reproduce.** Point the neutral template `main_scene` at a Node3D+BoxMesh probe
-(unshaded), `export_game.py --preset web-webgpu`, `run_browser_smoke.py` (widen its
-`relevant` console filter to include `[shader]|[diag|[js-p|[xlate`), read the last
-`[XLATE]`/`[SHADER]` line before the stall.
+The six failures were two Forward Mobile subpass tonemap variants, one
+unselected 16-bit FSR variant, two unselected subgroup variants, and an editor
+debug visualization. Patch 0018 later showed that unselected variants could
+still be fatal because `ShaderRD` compiled the listed variants before runtime
+selection.
 
-**Gate blind spot.** The ADR 0002 acceptance gate exercises the neutral template's
-**2D** menu, so it passed while 3D was broken. **Add a 3D render probe to the gate**
-so "WebGPU renders" can never again mean "2D only."
+### Patches 0018–0022: hardware validation
 
----
+Patch 0018 removed three abort classes:
 
-## Root cause (confirmed) — the 36‑byte heap‑buffer‑overflow
+- unselected subgroup variants containing `gl_HelperInvocation`;
+- the unselected FSR 16-bit variant;
+- `isnan`/`isinf` paths unsupported by the Tint reader.
 
-The ASAN debug smoke crashed during `RenderingDeviceDriverWebGPU` init, after the
-JS‑preinitialized device was imported but before the canvas context was
-configured (`webgpuCanvasContexts:0`), with:
+It also requested the compute and storage-texture limits the adapter exposed.
+That allowed validation errors to be observed rather than losing the page to a
+wasm trap.
 
+Patches 0019–0022 then corrected sampled-texture component types, negative LOD
+bounds, read-only-storage conversion types, storage-texture formats, and two
+shadow-entry sample-type sites. The current count is 18.
+
+## Published Forward Mobile result
+
+The p0014 release closed the Forward Mobile 3D chain:
+
+1. `0009` stripped Tint's unsupported SPIR-V `Volatile` decoration.
+2. `0010` propagated combined image/sampler splitting through function calls.
+3. `0011` stopped literal decoration operands from being remapped as IDs.
+4. `0012` converted texture types on function parameters.
+5. `0013` derived precise per-stage sampler/texture visibility.
+6. `0014` restored helper-reached bindings and paired depth textures with
+   non-filtering samplers.
+
+On the P40, the minimal scene rendered six PBR meshes with a directional light
+and real-time shadows at 59–60 fps, 36 draws/frame, and 0
+`GPUValidationError`. Chariot, Riftline, and The Deep were then verified with the
+same p0014 Forward Mobile build. Exact measurements remain in
+[webgpu-performance.md](webgpu-performance.md).
+
+## Historical checkpoints
+
+The following notes are deliberately dated. They describe investigation states
+that were true when recorded but are not current status.
+
+### 2026-07-22: shallow browser proof
+
+A release WebGPU export reached `navigator.gpu`, an adapter, and an active
+canvas context and passed 103/103 headless checks. The probe was shallow:
+subsequent ASAN work found a real Emdawn/Godot `RefCounted` collision. This
+checkpoint did not establish 3D rendering or safe release bytes.
+
+### 2026-07-23 to early 2026-07-24: Emdawn/Godot collision
+
+The ASAN debug smoke crashed during `RenderingDeviceDriverWebGPU` initialization
+with a 36-byte heap-buffer-overflow. The pinned Emdawn port predated Dawn's
+anonymous-namespace isolation, so Emdawn's global C++ `RefCounted` collided at
+WebAssembly link time with Godot's global `RefCounted`.
+
+The fix is the checksum-locked
+[`0001-emdawn-private-namespace.patch`](../../engine/toolchain/patches/0001-emdawn-private-namespace.patch),
+a narrow backport of Dawn commit
+`2752c7d71a190c8512f38ceda922253d23876fb4`. The build copies the pinned
+Emscripten package into a disposable cache, applies the backport there, and
+does not mutate the SDK.
+
+### Early 2026-07-24: 2D gate green, 3D still black
+
+The original automated gate rendered only the neutral template's 2D Control
+menu. It reached an active WebGPU context and produced a 1.2% visual difference
+from the WebGL baseline, while a 3D scene still appeared black.
+
+Instrumentation showed translation stopping during the 3D shader chain.
+Offline work then identified Tint's unsupported `Volatile` decoration and the
+later sampler/texture issues. Statements from this checkpoint that browser 3D
+verification was pending were superseded by the P40 run later that day.
+
+### 2026-07-24: offline 177/182 checkpoint
+
+After patch 0010, 177 of 182 enumerated shader modules translated in the older
+harness, with no crash or hang. The five remaining failures included subpass,
+storage-format, vertex storage, and editor-debug paths. This number is retained
+as a historical measurement; the corrected patch-0016 harness later enumerated
+different module variants and produced the 199/205 result.
+
+### 2026-07-24: p0014 release close
+
+Patches 0013 and 0014 resolved the Forward Mobile binding defects. The minimal
+lit/shadowed 3D scene rendered on the P40, and p0014 was published. The release
+assets attached to GitHub are identified in
+`[releases.godot_4_7_1_webgpu_p0014]`; the separate
+`[artifacts.export_templates]` table records a locally accepted build pair with
+different bytes.
+
+### 2026-07-25: Forward+ translation-only checkpoint
+
+After patches 0015–0017, all variants needed by the intended Forward+ runtime
+path translated in the corrected offline harness. The statement “none of this
+is hardware-verified” was accurate at that checkpoint only. Patch 0018 then ran
+Forward+ on the P40 and showed that translation did not imply valid runtime
+bindings or a rendered frame.
+
+## Remaining risks
+
+- Forward+ does not render and still emits 18 validation errors.
+- The p0014 Jolt web build failed one concave terrain collider accepted by the
+  official WebGL 2 control.
+- The automated gate still does not provide public GPU CI coverage for 3D.
+- Safari/iOS, native Android/iOS, and non-NVIDIA GPU vendors are unverified.
+- Headless GPU canvas readback can be black even while rendering; the accepted
+  hardware method uses engine draw counters plus validation-error logs.
+
+## Reproduction commands
+
+Fast source and documentation gates:
+
+```sh
+just engine-verify-patches
+just public-evidence-validate
+just test-python
 ```
-==ERROR: AddressSanitizer: heap-buffer-overflow ...
-WRITE of size 36 at 0x16cf21e8 thread T0
+
+Published Forward Mobile reproduction:
+
+```sh
+gh release download godot-4.7.1-webgpu-p0014 --repo lxsolutions/studio-foundation
+just export-browser-webgpu
+just run-browser-smoke
 ```
 
-**Why 36 bytes:** the pinned Emdawn WebGPU port (`v20250531.224602`, Dawn rev
-`ea66c0fa…`) predates Dawn's change that wraps its private implementation types in
-an anonymous namespace. Without that isolation, Emdawn's **global** C++
-`RefCounted` class collides at WebAssembly link time with **Godot's** global
-`RefCounted`. The linker resolves the one symbol to a single definition, so Emdawn
-allocates an object sized for *its* `RefCounted` while a constructor/method sized
-for the *other* (larger) `RefCounted` writes past the end — a fixed‑size heap
-overflow. (Authoritative write‑up: `engine/toolchain/README.md`.)
+Current-main Forward+ investigation:
 
-This also explains why the earlier non‑ASAN release proof "passed": the overflow
-wrote into adjacent heap slack instead of tripping a guard. It is real UB either
-way.
+```sh
+just engine-fetch
+just engine-build
+python tools/godot/export_game.py --preset web-webgpu --rendering-method forward_plus
+```
 
-### Note on the earlier ASAN dead‑ends (now moot)
-
-The all‑day `engine/.cache/studio-webgpu/*.log` experiments — `binding-visibility`,
-`null-instance`, `instance-parent`, `malloc-wrap`, `named-stack`,
-`spontaneous-callback`, and the unfinished 22:36 no‑opt link — were attempts to
-*localize* the crash while the in‑browser ASAN symbolizer kept self‑crashing
-(`_emscripten_pc_get_function` → `reading 'getName'` of undefined = wasm built
-without a function‑name section). Those are **superseded**: the bug was localized
-by ODR reasoning, not by symbolization. If a future crash ever needs symbolizing,
-the fix is to rebuild with **`--profiling-funcs`** (keeps the wasm name section)
-or use `~/emsdk/upstream/emscripten/emsymbolizer.py` — but that path is not needed
-for the current blocker.
-
----
-
-## The fix — Emdawn private‑namespace backport
-
-`engine/toolchain/patches/0001-emdawn-private-namespace.patch` wraps Emdawn's
-private implementation block in `webgpu/src/webgpu.cpp` in an anonymous
-`namespace { … }`, giving those types internal linkage so `RefCounted` no longer
-collides with Godot's. It is a narrow backport of upstream Dawn commit
-`2752c7d71a190c8512f38ceda922253d23876fb4`.
-
-Delivered as a first‑class, checksum‑locked **toolchain input** (ADR 0002 rule 13),
-not another engine upstream:
-
-- `engine-lock.toml [toolchain.emdawnwebgpu]` pins `version`, `revision`,
-  `source_sha256`, `patched_sha256`, the patch path, `patch_sha256`, and
-  `upstream_fix_commit`.
-- `engine/scripts/emdawn_port.py` (`prepare_locked_emdawn_port`) locates the
-  SDK's built‑in Emdawn package (read‑only), verifies version/Dawn‑rev/`webgpu.cpp`
-  SHA, copies it to `engine/.cache/toolchains/emdawnwebgpu`, applies + verifies the
-  patch, and hands the local port path to the build via `EMDAWNWEBGPU_PORT`.
-- `engine/scripts/tests/test_emdawn_port.py` covers it.
-- Already applied in this worktree's cache (patched `webgpu.cpp`, anon namespace
-  present).
-
-`engine.py build` (=`just engine-build`) wires this automatically before the scons
-web build, so a normal rebuild picks up the fix.
-
----
-
-## Patch 0008 — `tint-image-ordering` (registered)
-
-`engine/patches/0008-tint-image-ordering.patch` (listed in `engine-lock.toml`
-series, sha256 `14af2071…`). In `thirdparty/tint/.../spirv/reader/lower/texture.cc`
-the reader lowered `OpImage` *interleaved* in the single `builtin_worklist`, so an
-`OpImage` could be lowered **after** a texture builtin that consumes its result.
-0008 splits `OpImage` into a separate worklist processed **first**. Verified sound
-by reading the applied tree (lines 216–265). A shader‑translation correctness fix,
-independent of the `RefCounted` overflow.
-
----
-
-## Verification (2026-07-24) — how the gate was closed
-
-Run from this worktree, tools venv Python (system Python lacks SCons / PIL):
-
-1. `engine.py build` (via `tools/.venv/Scripts/python.exe`) — release **and** debug
-   web templates rebuilt with the locked Emdawn namespace port applied. Both
-   installed to `engine/artifacts/templates/*.webgpu.zip`. (`just engine-build`
-   fails: its `{{PY}}` is system Python, no SCons — run under the venv.)
-2. `export_game.py --game templates/godot-game --preset web-webgpu` → export OK.
-3. `capture_web.py … --preset web-webgpu` → **exit 0**: `capture.mjs` throws on an
-   inactive context, so this confirms an **active WebGPU canvas context** rendered a
-   frame with no runtime error / heap-buffer-overflow.
-4. `compare_screenshots.py web-webgl.png web-webgpu.png --max-diff-ratio 0.03` →
-   **ratio 0.0120 (1.2%) < 0.03** — pixels verified against the WebGL baseline.
-5. `engine.py record-artifacts` → wrote both templates (bytes + sha256) into
-   `engine-lock.toml [artifacts.export_templates]` and cleared the `blocker`.
-6. Independent wiring check: `test_emdawn_port.py` 4/4 (prepares the exact locked
-   port; rejects tampered source/patch/cache).
-
-## Remaining / follow-ups
-
-- **Commit the branch.** Uncommitted here: patch 0008, the Emdawn toolchain backport
-  + `emdawn_port.py`, `engine-lock.toml` (flags + toolchain + recorded artifacts),
-  ADR 0002 / README / this doc, `smoke.mjs`. Then merge `codex/godot-webgpu-recenter`
-  to `main` (currently 4 commits ahead of the last PR).
-- **Optional stronger proof:** an ASAN build re-run to show the heap-buffer-overflow
-  is gone (the release proof passed pre-fix too, so it is necessary but not
-  discriminating). The fix is structural (namespace isolation removes the ODR
-  collision at link time) and the functional gate matches the lock's definition of
-  done, so this is extra assurance, not a gate.
-- **Fix `just engine-build`** to use the tools-venv interpreter so the front-door
-  recipe works without the manual venv path.
-- Regenerate the disposable applied tree from patches at some point to drop the
-  ad-hoc ASAN instrumentation (see Fragility warning).
-
-Already reconciled in this worktree (uncommitted): `engine-lock.toml` build flags
-(`threads=no`, `webgpu=yes`, `opengl3=no`), the `[toolchain.emdawnwebgpu]` lock,
-the ADR rule 13, and the `blocker` line. The stale, dirty duplicate is the
-**primary `studio-foundation` worktree** (`main` @ `459faa0`, 4 behind
-`origin/main`, patches 0001–0003 only) — ignore it; this branch is source of truth.
-
-## Fragility warning
-
-Diagnostic instrumentation (extra `EM_ASM` probes in `main.cpp` /
-`worker_thread_pool.cpp`, etc.) lives **only** in the disposable applied tree
-`engine/.cache/studio-webgpu`, not in any patch. A clean regenerate from the patch
-series will drop it. That is fine now the root cause is fixed; fold anything worth
-keeping into a `WEBGPU_VERBOSE`‑gated patch before regenerating.
+Run the latter export in headed Chrome on a GPU host, allow at least 60 seconds,
+then record adapter, browser, artifact identity, renderer, draw counters, and
+every `GPUValidationError`.

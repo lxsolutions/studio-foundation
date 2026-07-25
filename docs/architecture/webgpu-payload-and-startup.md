@@ -2,7 +2,10 @@
 
 Measured 2026-07-24 against the published demo
 (<https://lxsolutions.github.io/studio-foundation/>) on an NVIDIA Tesla P40 through
-Chrome/WebGPU. Numbers here are observations, not estimates.
+Chrome/WebGPU. The demo used the p0014 Forward Mobile release (patches
+0001–0014). Numbers here are observations, not estimates, and are not p0022 or
+Forward+ measurements. See the canonical
+[evidence matrix](webgpu-evidence.md).
 
 ## What the download actually costs
 
@@ -24,17 +27,17 @@ while `-Oz` would only save ~100 KiB more. There is no easy flag left to pull.
 ## Cold start — where the time really goes
 
 An earlier note in this repo claimed roughly 20 seconds of WGSL shader compilation
-before the first frame. **That was wrong**, and it mattered because it pointed
+before the initial frame. **That was wrong**, and it mattered because it pointed
 optimization at the wrong thing.
 
 Measured on the live demo with the network throttled to 12 Mbps and HTTP caching
-disabled (a realistic first-time visitor):
+disabled (a realistic new visitor):
 
 | Phase | Observation |
 |---|---|
 | Download (12 MB compressed) | dominates; ~48% complete at 5 s |
 | wasm instantiate + engine boot + shader translation + pipeline build | fast — **80 pipelines built within ~2 s** of the engine starting |
-| First frames drawn | by **~13 s end to end** |
+| Initial frames drawn | by **~13 s end to end** |
 
 So **payload size, not shader compilation, is the cold-start bottleneck.** On an
 unthrottled datacenter link the same demo is rendering in ~4 s.
@@ -72,7 +75,7 @@ Not yet done, listed in rough order of expected benefit:
 
 ## Loading UX
 
-Because the first load is dominated by a large download, the demo ships
+Because the initial load is dominated by a large download, the demo ships
 `boot-overlay.js`, which keeps a progress screen up until frames are genuinely being
 produced. Detecting "rendering has started" is less obvious than it looks:
 

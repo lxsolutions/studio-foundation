@@ -7,17 +7,20 @@
 >
 > **Measured:** 2026-07-24, NVIDIA Tesla P40, headed Chrome under Xvfb.
 > **Engine:** patch series 0001-0014 (tag `godot-4.7.1-webgpu-p0014`).
+> **Scope boundary:** these are p0014 Forward Mobile measurements. Current
+> `main` patches 0015-0022 and the unfinished Forward+ path were not benchmarked
+> here. See the canonical [evidence matrix](webgpu-evidence.md).
 
 ---
 
 ## TL;DR
 
-**WebGPU runs the same game at ~2.5-3x the frame rate of WebGL2, at roughly half
-the draw calls.** Three real games — not showcase scenes — render on WebGPU
-hardware with **0 `GPUValidationError`**.
+In this p0014 A/B, the WebGPU Forward Mobile product path measured ~2.5–3x the
+frame rate of the official WebGL 2 Compatibility path, at roughly half the draw
+calls. Three game scenes rendered on the P40 with 0 `GPUValidationError`.
 
-The 60 fps figure is almost certainly vsync-capped, so it is a **floor, not a
-ceiling**: the true headroom is larger than this table can show.
+The 60 fps WebGPU figure was vsync-capped, so this run does not measure its
+maximum frame rate.
 
 ---
 
@@ -75,7 +78,7 @@ settings.
 
 ---
 
-## Cold start: ~20s to first frame — and it is NOT shader compilation
+## Cold start: ~20s to initial frame — and it is NOT shader compilation
 
 Measured on Chariot over a LAN-local server, and the reason several earlier
 investigations wrongly concluded "3D is black":
@@ -85,7 +88,7 @@ investigations wrongly concluded "3D is black":
 | WebGPU device acquired | +1.3s |
 | `studio: boot completed` | +8.7s |
 | All WGSL module-compilation log entries | **+17.9s → +18.0s** |
-| **First drawn frame (non-zero draw calls)** | **+20.9s** |
+| **Initial drawn frame (non-zero draw calls)** | **+20.9s** |
 
 **Shader compilation is not the bottleneck.** Every one of the 21 compilation-log
 entries lands inside a **single sub-second burst**, and the count is identical
@@ -94,12 +97,12 @@ across all three games regardless of scene size (Riftline +17.4s, Chariot
 (`CanvasShaderRD`, `SceneForwardMobileShaderRD`, `TonemapMobileShaderRD`), not
 game content. An independent run against the *published* demo, throttled to
 12 Mbps with caching disabled, agrees: **80 pipelines built within ~2s** of the
-engine starting, with total time to first frame ~13s **dominated by downloading
+engine starting, with total time to initial frame ~13s **dominated by downloading
 the 45.8 MB wasm**.
 
 So the cost is **engine startup — fetching and instantiating a 45.8 MB wasm,
 then engine and scene init — not WGSL translation**. For reference, the WebGL 2
-control reached its first frame at **+13.0s** on the same harness, so WebGPU adds
+control reached its initial frame at **+13.0s** on the same harness, so WebGPU adds
 real startup overhead, but far less than the raw ~20s figure suggests.
 
 Three consequences:
@@ -107,10 +110,10 @@ Three consequences:
 1. **Any capture window shorter than ~25s screenshots a blank canvas.**
    `tests/browser/capture.mjs` previously defaulted to 6s, which could not
    photograph a real 3D scene before it drew anything. The default is now 25s.
-   This holds regardless of *why* the first frame is late.
+   This holds regardless of *why* the initial frame is late.
 2. **Payload size is the lever** — shrinking/streaming the wasm and compressing
    transfer beats shader precompilation, which is already only ~2s.
-3. Measure first-frame latency with the **engine's own draw counters**, and
+3. Measure initial-frame latency with the **engine's own draw counters**, and
    beware `page.goto(waitUntil: "load")`: it waits for the entire wasm and can
    start a probe clock ~14s late, inflating every number after it.
 
