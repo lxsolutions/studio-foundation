@@ -30,3 +30,22 @@ jobs:
 
       - name: Verify the WebGPU patch series
         run: python engine/scripts/verify_patch_series.py
+
+  # Checksums cannot tell you a patch actually applies. Patch 0016 shipped a
+  # modification hunk for a file no patch creates -- it existed only as untracked
+  # local state in the tree it was generated from -- and the job above passed it
+  # while `git apply` failed on every clean checkout, taking engine-fetch with it.
+  # This job is slower because it needs the real base tree, which is precisely why
+  # it catches what the fast one structurally cannot.
+  apply:
+    name: applies to a clean tree
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Apply the series over pristine official Godot
+        run: python engine/scripts/verify_patch_apply.py
