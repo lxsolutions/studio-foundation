@@ -1,6 +1,6 @@
 # bforge op reference
 
-104 operations.
+105 operations.
 
 ## `arch.*`
 
@@ -1260,6 +1260,32 @@ Render from an explicit camera position and target. Auto-framing always fits the
 | `engine` | auto \| cycles \| eevee | 'auto' | Render engine |
 | `light_distance` | number | 0.0 | Light rig scale in metres; 0 fits it to the whole scene |
 | `world_light` | number | 0.32 | Ambient dome strength. Higher fills shadows but piles white specular sheen onto every surface, which washes out saturated albedo |
+
+### `render.cinematic`
+
+A film-grade beauty render: physical sun and sky, global illumination, atmospheric haze, depth of field and a filmic tonemap. render.view and render.camera are flat REVIEW rigs built to judge albedo honestly; this one is built to show the asset at its best, and it is the render that tells you whether the art actually holds up.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `out` | string | 'hero.png' | PNG output path |
+| `position` | array | None | Camera position in metres |
+| `target` | array | [0.0, 0.0, 0.0] | Point to look at |
+| `lens` | number | 40.0 | Focal length in mm |
+| `resolution` | integer | 1280 | Width in pixels |
+| `aspect` | number | 2.39 | Width / height. 2.39 is anamorphic, 1.78 is 16:9 |
+| `samples` | integer | 96 | Path-tracing samples. This is a beauty render; it costs time |
+| `sun_energy` | number | 4.0 | Sun strength in W/m2. 3-6 reads as hard daylight |
+| `sun_angle` | array | [52.0, 35.0] | Sun elevation and azimuth in degrees. Low sun = long shadows |
+| `sun_color` | any | '#fff2dc' | Sunlight colour; warmer at low elevation |
+| `sky_color` | any | '#6fa3dc' | Zenith sky colour, which is also the fill light |
+| `horizon_color` | any | '#e8dcc0' | Horizon haze colour |
+| `sky_strength` | number | 1.1 | Sky/ambient strength |
+| `haze` | number | 0.0 | Volumetric atmosphere density. 0.0005-0.004 separates distant forms; costs render time |
+| `focus` | number | 0.0 | Depth of field focus distance; 0 measures it to the target |
+| `aperture` | number | 0.0 | f-stop. 0 disables depth of field. 2.8 is shallow, 8 is deep |
+| `bounces` | integer | 6 | Light bounces. GI is most of what makes a render look expensive |
+| `exposure` | number | 0.0 | Exposure compensation in stops |
+| `look` | filmic \| agx \| standard \| contrast | 'agx' | View transform. Filmic/AgX roll off highlights like film; standard clips them |
 
 ### `render.contact_sheet`
 

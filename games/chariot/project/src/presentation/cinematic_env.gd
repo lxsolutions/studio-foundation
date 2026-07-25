@@ -84,7 +84,11 @@ static func build(profile: String) -> Environment:
 
 	# --- tonemapping: the single biggest one-line win -------------------
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
-	env.tonemap_exposure = 1.0
+	# 0.72, not 1.0: a Forward+ hardware capture measured 0.357 linear mean
+	# against ~0.20 for a properly exposed scene. Pale limestone under a midday
+	# sun sits high by nature, so the venue needs pulling down rather than the
+	# albedo being darkened away from what travertine actually is.
+	env.tonemap_exposure = 0.72
 	env.tonemap_white = 6.0
 
 	# --- contact shadows ------------------------------------------------
@@ -133,9 +137,11 @@ static func build(profile: String) -> Environment:
 	# --- atmosphere --------------------------------------------------------
 	if features.get("volumetric", false):
 		env.volumetric_fog_enabled = true
-		# Thin. A hippodrome is 700 m long, so even a faint density separates
-		# the near stands from the far ones and reads as heat haze.
-		env.volumetric_fog_density = 0.008
+		# VERY thin. A hippodrome is 700 m long, so density compounds fast: at
+		# 0.008 a hardware capture came back with the sky fogged to solid tan and
+		# every form flattened. 0.002 still separates the near stands from the
+		# far ones without eating the scene.
+		env.volumetric_fog_density = 0.002
 		env.volumetric_fog_albedo = Color(0.94, 0.89, 0.79)
 		env.volumetric_fog_emission = Color(0.10, 0.09, 0.07)
 		env.volumetric_fog_emission_energy = 0.4
