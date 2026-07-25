@@ -105,6 +105,7 @@ test-rust:
 test-python:
     uv run --project tools python -m unittest discover -s tools/studio-mcp/tests -p "test_*.py" -v
     uv run --project tools python -m unittest discover -s tools/infra/tests -p "test_*.py" -v
+    uv run --project tools python -m unittest discover -s tools/ci/tests -p "test_*.py" -v
     {{PY}} -m unittest discover -s engine/scripts/tests -p "test_*.py" -v
     uv run --project tools python -m unittest discover -s tools/bforge/tests -p "test_schema.py" -v
     uv run --project tools python -m unittest discover -s tools/bforge/tests -p "test_mcp.py" -v
@@ -134,7 +135,7 @@ test-generated:
 
 # ------------------------------------------------------------------ lint / format
 
-lint: lint-rust lint-python lint-workflows
+lint: lint-rust lint-python lint-workflows public-evidence-validate
 
 lint-rust:
     {{PY}} tools/cargo_env.py fmt --manifest-path services/Cargo.toml --all -- --check
@@ -146,6 +147,11 @@ lint-python:
 
 lint-workflows:
     uv run --project tools python tools/ci/validate_workflows.py
+
+# Keep public release/main claims derived from engine-lock.toml and verify links
+# in the designated public documentation and canonical Pages source.
+public-evidence-validate:
+    {{PY}} tools/ci/validate_public_evidence.py
 
 fmt:
     cargo fmt --manifest-path services/Cargo.toml --all

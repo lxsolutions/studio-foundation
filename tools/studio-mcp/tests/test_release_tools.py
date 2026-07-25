@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import copy
 import hashlib
 import importlib.util
 import json
 import subprocess
 import sys
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 
@@ -206,6 +208,31 @@ class AuditTests(unittest.TestCase):
 class ValidationTests(unittest.TestCase):
     def test_engine_lock_and_patch_checksums_validate(self) -> None:
         self.assertEqual(validator.validate_engine_lock(REPO), [])
+
+    def test_published_release_is_p0014_not_current_patch_count(self) -> None:
+        with (REPO / "engine" / "engine-lock.toml").open("rb") as handle:
+            lock = tomllib.load(handle)
+        patch_count = len(lock["patches"]["series"])
+        self.assertEqual(validator.validate_published_webgpu_release(lock, patch_count), [])
+
+        changed = copy.deepcopy(lock)
+        changed["releases"]["godot_4_7_1_webgpu_p0014"]["patch_through"] = patch_count
+        problems = validator.validate_published_webgpu_release(changed, patch_count)
+        self.assertIn("published p0014 release must record patch_through = 14", problems)
+
+    def test_forward_plus_development_state_stays_non_release_evidence(self) -> None:
+        with (REPO / "engine" / "engine-lock.toml").open("rb") as handle:
+            lock = tomllib.load(handle)
+        patch_count = len(lock["patches"]["series"])
+        self.assertEqual(validator.validate_forward_plus_development(lock, patch_count), [])
+
+        changed = copy.deepcopy(lock)
+        changed["development"]["webgpu_forward_plus"]["rendered_frame"] = True
+        problems = validator.validate_forward_plus_development(changed, patch_count)
+        self.assertIn(
+            "Forward+ development state must record rendered_frame = false",
+            problems,
+        )
 
     def test_engine_artifact_records_verify_local_bytes(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
