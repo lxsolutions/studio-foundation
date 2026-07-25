@@ -133,6 +133,90 @@ def material_pbr(ctx, object, base_color, roughness, metallic, detail_scale, gra
 
 
 @op(
+    "material.tileable",
+    summary="Bake a SEAMLESS PBR texture set and apply it repeating across a surface. This is how architecture gets textured: a unique bake for a 725 m stadium works out to ~3 px/m, which is no texture at all, whereas one 1k tiling map gives real surface detail everywhere. Noise is sampled through a torus mapping so it tiles perfectly with no visible seam.",
+    params={
+        "object": ("str", None, "Object to texture"),
+        "base_color": ("colorref", "stone_grey", "Base albedo"),
+        "roughness": ("num", 0.78, "Mid roughness"),
+        "metallic": ("num", 0.0, "Metallic 0..1"),
+        "detail_scale": ("num", 6.0, "Feature size in the baked map — higher is finer"),
+        "dirt": ("num", 0.35, "Grime settled in the low spots (0..1)"),
+        "dirt_color": ("colorref", "#2b2118", "Grime colour"),
+        "bump": ("num", 0.4, "Surface relief strength"),
+        "tiles": ("num", 6.0, "How many times the map repeats across the object's UVs"),
+        "uv_scale": ("num", 0.0, "Metres per UV tile for box projection; 0 keeps existing UVs"),
+        "size": ("int", 1024, "Texture resolution"),
+        "samples": ("int", 16, "Cycles samples for the bake"),
+        "stem": ("str", "", "Filename stem (defaults to the object name)"),
+        "out_dir": ("path", "textures", "Directory for the PNGs"),
+        "reuse": ("bool", True, "If this stem was already baked, assign the existing material instead of baking again. Bake once, apply to every stone surface in a building — same texture, one set of maps, one draw call"),
+        "seed": ("int", 0, "Random seed"),
+    },
+    tags=["material", "bake", "pbr"],
+)
+def material_tileable(ctx, object, base_color, roughness, metallic, detail_scale, dirt,
+                      dirt_color, bump, tiles, uv_scale, size, samples, stem, out_dir,
+                      reuse, seed):
+    obj = _get(object)
+    if obj.type != "MESH":
+        raise OpError(f"'{object}' is a {obj.type}, not a mesh")
+
+    existing = bpy.data.materials.get(f"m_{scene_lib.sanitize(stem or obj.name)}")
+    if reuse and existing is not None:
+        if uv_scale > 0.0:
+            uv_lib.box_project(obj, scale=uv_scale)
+        obj.data.materials.clear()
+        mat_lib.assign(obj, existing)
+        return {
+            "object": obj.name, "material": existing.name, "reused": True,
+            "tiles": tiles, "uv_scale": uv_scale or None, "gltf_safe": True,
+        }
+
+    if uv_scale > 0.0:
+        # Box projection at a fixed metres-per-tile keeps texel density uniform
+        # across every surface of the building, which is what makes a kit read
+        # as one kit rather than a pile of separately-textured parts.
+        uv_lib.box_project(obj, scale=uv_scale)
+    elif not obj.data.uv_layers:
+        raise OpError(
+            f"'{object}' has no UVs. Pass uv_scale (metres per tile) to box-project, "
+            "or run uv.unwrap first."
+        )
+
+    label = scene_lib.sanitize(stem or obj.name)
+    source = mat_lib.tileable_pbr(
+        f"m_tileable_{label}", base_color, roughness=roughness, metallic=metallic,
+        detail_scale=detail_scale, dirt_color=dirt_color, dirt=dirt, bump=bump, seed=seed,
+    )
+    directory = ctx.out_path(f"{out_dir}/{label}.png", ".png").parent
+    try:
+        produced = mat_lib.bake_tileable_set(
+            source, str(directory), label, size=size, samples=samples,
+        )
+    except (RuntimeError, ValueError) as exc:
+        raise OpError(f"tileable bake failed: {exc}") from exc
+    if not produced:
+        raise OpError("no maps were baked")
+
+    applied = mat_lib.tiled_material(f"m_{label}", produced, tiles=tiles)
+    obj.data.materials.clear()
+    mat_lib.assign(obj, applied)
+    bpy.data.materials.remove(source)
+
+    return {
+        "object": obj.name,
+        "material": applied.name,
+        "maps": {k: ctx.rel(v[1]) for k, v in produced.items()},
+        "size": size,
+        "tiles": tiles,
+        "uv_scale": uv_scale or None,
+        "reused": False,
+        "gltf_safe": True,
+    }
+
+
+@op(
     "material.bake_pbr",
     summary="Bake a layered material into a real PBR texture set (base colour, normal, roughness, AO) and rewire it as glTF-safe image textures. This is the step that makes a procedurally-surfaced asset actually shippable.",
     params={

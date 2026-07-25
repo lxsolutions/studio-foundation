@@ -14,6 +14,8 @@ what turns "procedural" from a Blender-only party trick into a shippable asset.
 
 from __future__ import annotations
 
+import math
+
 import bpy
 
 # A deliberately small, harmonised palette. Stylised game art lives or dies on
@@ -521,12 +523,309 @@ def layered_pbr(
     return material
 
 
+def _torus_coords(tree, tiles=1.0):
+    """UV -> a point on a torus, so 3D noise sampled there tiles seamlessly.
+
+    Blender's noise textures are not periodic, so baking one straight to a map
+    leaves a visible seam wherever it repeats. Wrapping UV around a torus makes
+    the sample point return to itself at u=1 and v=1 by construction, which
+    makes the baked result tile perfectly in both axes.
+
+    This is what lets a 725 m stadium be textured from one 1k map. Baking a
+    unique map for a building that size gives roughly 3 px/m, which is no
+    texture at all.
+    """
+    nodes, links = tree.nodes, tree.links
+    uv = nodes.new("ShaderNodeUVMap")
+    uv.location = (-2200, 0)
+    scaled = nodes.new("ShaderNodeVectorMath")
+    scaled.operation = "MULTIPLY"
+    scaled.location = (-2040, 0)
+    scaled.inputs[1].default_value = (tiles, tiles, 0.0)
+    links.new(uv.outputs["UV"], scaled.inputs[0])
+
+    split = nodes.new("ShaderNodeSeparateXYZ")
+    split.location = (-1880, 0)
+    links.new(scaled.outputs["Vector"], split.inputs["Vector"])
+
+    def angle(component, offset_y):
+        turn = nodes.new("ShaderNodeMath")
+        turn.operation = "MULTIPLY"
+        turn.location = (-1720, offset_y)
+        turn.inputs[1].default_value = math.tau
+        links.new(component, turn.inputs[0])
+        sine = nodes.new("ShaderNodeMath")
+        sine.operation = "SINE"
+        sine.location = (-1560, offset_y)
+        links.new(turn.outputs[0], sine.inputs[0])
+        cosine = nodes.new("ShaderNodeMath")
+        cosine.operation = "COSINE"
+        cosine.location = (-1560, offset_y - 120)
+        links.new(turn.outputs[0], cosine.inputs[0])
+        return sine, cosine
+
+    sin_u, cos_u = angle(split.outputs["X"], 220)
+    sin_v, cos_v = angle(split.outputs["Y"], -220)
+
+    # radius = 1 + 0.25*cos(v): a fat torus, so both axes get similar feature
+    # sizes instead of one being visibly stretched.
+    ring = nodes.new("ShaderNodeMath")
+    ring.operation = "MULTIPLY_ADD"
+    ring.location = (-1400, -220)
+    ring.inputs[1].default_value = 0.25
+    ring.inputs[2].default_value = 1.0
+    links.new(cos_v.outputs[0], ring.inputs[0])
+
+    def planar(trig, offset_y):
+        product = nodes.new("ShaderNodeMath")
+        product.operation = "MULTIPLY"
+        product.location = (-1240, offset_y)
+        links.new(ring.outputs[0], product.inputs[0])
+        links.new(trig.outputs[0], product.inputs[1])
+        return product
+
+    x_axis = planar(cos_u, 120)
+    y_axis = planar(sin_u, -40)
+    z_axis = nodes.new("ShaderNodeMath")
+    z_axis.operation = "MULTIPLY"
+    z_axis.location = (-1240, -340)
+    z_axis.inputs[1].default_value = 0.25
+    links.new(sin_v.outputs[0], z_axis.inputs[0])
+
+    combine = nodes.new("ShaderNodeCombineXYZ")
+    combine.location = (-1080, 0)
+    links.new(x_axis.outputs[0], combine.inputs["X"])
+    links.new(y_axis.outputs[0], combine.inputs["Y"])
+    links.new(z_axis.outputs[0], combine.inputs["Z"])
+    return combine.outputs["Vector"]
+
+
+def tileable_pbr(name, base_color, roughness=0.78, metallic=0.0, detail_scale=6.0,
+                 dirt_color="#2b2118", dirt=0.35, bump=0.4, tiles=1.0, seed=0):
+    """A seamless surface for tiling onto architecture.
+
+    Deliberately excludes the curvature and ambient-occlusion layers that
+    `layered_pbr` uses. Those describe a specific MESH — where its edges are,
+    where its crevices are — and cannot be baked into a texture meant to repeat
+    across arbitrary geometry. Tileable maps carry material detail; per-object
+    wear needs its own bake.
+    """
+    material = bpy.data.materials.new(name)
+    material.use_nodes = True
+    tree = material.node_tree
+    nodes, links = tree.nodes, tree.links
+    bsdf = nodes.get("Principled BSDF")
+    base_rgba = resolve_color(base_color)
+    dirt_rgba = resolve_color(dirt_color)
+    coords = _torus_coords(tree, tiles)
+
+    def noise(scale, detail, offset_y, w):
+        node = nodes.new("ShaderNodeTexNoise")
+        node.location = (-900, offset_y)
+        node.noise_dimensions = "3D"
+        _set(node, "Scale", scale)
+        _set(node, "Detail", detail)
+        _set(node, "Roughness", 0.6)
+        _set(node, "W", float(w))
+        links.new(coords, node.inputs["Vector"])
+        return node
+
+    coarse = noise(detail_scale, 6.0, -100, seed)
+    fine = noise(detail_scale * 4.2, 8.0, -320, seed + 5)
+    blotch = noise(max(0.5, detail_scale * 0.28), 3.0, 160, seed + 11)
+
+    detail_mix = nodes.new("ShaderNodeMix")
+    detail_mix.data_type = "FLOAT"
+    detail_mix.location = (-700, -200)
+    _set(detail_mix, "Factor", 0.4)
+    links.new(coarse.outputs["Fac"], detail_mix.inputs[2])
+    links.new(fine.outputs["Fac"], detail_mix.inputs[3])
+
+    # LOW-FREQUENCY CONTENT IS WHAT MAKES TILING VISIBLE. A big blotch is the
+    # eye's anchor, so once the map repeats those blotches line up into an
+    # obvious grid across the wall — which is exactly what happened on the first
+    # textured hippodrome. A tiling map has to be dominated by high-frequency
+    # detail; large-scale variation belongs per-object (vertex colour, a second
+    # unique map), not in the thing that repeats.
+    blotch_ramp = nodes.new("ShaderNodeValToRGB")
+    blotch_ramp.location = (-700, 160)
+    blotch_ramp.color_ramp.elements[0].position = 0.42
+    blotch_ramp.color_ramp.elements[1].position = 0.60
+    links.new(blotch.outputs["Fac"], blotch_ramp.inputs["Fac"])
+
+    blotched = nodes.new("ShaderNodeMix")
+    blotched.data_type = "RGBA"
+    blotched.location = (-500, 60)
+    blotched.inputs[6].default_value = _darken(base_rgba, 0.12)
+    blotched.inputs[7].default_value = _lighten(base_rgba, 0.06)
+    links.new(blotch_ramp.outputs["Color"], blotched.inputs[0])
+
+    # Grain is the high-frequency signal that survives tiling without reading as
+    # a repeat, so it carries most of the surface interest. Kept moderate: a
+    # full swing to half-darkness stacks with the grime below and drags the whole
+    # building down.
+    grained = nodes.new("ShaderNodeMix")
+    grained.data_type = "RGBA"
+    grained.location = (-320, 0)
+    grained.inputs[7].default_value = _darken(base_rgba, 0.28)
+    links.new(detail_mix.outputs[0], grained.inputs[0])
+    links.new(blotched.outputs[2], grained.inputs[6])
+
+    # Grime settled in the dips reads as age even on a flat wall, where there is
+    # no cavity for an AO pass to find. Driven by the FINE detail, not the
+    # blotch, for the same tiling reason.
+    grime = nodes.new("ShaderNodeMath")
+    grime.operation = "MULTIPLY"
+    grime.location = (-320, 280)
+    grime.inputs[1].default_value = dirt * 0.5
+    links.new(detail_mix.outputs[0], grime.inputs[0])
+
+    with_dirt = nodes.new("ShaderNodeMix")
+    with_dirt.data_type = "RGBA"
+    with_dirt.location = (-140, 60)
+    with_dirt.inputs[7].default_value = dirt_rgba
+    links.new(grime.outputs[0], with_dirt.inputs[0])
+    links.new(grained.outputs[2], with_dirt.inputs[6])
+    links.new(with_dirt.outputs[2], bsdf.inputs["Base Color"])
+
+    rough = nodes.new("ShaderNodeMapRange")
+    rough.location = (-320, -420)
+    _set(rough, "To Min", max(0.05, roughness - 0.22))
+    _set(rough, "To Max", min(1.0, roughness + 0.14))
+    links.new(detail_mix.outputs[0], rough.inputs["Value"])
+    links.new(rough.outputs["Result"], bsdf.inputs["Roughness"])
+    _set(bsdf, "Metallic", metallic)
+
+    relief = nodes.new("ShaderNodeBump")
+    relief.location = (-140, -420)
+    _set(relief, "Strength", bump)
+    _set(relief, "Distance", 0.05)
+    links.new(detail_mix.outputs[0], relief.inputs["Height"])
+    links.new(relief.outputs["Normal"], bsdf.inputs["Normal"])
+
+    material["bforge_procedural"] = "tileable_pbr"
+    return material
+
+
 def _lighten(rgba, amount):
     return tuple(min(1.0, c + (1.0 - c) * amount) for c in rgba[:3]) + (rgba[3],)
 
 
 def _darken(rgba, amount):
     return tuple(max(0.0, c * (1.0 - amount)) for c in rgba[:3]) + (rgba[3],)
+
+
+def bake_tileable_set(material, out_dir, stem, size=1024, samples=16,
+                      maps=("base_color", "normal", "roughness")):
+    """Bake a tileable material to seamless maps off a throwaway flat plane.
+
+    A plane with exact 0..1 UVs and no curvature means the bake captures the
+    material and nothing about any particular mesh — which is the whole point
+    of a tiling texture. Margin is 0: a margin bleeds edge pixels outward and
+    would break the seam the torus mapping just guaranteed.
+    """
+    scene = bpy.context.scene
+    previous_engine = scene.render.engine
+    scene.render.engine = "CYCLES"
+    scene.cycles.samples = max(1, samples)
+    if hasattr(scene.cycles, "device"):
+        scene.cycles.device = "CPU"
+    scene.render.bake.margin = 0
+    scene.render.bake.use_clear = True
+
+    mesh = bpy.data.meshes.new("_bforge_swatch")
+    verts = [(-1, -1, 0), (1, -1, 0), (1, 1, 0), (-1, 1, 0)]
+    mesh.from_pydata(verts, [], [(0, 1, 2, 3)])
+    mesh.update()
+    layer = mesh.uv_layers.new(name="UVMap")
+    for index, uv in enumerate([(0, 0), (1, 0), (1, 1), (0, 1)]):
+        layer.data[index].uv = uv
+    plane = bpy.data.objects.new("_bforge_swatch", mesh)
+    plane.data.materials.append(material)
+    scene.collection.objects.link(plane)
+
+    view_layer = bpy.context.view_layer
+    previous_selection = [o for o in scene.objects if o.select_get()]
+    previous_active = view_layer.objects.active
+    for other in scene.objects:
+        other.select_set(False)
+    plane.select_set(True)
+    view_layer.objects.active = plane
+
+    produced = {}
+    try:
+        for map_name in maps:
+            if map_name not in PBR_PASSES:
+                continue
+            bake_type, is_data = PBR_PASSES[map_name]
+            image = bpy.data.images.new(
+                f"{stem}_{map_name}", width=size, height=size,
+                alpha=False, float_buffer=False, is_data=is_data,
+            )
+            node = material.node_tree.nodes.new("ShaderNodeTexImage")
+            node.image = image
+            node.location = (-2400, 600)
+            node.select = True
+            material.node_tree.nodes.active = node
+            if bake_type == "DIFFUSE":
+                scene.render.bake.use_pass_direct = False
+                scene.render.bake.use_pass_indirect = False
+                scene.render.bake.use_pass_color = True
+            bpy.ops.object.bake(type=bake_type, use_clear=True, margin=0)
+            path = f"{out_dir}/{stem}_{map_name}.png"
+            image.filepath_raw = path
+            image.file_format = "PNG"
+            image.save()
+            produced[map_name] = (image, path)
+            material.node_tree.nodes.remove(node)
+    finally:
+        bpy.data.objects.remove(plane, do_unlink=True)
+        bpy.data.meshes.remove(mesh)
+        for other in previous_selection:
+            if other.name in scene.objects:
+                other.select_set(True)
+        view_layer.objects.active = previous_active
+        scene.render.engine = previous_engine
+    return produced
+
+
+def tiled_material(name, produced, tiles=4.0, base_color=None):
+    """A glTF-safe material that repeats baked maps across a surface."""
+    material = bpy.data.materials.new(name)
+    material.use_nodes = True
+    tree = material.node_tree
+    nodes, links = tree.nodes, tree.links
+    bsdf = nodes.get("Principled BSDF")
+    if base_color is not None:
+        _set(bsdf, "Base Color", resolve_color(base_color))
+
+    uv = nodes.new("ShaderNodeUVMap")
+    uv.location = (-900, 0)
+    mapping = nodes.new("ShaderNodeMapping")
+    mapping.location = (-740, 0)
+    _set(mapping, "Scale", (tiles, tiles, 1.0))
+    links.new(uv.outputs["UV"], mapping.inputs["Vector"])
+
+    row = 300
+    for map_name, (image, _path) in produced.items():
+        tex = nodes.new("ShaderNodeTexImage")
+        tex.image = image
+        tex.extension = "REPEAT"
+        tex.location = (-520, row)
+        row -= 300
+        links.new(mapping.outputs["Vector"], tex.inputs["Vector"])
+        if map_name == "base_color":
+            links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
+        elif map_name == "roughness":
+            image.colorspace_settings.name = "Non-Color"
+            links.new(tex.outputs["Color"], bsdf.inputs["Roughness"])
+        elif map_name == "normal":
+            image.colorspace_settings.name = "Non-Color"
+            normal_map = nodes.new("ShaderNodeNormalMap")
+            normal_map.location = (-260, row + 300)
+            links.new(tex.outputs["Color"], normal_map.inputs["Color"])
+            links.new(normal_map.outputs["Normal"], bsdf.inputs["Normal"])
+    return material
 
 
 # Which Cycles pass produces each map, and whether it is colour or data.
