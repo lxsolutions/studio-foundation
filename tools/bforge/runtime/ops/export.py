@@ -54,10 +54,11 @@ PRESETS = {
         "animations": ("bool", True, "Include armature actions"),
         "draco": ("bool", False, "Draco mesh compression — smaller files, slower load, not all importers support it"),
         "strict": ("bool", True, "Fail on problems that would corrupt the import instead of warning"),
+        "rename": ("obj", None, "Names to apply IN THE EXPORTED FILE ONLY, e.g. {\"horse\": \"Horse\", \"m_coat\": \"Coat\", \"gallop\": \"Gallop\"}. Game code often looks up nodes and materials by exact name, and those names break the studio's snake_case rule — this satisfies both without renaming the master"),
     },
     tags=["export", "io"],
 )
-def export_gltf(ctx, out, objects, engine, format, animations, draco, strict):
+def export_gltf(ctx, out, objects, engine, format, animations, draco, strict, rename):
     targets = [_get(n) for n in objects] if objects else list(bpy.context.scene.objects)
     meshes = [o for o in targets if o.type == "MESH"]
     if not targets:
@@ -83,6 +84,11 @@ def export_gltf(ctx, out, objects, engine, format, animations, draco, strict):
     for obj in targets:
         obj.select_set(True)
 
+    # Apply engine-contract names for the duration of the export, then put the
+    # master's own snake_case names back. Renaming the datablocks permanently
+    # would make the .blend fail `just asset-validate`.
+    restore = _apply_renames(rename or {})
+
     try:
         bpy.ops.export_scene.gltf(
             filepath=str(path),
@@ -103,6 +109,8 @@ def export_gltf(ctx, out, objects, engine, format, animations, draco, strict):
     except (RuntimeError, TypeError) as exc:
         raise OpError(f"glTF export failed: {exc}") from exc
     finally:
+        for datablock, original in restore:
+            datablock.name = original
         for obj in bpy.context.scene.objects:
             obj.select_set(False)
         for obj in previous:
@@ -122,8 +130,35 @@ def export_gltf(ctx, out, objects, engine, format, animations, draco, strict):
         "meshes": len(meshes),
         "triangles": sum(mesh_lib.tri_count(o) for o in meshes),
         "animations": [a.name for a in bpy.data.actions] if animations else [],
+        "renamed": dict(rename or {}),
         "warnings": warnings,
     }
+
+
+def _apply_renames(rename: dict):
+    """Temporarily rename objects, materials and actions. Returns undo pairs."""
+    if not rename:
+        return []
+    restore = []
+    unmatched = []
+    for source, target in rename.items():
+        for collection in (bpy.data.objects, bpy.data.materials, bpy.data.actions):
+            datablock = collection.get(source)
+            if datablock is not None:
+                restore.append((datablock, datablock.name))
+                datablock.name = str(target)
+                break
+        else:
+            unmatched.append(source)
+    if unmatched:
+        # Undo anything already applied so a typo cannot half-rename the export.
+        for datablock, original in restore:
+            datablock.name = original
+        raise OpError(
+            f"rename refers to names that do not exist: {sorted(unmatched)}. "
+            "Check object/material/action names with session.info or material.list."
+        )
+    return restore
 
 
 def _preflight(meshes):
@@ -260,7 +295,7 @@ def export_asset(ctx, asset_id, out_dir, objects, engine, category, ai_prompt, c
     prefix = f"{out_dir.rstrip('/')}/{identifier}" if out_dir else identifier
 
     blend = export_blend(ctx, f"{prefix}.blend", True)
-    glb = export_gltf(ctx, f"{prefix}.glb", objects, engine, "glb", True, False, strict)
+    glb = export_gltf(ctx, f"{prefix}.glb", objects, engine, "glb", True, False, strict, None)
     meta = export_meta(
         ctx, f"{prefix}.meta.json", identifier, category, "CC-BY-4.0", "bforge",
         "procedural", "bforge", "", ai_prompt, 0, 2, "explicit", "auto",

@@ -348,6 +348,169 @@ def check_critique(ctx, objects, texture_size):
 
 
 @op(
+    "check.image",
+    summary="Measure an image instead of eyeballing it: luminance range, blown highlights, crushed blacks, contrast, saturation, dominant colours and subject coverage. Reading a render is slow and cannot tell 'the asset is wrong' from 'the render is over-lit'. These numbers can, in a fraction of the time.",
+    params={
+        "path": ("path", None, "PNG to analyse — a render, a contact sheet, or a baked texture"),
+        "colors": ("int", 6, "How many dominant colours to report"),
+        "background": ("color", [0.05, 0.055, 0.065, 1.0], "Backdrop colour, excluded from subject stats"),
+    },
+    tags=["check", "inspect"],
+    mutates=False,
+)
+def check_image(ctx, path, colors, background):
+    try:
+        import numpy
+    except ImportError as exc:  # pragma: no cover - Blender bundles numpy
+        raise OpError("numpy unavailable in this Blender build") from exc
+
+    target = ctx.resolve(path)
+    if not target.is_file():
+        target = ctx.out_path(path, ".png")
+    if not target.is_file():
+        raise OpError(f"no image at {target}")
+
+    image = bpy.data.images.load(str(target))
+    try:
+        width, height = image.size
+        data = numpy.array(image.pixels[:], dtype=numpy.float32).reshape((height, width, 4))
+    finally:
+        bpy.data.images.remove(image)
+
+    rgb = data[:, :, :3]
+    # Rec. 709 luma: matches how an eye weights the channels, so "too bright"
+    # here means what it means visually.
+    luma = rgb @ numpy.array([0.2126, 0.7152, 0.0722], dtype=numpy.float32)
+
+    # Sample the actual corners rather than trusting a nominal backdrop colour:
+    # the world is lit and tone-mapped like everything else, so the rendered
+    # background never matches the value that was set on it.
+    corner = min(8, width // 8, height // 8) or 1
+    corners = numpy.concatenate([
+        rgb[:corner, :corner].reshape(-1, 3), rgb[:corner, -corner:].reshape(-1, 3),
+        rgb[-corner:, :corner].reshape(-1, 3), rgb[-corner:, -corner:].reshape(-1, 3),
+    ])
+    backdrop = numpy.median(corners, axis=0)
+    if float(numpy.std(corners)) > 0.05:
+        backdrop = numpy.array(background[:3], dtype=numpy.float32)
+    distance = numpy.linalg.norm(rgb - backdrop, axis=2)
+    subject = distance > 0.06
+    coverage = float(subject.mean())
+    if coverage < 1e-4:
+        raise OpError(
+            f"{target.name} is essentially empty — nothing but backdrop. The camera "
+            "is probably pointed away from the subject, or the scene is unlit."
+        )
+
+    subject_luma = luma[subject]
+    subject_rgb = rgb[subject]
+    peak = float(numpy.percentile(subject_luma, 99))
+    floor = float(numpy.percentile(subject_luma, 1))
+    blown = float((subject_luma > 0.97).mean())
+    crushed = float((subject_luma < 0.02).mean())
+
+    maxc = subject_rgb.max(axis=1)
+    minc = subject_rgb.min(axis=1)
+    saturation = float(numpy.mean((maxc - minc) / numpy.maximum(maxc, 1e-5)))
+
+    # Quantise to a coarse grid and count — cheap, deterministic, and enough to
+    # answer "is this thing actually the colour I asked for".
+    quantised = numpy.clip((subject_rgb * 8).astype(numpy.int32), 0, 7)
+    keys = quantised[:, 0] * 64 + quantised[:, 1] * 8 + quantised[:, 2]
+    unique, counts = numpy.unique(keys, return_counts=True)
+    order = numpy.argsort(-counts)[: max(1, colors)]
+    dominant = []
+    for index in order:
+        key = int(unique[index])
+        bucket = ((key // 64) / 8.0, ((key // 8) % 8) / 8.0, (key % 8) / 8.0)
+        members = subject_rgb[keys == key]
+        mean = members.mean(axis=0)
+        dominant.append({
+            "linear": [round(float(c), 4) for c in mean],
+            "hex": "#" + "".join(
+                f"{max(0, min(255, round(_linear_to_srgb(float(c)) * 255))):02x}" for c in mean
+            ),
+            "share": round(float(counts[index]) / len(keys), 4),
+            "_bucket": [round(b, 3) for b in bucket],
+        })
+
+    findings = []
+    if blown > 0.08:
+        findings.append(
+            f"{blown:.0%} of the subject is blown to white — the LIGHTING is too hot, "
+            "not the material. Lower the light rig or check the view transform before "
+            "touching the albedo."
+        )
+    if crushed > 0.12:
+        findings.append(f"{crushed:.0%} of the subject is crushed to black — add fill light.")
+    if peak - floor < 0.12:
+        findings.append(
+            f"contrast is flat (luma {floor:.2f}..{peak:.2f}); the form will not read."
+        )
+    if saturation < 0.06:
+        findings.append(
+            f"near-monochrome (mean saturation {saturation:.2f}) — if colour was expected, "
+            "the material is probably not reaching the shader."
+        )
+    if coverage < 0.04:
+        findings.append(
+            f"the subject fills only {coverage:.1%} of frame — move the camera closer."
+        )
+
+    return {
+        "path": str(target),
+        "size": [width, height],
+        "subject_coverage": round(coverage, 4),
+        "luma": {
+            "mean": round(float(subject_luma.mean()), 4),
+            "p1": round(floor, 4),
+            "p99": round(peak, 4),
+            "contrast": round(peak - floor, 4),
+            "space": "srgb (as displayed)",
+        },
+        # A PNG is sRGB-encoded. Albedo, light power and every other physical
+        # quantity are LINEAR. Comparing a displayed luma against a linear
+        # target silently misreads exposure by ~2x — it did exactly that during
+        # light-rig calibration. Both are reported so the mistake is not
+        # available to make.
+        "luma_linear": {
+            "mean": round(float(_srgb_to_linear_array(numpy, subject_luma).mean()), 4),
+            "space": "linear (physical)",
+        },
+        "blown_highlights": round(blown, 4),
+        "crushed_shadows": round(crushed, 4),
+        "mean_saturation": round(saturation, 4),
+        # The straight mean, un-quantised. `dominant_colors` buckets into 8
+        # levels per channel, which is fine for "what colour family is this"
+        # and useless for dark values — a 0.05 albedo falls in bucket 0 whose
+        # midpoint is 0.06, reporting a colour 4x too bright. Use this for any
+        # comparison against a requested colour.
+        "mean_color": {
+            "linear": [round(float(c), 4) for c in subject_rgb.mean(axis=0)],
+            "hex": "#" + "".join(
+                f"{max(0, min(255, round(_linear_to_srgb(float(c)) * 255))):02x}"
+                for c in subject_rgb.mean(axis=0)
+            ),
+        },
+        "dominant_colors": dominant,
+        "findings": findings,
+        "ok": not findings,
+    }
+
+
+def _srgb_to_linear_array(numpy, values):
+    return numpy.where(
+        values <= 0.04045, values / 12.92, ((values + 0.055) / 1.055) ** 2.4
+    )
+
+
+def _linear_to_srgb(value):
+    if value <= 0.0031308:
+        return value * 12.92
+    return 1.055 * (max(value, 0.0) ** (1 / 2.4)) - 0.055
+
+
+@op(
     "check.silhouette",
     summary="Score how readable an object's silhouette is from the standard game camera angles. A prop that fails here will not read at gameplay distance no matter how good its texture is.",
     params={

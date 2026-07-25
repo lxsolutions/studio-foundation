@@ -63,7 +63,14 @@ def _bounding_sphere(objs):
     return centre, radius
 
 
-def _setup_world(strength=0.6):
+def _setup_world(strength=0.32):
+    """Ambient dome.
+
+    Kept deliberately low. A bright uniform dome lights every microfacet from
+    every direction, which piles white specular sheen onto the albedo — at 0.6
+    it measured as a +0.19 constant, enough to make saturated colours
+    unreadable. Fidelity is measured by tests/test_fidelity.py.
+    """
     scene = bpy.context.scene
     if scene.world is None:
         scene.world = bpy.data.worlds.new("World")
@@ -83,10 +90,15 @@ def _setup_lights(centre, radius):
     for obj in [o for o in bpy.context.scene.objects if o.type == "LIGHT"]:
         scene_lib.delete(obj)
     distance = radius * 3.2
+    # Large, soft sources and a big ambient share. Three hard lights produce a
+    # broad white specular sheen on top of the albedo — negligible on bright
+    # surfaces, DOMINANT on dark saturated ones, which measured as saturated
+    # green rendering 5.4x too light. Soft and ambient-heavy is both closer to
+    # a studio review setup and far more faithful to the actual albedo.
     rig = [
-        ("key", (1.1, -1.5, 1.6), 1.0, radius * 1.5),
-        ("fill", (-1.7, -0.9, 0.6), 0.32, radius * 2.2),
-        ("rim", (-0.4, 1.8, 1.3), 0.55, radius * 1.4),
+        ("key", (1.1, -1.5, 1.6), 1.0, radius * 3.0),
+        ("fill", (-1.7, -0.9, 0.6), 0.38, radius * 4.0),
+        ("rim", (-0.4, 1.8, 1.3), 0.30, radius * 2.6),
     ]
     made = []
     for name, direction, power_scale, size in rig:
@@ -94,10 +106,15 @@ def _setup_lights(centre, radius):
         data.size = max(0.2, size)
         # Irradiance from a point-ish source falls off as 1/d², and d scales with
         # the subject, so power must scale with radius² to hold exposure constant
-        # across a 0.2 m gem and a 30 m terrain. The constant is calibrated so a
-        # mid-grey (0.5 albedo) surface renders near mid-grey: solving
-        # albedo * P / (4*pi*d^2) / pi = 0.5 for d = 3.2*radius gives ~200.
-        data.energy = power_scale * 200.0 * (radius ** 2) + 12.0
+        # across a 0.2 m gem and a 30 m terrain.
+        #
+        # The constant is MEASURED, not derived: tests/calibrate_lighting.py
+        # renders an 18% grey card at four subject scales and reports the ratio.
+        # The original hand-derived 200 came out 3.41x too hot, which made every
+        # dark albedo render as pale stone — and cost several rounds of "fixing"
+        # a material that was correct all along. Re-run the calibration after
+        # touching anything here.
+        data.energy = power_scale * 105.0 * (radius ** 2) + 6.0
         light = bpy.data.objects.new(f"_bforge_{name}", data)
         bpy.context.scene.collection.objects.link(light)
         offset = Vector(direction).normalized() * distance
@@ -202,6 +219,34 @@ def _render_to(path):
     return path
 
 
+def _analyse(ctx, path):
+    """Attach measured stats to every render.
+
+    An agent reading a PNG can see that something is wrong but not usually WHY.
+    These numbers separate the two failure modes that look identical in an
+    image — a blown-out light rig and a broken material — which otherwise costs
+    several minutes of renders each time to tell apart.
+    """
+    from .check import check_image
+
+    try:
+        report = check_image(ctx, path=str(path), colors=4,
+                             background=[0.05, 0.055, 0.065, 1.0])
+    except Exception as exc:  # noqa: BLE001 — diagnostics must never fail a render
+        return {"error": str(exc)}
+    return {
+        "subject_coverage": report["subject_coverage"],
+        "luma": report["luma"],
+        "luma_linear": report["luma_linear"],
+        "blown_highlights": report["blown_highlights"],
+        "crushed_shadows": report["crushed_shadows"],
+        "mean_saturation": report["mean_saturation"],
+        "mean_color": report["mean_color"],
+        "dominant_colors": [c["hex"] for c in report["dominant_colors"]],
+        "findings": report["findings"],
+    }
+
+
 def _cleanup_rig(objs):
     for obj in objs:
         if obj and obj.name in bpy.data.objects:
@@ -229,7 +274,7 @@ def _hide_others(keep):
         "samples": ("int", 24, "Render samples — 24 is enough to judge form"),
         "engine": ("enum:auto|cycles|eevee", "auto", "Render engine. 'auto' means Cycles/CPU, which is the only one that works without a GPU context; 'eevee' is faster but crashes headless on machines with no display server"),
         "ortho": ("bool", False, "Orthographic projection (right for front/side/top reference)"),
-        "world_light": ("num", 0.6, "Ambient strength"),
+        "world_light": ("num", 0.32, "Ambient dome strength. Higher fills shadows but piles white specular sheen onto every surface, which washes out saturated albedo"),
     },
     tags=["render"],
 )
@@ -251,6 +296,7 @@ def render_view(ctx, out, objects, view, resolution, samples, engine, ortho, wor
     return {
         "path": str(path), "rel": ctx.rel(path), "view": view, "engine": used,
         "resolution": resolution, "subject_radius_m": round(radius, 4),
+        "analysis": _analyse(ctx, path),
     }
 
 
@@ -267,7 +313,7 @@ def render_view(ctx, out, objects, view, resolution, samples, engine, ortho, wor
         "samples": ("int", 32, "Render samples"),
         "engine": ("enum:auto|cycles|eevee", "auto", "Render engine"),
         "light_distance": ("num", 0.0, "Light rig scale in metres; 0 fits it to the whole scene"),
-        "world_light": ("num", 0.6, "Ambient strength"),
+        "world_light": ("num", 0.32, "Ambient dome strength. Higher fills shadows but piles white specular sheen onto every surface, which washes out saturated albedo"),
     },
     tags=["render"],
 )
@@ -310,6 +356,7 @@ def render_camera(ctx, out, position, target, lens, resolution, aspect, samples,
         "path": str(path), "rel": ctx.rel(path), "engine": used,
         "position": [round(v, 3) for v in eye], "target": [round(v, 3) for v in centre],
         "lens_mm": lens, "resolution": [scene.render.resolution_x, scene.render.resolution_y],
+        "analysis": _analyse(ctx, path),
     }
 
 
