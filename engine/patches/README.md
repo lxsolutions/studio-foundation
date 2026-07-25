@@ -130,6 +130,17 @@ browser WebGPU template build. They apply to the official Godot commit in
     MSAA-float precedence preserved, and samplers paired with integer textures
     forced to NonFiltering. Measured on a Tesla P40: `GPUValidationError` 106 -> 42.
 
+20. `0020-webgpu-lod-clamp-and-storage-sample-type.patch` - two conformance
+    defects Forward+ exposes. Godot passes sampler `min_lod`/`max_lod` straight
+    through and Forward+ produces a negative one; Vulkan ignores that, WebGPU
+    rejects the sampler ("LOD clamp bounds contain a negative number"). Mip 0 is
+    the floor, so clamping to zero is what the shader already assumes. And the
+    read-only-storage-to-sampled conversion chose its `sampleType` from the
+    texture FORMAT, which yields `UnfilterableFloat` for formats whose WGSL is
+    `texture_2d<i32>` - WebGPU validates the layout against the SHADER, so the
+    scanned component type now wins. Measured on a Tesla P40:
+    `GPUValidationError` 42 -> 38.
+
 The WebGPU implementation originated in `dwalter/godotwebgpu`. Studio
 Foundation owns the 4.7.1 port, scoped patch curation, preparation/build tooling,
 and validation. See `../../docs/architecture/webgpu-integration.md` for the

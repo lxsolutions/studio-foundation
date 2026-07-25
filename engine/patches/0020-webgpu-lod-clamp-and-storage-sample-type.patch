@@ -1,0 +1,53 @@
+Subject: [PATCH] webgpu: clamp negative LOD bounds and trust the shader on storage-to-sampled
+
+Two small conformance defects Forward+ exposes.
+
+1. Negative LOD clamp. Godot passes min_lod/max_lod through from sampler state,
+   and Forward+ creates samplers with a negative min_lod. Vulkan ignores it;
+   WebGPU rejects the sampler outright:
+
+     LOD clamp bounds [-N.N, N.N] contain a negative number.
+
+   A negative lower LOD bound has no meaning -- mip level 0 is the floor -- so
+   clamping to zero is exactly what the shader already assumes.
+
+2. Read-only-storage-to-sampled conversion picked its sampleType from the texture
+   FORMAT. Several formats map to UnfilterableFloat while the WGSL Tint emits is
+   texture_2d<i32>, and WebGPU validates the layout against the SHADER, not
+   against our idea of the format. The scanned WGSL component type now wins, with
+   the format-derived value kept only as a fallback for bindings the scan missed.
+
+Measured on a Tesla P40 through Chrome/WebGPU, Chariot on Forward+:
+GPUValidationError 42 -> 38, aborts and wasm traps still 0.
+
+diff --git a/drivers/webgpu/rendering_device_driver_webgpu.cpp b/drivers/webgpu/rendering_device_driver_webgpu.cpp
+--- a/drivers/webgpu/rendering_device_driver_webgpu.cpp
++++ b/drivers/webgpu/rendering_device_driver_webgpu.cpp
+@@ -2548,8 +2548,11 @@
+ 	desc.addressModeU = map_address(p_state.repeat_u);
+ 	desc.addressModeV = map_address(p_state.repeat_v);
+ 	desc.addressModeW = map_address(p_state.repeat_w);
+-	desc.lodMinClamp = p_state.min_lod;
+-	desc.lodMaxClamp = p_state.max_lod;
++	// WebGPU rejects a sampler whose LOD bounds go negative, where Vulkan simply
++	// ignores it. Mip level 0 is the floor, so a negative lower bound is
++	// meaningless and clamping preserves the intended behaviour.
++	desc.lodMinClamp = MAX(0.0f, p_state.min_lod);
++	desc.lodMaxClamp = MAX(0.0f, p_state.max_lod);
+ 
+ 	if (p_state.enable_compare) {
+ 		desc.compare = map_compare(p_state.compare_op);
+@@ -4529,7 +4532,12 @@
+ 						// Read-only storage texture was converted to sampled texture_2d.
+ 						// Create a sampled texture BGL entry instead of storage.
+ 						WGPUTextureFormat fmt = wgsl_storage_tex_format.has(k) ? wgsl_storage_tex_format[k] : WGPUTextureFormat_RGBA8Unorm;
+-						entry.texture.sampleType = _texture_sample_type_for_format(fmt);
++						// What the shader DECLARES is what WebGPU validates against, so it
++						// wins over the format-derived guess: several formats map to
++						// UnfilterableFloat while the WGSL is texture_2d<i32>.
++						entry.texture.sampleType = wgsl_tex_sample_type.has(k)
++								? wgsl_tex_sample_type[k]
++								: _texture_sample_type_for_format(fmt);
+ 						entry.texture.viewDimension = wgsl_tex_dims.has(k) ? wgsl_tex_dims[k] : WGPUTextureViewDimension_2D;
+ 						entry.texture.multisampled = false;
+ 					} else {
