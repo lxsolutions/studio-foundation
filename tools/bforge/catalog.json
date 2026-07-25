@@ -2668,6 +2668,11 @@
             "type": "boolean",
             "description": "Compress the file",
             "default": true
+          },
+          "pack_textures": {
+            "type": "boolean",
+            "description": "Embed image textures in the .blend. A master links textures by RELATIVE path, so the moment it is copied into assets-source those links break and the committed master is useless \u2014 `just asset-validate` fails it on missing textures",
+            "default": true
           }
         },
         "additionalProperties": false

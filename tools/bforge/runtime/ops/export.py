@@ -202,13 +202,38 @@ def _preflight(meshes):
     params={
         "out": ("path", "asset.blend", "Output .blend path"),
         "compress": ("bool", True, "Compress the file"),
+        "pack_textures": ("bool", True, "Embed image textures in the .blend. A master links textures by RELATIVE path, so the moment it is copied into assets-source those links break and the committed master is useless — `just asset-validate` fails it on missing textures"),
     },
     tags=["export", "io"],
 )
-def export_blend(ctx, out, compress):
+def export_blend(ctx, out, compress, pack_textures):
+    packed = 0
+    if pack_textures:
+        # Filter on as little as possible. A baked map created with images.new()
+        # and then saved keeps source "GENERATED" AND reports has_data False
+        # once Blender frees the buffer — so both of the obvious filters skip
+        # exactly the textures that most need packing, silently, leaving a
+        # committed master whose texture links are dead.
+        loose = [
+            image
+            for image in bpy.data.images
+            if not image.packed_file and image.name != "Render Result"
+        ]
+        for image in loose:
+            try:
+                image.pack()
+                packed += 1
+            except RuntimeError as exc:  # generated image with nothing on disk
+                ctx.note(f"could not pack '{image.name}': {exc}")
+
     path = ctx.out_path(out, ".blend")
     bpy.ops.wm.save_as_mainfile(filepath=str(path), copy=True, compress=compress)
-    return {"path": str(path), "rel": ctx.rel(path), "bytes": path.stat().st_size}
+    return {
+        "path": str(path),
+        "rel": ctx.rel(path),
+        "bytes": path.stat().st_size,
+        "packed_textures": packed,
+    }
 
 
 @op(
@@ -294,7 +319,7 @@ def export_asset(ctx, asset_id, out_dir, objects, engine, category, ai_prompt, c
     identifier = scene_lib.sanitize(asset_id)
     prefix = f"{out_dir.rstrip('/')}/{identifier}" if out_dir else identifier
 
-    blend = export_blend(ctx, f"{prefix}.blend", True)
+    blend = export_blend(ctx, f"{prefix}.blend", True, True)
     glb = export_gltf(ctx, f"{prefix}.glb", objects, engine, "glb", True, False, strict, None)
     meta = export_meta(
         ctx, f"{prefix}.meta.json", identifier, category, "CC-BY-4.0", "bforge",

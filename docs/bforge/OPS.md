@@ -607,6 +607,7 @@ Save the .blend master. Under ADR 0006 the .blend is the committed source of tru
 | --- | --- | --- | --- |
 | `out` | string | 'asset.blend' | Output .blend path |
 | `compress` | boolean | True | Compress the file |
+| `pack_textures` | boolean | True | Embed image textures in the .blend. A master links textures by RELATIVE path, so the moment it is copied into assets-source those links break and the committed master is useless — `just asset-validate` fails it on missing textures |
 
 ### `export.gltf`
 

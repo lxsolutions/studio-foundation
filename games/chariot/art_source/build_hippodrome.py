@@ -220,7 +220,6 @@ def build(forge, spec, quality):
     # What makes a venue read as the Colosseum rather than as a stadium bowl
     # is arches, and a vertical rhythm cutting the seating into wedges. A
     # smooth stone ramp reads as a retaining wall no matter how big it is.
-    stand_depth = stand_back - outer
     bays = {"low": 28, "medium": 44, "high": 68}[quality]
 
     # Upper arcade ring, standing on the back of the cavea. This is the storey
@@ -274,28 +273,37 @@ def build(forge, spec, quality):
     # Vomitoria: the stair wedges that divide the seating into cunei. This
     # vertical rhythm is half of what the eye reads as "Roman amphitheatre".
     wedges = {"low": 10, "medium": 18, "high": 26}[quality]
-    wedge_radius = radius + podium_offset
-    wedge_perimeter = 2.0 * straight + 2.0 * math.pi * wedge_radius
+    # Spacing must be computed on the SAME radius the path is sampled at, or
+    # stadium_point wraps and the wedges bunch instead of dividing the bowl
+    # evenly.
+    wedge_perimeter = 2.0 * straight + 2.0 * math.pi * radius
+    # A vomitorium is a stair cut INTO the rake, not a slab standing on it.
+    # Built as a full-height box it becomes a 36 m blank wall that blots out
+    # half the bowl from any trackside camera — which is exactly how it looked
+    # in the first textured build. Sweeping the cavea profile, raised one step,
+    # along a short arc gives a divider that hugs the seating instead.
+    step_profile = [(lat, vert + 0.8) for lat, vert in cavea_points[:-3]]
     for index in range(wedges):
-        x, y = stadium_point(wedge_perimeter * index / wedges, straight, wedge_radius)
-        heading = math.degrees(math.atan2(y, x))
+        centre = wedge_perimeter * index / wedges
+        span = 2.2  # metres of arc the stair occupies
+        path = []
+        for offset in (-span * 0.5, 0.0, span * 0.5):
+            px, py = stadium_point(centre + offset, straight, radius)
+            path += [px, py, 0.0]
         forge.call(
-            "build.box",
+            "build.sweep",
             name=f"vomitorium_{index}",
-            size=[1.8, stand_depth * 0.96, stand_top * 1.02],
-            location=[x, y, 0.0],
-            bevel=0.06,
+            profile=flat(step_profile),
+            path=path,
+            path_shape="custom",
+            closed_path=False,
+            closed_profile=False,
             material="stone",
             color=STONE_SHADE,
             uv="box",
             uv_scale=3.0,
-            origin="bottom",
-        )
-        forge.call(
-            "object.transform",
-            name=f"vomitorium_{index}",
-            rotation=[0, 0, heading],
-            apply=True,
+            origin="world",
+            _timeout=600,
         )
         parts.append(f"vomitorium_{index}")
 
@@ -511,12 +519,68 @@ def build(forge, spec, quality):
     return parts
 
 
+# Which parts are stone, and therefore share one tiling travertine map. Sand,
+# bronze and cloth keep their own flat materials — a single texture stretched
+# over everything is how you lose the material contrast the venue depends on.
+STONE_PREFIXES = (
+    "rail_",
+    "cavea",
+    "upper_arcade",
+    "attic_colonnade",
+    "vomitorium_",
+    "spina_wall",
+    "meta_",
+    "obelisk",
+    "tower_",
+)
+
+
+def surface_stone(forge, parts, size=1024, samples=14):
+    """Give every stone surface one shared, seamless tiling material.
+
+    Baked ONCE and reused: a 725 m building cannot carry a unique map (that is
+    ~3 px/m), and per-part bakes would multiply both texture memory and draw
+    calls for a surface that is the same stone everywhere.
+
+    `uv_scale` is fixed across all of them so texel density is identical from
+    the podium to the attic — mismatched density between adjacent surfaces is
+    the thing that makes a building read as assembled from spare parts.
+    """
+    stone = [p for p in parts if p.startswith(STONE_PREFIXES)]
+    for index, part in enumerate(stone):
+        forge.call(
+            "material.tileable",
+            object=part,
+            base_color=STONE_SUN,
+            roughness=0.84,
+            detail_scale=5.5,
+            dirt=0.45,
+            dirt_color="#3a2f22",
+            bump=0.5,
+            tiles=1.0,
+            uv_scale=3.0,
+            size=size,
+            samples=samples,
+            stem="travertine",
+            reuse=index > 0,
+            _timeout=3600,
+        )
+    return stone
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--quality", default="medium", choices=["low", "medium", "high"]
     )
     parser.add_argument("--render", action="store_true")
+    parser.add_argument(
+        "--pbr",
+        action="store_true",
+        help="Surface the stone with a shared seamless tiling PBR set "
+        "(base colour, normal, roughness) instead of flat vertex colour",
+    )
+    parser.add_argument("--texture-size", type=int, default=1024)
     parser.add_argument(
         "--install",
         action="store_true",
@@ -532,6 +596,12 @@ def main() -> int:
         forge.start()
         parts = build(forge, spec, args.quality)
         print(f"built {len(parts)} parts")
+
+        if args.pbr:
+            stone = surface_stone(forge, parts, size=args.texture_size)
+            print(
+                f"surfaced : {len(stone)} stone parts share one tiling travertine set"
+            )
 
         # Collapse the pile of near-identical materials the prop recipes leave
         # behind BEFORE joining — every distinct material is a draw call.
