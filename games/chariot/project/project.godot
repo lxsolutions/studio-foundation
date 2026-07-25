@@ -36,6 +36,12 @@ enabled=PackedStringArray("res://addons/studio_core/plugin.cfg")
 
 [rendering]
 
-renderer/rendering_method="mobile"
+; Forward+ is required for SSAO, SSIL, SSR and SDFGI. Under Mobile those
+; Environment settings are accepted and then silently ignored, which is the
+; renderer handbrake that kept good assets looking flat regardless of how well
+; they were built. cinematic_env.gd tiers the features per render profile, so
+; lower tiers degrade rather than break.
+renderer/rendering_method="forward_plus"
+renderer/rendering_method.mobile="mobile"
 renderer/rendering_method.web="gl_compatibility"
 textures/vram_compression/import_etc2_astc=true
