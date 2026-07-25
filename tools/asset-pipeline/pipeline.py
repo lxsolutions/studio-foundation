@@ -2,14 +2,16 @@
 """Deterministic command-line asset pipeline (ADR 0006).
 
   pipeline.py validate <file.blend>
-  pipeline.py export   <file.blend>            # validate first, then GLB
+  pipeline.py export   <file.blend> [--out P]  # validate first, then GLB
   pipeline.py cook     --profile P [--game G]  # export all + sync into project + manifests
   pipeline.py preview  <file.blend> [--frames N]
   pipeline.py report
 
-Sources live in assets-source/; ALL outputs land in assets-generated/ (repo
-level, hash-cached) and are synced into <game>/project/assets/generated/ by
-cook. Nothing here ever writes into assets-source/.
+Foundation sources live in assets-source/; default outputs land in
+assets-generated/ (repo level, hash-cached) and are synced into
+<game>/project/assets/generated/ by cook. An explicit export --out path lets
+an externally mounted game receive a validated GLB without moving its master
+asset into this repository. Nothing here ever writes into assets-source/.
 """
 
 from __future__ import annotations
@@ -126,10 +128,32 @@ def save_cache(cache: dict) -> None:
 
 
 def generated_path_for(blend: Path) -> Path:
-    relative = blend.resolve().relative_to(REPO)
+    resolved = blend.resolve()
+    try:
+        relative = resolved.relative_to(REPO.resolve())
+    except ValueError as exc:
+        raise SystemExit(
+            f"external asset is outside the Foundation repository: {resolved}\n"
+            "pass --out <path.glb> to choose its export destination"
+        ) from exc
     # templates/godot-game/assets-source/props/x/x.blend -> assets-generated/templates/godot-game/props/x/x.glb
     parts = [p for p in relative.parts if p != "assets-source"]
     return GENERATED.joinpath(*parts[:-1]) / (blend.stem + ".glb")
+
+
+def export_path_for(blend: Path, requested: Path | None = None) -> Path:
+    if requested is not None:
+        return requested.expanduser().resolve()
+    return generated_path_for(blend)
+
+
+def cache_key_for(out_path: Path) -> str:
+    resolved = out_path.resolve()
+    try:
+        return resolved.relative_to(REPO.resolve()).as_posix()
+    except ValueError:
+        digest = hashlib.sha256(str(resolved).encode("utf-8")).hexdigest()[:16]
+        return f"external/{resolved.name}-{digest}"
 
 
 def cmd_validate(blend: Path) -> int:
@@ -148,13 +172,18 @@ def cmd_validate(blend: Path) -> int:
     return 0 if result.get("ok") else 1
 
 
-def cmd_export(blend: Path, force: bool = False) -> tuple[int, Path]:
-    out_path = generated_path_for(blend)
+def cmd_export(
+    blend: Path,
+    force: bool = False,
+    requested_out: Path | None = None,
+) -> tuple[int, Path]:
+    out_path = export_path_for(blend, requested_out)
     cache = load_cache()
     digest = source_hash(blend)
-    key = str(out_path.relative_to(REPO)).replace("\\", "/")
+    key = cache_key_for(out_path)
+    display_path = key if not key.startswith("external/") else str(out_path)
     if not force and cache.get(key) == digest and out_path.is_file():
-        print(f"export {blend.name}: cached ({key})")
+        print(f"export {blend.name}: cached ({display_path})")
         return 0, out_path
     code = cmd_validate(blend)
     if code != 0:
@@ -165,7 +194,7 @@ def cmd_export(blend: Path, force: bool = False) -> tuple[int, Path]:
         return 1, out_path
     cache[key] = digest
     save_cache(cache)
-    print(f"export {blend.name}: OK -> {key} ({result.get('bytes', 0)} bytes)")
+    print(f"export {blend.name}: OK -> {display_path} ({result.get('bytes', 0)} bytes)")
     return 0, out_path
 
 
@@ -271,6 +300,10 @@ def main() -> int:
             cmd.add_argument("--frames", type=int, default=1)
         if name == "export":
             cmd.add_argument("--force", action="store_true")
+            cmd.add_argument(
+                "--out",
+                help="GLB output path (required when the master is outside this repository)",
+            )
     cook = sub.add_parser("cook")
     cook.add_argument("--profile", required=True)
     cook.add_argument("--game", default="templates/godot-game")
@@ -287,7 +320,8 @@ def main() -> int:
     if args.command == "validate":
         return cmd_validate(blend)
     if args.command == "export":
-        return cmd_export(blend, force=args.force)[0]
+        requested_out = Path(args.out) if args.out else None
+        return cmd_export(blend, force=args.force, requested_out=requested_out)[0]
     if args.command == "preview":
         return cmd_preview(blend, args.frames)
     return 2
