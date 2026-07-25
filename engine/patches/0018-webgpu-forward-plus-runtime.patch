@@ -1,0 +1,209 @@
+Subject: [PATCH] webgpu: make Forward+ survive pipeline warm-up on real hardware
+
+Patches 0015-0017 made every shader Forward+ needs translate offline. Running the
+result on an actual GPU showed that was necessary and not sufficient: the page
+died partway through shader compilation, having compiled only 2D canvas shaders.
+
+Three aborts, and the first two share a root cause worth stating plainly.
+
+  GODOT PUSHES EVERY VARIANT AND THEN SELECTS ONE, BUT ShaderRD COMPILES THEM ALL.
+
+That idiom is fine on a backend whose shader compiler returns an error for input
+it cannot handle. Tint does not return an error -- it calls TINT_UNIMPLEMENTED,
+which is an abort, which under WebGPU is a wasm trap and a dead page. So a
+variant the device will never select is still fatal merely by being listed.
+
+1. cluster_builder_rd.cpp. 0015 added a non-subgroup fallback and selected it,
+   which was not enough: the USE_SUBGROUPS source stayed in the variant list, so
+   gl_HelperInvocation still reached Tint.
+     TINT_UNIMPLEMENTED unhandled SPIR-V BuiltIn: HelperInvocation (val = 23)
+   The list is now built conditionally, so unusable variants are never compiled.
+   Two variants either way, so the enum indices are unchanged.
+
+2. effects/fsr.cpp. Identical defect. FSR's NORMAL path uses 16-bit arithmetic;
+   the driver already reported SUPPORTS_HALF_FLOAT false and already selected
+   FALLBACK, and it still died because NORMAL was compiled anyway.
+     TINT_ASSERT(int_ty->width() == 32)
+
+3. volumetric_fog_process.glsl. isnan()/isinf() lower to OpIsNan/OpIsInf, which
+   Tint's SPIR-V reader does not implement and aborts on. Replaced with an exact
+   finiteness test: a float is finite precisely when |x| <= FLT_MAX, since every
+   comparison with NaN is false and infinities exceed FLT_MAX. motion_vectors.glsl
+   already avoided isnan() this way, commented "isnan not available in WGSL" --
+   the volumetric fog pass simply never got the same treatment.
+
+With the aborts gone the page survives and 106 GPUValidationErrors appear, which
+is progress: those fail a pipeline gracefully instead of killing the process.
+62 of them were the device asking for less than the adapter offers. The shell
+already maxes out nine limits, but that list predates Forward+ and omits what its
+compute passes need, so WebGPU enforced the spec defaults -- 4 storage textures
+per stage, 256 invocations per workgroup -- and rejected pipelines this adapter
+was perfectly willing to create. Dawn says so in the message itself:
+
+  ...exceeds the maximum per-stage limit (4). This adapter supports a higher
+  maxStorageTexturesPerShaderStage of 8, which can be specified in requiredLimits.
+
+Forward Mobile never hit these because almost nothing it does runs through
+compute.
+
+Measured on a Tesla P40 through Chrome/WebGPU, Chariot, before -> after:
+
+  internal compiler errors   1  ->    0
+  wasm traps                 1  ->    0
+  GPUValidationError       168  ->  106
+  shader modules compiled  only CanvasShaderRD -> ClusterRender, Gi, SdfgiPreprocess,
+                           SdfgiDirectLight, Ssao, Ssil, VoxelGi, Canvas
+
+The remaining 106 are one family -- bind-group layouts describing a binding
+differently from the shader (Uint/Sint sample types declared Float, format
+mismatches, a texture slot declared as a sampler). That is the 0013/0014 lineage
+continuing, exposed because Forward+ uses integer and storage textures Forward
+Mobile never touched. Forward+ still does not render; this is the abort layer
+cleared, not the finish line.
+
+diff --git a/servers/rendering/renderer_rd/cluster_builder_rd.cpp b/servers/rendering/renderer_rd/cluster_builder_rd.cpp
+--- a/servers/rendering/renderer_rd/cluster_builder_rd.cpp
++++ b/servers/rendering/renderer_rd/cluster_builder_rd.cpp
+@@ -55,11 +55,6 @@
+ 		rasterization_state.enable_depth_clamp = true;
+ 		ms.sample_count = RD::TEXTURE_SAMPLES_4;
+ 
+-		Vector<String> variants;
+-		variants.push_back("\n#define USE_SUBGROUPS\n");
+-		variants.push_back("\n#define USE_ATTACHMENT\n#define USE_SUBGROUPS\n");
+-		variants.push_back("");
+-		variants.push_back("\n#define USE_ATTACHMENT\n");
+ 
+ 		ClusterRender::ShaderVariant shader_variant;
+ 		RenderingDevice *rd = RD::get_singleton();
+@@ -75,17 +70,31 @@
+ 				(subgroup_ops & RD::SUBGROUP_BALLOT_BIT) &&
+ 				(subgroup_ops & RD::SUBGROUP_ARITHMETIC_BIT);
+ 
++		// ShaderRD compiles EVERY variant of a version, not just the selected one,
++		// so merely *choosing* the fallback is not enough: leaving the subgroup source
++		// in the list still hands gl_HelperInvocation to Tint, which aborts with
++		// TINT_UNIMPLEMENTED and traps the wasm module -- the page dies before a single
++		// 3D shader compiles. Variants the device cannot compile must never be built.
++		Vector<String> variants;
++		if (subgroups_usable) {
++			variants.push_back("\n#define USE_SUBGROUPS\n");
++			variants.push_back("\n#define USE_ATTACHMENT\n#define USE_SUBGROUPS\n");
++		} else {
++			variants.push_back("");
++			variants.push_back("\n#define USE_ATTACHMENT\n");
++		}
++
+ 		if (rd->has_feature(RD::SUPPORTS_FRAGMENT_SHADER_WITH_ONLY_SIDE_EFFECTS)) {
+ 			fb_format = rd->framebuffer_format_create_empty();
+ 			blend_state = RD::PipelineColorBlendState::create_disabled();
+-			shader_variant = subgroups_usable ? ClusterRender::SHADER_NORMAL : ClusterRender::SHADER_NORMAL_NO_SUBGROUPS;
++			shader_variant = ClusterRender::SHADER_NORMAL;
+ 		} else {
+ 			Vector<RD::AttachmentFormat> afs;
+ 			afs.push_back(RD::AttachmentFormat());
+ 			afs.write[0].usage_flags = RD::TEXTURE_USAGE_COLOR_ATTACHMENT_BIT;
+ 			fb_format = rd->framebuffer_format_create(afs);
+ 			blend_state = RD::PipelineColorBlendState::create_blend();
+-			shader_variant = subgroups_usable ? ClusterRender::SHADER_USE_ATTACHMENT : ClusterRender::SHADER_USE_ATTACHMENT_NO_SUBGROUPS;
++			shader_variant = ClusterRender::SHADER_USE_ATTACHMENT;
+ 		}
+ 
+ 		cluster_render.cluster_render_shader.initialize(variants);
+diff --git a/servers/rendering/renderer_rd/effects/fsr.cpp b/servers/rendering/renderer_rd/effects/fsr.cpp
+--- a/servers/rendering/renderer_rd/effects/fsr.cpp
++++ b/servers/rendering/renderer_rd/effects/fsr.cpp
+@@ -36,17 +36,24 @@
+ using namespace RendererRD;
+ 
+ FSR::FSR() {
+-	Vector<String> fsr_upscale_modes;
+-	fsr_upscale_modes.push_back("\n#define MODE_FSR_UPSCALE_NORMAL\n");
+-	fsr_upscale_modes.push_back("\n#define MODE_FSR_UPSCALE_FALLBACK\n");
+-	fsr_shader.initialize(fsr_upscale_modes);
++	// ShaderRD compiles EVERY variant of a version, not just the selected one, so
++	// listing a variant the device cannot compile is fatal on a backend whose shader
++	// compiler aborts instead of erroring: FSR's NORMAL path uses 16-bit arithmetic,
++	// Tint hits TINT_ASSERT(int_ty->width() == 32), and under WebGPU that abort is a
++	// wasm trap that kills the page. Selecting FALLBACK was never enough -- NORMAL
++	// still got compiled. Build only what this device can handle.
++	const bool half_float = RD::get_singleton()->has_feature(RD::SUPPORTS_HALF_FLOAT);
+ 
+-	FSRShaderVariant variant;
+-	if (RD::get_singleton()->has_feature(RD::SUPPORTS_HALF_FLOAT)) {
+-		variant = FSR_SHADER_VARIANT_NORMAL;
++	Vector<String> fsr_upscale_modes;
++	if (half_float) {
++		fsr_upscale_modes.push_back("\n#define MODE_FSR_UPSCALE_NORMAL\n");
+ 	} else {
+-		variant = FSR_SHADER_VARIANT_FALLBACK;
++		fsr_upscale_modes.push_back("\n#define MODE_FSR_UPSCALE_FALLBACK\n");
+ 	}
++	fsr_shader.initialize(fsr_upscale_modes);
++
++	// Only one variant exists now, so it is always index 0.
++	const int variant = 0;
+ 
+ 	shader_version = fsr_shader.version_create();
+ 	pipeline.create_compute_pipeline(fsr_shader.version_get_shader(shader_version, variant));
+diff --git a/servers/rendering/renderer_rd/shaders/environment/volumetric_fog_process.glsl b/servers/rendering/renderer_rd/shaders/environment/volumetric_fog_process.glsl
+--- a/servers/rendering/renderer_rd/shaders/environment/volumetric_fog_process.glsl
++++ b/servers/rendering/renderer_rd/shaders/environment/volumetric_fog_process.glsl
+@@ -292,6 +292,16 @@
+ // Higher values will make light in volumetric fog fade out sooner when it's occluded by shadow.
+ const float INV_FOG_FADE = 10.0;
+ 
++// isnan()/isinf() lower to OpIsNan/OpIsInf, which Tint's SPIR-V reader does not
++// implement. It aborts (TINT_UNIMPLEMENTED) rather than failing gracefully, which
++// under WebGPU is a wasm trap and a dead page. A value is finite exactly when
++// |x| <= FLT_MAX: NaN fails because every comparison with NaN is false, and
++// infinities fail because they exceed FLT_MAX. See motion_vectors.glsl, which
++// already avoids isnan() for the same reason.
++bool any_not_finite(vec4 v) {
++	return !all(lessThanEqual(abs(v), vec4(3.402823466e+38)));
++}
++
+ void main() {
+ 	vec3 fog_cell_size = 1.0 / vec3(params.fog_volume_size);
+ 
+@@ -801,8 +811,8 @@
+ 	}
+ 
+ 	vec4 final_density = vec4(total_light * scattering + emission, total_density);
+-	bool is_reprojected_density_invalid = any(isnan(reprojected_density)) || any(isinf(reprojected_density));
+-	bool is_final_density_invalid = any(isnan(final_density)) || any(isinf(final_density));
++	bool is_reprojected_density_invalid = any_not_finite(reprojected_density);
++	bool is_final_density_invalid = any_not_finite(final_density);
+ 
+ 	if (is_final_density_invalid) {
+ 		final_density = is_reprojected_density_invalid ? vec4(0.0) : reprojected_density;
+@@ -853,7 +863,7 @@
+ 		prev_z = z;
+ 
+ 		vec4 final_fog = vec4(fog_accum.rgb, fog_accum.a);
+-		bool is_final_fog_invalid = any(isnan(final_fog)) || any(isinf(final_fog));
++		bool is_final_fog_invalid = any_not_finite(final_fog);
+ 		final_fog = is_final_fog_invalid ? vec4(0.0) : final_fog;
+ 		final_fog = clamp(final_fog, vec4(0.0), vec4(65504.0));
+ 		imageStore(fog_map, fog_pos, final_fog);
+diff --git a/platform/web/js/engine/engine.js b/platform/web/js/engine/engine.js
+--- a/platform/web/js/engine/engine.js
++++ b/platform/web/js/engine/engine.js
+@@ -353,6 +353,17 @@
+ 				'maxSamplersPerShaderStage',
+ 				'maxColorAttachments',
+ 				'maxBindGroups',
++				// Forward+ additions. Its GI, SDFGI, SSAO/SSIL and octmap passes are
++				// compute-heavy in a way Forward Mobile never was, and the spec defaults
++				// (4 storage textures per stage, 256 invocations per workgroup) reject
++				// pipelines this adapter is perfectly capable of creating.
++				'maxStorageTexturesPerShaderStage',
++				'maxComputeInvocationsPerWorkgroup',
++				'maxComputeWorkgroupSizeX',
++				'maxComputeWorkgroupSizeY',
++				'maxComputeWorkgroupSizeZ',
++				'maxComputeWorkgroupStorageSize',
++				'maxComputeWorkgroupsPerDimension',
+ 			];
+ 			for (var li = 0; li < limitsToMax.length; li++) {
+ 				var key = limitsToMax[li];

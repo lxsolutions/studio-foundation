@@ -100,6 +100,25 @@ browser WebGPU template build. They apply to the official Godot commit in
     (Forward Mobile overrides it to a packed 10-bit format but cannot run SSR at
     all, since `_render_buffers_can_be_storage()` is false).
 
+18. `0018-webgpu-forward-plus-runtime.patch` - make Forward+ survive pipeline
+    warm-up on hardware. 0015-0017 made its shaders *translate*; running it on a
+    Tesla P40 showed that was necessary and not sufficient - the page died having
+    compiled only 2D canvas shaders. The root cause is worth stating plainly:
+    **Godot pushes every shader variant and then selects one, but `ShaderRD`
+    compiles them all.** That is fine where the compiler returns an error for
+    input it cannot handle; Tint instead calls `TINT_UNIMPLEMENTED`, which is an
+    abort, which under WebGPU is a wasm trap and a dead page. So a variant the
+    device will never select is fatal merely by being listed. Fixes the variant
+    lists in `cluster_builder_rd.cpp` (`gl_HelperInvocation`) and `effects/fsr.cpp`
+    (16-bit math), replaces `isnan()`/`isinf()` in `volumetric_fog_process.glsl`
+    with an exact `|x| <= FLT_MAX` finiteness test, and requests the compute and
+    storage-texture limits Forward+ needs - the shell maxed out nine limits but
+    that list predates Forward+, so WebGPU enforced spec defaults the adapter was
+    happy to exceed. Measured: aborts and wasm traps 1 -> 0, `GPUValidationError`
+    168 -> 106, and the whole GI/SDFGI/SSAO/SSIL/VoxelGI/cluster shader set now
+    compiles. Forward+ still does not *render* - the remaining 106 are
+    bind-group-layout description bugs, the `0013`/`0014` lineage continuing.
+
 The WebGPU implementation originated in `dwalter/godotwebgpu`. Studio
 Foundation owns the 4.7.1 port, scoped patch curation, preparation/build tooling,
 and validation. See `../../docs/architecture/webgpu-integration.md` for the
