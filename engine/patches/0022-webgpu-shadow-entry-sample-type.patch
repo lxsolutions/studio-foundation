@@ -1,0 +1,50 @@
+Subject: [PATCH] webgpu: trust the shader's component type at the shadow-entry sites
+
+0019 and 0020 made the main bind-group-layout sites derive sampleType from the WGSL
+component type, but the two "shadow entry" sites still derived it from the texture
+FORMAT alone. _texture_sample_type_for_format() answers UnfilterableFloat wherever it
+has no better answer, while the shader declares texture_2d<i32>:
+
+  The shader's texture sample type (TextureSampleType::Sint) isn't compatible with
+  the layout's texture sample type (TextureSampleType::UnfilterableFloat)
+
+WebGPU validates a layout against the SHADER, so the scanned declaration wins and the
+format-derived value remains only as a fallback for bindings the scan missed. This is
+the same correction 0020 applied to the read-only-storage-to-sampled path; these two
+sites were simply missed.
+
+Measured on a Tesla P40 through Chrome/WebGPU, Chariot on Forward+:
+
+  Sint sample-type mismatches   4 -> 0
+  GPUValidationError           26 -> 18   (the extra 4 are cascading invalid-layout
+                                           errors that disappear with their cause)
+  aborts / wasm traps          still 0
+
+diff --git a/drivers/webgpu/rendering_device_driver_webgpu.cpp b/drivers/webgpu/rendering_device_driver_webgpu.cpp
+--- a/drivers/webgpu/rendering_device_driver_webgpu.cpp
++++ b/drivers/webgpu/rendering_device_driver_webgpu.cpp
+@@ -4752,7 +4752,12 @@
+ 			WGPUBindGroupLayoutEntry shadow_entry = {};
+ 			shadow_entry.binding = shadow_bnd;
+ 			shadow_entry.visibility = WGPUShaderStage_Compute;
+-			shadow_entry.texture.sampleType = _texture_sample_type_for_format(shadow_fmt);
++			// The shader's own declaration wins: WebGPU validates the layout against it,
++			// and the format-derived guess answers UnfilterableFloat where the WGSL says
++			// texture_2d<i32>.
++			shadow_entry.texture.sampleType = wgsl_tex_sample_type.has(shadow_key)
++					? wgsl_tex_sample_type[shadow_key]
++					: _texture_sample_type_for_format(shadow_fmt);
+ 			shadow_entry.texture.viewDimension = wgsl_tex_dims.has(shadow_key) ? wgsl_tex_dims[shadow_key] : WGPUTextureViewDimension_2D;
+ 			shadow_entry.texture.multisampled = false;
+ 			entries.push_back(shadow_entry);
+@@ -4885,7 +4890,9 @@
+ 					WGPUBindGroupLayoutEntry se = {};
+ 					se.binding = shadow_bnd;
+ 					se.visibility = WGPUShaderStage_Compute;
+-					se.texture.sampleType = _texture_sample_type_for_format(shadow_fmt);
++					se.texture.sampleType = wgsl_tex_sample_type.has(shadow_key)
++							? wgsl_tex_sample_type[shadow_key]
++							: _texture_sample_type_for_format(shadow_fmt);
+ 					se.texture.viewDimension = wgsl_tex_dims.has(shadow_key) ? wgsl_tex_dims[shadow_key] : WGPUTextureViewDimension_2D;
+ 					se.texture.multisampled = false;
+ 					merged_entries.push_back(se);
