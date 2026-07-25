@@ -16,6 +16,10 @@ NAME := ""
 DISPLAY_NAME := ""
 GAME := "templates/godot-game"
 PROFILE := "desktop_high"
+# bforge (ADR 0014): `just NAME=crate_a RECIPE=prop.crate bforge-make`
+RECIPE := "prop.crate"
+TAG := ""
+SEARCH := ""
 FILE := ""
 
 default:
@@ -102,6 +106,8 @@ test-python:
     uv run --project tools python -m unittest discover -s tools/studio-mcp/tests -p "test_*.py" -v
     uv run --project tools python -m unittest discover -s tools/infra/tests -p "test_*.py" -v
     {{PY}} -m unittest discover -s engine/scripts/tests -p "test_*.py" -v
+    uv run --project tools python -m unittest discover -s tools/bforge/tests -p "test_schema.py" -v
+    uv run --project tools python -m unittest discover -s tools/bforge/tests -p "test_mcp.py" -v
 
 # Cross-language protocol golden-fixture checks (Rust side runs in test-rust too)
 test-protocol:
@@ -172,6 +178,37 @@ asset-preview:
 
 asset-report:
     uv run --project tools python tools/asset-pipeline/pipeline.py report
+
+# ------------------------------------------------------------------ bforge (agent asset authoring, ADR 0014)
+
+# Verify the whole Blender chain: daemon, build, render, validate, export.
+bforge-doctor:
+    uv run --project tools python tools/bforge/bforge/cli.py doctor
+
+# List operations. Filter with TAG=prop or SEARCH=rock.
+bforge-ops:
+    uv run --project tools python tools/bforge/bforge/cli.py ops --tag "{{TAG}}" --search "{{SEARCH}}"
+
+# Recipe -> validated, collided, exported asset. Example:
+#   just NAME=crate_a RECIPE=prop.crate bforge-make
+bforge-make:
+    uv run --project tools python tools/bforge/bforge/cli.py make "{{NAME}}" --recipe "{{RECIPE}}" --export
+
+# Fast suites: catalog/schema + MCP protocol. No Blender needed.
+bforge-test:
+    uv run --project tools python -m unittest discover -s tools/bforge/tests -p "test_schema.py" -v
+    uv run --project tools python -m unittest discover -s tools/bforge/tests -p "test_mcp.py" -v
+
+# Live Blender integration suite (skips cleanly when Blender is absent).
+bforge-test-live:
+    uv run --project tools python -m unittest discover -s tools/bforge/tests -p "test_forge.py" -v
+
+# Regenerate the visual review gallery + the committed op catalog.
+bforge-gallery:
+    uv run --project tools python tools/bforge/tests/gallery.py
+
+bforge-catalog:
+    uv run --project tools python tools/bforge/bforge/cli.py catalog --refresh --reference docs/bforge/OPS.md
 
 # ------------------------------------------------------------------ exports
 
