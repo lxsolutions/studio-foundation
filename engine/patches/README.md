@@ -151,6 +151,14 @@ browser WebGPU template build. They apply to the official Godot commit in
     added (the 16-bit *norm* variants are not core WebGPU and do not compile).
     Measured on a Tesla P40: format mismatches 6 -> 0, `GPUValidationError` 38 -> 26.
 
+22. `0022-webgpu-shadow-entry-sample-type.patch` - the same correction `0020` made
+    to the read-only-storage path, applied to the two "shadow entry" sites that were
+    missed. They derived `sampleType` from the texture FORMAT, and
+    `_texture_sample_type_for_format()` answers `UnfilterableFloat` wherever it has
+    no better answer, while the shader declares `texture_2d<i32>`. WebGPU validates
+    a layout against the SHADER, so the scanned declaration wins. Measured on a
+    Tesla P40: Sint mismatches 4 -> 0, `GPUValidationError` 26 -> 18.
+
 The WebGPU implementation originated in `dwalter/godotwebgpu`. Studio
 Foundation owns the 4.7.1 port, scoped patch curation, preparation/build tooling,
 and validation. See `../../docs/architecture/webgpu-integration.md` for the
