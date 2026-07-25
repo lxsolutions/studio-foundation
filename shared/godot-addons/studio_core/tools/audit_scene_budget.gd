@@ -34,12 +34,29 @@ const PROFILES_PATH := "res://addons/studio_core/profiles.json"
 ## Triangle ceilings per profile. profiles.json has no triangle key -- it
 ## describes quality knobs, not scene weight -- but an unbounded triangle count
 ## is the most common way a browser build dies, so the gate carries its own.
+##
+## CALIBRATION (2026-07-25). The first numbers here were guesses and were wrong:
+## they flagged Chariot at 4.3x over while it was in fact holding a locked 60 fps.
+## Measured on a Tesla P40 (Pascal, ~GTX 1080 class), Chrome/WebGPU, Forward
+## Mobile, 1280x1024, via tools/wgpu perf probe:
+##
+##   5,190,816 triangles -> 60 fps locked, median 16.67 ms, p95 16.67-33.33 ms,
+##   GPU utilisation 27-40% (mean ~37%), 194 MiB VRAM, 60 W of 250 W.
+##
+## So ~5.2M triangles costs about a third of a P40. Extrapolating to saturation
+## gives roughly 14M, and desktop_high is set to a 60%-of-that sustained target.
+##
+## HONESTY NOTE: only desktop_high is measurement-backed. The browser and mobile
+## ceilings are derived from the P40 figure by assuming an integrated GPU is
+## roughly a fifth of its raster throughput -- a reasonable engineering guess,
+## NOT a measurement. Calibrating those needs a laptop-class device; until then
+## treat a browser/mobile violation as a prompt to measure, not as fact.
 const TRIANGLE_BUDGETS := {
-	"desktop_high": 3000000,
-	"browser_webgpu": 1200000,
-	"browser_webgl": 500000,
-	"mobile_high": 700000,
-	"mobile_low": 300000,
+	"desktop_high": 8000000,
+	"browser_webgpu": 2500000,
+	"browser_webgl": 800000,
+	"mobile_high": 1000000,
+	"mobile_low": 400000,
 }
 
 var _scene_path: String = ""

@@ -121,6 +121,11 @@ test-protocol:
 test-godot:
     {{PY}} tools/godot/run_godot.py --game "{{GAME}}" --tests
 
+# Fail a game whose main scene exceeds the budgets its render profile declares.
+# PROFILE defaults to the browser, which is the tightest tier we actually ship.
+budget-godot PROFILE="browser_webgpu":
+    {{PY}} tools/godot/run_godot.py --game "{{GAME}}" --budget --profile "{{PROFILE}}"
+
 # DB-backed integration tests (requires `just services-up`)
 test-db:
     {{PY}} tools/infra/db.py test-env -- {{PY}} tools/cargo_env.py test --manifest-path services/Cargo.toml -p studio-integration-tests -- --ignored
