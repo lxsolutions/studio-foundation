@@ -1,0 +1,177 @@
+Subject: [PATCH] webgpu: plain-atomics fallback for the Forward+ cluster builder
+
+Forward+ (clustered) could not run under WebGPU at all, for two reasons that
+both live in the cluster builder's fragment shader.
+
+1. Subgroup operations. cluster_render.glsl elects one writer per cluster using
+   subgroupBroadcastFirst / subgroupBallot / subgroupBallotExclusiveBitCount /
+   subgroupOr. WebGPU exposes no subgroup support whatsoever -- the driver
+   already reports LIMIT_SUBGROUP_* as 0 -- but nothing in servers/rendering
+   ever read those limits, so the shader was compiled unconditionally and the
+   cluster build pass could never be created.
+
+2. gl_HelperInvocation. The election is guarded by that builtin, and Tint's
+   SPIR-V reader aborts on it outright:
+
+     spirv/reader/parser/parser.cc:670 internal compiler error:
+     TINT_UNIMPLEMENTED unhandled SPIR-V BuiltIn: HelperInvocation (val = 23)
+
+   That is the same failure mode as the Volatile decoration fixed in 0009: a
+   TINT_UNIMPLEMENTED abort is a wasm trap in the browser, i.e. a frozen page,
+   not a graceful "effect unavailable". cluster_render.glsl is the only live
+   user of gl_HelperInvocation in the engine (the other reference, in
+   scene_forward_lights_inc.glsl, sits inside `#if 0`), which is why Forward
+   Mobile was unaffected and this stayed hidden.
+
+The fix adds a USE_SUBGROUPS variant pair and lets a driver without
+fragment-stage subgroup ballot+arithmetic select the plain-atomics path, which
+produces an identical cluster buffer:
+
+  - Every invocation the ballot would have grouped shares the same
+    cluster_offset (that is what the ballot groups on) and the same flat
+    element_index, so they all atomicOr the very same word and the very same
+    bit. atomicOr is idempotent, so dropping the election and letting each
+    invocation write is bit-identical. The election exists only to cut atomic
+    traffic; it is an optimisation, not semantics.
+  - Likewise subgroupOr on the depth bits: OR-merging across the subgroup and
+    writing once yields the same final word as each invocation OR-ing its own
+    bit into its own offset.
+  - The fallback also skips the gl_HelperInvocation test. Letting helper
+    invocations write is conservative -- a cluster may list an element that
+    barely misses it, costing a little shading work, never dropping one. Godot
+    already ships this same trade-off via sc_use_helper_check on Apple/MSAA.
+
+The two new variants are APPENDED to ShaderVariant, so every driver that does
+report subgroup support keeps compiling exactly the shader it did before and
+existing platforms are untouched.
+
+Verified offline, GPU-free, with the vendored-glslang + Tint harness at the
+engine's real target env (Vulkan 1.1 / SPIR-V 1.3): cluster_render.glsl
+translates to valid WGSL in both the `default` and `attachment` (non-subgroup)
+variants, where previously it could not even be compiled to SPIR-V. Not yet
+verified on hardware.
+
+diff --git a/servers/rendering/renderer_rd/cluster_builder_rd.cpp b/servers/rendering/renderer_rd/cluster_builder_rd.cpp
+index 1df4b6054d..3bc79c94aa 100644
+--- a/servers/rendering/renderer_rd/cluster_builder_rd.cpp
++++ b/servers/rendering/renderer_rd/cluster_builder_rd.cpp
+@@ -56,22 +56,36 @@ ClusterBuilderSharedDataRD::ClusterBuilderSharedDataRD() {
+ 		ms.sample_count = RD::TEXTURE_SAMPLES_4;
+ 
+ 		Vector<String> variants;
++		variants.push_back("\n#define USE_SUBGROUPS\n");
++		variants.push_back("\n#define USE_ATTACHMENT\n#define USE_SUBGROUPS\n");
+ 		variants.push_back("");
+ 		variants.push_back("\n#define USE_ATTACHMENT\n");
+ 
+ 		ClusterRender::ShaderVariant shader_variant;
+ 		RenderingDevice *rd = RD::get_singleton();
++
++		// The cluster builder's fragment shader uses subgroup ballot + arithmetic to
++		// elect one writer per cluster. Drivers that expose no subgroup support in the
++		// fragment stage (WebGPU exposes none at all) need the plain-atomics fallback,
++		// which is functionally identical -- see cluster_render.glsl.
++		const uint64_t subgroup_stages = rd->limit_get(RD::LIMIT_SUBGROUP_IN_SHADERS);
++		const uint64_t subgroup_ops = rd->limit_get(RD::LIMIT_SUBGROUP_OPERATIONS);
++		const bool subgroups_usable =
++				(subgroup_stages & RD::SHADER_STAGE_FRAGMENT_BIT) &&
++				(subgroup_ops & RD::SUBGROUP_BALLOT_BIT) &&
++				(subgroup_ops & RD::SUBGROUP_ARITHMETIC_BIT);
++
+ 		if (rd->has_feature(RD::SUPPORTS_FRAGMENT_SHADER_WITH_ONLY_SIDE_EFFECTS)) {
+ 			fb_format = rd->framebuffer_format_create_empty();
+ 			blend_state = RD::PipelineColorBlendState::create_disabled();
+-			shader_variant = ClusterRender::SHADER_NORMAL;
++			shader_variant = subgroups_usable ? ClusterRender::SHADER_NORMAL : ClusterRender::SHADER_NORMAL_NO_SUBGROUPS;
+ 		} else {
+ 			Vector<RD::AttachmentFormat> afs;
+ 			afs.push_back(RD::AttachmentFormat());
+ 			afs.write[0].usage_flags = RD::TEXTURE_USAGE_COLOR_ATTACHMENT_BIT;
+ 			fb_format = rd->framebuffer_format_create(afs);
+ 			blend_state = RD::PipelineColorBlendState::create_blend();
+-			shader_variant = ClusterRender::SHADER_USE_ATTACHMENT;
++			shader_variant = subgroups_usable ? ClusterRender::SHADER_USE_ATTACHMENT : ClusterRender::SHADER_USE_ATTACHMENT_NO_SUBGROUPS;
+ 		}
+ 
+ 		cluster_render.cluster_render_shader.initialize(variants);
+diff --git a/servers/rendering/renderer_rd/cluster_builder_rd.h b/servers/rendering/renderer_rd/cluster_builder_rd.h
+index 49b039a997..9bb1ce1f60 100644
+--- a/servers/rendering/renderer_rd/cluster_builder_rd.h
++++ b/servers/rendering/renderer_rd/cluster_builder_rd.h
+@@ -73,9 +73,14 @@ class ClusterBuilderSharedDataRD {
+ 		RID shader_version;
+ 		RID shader;
+ 
++		// The _NO_SUBGROUPS variants are appended, not inserted, so the existing two
++		// keep their indices and every driver that reports subgroup support keeps
++		// compiling exactly the shader it did before.
+ 		enum ShaderVariant {
+ 			SHADER_NORMAL,
+ 			SHADER_USE_ATTACHMENT,
++			SHADER_NORMAL_NO_SUBGROUPS,
++			SHADER_USE_ATTACHMENT_NO_SUBGROUPS,
+ 		};
+ 
+ 		enum PipelineVersion {
+diff --git a/servers/rendering/renderer_rd/shaders/cluster_render.glsl b/servers/rendering/renderer_rd/shaders/cluster_render.glsl
+index 126bd75f75..1662b5a54c 100644
+--- a/servers/rendering/renderer_rd/shaders/cluster_render.glsl
++++ b/servers/rendering/renderer_rd/shaders/cluster_render.glsl
+@@ -65,9 +65,11 @@ void main() {
+ 
+ #VERSION_DEFINES
+ 
++#ifdef USE_SUBGROUPS
+ #extension GL_KHR_shader_subgroup_ballot : enable
+ #extension GL_KHR_shader_subgroup_arithmetic : enable
+ #extension GL_KHR_shader_subgroup_vote : enable
++#endif
+ 
+ // On Apple platforms, gl_HelperInvocation (simd_is_helper_thread()) is unreliable with MSAA, causing rendering artifacts.
+ // Setting this to false will disable the helper invocation check.
+@@ -117,6 +119,16 @@ void main() {
+ 
+ 	uint aux = 0;
+ 
++	// Without subgroup ops (e.g. WebGPU, which exposes none), every invocation writes
++	// its own bit instead of electing one writer per cluster. This is bit-identical:
++	// all invocations the ballot would have grouped share the same cluster_offset and
++	// the same flat element_index, so they all atomicOr the very same word and bit, and
++	// atomicOr is idempotent. The election exists only to cut atomic traffic, not to
++	// change the result. gl_HelperInvocation is also skipped -- Tint's SPIR-V reader
++	// aborts on that builtin, and letting helper invocations write is conservative
++	// (a cluster may list an element that barely misses it, costing a little shading
++	// work but never dropping one).
++#ifdef USE_SUBGROUPS
+ 	uint cluster_thread_group_index;
+ 	if (!sc_use_helper_check || !gl_HelperInvocation) {
+ 		//https://advances.realtimerendering.com/s2017/2017_Sig_Improved_Culling_final.pdf
+@@ -142,6 +154,9 @@ void main() {
+ 			aux = atomicOr(cluster_render.data[usage_write_offset], usage_write_bit);
+ 		}
+ 	}
++#else
++	aux = atomicOr(cluster_render.data[usage_write_offset], usage_write_bit);
++#endif
+ 
+ 	//find the current element in the depth usage list and mark the current depth as used
+ 	float unit_depth = depth_interp * state.inv_z_far;
+@@ -151,12 +166,18 @@ void main() {
+ 	uint z_write_offset = cluster_offset + state.cluster_depth_offset + element_index;
+ 	uint z_write_bit = 1 << z_bit;
+ 
++#ifdef USE_SUBGROUPS
+ 	if (!sc_use_helper_check || !gl_HelperInvocation) {
+ 		z_write_bit = subgroupOr(z_write_bit); //merge all Zs
+ 		if (cluster_thread_group_index == 0) {
+ 			aux = atomicOr(cluster_render.data[z_write_offset], z_write_bit);
+ 		}
+ 	}
++#else
++	// OR-merging the subgroup's depth bits and writing once is the same final word as
++	// each invocation OR-ing its own bit into its own offset, which is what this does.
++	aux = atomicOr(cluster_render.data[z_write_offset], z_write_bit);
++#endif
+ 
+ #ifdef USE_ATTACHMENT
+ 	frag_color = vec4(float(aux));

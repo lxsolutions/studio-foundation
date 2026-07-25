@@ -43,12 +43,94 @@ Folding that 3D render into the automated gate is the remaining CI task.
 | **3D rendering under WebGPU** | 🟢 **in-browser render VERIFIED on an NVIDIA Tesla P40 (patches 0009–0013)** — 3D scene draws a lit mesh at 60 fps, 0 GPUValidationError | §3D rendering gap |
 | **3D scene-shader translation** | 🟢 **177/182 translate offline** (was 174); the runtime-specialized scene shader also translates *and renders* after patches 0011–0013 | §3D rendering gap |
 | Template artifacts locked in `engine-lock.toml` | ✅ | `[artifacts.export_templates]`: release + debug + sha256 |
+| **Forward+ (clustered) shader translation** | 🟢 **translates offline** after patch 0015 — was impossible before | §Forward+ |
+| **Forward+ on hardware** | ⬜ **not yet tested** — needs a GPU box | §Forward+ |
 
 Reference point: a **release** WebGPU export passed a (shallow, non‑ASAN) browser
 proof on 2026‑07‑22 — `navigator.gpu` + adapter + active canvas context + 103/103
 headless (`engine/.cache/oswt-proof/.studio/verification.json`). ASAN hardening
 then surfaced the `RefCounted` overflow that proof did not catch; that is now
 fixed and awaiting the re‑verified rebuild.
+
+---
+
+## Forward+ — the renderer ceiling (2026‑07‑25)
+
+Everything above was measured on **Forward Mobile**, because
+`tools/godot/export_game.py` hardcoded `--rendering-method mobile` for the
+`web-webgpu` preset. Per‑game `project.godot` values never mattered; that one
+string decided it for every export the studio has ever produced.
+
+That caps quality at a level no amount of art can lift. In this tree,
+`render_forward_mobile.cpp` returns `false` from `_render_buffers_can_be_storage()`
+(⇒ no SSAO, SSIL, SSR), `is_dynamic_gi_supported()` (⇒ no SDFGI, no VoxelGI) and
+`is_volumetric_supported()` (⇒ no volumetric fog), and hardcodes
+`get_max_elements()` to 256 clustered elements. Forward+ inherits the
+`RendererSceneRenderRD` base, which returns `true` to all three and reads
+`rendering/limits/cluster_builder/max_clustered_elements`.
+
+Forward+ was already compiled into the same template (`forward_clustered/SCsub`
+is unconditional) and already a legal web value (`main.cpp` declares
+`rendering_method.web` as `forward_plus,mobile,gl_compatibility`; the web export
+plugin handles it). It had simply never been selected.
+
+**Two defects blocked it, both in `cluster_render.glsl`, both fixed by patch 0015:**
+
+1. **Subgroup ops with no fallback.** The cluster builder elects one writer per
+   cluster via `subgroupBallot`/`subgroupBroadcastFirst`/`subgroupOr`. WebGPU has
+   no subgroup support at all — the driver already reported `LIMIT_SUBGROUP_*` as
+   `0` — but **nothing in `servers/rendering/` ever read those limits.** 0015 adds
+   an appended `USE_SUBGROUPS` variant pair plus a plain-atomics fallback that is
+   bit-identical (every invocation the ballot would group writes the same word and
+   bit; `atomicOr` is idempotent), and makes the builder honour the limit.
+2. **A Tint abort on `gl_HelperInvocation`** —
+   `TINT_UNIMPLEMENTED unhandled SPIR-V BuiltIn: HelperInvocation (val = 23)`.
+   Same failure mode as the `Volatile` decoration fixed in 0009: an abort is a
+   wasm trap, i.e. a frozen page. `cluster_render.glsl` is the engine's only live
+   user of that builtin (the other, in `scene_forward_lights_inc.glsl`, is inside
+   `#if 0`), which is exactly why Forward Mobile was unaffected.
+
+**Why Forward+ is the better fit for WebGPU, not merely the prettier one:** Forward
+Mobile's single untranslatable shader, `tonemap_mobile.glsl`, is also the *only*
+shader in the engine using subpasses (`subpassLoad`/`input_attachment`) — a
+concept WebGPU does not have. Mobile is designed around tile-based subpass
+merging; Forward+ is built on compute and storage buffers, which WebGPU has
+natively.
+
+**Measured after 0015–0017** (offline, GPU-free, at the engine's real target env of
+Vulkan 1.1 / SPIR‑V 1.3): **199 modules compiled, 0 GLSL failures, 6 Tint failures,
+3 skipped.** *None of the six blocks Forward+ under WebGPU:*
+
+| Failure | Blocks Forward+? |
+| --- | --- |
+| `tonemap_mobile` `subpass` ×2 | No — Forward Mobile only; WebGPU has no subpasses |
+| `fsr_upscale` `normal` (16-bit math) | No — the driver reports `SUPPORTS_HALF_FLOAT` false, so `fsr.cpp` selects `FALLBACK`, which translates |
+| `cluster_render` `subgroups` ×2 | No — WebGPU selects the no-subgroups variant added by 0015 |
+| `sdfgi_debug_probes` | No — editor debug visualisation |
+
+SSAO, SSIL, SDFGI, VoxelGI, volumetric fog, subsurface scattering, TAA, SSR and the
+clustered scene shader all translate. Note that `ssao_blur`, `ssil_blur` and
+`subsurface_scattering` were previously *assumed* to translate — they were in fact
+never compiled, because the harness enumerated them without the `MODE_`/
+`USE_*_SAMPLES` defines the engine actually builds them with (fixed in 0016).
+
+**None of this is hardware-verified.** Translating offline is not rendering.
+Forward+ also binds far more aggressively than Mobile, and patch 0013 exists
+because Mobile *alone* already tripped WebGPU's 16-samplers-per-stage limit —
+expect that to be the next thing to break. Export a Forward+ build with
+`export_game.py --preset web-webgpu --rendering-method forward_plus` and run it on
+the P40; `mobile` remains the default until that passes.
+
+### Reproducing the sweep
+
+```bash
+# ~1 minute; needs only Godot's vendored glslang, not the full Tint build.
+bash drivers/webgpu/tint_cli/build_glsl2spv.sh
+python drivers/webgpu/wgsl_precompile.py <engine-tree> /tmp/out.gen.h <engine-tree>/bin/glsl2spv
+```
+
+On Windows, `bin/tint_convert_cli` must also exist **without** the `.exe`
+suffix — Python's `os.path.isfile` does not auto-append it the way Git Bash does.
 
 ---
 

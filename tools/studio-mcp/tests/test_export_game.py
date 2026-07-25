@@ -56,6 +56,37 @@ class ConfigureWebRendererTests(unittest.TestCase):
                 ],
             )
 
+    def test_webgpu_can_select_forward_plus(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            html = self._html(Path(directory))
+            export_game.configure_web_renderer(html, "web-webgpu", "forward_plus")
+            config = self._config(html)
+            self.assertEqual(config["renderingDriver"], "webgpu")
+            self.assertEqual(
+                config["args"],
+                [
+                    "--rendering-method",
+                    "forward_plus",
+                    "--rendering-driver",
+                    "webgpu",
+                ],
+            )
+
+    def test_webgpu_rejects_unknown_rendering_method(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            html = self._html(Path(directory))
+            with self.assertRaises(RuntimeError):
+                export_game.configure_web_renderer(html, "web-webgpu", "gl_compatibility")
+
+    def test_webgl_ignores_rendering_method(self) -> None:
+        # The override is WebGPU-only; WebGL2 cannot run a clustered renderer.
+        with tempfile.TemporaryDirectory() as directory:
+            html = self._html(Path(directory))
+            export_game.configure_web_renderer(html, "web-webgl", "forward_plus")
+            config = self._config(html)
+            self.assertEqual(config["renderingDriver"], "opengl3")
+            self.assertIn("gl_compatibility", config["args"])
+
     def test_webgl_binds_compatibility_renderer(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             html = self._html(Path(directory))

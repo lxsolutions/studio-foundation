@@ -95,15 +95,35 @@ def expected_outputs(project: Path, preset: str) -> list[Path]:
     return []
 
 
-def configure_web_renderer(export_html: Path, preset: str) -> None:
+WEBGPU_RENDERING_METHODS = ("mobile", "forward_plus")
+
+
+def configure_web_renderer(
+    export_html: Path, preset: str, rendering_method: str = "mobile"
+) -> None:
     """Bind the generated shell and engine CLI to the preset's real renderer.
 
     Exports use the official editor with Studio's custom runtime templates. The
     official editor does not know Studio's WebGPU-only HTML configuration field,
     so make that handoff explicit after export and preserve all existing args.
+
+    `rendering_method` only applies to `web-webgpu`. It stays "mobile" by default
+    because that is the configuration that has been verified on hardware, but
+    Forward Mobile hard-disables the entire high-end feature set -- it returns
+    false from `_render_buffers_can_be_storage`, `is_dynamic_gi_supported`, and
+    `is_volumetric_supported`, so SSAO, SSIL, SSR, SDFGI, VoxelGI and volumetric
+    fog are all unavailable no matter what a project asks for. "forward_plus"
+    selects the clustered renderer, which is compiled into the same template and
+    is a legal `rendering_method.web` value, so a Forward+ build can be produced
+    and tested without editing this file.
     """
     if preset not in {"web-webgl", "web-webgpu"}:
         return
+    if preset == "web-webgpu" and rendering_method not in WEBGPU_RENDERING_METHODS:
+        raise RuntimeError(
+            f"unsupported rendering method {rendering_method!r} for web-webgpu; "
+            f"expected one of {', '.join(WEBGPU_RENDERING_METHODS)}"
+        )
     source = export_html.read_text(encoding="utf-8")
     match = re.search(r"const GODOT_CONFIG = (\{[^\n]+\});", source)
     if not match:
@@ -116,7 +136,7 @@ def configure_web_renderer(export_html: Path, preset: str) -> None:
     if preset == "web-webgpu":
         renderer_args = [
             "--rendering-method",
-            "mobile",
+            rendering_method,
             "--rendering-driver",
             "webgpu",
         ]
@@ -143,6 +163,17 @@ def main() -> int:
         "--preset", required=True, choices=["web-webgl", "web-webgpu", "android", "ios"]
     )
     parser.add_argument("--debug", action="store_true", help="export debug build")
+    parser.add_argument(
+        "--rendering-method",
+        default="mobile",
+        choices=list(WEBGPU_RENDERING_METHODS),
+        help=(
+            "renderer for the web-webgpu preset (ignored by other presets). "
+            "'mobile' is the hardware-verified default; 'forward_plus' enables the "
+            "clustered renderer, which is the only one that can do SSAO/SSIL/SSR/"
+            "SDFGI/VoxelGI/volumetric fog"
+        ),
+    )
     args = parser.parse_args()
     senv.load_dotenv()
 
@@ -180,7 +211,7 @@ def main() -> int:
         raise SystemExit("godot export timed out") from error
     web_html = project / "exports" / args.preset / "index.html"
     if proc.returncode == 0 and web_html.is_file() and args.preset.startswith("web"):
-        configure_web_renderer(web_html, args.preset)
+        configure_web_renderer(web_html, args.preset, args.rendering_method)
 
     output_text = (proc.stdout or "") + (proc.stderr or "")
 
