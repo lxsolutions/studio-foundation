@@ -1,0 +1,117 @@
+Subject: [PATCH] webgpu: derive sampled-texture sampleType from the WGSL component type
+
+The driver scans Tint's WGSL to learn each texture binding's dimension,
+depth-ness and multisampled-ness, but never read the component type. Every
+sampled binding was therefore described to WebGPU as TextureSampleType::Float,
+including the ones the shader samples as integers:
+
+  The shader's texture sample type (TextureSampleType::Uint) isn't compatible
+  with the layout's texture sample type (TextureSampleType::Float)
+
+Forward Mobile never tripped this because it samples almost nothing as an
+integer. Forward+ does -- cluster data, VoxelGI and SDFGI all read integer
+textures -- so this was 32 of its 106 remaining validation failures, and the
+single largest class.
+
+The component type is already present in the WGSL type string, so it is now
+recorded while the dimension is being parsed (`texture_2d<u32>` is Uint, `<i32>`
+Sint, `<f32>` Float) and used at both bind-group-layout sites instead of assuming
+Float. Existing precedence is preserved: `texture_depth_*` has no component
+parameter and still wins, and multisampled float stays UnfilterableFloat because
+filtering an MSAA texture is illegal in WebGPU.
+
+Integer textures are unfilterable, so a sampler paired with one is now forced to
+NonFiltering, the same treatment MSAA bindings already received.
+
+Measured on a Tesla P40 through Chrome/WebGPU, Chariot on Forward+:
+
+  GPUValidationError  106 -> 42, with the Uint class eliminated entirely
+  aborts / wasm traps  still 0
+
+Remaining are smaller and unrelated: storage-texture format mismatches, a Sint
+case reaching a different code path, a texture slot described as a sampler,
+negative LOD clamp bounds, and a storage atomic needing read_write access.
+
+diff --git a/drivers/webgpu/rendering_device_driver_webgpu.cpp b/drivers/webgpu/rendering_device_driver_webgpu.cpp
+--- a/drivers/webgpu/rendering_device_driver_webgpu.cpp
++++ b/drivers/webgpu/rendering_device_driver_webgpu.cpp
+@@ -3300,6 +3300,12 @@
+ 	// texture.multisampled=true to match sampler2DMS (GLSL) bindings.
+ 	HashMap<uint32_t, bool> wgsl_is_multisampled_texture;
+ 
++	// Maps (set_index << 16 | binding) → the sampled texture's component type, read
++	// from the WGSL type parameter: texture_2d<u32> is Uint, <i32> is Sint, <f32> is
++	// Float. Without this every sampled binding was declared Float and WebGPU
++	// rejected any pipeline whose shader actually sampled integers.
++	HashMap<uint32_t, WGPUTextureSampleType> wgsl_tex_sample_type;
++
+ 	// Depth alias bindings: Tint splits mixed-usage depth textures into two globals
+ 	// (one Depth at binding B, one Float alias at binding B+1). Track (set,B+1) pairs
+ 	// so we can add extra BGL and bind group entries.
+@@ -3926,6 +3932,26 @@
+ 							uint32_t key = ((uint32_t)grp << 16) | (uint32_t)bnd;
+ 							wgsl_is_depth_texture[key] = true;
+ 						}
++						// Sampled (non-depth, non-storage) textures carry their component
++						// type as a WGSL type parameter. Read it rather than assuming f32.
++						if (tp && strncmp(tp, "texture_depth_", 14) != 0 &&
++								strncmp(tp, "texture_storage_", 16) != 0) {
++							const char *lt = strchr(tp, '<');
++							if (lt && lt[1] != '\0') {
++								WGPUTextureSampleType st = WGPUTextureSampleType_Undefined;
++								if (strncmp(lt + 1, "u32", 3) == 0) {
++									st = WGPUTextureSampleType_Uint;
++								} else if (strncmp(lt + 1, "i32", 3) == 0) {
++									st = WGPUTextureSampleType_Sint;
++								} else if (strncmp(lt + 1, "f32", 3) == 0) {
++									st = WGPUTextureSampleType_Float;
++								}
++								if (st != WGPUTextureSampleType_Undefined) {
++									uint32_t key = ((uint32_t)grp << 16) | (uint32_t)bnd;
++									wgsl_tex_sample_type[key] = st;
++								}
++							}
++						}
+ 					}
+ 					// Check for depth alias variable: Tint names it "*_depth_alias".
+ 					// The variable name is between "var " and ":".
+@@ -4435,9 +4461,15 @@
+ 					  bool is_depth = wgsl_is_depth_texture.has(k) && wgsl_is_depth_texture[k];
+ 					  // Multisampled float textures must use UnfilterableFloat, not Float
+ 					  // (filtering is illegal for MSAA textures in WebGPU).
++					  // Integer textures must be declared Uint/Sint or WebGPU rejects the
++					  // pipeline. Depth wins (no component type), and MSAA float must stay
++					  // UnfilterableFloat because filtering an MSAA texture is illegal.
++					  WGPUTextureSampleType scanned = wgsl_tex_sample_type.has(k)
++						  ? wgsl_tex_sample_type[k] : WGPUTextureSampleType_Float;
+ 					  entry.texture.sampleType = is_depth
+ 						  ? WGPUTextureSampleType_Depth
+-						  : (is_ms ? WGPUTextureSampleType_UnfilterableFloat : WGPUTextureSampleType_Float);
++						  : ((is_ms && scanned == WGPUTextureSampleType_Float)
++							  ? WGPUTextureSampleType_UnfilterableFloat : scanned);
+ 					  entry.texture.viewDimension = wgsl_tex_dims.has(k) ? wgsl_tex_dims[k] : WGPUTextureViewDimension_2D;
+ 					  entry.texture.multisampled = is_ms; }
+ 					bge.layout_entry = entry;
+@@ -4466,14 +4498,20 @@
+ 					  bool is_depth = wgsl_is_depth_texture.has(k) && wgsl_is_depth_texture[k];
+ 					  // Multisampled float textures must use UnfilterableFloat
+ 					  // (filtering is illegal for MSAA textures in WebGPU).
++					  WGPUTextureSampleType scanned = wgsl_tex_sample_type.has(k)
++						  ? wgsl_tex_sample_type[k] : WGPUTextureSampleType_Float;
+ 					  tex_entry.texture.sampleType = is_depth
+ 						  ? WGPUTextureSampleType_Depth
+-						  : (is_ms ? WGPUTextureSampleType_UnfilterableFloat : WGPUTextureSampleType_Float);
++						  : ((is_ms && scanned == WGPUTextureSampleType_Float)
++							  ? WGPUTextureSampleType_UnfilterableFloat : scanned);
+ 					  tex_entry.texture.viewDimension = wgsl_tex_dims.has(k) ? wgsl_tex_dims[k] : WGPUTextureViewDimension_2D;
+ 					  tex_entry.texture.multisampled = is_ms;
+ 					  // MSAA texture bindings with UnfilterableFloat require a NonFiltering sampler —
+ 					  // override the sampler for this combined binding.
+-					  if (is_ms && !is_depth) {
++					  // Integer and MSAA textures are both unfilterable, so their paired
++					  // sampler must be NonFiltering.
++					  if (!is_depth && (is_ms || scanned == WGPUTextureSampleType_Uint ||
++							  scanned == WGPUTextureSampleType_Sint)) {
+ 						  samp_entry.sampler.type = WGPUSamplerBindingType_NonFiltering;
+ 					  }
+ 					}
