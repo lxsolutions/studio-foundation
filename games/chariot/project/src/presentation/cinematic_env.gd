@@ -23,10 +23,13 @@ extends RefCounted
 ##     FOG        separates the near stands from the far ones across 700 m.
 ##   SDFGI        Real-time GI. Desktop only; it is expensive.
 ##
-## Every feature is gated on the active render profile, so browser and mobile
-## tiers degrade instead of dying. Forward+ is required for SSAO/SSIL/SDFGI —
-## under the Mobile renderer these calls are silently ignored, which is the
-## renderer handbrake this exists to lift.
+## Every feature is gated on the active render profile AND on what the live
+## renderer can actually do. Forward+ is required for SSAO/SSIL/SDFGI — under
+## the Mobile renderer those calls are silently ignored, and volumetric fog on
+## the Compatibility renderer is worse than ignored: it ERRORS every build
+## (environment_set_volumetric_fog), which a QA capture over ANGLE runs into
+## immediately. Wanting a feature (TIERS) and having it (METHOD_CAPS) are
+## different facts; the environment asks for their intersection.
 
 ## Feature sets per profile. Anything absent is simply off for that tier.
 const TIERS := {
@@ -53,13 +56,44 @@ const TIERS := {
 }
 
 
+## What each rendering method HAS, independent of what a profile WANTS.
+## Mobile supports bloom and penumbra suns but none of the screen-space or GI
+## features; Compatibility keeps bloom only (4.3+). Anything else — the dummy
+## renderer under --headless, or a method this table has never heard of —
+## gets nothing fancy, which is the safe reading.
+const METHOD_CAPS := {
+	"forward_plus": {
+		"ssao": true, "ssil": true, "sdfgi": true, "volumetric": true,
+		"glow": true, "ssr": true, "shadow_soft": true,
+	},
+	"mobile": {"glow": true, "shadow_soft": true},
+	"gl_compatibility": {"glow": true},
+}
+
+
 static func features_for(profile: String) -> Dictionary:
 	return TIERS.get(profile, TIERS["browser_webgl"])
 
 
+## The intersection of what `profile` wants and what `method` can render.
+static func effective_features(profile: String, method: String) -> Dictionary:
+	var wanted := features_for(profile)
+	var caps: Dictionary = METHOD_CAPS.get(method, {})
+	var out := {}
+	for key in wanted:
+		out[key] = bool(wanted[key]) and bool(caps.get(key, false))
+	return out
+
+
+static func _live_method() -> String:
+	return RenderingServer.get_current_rendering_method()
+
+
 ## Build the Environment for a sunlit Mediterranean afternoon.
-static func build(profile: String) -> Environment:
-	var features := features_for(profile)
+## `method` defaults to the live renderer; tests pass one explicitly because
+## headless runs report a method with no capabilities at all.
+static func build(profile: String, method: String = "") -> Environment:
+	var features := effective_features(profile, method if not method.is_empty() else _live_method())
 	var env := Environment.new()
 
 	var sky := Sky.new()
@@ -160,8 +194,8 @@ static func build(profile: String) -> Environment:
 
 ## The sun. Angular size is what gives shadows a real penumbra; a zero-size
 ## sun produces the hard stencil edges that make a scene look untextured.
-static func build_sun(profile: String) -> DirectionalLight3D:
-	var features := features_for(profile)
+static func build_sun(profile: String, method: String = "") -> DirectionalLight3D:
+	var features := effective_features(profile, method if not method.is_empty() else _live_method())
 	var sun := DirectionalLight3D.new()
 	sun.name = "Sun"
 	sun.rotation_degrees = Vector3(-48.0, -32.0, 0.0)

@@ -5,10 +5,15 @@ extends SceneTree
 ## Loads a scene off-screen, lets it settle a few frames, and writes a PNG.
 ## Deterministic enough for visual-regression baselines (fixed seed via
 ## project settings; agents should capture with the same --size every time).
+##
+## For MEASURED captures (exposure, probes, HUD checks) use the QA gate
+## instead: tools/godot/qa_capture.py with res://tests/qa_shots.gd.
 
 var _scene_path := ""
 var _out_path := "user://captures/capture.png"
 var _settle_frames := 8
+var _target_size := Vector2i.ZERO
+var _size_settled := false
 var _instance: Node = null
 var _frames_seen := 0
 
@@ -26,13 +31,32 @@ func _initialize() -> void:
 		return
 	var parts := size.split("x")
 	if parts.size() == 2:
-		root.size = Vector2i(int(parts[0]), int(parts[1]))
+		_target_size = Vector2i(int(parts[0]), int(parts[1]))
 
 
 func _process(_delta: float) -> bool:
 	_frames_seen += 1
+	# Window resizes land asynchronously, and a size set during _initialize is
+	# silently overridden when the window first shows — captures came back at
+	# the project default no matter what --size asked. Ask on the first frame,
+	# then hold until the OS agrees (or a short cap expires).
+	if not _size_settled:
+		if _target_size == Vector2i.ZERO:
+			_size_settled = true
+			_frames_seen = 0
+			return false
+		if _frames_seen == 1:
+			root.mode = Window.MODE_WINDOWED
+			root.borderless = true
+			root.size = _target_size
+			return false
+		if root.size != _target_size and _frames_seen < 40:
+			return false
+		_size_settled = true
+		_frames_seen = 0
+		return false
 	# Defer scene instantiation until autoloads and the tree are active.
-	if _frames_seen == 2:
+	if _frames_seen == 1:
 		var packed: Variant = load(_scene_path)
 		if packed == null or not (packed is PackedScene):
 			printerr("[capture] cannot load scene: " + _scene_path)
@@ -41,7 +65,7 @@ func _process(_delta: float) -> bool:
 		_instance = (packed as PackedScene).instantiate()
 		root.add_child(_instance)
 		return false
-	if _instance != null and _frames_seen >= 2 + _settle_frames:
+	if _instance != null and _frames_seen >= 1 + _settle_frames:
 		_save()
 		return true
 	# Safety cap: never run forever even if something stalls.
