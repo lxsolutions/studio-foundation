@@ -78,11 +78,25 @@ func shots() -> Array:
 			# Mid-race: chase camera on the field, running order filling the
 			# strip. The strip staying on screen at phone size is the check
 			# that caught the running order off the bottom in BOTH views once.
+			#
+			# The probes are catastrophe detectors, not colorimeters: expected
+			# values are midpoints MEASURED across both renderer tiers
+			# (Compatibility sand 200/172/143, Forward+ golden-hour 186/131/95;
+			# sky blue 78/125/189 vs dusk 125/122/140) and the tolerance spans
+			# both plus run noise. A black sky, a blown frame, or gray sand
+			# all sit far outside; a deliberate regrade means recalibrating
+			# from build/qa/report.json, which prints the actuals.
 			"name": "running", "scene": "res://scenes/spectator.tscn",
 			"profiles": PROFILE_BY_DEVICE,
 			"pre_setup": "disable_boot_route", "setup": "inject_running", "run_s": 2.0,
 			"devices": ["desktop", "phone"],
-			"frame": {"luma_min": 50.0, "luma_max": 190.0, "sat_min": 0.05},
+			"frame": {
+				"luma_min": 50.0, "luma_max": 190.0, "sat_min": 0.05,
+				"probes": [
+					{"at": [0.85, 0.04], "expect": [101, 123, 164], "tol": 65.0, "label": "sky"},
+					{"at": [0.50, 0.72], "expect": [193, 152, 119], "tol": 52.0, "label": "sand"},
+				],
+			},
 			"hud": {"margin": 2.0},
 		},
 		{
