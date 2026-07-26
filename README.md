@@ -150,6 +150,7 @@ to work here.
 | 3D render (lit + shadowed) | **Verified in-browser on an NVIDIA Tesla P40.** Patches 0013–0014 fix per-stage sampler visibility and depth-texture sampler types. A minimal PBR + shadow scene renders at 59–60 fps / 36 draws per frame, and a full game (The Chariot Club) holds a locked 60 fps at ~490–630 draws and ~23M primitives per frame — both with 0 `GPUValidationError` |
 | Fallback | The same template project has an official WebGL 2 export preset |
 | Template behavior | Headless GDScript tests cover the shared addon and neutral starter project |
+| Visual QA | A measured capture gate ([runbook](docs/runbooks/visual-qa-gate.md)) renders each game's declared shots at desktop/tablet/phone presets and fails builds on exposure, calibrated color-probe, HUD-placement, tap-size, and overlap violations. It found and re-measured eighteen shipped HUD/scale bugs in The Chariot Club, and the same sweep runs conformant on both the Compatibility renderer (software, no GPU) and Forward+ on an NVIDIA Tesla P40 |
 | Optional services | Rust and Nakama components are independently tested and are not required for client-only use |
 
 Exact test counts, artifact state, and unverified areas are in the
@@ -226,6 +227,7 @@ deployment.
 | `just export-browser-webgl [GAME]` | Export with official WebGL 2 templates |
 | `just export-browser-webgpu [GAME]` | Export with the locally built WebGPU templates |
 | `just run-browser-smoke` | Check browser boot, console output, canvas, and renderer |
+| `just GAME=games/chariot qa-godot` | Render the game's declared QA shots and measure them ([runbook](docs/runbooks/visual-qa-gate.md)) |
 | `just ci-local` | Run the full local acceptance suite |
 
 Run `just` to list every supported command.
