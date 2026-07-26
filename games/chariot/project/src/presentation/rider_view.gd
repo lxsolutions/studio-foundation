@@ -427,9 +427,17 @@ func _set_rider_hud_visible(shown: bool) -> void:
 
 func _build_training_overlay() -> void:
 	_training_panel = PanelContainer.new()
+	_training_panel.name = "TrainingBoard"
 	_training_panel.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	_training_panel.position += Vector2(-170.0, -240.0)
+	# Grow both ways, not a hand-computed x offset (the same stale-arithmetic
+	# trap the QA gate measured on the input bar) — and grow UP from a bottom
+	# margin: anchored at a fixed top, the board's own growth ran its
+	# dismiss button 16 units off the bottom of the screen (measured).
+	_training_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_training_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_training_panel.position += Vector2(0.0, -20.0)
 	_training_panel.self_modulate = Color(0.071, 0.063, 0.043, 0.9)
+	_training_panel.add_to_group("qa_hud")
 	(get_node("Hud") as CanvasLayer).add_child(_training_panel)
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 8)
@@ -454,8 +462,11 @@ func _build_training_overlay() -> void:
 	for label_and_type: Array in [["DRIVE (W)", "drive"], ["EASE (S)", "ease"]]:
 		var button := Button.new()
 		button.text = label_and_type[0]
-		button.custom_minimum_size = Vector2(130.0, 52.0)
+		# 60 units clears the 44 px touch floor at phone scale.
+		button.custom_minimum_size = Vector2(130.0, 60.0)
 		button.focus_mode = Control.FOCUS_NONE
+		button.add_to_group("qa_hud")
+		button.add_to_group("qa_tap")
 		var input_type: String = label_and_type[1]
 		button.pressed.connect(func() -> void: _send_training(input_type))
 		buttons.add_child(button)
@@ -465,8 +476,12 @@ func _build_training_overlay() -> void:
 	_training_result.add_theme_color_override("font_color", Color(0.847, 0.780, 0.635))
 	box.add_child(_training_result)
 	var dismiss := Button.new()
+	dismiss.name = "BackToStable"
 	dismiss.text = "Back to the stable"
+	dismiss.custom_minimum_size = Vector2(0.0, 60.0)
 	dismiss.focus_mode = Control.FOCUS_NONE
+	dismiss.add_to_group("qa_hud")
+	dismiss.add_to_group("qa_tap")
 	dismiss.pressed.connect(_dismiss_training)
 	box.add_child(dismiss)
 	_training_panel.visible = false
@@ -509,22 +524,39 @@ var _dam_pick: OptionButton
 func _build_stable_overlay() -> void:
 	var hud := get_node("Hud") as CanvasLayer
 	_stable_button = Button.new()
+	_stable_button.name = "StableDoor"
 	_stable_button.text = "STABLE"
-	_stable_button.custom_minimum_size = Vector2(110.0, 44.0)
+	_stable_button.custom_minimum_size = Vector2(110.0, 60.0)
 	_stable_button.focus_mode = Control.FOCUS_NONE
 	_stable_button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	_stable_button.position += Vector2(-126.0, 14.0)
+	_stable_button.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	# Below the centered title panel on a narrow canvas, same as the stands'
+	# reins door — but LOWER than the stands' 100: the rider's panel also
+	# carries the post line, and at 100 the door still clipped its bottom by
+	# 8 units (measured).
+	var door_y := 124.0 if get_viewport().get_visible_rect().size.x < 660.0 else 14.0
+	_stable_button.position += Vector2(-126.0, door_y)
+	_stable_button.add_to_group("qa_hud")
+	_stable_button.add_to_group("qa_tap")
 	_stable_button.pressed.connect(_toggle_stable)
 	_stable_button.visible = false
 	hud.add_child(_stable_button)
 
 	_stable_panel = PanelContainer.new()
+	_stable_panel.name = "StableBoard"
 	_stable_panel.set_anchors_preset(Control.PRESET_CENTER)
+	# CENTER without grow-both hung the whole board down-right of the screen
+	# center — off-center on desktop and entirely OFF a phone's canvas.
+	_stable_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_stable_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
 	_stable_panel.self_modulate = Color(0.071, 0.063, 0.043, 0.94)
 	_stable_panel.visible = false
+	_stable_panel.add_to_group("qa_hud")
 	hud.add_child(_stable_panel)
 	var box := VBoxContainer.new()
-	box.custom_minimum_size = Vector2(560.0, 0.0)
+	# 500, not 560: a phone canvas settles at 520 visible units and the board
+	# must fit inside it with the panel's own padding.
+	box.custom_minimum_size = Vector2(500.0, 0.0)
 	box.add_theme_constant_override("separation", 8)
 	_stable_panel.add_child(box)
 	var title := Label.new()
@@ -541,7 +573,12 @@ func _build_stable_overlay() -> void:
 	for section in STABLE_SECTIONS:
 		var tab := Button.new()
 		tab.text = section
+		# The tap floor judges the SMALLEST dimension: "YARD" sized itself
+		# ~50 units wide (37 px on a phone) even at full height.
+		tab.custom_minimum_size = Vector2(64.0, 60.0)
 		tab.focus_mode = Control.FOCUS_NONE
+		tab.add_to_group("qa_hud")
+		tab.add_to_group("qa_tap")
 		tab.pressed.connect(func() -> void: _open_section(section))
 		sections.add_child(tab)
 
@@ -571,8 +608,12 @@ func _build_stable_overlay() -> void:
 	_stable_status.add_theme_color_override("font_color", Color(0.847, 0.780, 0.635))
 	box.add_child(_stable_status)
 	var close := Button.new()
+	close.name = "CloseStable"
 	close.text = "Close"
+	close.custom_minimum_size = Vector2(0.0, 60.0)
 	close.focus_mode = Control.FOCUS_NONE
+	close.add_to_group("qa_hud")
+	close.add_to_group("qa_tap")
 	close.pressed.connect(_toggle_stable)
 	box.add_child(close)
 
@@ -930,6 +971,9 @@ func _horse_row(horse: Dictionary) -> HBoxContainer:
 		_selected_horse_id = horse_id
 		_refresh_stable())
 	pick.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# The text column bends, the row does not: without clipping, one long
+	# stat line forced the whole board 40 units off each phone edge.
+	pick.clip_text = true
 	row.add_child(pick)
 	row.add_child(_menu_button("FEED", StableActions.MEALS, func(meal: String) -> void:
 		_send_stable(StableActions.care(horse_id, meal, stable_client.code), "Feeding %s…" % str(horse.get("name", "")))))
@@ -957,6 +1001,7 @@ func _race_row(race: Dictionary) -> HBoxContainer:
 		line.text += "  ·  awaiting the stewards"
 		line.add_theme_color_override("font_color", Color(0.62, 0.57, 0.47))
 	line.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	line.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	row.add_child(line)
 	var entered_race := rider.entered_open_race(_selected_horse_id)
 	var action := Button.new()
@@ -997,6 +1042,11 @@ func _on_stable_settled(_path: String, ok: bool, error: String) -> void:
 
 func _refresh_training() -> void:
 	_training_panel.visible = training.active() or training.finished()
+	# The idle "waiting for your race" line lives where the board stands, and
+	# the board already names the horse — one of them at a time (a 300x28-unit
+	# overlap, measured). Re-shown by _refresh_rider_line once the board goes.
+	if rider.signed_in() and not rider.riding():
+		_my_line.visible = not _training_panel.visible
 	if not _training_panel.visible:
 		return
 	if _stable_panel != null:

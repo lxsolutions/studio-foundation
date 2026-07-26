@@ -116,6 +116,68 @@ func shots() -> Array:
 			"frame": {"luma_min": 50.0, "luma_max": 190.0, "sat_min": 0.05},
 			"hud": {"margin": 2.0},
 		},
+		{
+			# The training needle mid-session — the platosplaza edition's
+			# panel was once re-pinned blind; here every session gets a still.
+			"name": "training", "scene": "res://scenes/rider.tscn",
+			"profiles": PROFILE_BY_DEVICE,
+			"setup": "inject_training", "run_s": 1.2,
+			"devices": ["desktop", "phone"],
+			"frame": {"luma_min": 45.0, "luma_max": 190.0, "sat_min": 0.05},
+			"hud": {"margin": 2.0},
+		},
+		{
+			# ...and the settled result the wire hands back, rendered verbatim.
+			"name": "training_done", "scene": "res://scenes/rider.tscn",
+			"profiles": PROFILE_BY_DEVICE,
+			"setup": "inject_training_done", "run_s": 1.2,
+			"devices": ["desktop", "phone"],
+			"frame": {"luma_min": 45.0, "luma_max": 190.0, "sat_min": 0.05},
+			"hud": {"margin": 2.0},
+		},
+		{
+			# The stable yard: the raise-train-race hub and the largest HUD
+			# surface in the game. Its board hung entirely OFF a phone's
+			# canvas until this shot existed.
+			"name": "stable_yard", "scene": "res://scenes/rider.tscn",
+			"profiles": PROFILE_BY_DEVICE,
+			"setup": "inject_stable_yard", "run_s": 1.2,
+			"devices": ["desktop", "phone"],
+			"frame": {"luma_min": 45.0, "luma_max": 190.0, "sat_min": 0.05},
+			"hud": {"margin": 2.0},
+		},
+		{
+			"name": "stable_bloodstock", "scene": "res://scenes/rider.tscn",
+			"profiles": PROFILE_BY_DEVICE,
+			"setup": "inject_stable_bloodstock", "run_s": 1.2,
+			"devices": ["desktop", "phone"],
+			"frame": {"luma_min": 45.0, "luma_max": 190.0, "sat_min": 0.05},
+			"hud": {"margin": 2.0},
+		},
+		{
+			"name": "stable_exchange", "scene": "res://scenes/rider.tscn",
+			"profiles": PROFILE_BY_DEVICE,
+			"setup": "inject_stable_exchange", "run_s": 1.2,
+			"devices": ["desktop", "phone"],
+			"frame": {"luma_min": 45.0, "luma_max": 190.0, "sat_min": 0.05},
+			"hud": {"margin": 2.0},
+		},
+		{
+			"name": "stable_honours", "scene": "res://scenes/rider.tscn",
+			"profiles": PROFILE_BY_DEVICE,
+			"setup": "inject_stable_honours", "run_s": 1.2,
+			"devices": ["desktop", "phone"],
+			"frame": {"luma_min": 45.0, "luma_max": 190.0, "sat_min": 0.05},
+			"hud": {"margin": 2.0},
+		},
+		{
+			"name": "stable_circuit", "scene": "res://scenes/rider.tscn",
+			"profiles": PROFILE_BY_DEVICE,
+			"setup": "inject_stable_circuit", "run_s": 1.2,
+			"devices": ["desktop", "phone"],
+			"frame": {"luma_min": 45.0, "luma_max": 190.0, "sat_min": 0.05},
+			"hud": {"margin": 2.0},
+		},
 	]
 
 
@@ -142,13 +204,122 @@ func inject_finished(view: Node) -> void:
 	view.call("_on_spectate_event", "race:phase", {"status": "finished", "race": settled})
 
 
+## The signed-in stable, shaped like horses:update really is: yard rows read
+## grade/condition/bond/record, bloodstock needs sexes for the sire/dam picks.
+const MY_HORSES: Array = [
+	{"id": "h1", "name": "Boreas", "grade": "B", "sex": "colt",
+		"condition": 82, "bond": 61, "record": {"wins": 3, "starts": 9}},
+	{"id": "h3", "name": "Aithon", "grade": "A", "sex": "stallion",
+		"condition": 74, "bond": 77, "record": {"wins": 6, "starts": 14}},
+	{"id": "h9", "name": "Melite", "grade": "C", "sex": "filly",
+		"condition": 66, "bond": 40, "record": {"wins": 0, "starts": 2}},
+]
+
+const TRAINING_TICK: Dictionary = {
+	"sessionId": "s1", "t": 6.0, "effort": 62.0, "zoneLo": 40.0,
+	"zoneHi": 70.0, "score": 14.0, "surge": false, "secondsLeft": 9.0,
+}
+
+const TRAINING_DONE: Dictionary = {
+	"sessionId": "s1", "horse": {"name": "Boreas"},
+	"result": {"score": 78, "stat": "stamina", "gain": 1.4, "conditionDelta": -6.0},
+}
+
+const EXCHANGE: Dictionary = {
+	"purse": 740,
+	"listings": [
+		{"id": "l1", "horseName": "Kalliste", "grade": "B", "stableName": "Nikias Yard", "price": 260, "mine": false},
+		{"id": "l2", "horseName": "Pyrois", "grade": "C", "stableName": "Kadmos Stables", "price": 180, "mine": true},
+	],
+}
+
+const HONOURS: Dictionary = {
+	"honours": [
+		{"id": "first_win", "name": "First Laurels", "current": 3, "target": 1, "earned": true, "claimable": false},
+		{"id": "campaigner", "name": "Campaigner", "current": 9, "target": 10, "earned": false, "claimable": false},
+		{"id": "bloodline", "name": "Bloodline Keeper", "current": 1, "target": 1, "earned": false, "claimable": true},
+	],
+}
+
+const CIRCUIT: Dictionary = {
+	"season": {"id": "2026-S3"},
+	"myStable": {"rank": 4, "points": 128, "title": "Rising Yard",
+		"nextGoal": "Top three finishes earn the Crown invitation"},
+	"stableStandings": [
+		{"stableName": "Helios House", "points": 402, "wins": 21},
+		{"stableName": "Nikias Yard", "points": 335, "wins": 17},
+		{"stableName": "Argent Stables", "points": 300, "wins": 12},
+		{"stableName": "Kadmos Stables", "points": 128, "wins": 6},
+	],
+}
+
+
 func inject_rider_live(view: Node) -> void:
-	view.call("_on_spectate_event", "auth:ok", {"user": {"name": "Kadmos Stables"}})
-	view.call("_on_spectate_event", "horses:update", {"horses": [
-		{"id": "h1", "name": "Boreas"}, {"id": "h3", "name": "Aithon"},
-	]})
-	view.call("_on_spectate_event", "races:update", {"races": []})
+	_sign_in(view)
 	inject_running(view)
+
+
+func inject_training(view: Node) -> void:
+	_sign_in(view)
+	view.call("_on_spectate_event", "training:tick", TRAINING_TICK)
+
+
+func inject_training_done(view: Node) -> void:
+	inject_training(view)
+	view.call("_on_spectate_event", "training:done", TRAINING_DONE)
+
+
+func inject_stable_yard(view: Node) -> void:
+	_sign_in(view)
+	view.call("_toggle_stable")
+
+
+func inject_stable_bloodstock(view: Node) -> void:
+	inject_stable_yard(view)
+	view.call("_open_section", "BLOODSTOCK")
+
+
+## Projection sections render off the same callback the REST client fires;
+## offline, the fetch is captured rather than sent, so the injected payload
+## is the only content and nothing races it.
+func inject_stable_exchange(view: Node) -> void:
+	inject_stable_yard(view)
+	view.call("_open_section", "EXCHANGE")
+	view.call("_on_stable_projection", "/api/exchange", true, "", {"exchange": EXCHANGE})
+
+
+func inject_stable_honours(view: Node) -> void:
+	inject_stable_yard(view)
+	view.call("_open_section", "HONOURS")
+	view.call("_on_stable_projection", "/api/honours", true, "", {"honours": HONOURS})
+
+
+func inject_stable_circuit(view: Node) -> void:
+	inject_stable_yard(view)
+	view.call("_open_section", "CIRCUIT")
+	view.call("_on_stable_projection", "/api/circuit", true, "", {"circuit": CIRCUIT})
+
+
+func _sign_in(view: Node) -> void:
+	view.call("_on_spectate_event", "auth:ok", {"user": {"name": "Kadmos Stables"}})
+	view.call("_on_spectate_event", "horses:update", {"horses": MY_HORSES})
+	view.call("_on_spectate_event", "races:update", {"races": _open_races()})
+
+
+## Two open races: one with a post time eight minutes out (the countdown
+## branch), one schedule-less (the "awaiting the stewards" branch). Post
+## times are computed at injection because they must sit in the future.
+func _open_races() -> Array:
+	var now_ms := int(Time.get_unix_time_from_system() * 1000.0)
+	return [
+		{"id": "r1", "name": "The Dawn Sprint", "status": "open",
+			"distance": 450, "surface": "sand",
+			"entries": [{"horseId": "h2"}, {"horseId": "h5"}],
+			"scheduledFor": now_ms + 8 * 60 * 1000},
+		{"id": "r2", "name": "The Stewards' Trial", "status": "open",
+			"distance": 700, "surface": "sand",
+			"entries": []},
+	]
 
 
 ## Mid-race field: leader at 240 m of 700, tail 60 m back, lanes fanned.
