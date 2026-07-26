@@ -3,13 +3,18 @@
 
   pipeline.py validate <file.blend>
   pipeline.py export   <file.blend>            # validate first, then GLB
-  pipeline.py cook     --profile P [--game G]  # export all + sync into project + manifests
+  pipeline.py cook     --profile P [--game G] [--dest DIR]
   pipeline.py preview  <file.blend> [--frames N]
   pipeline.py report
 
 Sources live in assets-source/; ALL outputs land in assets-generated/ (repo
-level, hash-cached) and are synced into <game>/project/assets/generated/ by
-cook. Nothing here ever writes into assets-source/.
+level, hash-cached) and are synced by cook into <game>/project/assets/generated/,
+or into --dest when a consuming repo outside this one wants the cooked pack
+(ADR 0015: games consume the foundation, so cooked output must be able to land
+in THEIR tree; without --dest the sync would also resurrect a project/ dir for
+asset-only games that deliberately have none). --dest gets the runtime files
+plus asset_manifest.json and skips the project-only content_manifest.json.
+Nothing here ever writes into assets-source/.
 """
 
 from __future__ import annotations
@@ -176,10 +181,36 @@ def game_root(game: str) -> Path:
     return path
 
 
-def cmd_cook(profile: str, game: str) -> int:
+def cooked_relative(out_path: Path, game: str) -> Path:
+    """Where a cooked file sits relative to the sync root.
+
+    Exports land under assets-generated/<game>/<category>/<file>; the game's
+    own path segments are stripped so the synced tree starts at the category
+    (deep/deep_ore_vein.glb), whichever root it is synced into.
+    """
+    relative = out_path.relative_to(GENERATED)
+    parts = [p for p in relative.parts if p not in Path(game).parts]
+    return Path(*parts)
+
+
+def cook_sync_root(root: Path, dest: str | None) -> Path:
+    """The directory cooked files and the manifest sync into.
+
+    Default is the game's own gitignored project dir. --dest points anywhere,
+    typically a consuming repo's asset directory (ADR 0015) -- also the only
+    way to cook an asset-only game without conjuring a project/ dir it does
+    not have.
+    """
+    if dest:
+        return Path(dest).expanduser().resolve()
+    return root / "project" / "assets" / "generated"
+
+
+def cmd_cook(profile: str, game: str, dest: str | None = None) -> int:
     if profile not in PROFILES:
         raise SystemExit(f"unknown profile '{profile}' (choose from {', '.join(PROFILES)})")
     root = game_root(game)
+    sync_root = cook_sync_root(root, dest)
     sources = sorted((root / "assets-source").rglob("*.blend"))
     if not sources:
         print(f"cook: no source assets under {game}/assets-source")
@@ -191,32 +222,36 @@ def cmd_cook(profile: str, game: str) -> int:
             failures += 1
             continue
         meta = load_meta(blend)
-        # Sync runtime file into the game project (generated dir, gitignored).
-        relative = out_path.relative_to(GENERATED)
-        parts = [p for p in relative.parts if p not in Path(game).parts]
-        dest = root / "project" / "assets" / "generated" / Path(*parts)
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.write_bytes(out_path.read_bytes())
+        # Sync runtime file into the chosen root (gitignored project dir, or
+        # a consuming repo's tree via --dest).
+        relative = cooked_relative(out_path, game)
+        target = sync_root / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(out_path.read_bytes())
         manifest["assets"][meta["asset_id"]] = {
-            "file": str(Path(*parts)).replace("\\", "/"),
+            "file": str(relative).replace("\\", "/"),
             "category": meta.get("category", "prop"),
             "source_hash": source_hash(blend),
             "texture_policy": meta.get("texture_policy", "compressed"),
             # Texture conversion hook: per-profile KTX2/Basis + platform compression
             # lands here when texture-bearing assets arrive (tracked in docs/asset-pipeline).
         }
-    manifest_path = root / "project" / "assets" / "generated" / "asset_manifest.json"
+    manifest_path = sync_root / "asset_manifest.json"
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-    content_path = root / "project" / "content_manifest.json"
-    content_path.write_text(
-        json.dumps(
-            {"schema": 1, "packs": {"base": {"version": "0.1.0", "profile": profile}}},
-            indent=2,
-        ),
-        encoding="utf-8",
-    )
-    print(f"cook: {len(sources) - failures}/{len(sources)} assets for profile {profile} -> {game}")
+    if dest is None:
+        # The content manifest describes a Godot project's packs; an external
+        # destination is not a project, so it only gets the asset manifest.
+        content_path = root / "project" / "content_manifest.json"
+        content_path.write_text(
+            json.dumps(
+                {"schema": 1, "packs": {"base": {"version": "0.1.0", "profile": profile}}},
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+    where = str(sync_root) if dest else game
+    print(f"cook: {len(sources) - failures}/{len(sources)} assets for profile {profile} -> {where}")
     return 1 if failures else 0
 
 
@@ -274,13 +309,21 @@ def main() -> int:
     cook = sub.add_parser("cook")
     cook.add_argument("--profile", required=True)
     cook.add_argument("--game", default="templates/godot-game")
+    cook.add_argument(
+        "--dest",
+        default=None,
+        help=(
+            "sync cooked files + asset_manifest.json into this directory instead of "
+            "<game>/project/assets/generated (for consuming repos, ADR 0015)"
+        ),
+    )
     sub.add_parser("report")
     args = parser.parse_args()
 
     if args.command == "report":
         return cmd_report()
     if args.command == "cook":
-        return cmd_cook(args.profile, args.game)
+        return cmd_cook(args.profile, args.game, args.dest)
     blend = Path(args.file).resolve()
     if not blend.is_file():
         raise SystemExit(f"not found: {blend}")
