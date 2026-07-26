@@ -137,8 +137,15 @@ func _rider_client() -> RiderClient:
 
 func _build_code_panel() -> void:
 	_code_panel = PanelContainer.new()
+	_code_panel.name = "SignInGate"
 	_code_panel.set_anchors_preset(Control.PRESET_CENTER)
+	# Grow both ways or the preset pins the panel's top-left AT screen center
+	# and the whole gate hangs down-right — 98 units off a phone's edge,
+	# measured by the QA gate.
+	_code_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_code_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
 	_code_panel.self_modulate = Color(0.071, 0.063, 0.043, 0.94)
+	_code_panel.add_to_group("qa_hud")
 	(get_node("Hud") as CanvasLayer).add_child(_code_panel)
 	var box := VBoxContainer.new()
 	box.custom_minimum_size = Vector2(340.0, 0.0)
@@ -155,14 +162,25 @@ func _build_code_panel() -> void:
 	_gate_status.add_theme_color_override("font_color", Color(0.957, 0.808, 0.463))
 	box.add_child(_gate_status)
 	_code_edit = LineEdit.new()
+	_code_edit.name = "OwnerCode"
 	_code_edit.placeholder_text = "Owner code"
 	_code_edit.max_length = 12
 	_code_edit.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	# 60 design units keeps every sign-in control above the 44 px touch floor
+	# at the ~0.75 px/unit a phone window settles at (measured by the QA
+	# gate, not eyeballed).
+	_code_edit.custom_minimum_size = Vector2(0.0, 60.0)
 	_code_edit.text_submitted.connect(func(_text: String) -> void: _submit_code())
+	_code_edit.add_to_group("qa_hud")
+	_code_edit.add_to_group("qa_tap")
 	box.add_child(_code_edit)
 	_join_button = Button.new()
+	_join_button.name = "TakeTheReins"
 	_join_button.text = "Take the reins"
+	_join_button.custom_minimum_size = Vector2(0.0, 60.0)
 	_join_button.pressed.connect(_submit_code)
+	_join_button.add_to_group("qa_hud")
+	_join_button.add_to_group("qa_tap")
 	box.add_child(_join_button)
 	_code_error = Label.new()
 	_code_error.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -170,18 +188,26 @@ func _build_code_panel() -> void:
 	_code_error.add_theme_color_override("font_color", Color(0.910, 0.451, 0.353))
 	box.add_child(_code_error)
 	_recovery_button = LinkButton.new()
+	_recovery_button.name = "RecoverCode"
 	_recovery_button.text = "Lost your code? Recover at the stables office"
 	_recovery_button.underline = LinkButton.UNDERLINE_MODE_ON_HOVER
 	_recovery_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_recovery_button.add_theme_font_size_override("font_size", 13)
+	_recovery_button.custom_minimum_size = Vector2(0.0, 60.0)
 	_recovery_button.pressed.connect(_open_recovery)
+	_recovery_button.add_to_group("qa_hud")
+	_recovery_button.add_to_group("qa_tap")
 	box.add_child(_recovery_button)
 	_stands_button = LinkButton.new()
+	_stands_button.name = "WatchInstead"
 	_stands_button.text = "Watch from the stands instead"
 	_stands_button.underline = LinkButton.UNDERLINE_MODE_ON_HOVER
 	_stands_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_stands_button.add_theme_font_size_override("font_size", 13)
+	_stands_button.custom_minimum_size = Vector2(0.0, 60.0)
 	_stands_button.pressed.connect(func() -> void: _switch_scene("res://scenes/spectator.tscn"))
+	_stands_button.add_to_group("qa_hud")
+	_stands_button.add_to_group("qa_tap")
 	box.add_child(_stands_button)
 
 
@@ -317,25 +343,47 @@ func _build_rider_hud() -> void:
 	var hud := get_node("Hud") as CanvasLayer
 
 	_my_line = Label.new()
+	_my_line.name = "MyLine"
 	_my_line.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	_my_line.position += Vector2(0.0, -140.0)
+	# Grow both ways or the label's LEFT edge pins at the anchor and the
+	# rider's own line sits off-center right (the neighbouring bar and strip
+	# hand-compensate with x offsets; a text label cannot).
+	_my_line.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	# The drive stack reads bottom-up: input bar (-96, 64 tall), energy bar,
+	# own line. Spacing is set by MEASURED heights — a ProgressBar renders at
+	# its themed ~27 units, not the 14 its custom_minimum_size declares, and
+	# the overlap check caught its bottom 9 units under the input bar.
+	_my_line.position += Vector2(0.0, -152.0)
 	_my_line.add_theme_font_size_override("font_size", 20)
 	_my_line.add_theme_color_override("font_color", Color(0.976, 0.949, 0.878))
+	# qa_hud: the visual QA gate checks these stay on screen at every device
+	# size; qa_tap (on the buttons) adds the physical tap-size floor.
+	_my_line.add_to_group("qa_hud")
 	hud.add_child(_my_line)
 
 	_energy_bar = ProgressBar.new()
+	_energy_bar.name = "EnergyBar"
 	_energy_bar.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	_energy_bar.position += Vector2(-110.0, -114.0)
+	# Grow both ways instead of a hand-computed x offset: the input bar below
+	# carried a stale -210 for a 504-wide row (it was sized for narrower
+	# buttons once), which pushed BLOCK 52 units off a phone's edge and sat
+	# the whole bar off-center everywhere. Measured by the QA gate.
+	_energy_bar.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_energy_bar.position += Vector2(0.0, -124.0)
 	_energy_bar.custom_minimum_size = Vector2(220.0, 14.0)
 	_energy_bar.min_value = 0.0
 	_energy_bar.max_value = 100.0
 	_energy_bar.show_percentage = false
+	_energy_bar.add_to_group("qa_hud")
 	hud.add_child(_energy_bar)
 
 	_input_bar = HBoxContainer.new()
+	_input_bar.name = "InputBar"
 	_input_bar.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	_input_bar.position += Vector2(-210.0, -96.0)
+	_input_bar.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_input_bar.position += Vector2(0.0, -96.0)
 	_input_bar.add_theme_constant_override("separation", 14)
+	_input_bar.add_to_group("qa_hud")
 	hud.add_child(_input_bar)
 
 	_guide_in_button = _make_input_button("◀ INSIDE", func() -> void: _send_guide("in"))
@@ -346,14 +394,23 @@ func _build_rider_hud() -> void:
 	_block_button.toggle_mode = true
 	_block_button.toggled.connect(_send_block)
 
+	# On a narrow canvas the centered input bar reaches the left edge where
+	# the broadcast's running order sits (a 101x64-unit collision, measured).
+	# Lift the strip clear of the whole drive stack there.
+	if get_viewport().get_visible_rect().size.x < 640.0:
+		_rank_strip.position.y -= 178.0
+
 	_set_rider_hud_visible(false)
 
 
 func _make_input_button(label: String, on_press: Callable) -> Button:
 	var button := Button.new()
+	button.name = label.to_pascal_case()
 	button.text = label
 	button.custom_minimum_size = Vector2(104.0, 64.0)
 	button.focus_mode = Control.FOCUS_NONE
+	button.add_to_group("qa_hud")
+	button.add_to_group("qa_tap")
 	if not on_press.is_null():
 		button.pressed.connect(on_press)
 	_input_bar.add_child(button)

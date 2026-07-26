@@ -73,6 +73,7 @@ var _leader_called := ""
 var _stretch_called := false
 var _banner: Label
 var _phase_label: Label
+var _rank_strip: PanelContainer
 var _rank_labels: Array[Label] = []
 var _connection_label: Label
 var _horses: Dictionary = {}
@@ -89,8 +90,16 @@ const PARADE_WALK_MPS := 1.6
 const PARADE_SPAN_M := 30.0
 const PARADE_STAGGER_M := 3.1
 
+## The smallest design-unit area the HUD must keep visible when phone-sized
+## windows scale the UI up (StudioUiScale): the rider input bar is the widest
+## must-fit block at 504 units (3 x 104 + 150 + 3 x 14 separation), the
+## sign-in gate the tallest at ~340.
+const UI_MIN_VISIBLE := Vector2(520.0, 640.0)
+
 
 func _ready() -> void:
+	_apply_ui_scale()
+	get_window().size_changed.connect(_apply_ui_scale)
 	_track_scene = load(TRACK_MODEL)
 	_gate_scene = load(GATE_MODEL)
 	_horse_scene = load(HORSE_MODEL)
@@ -106,6 +115,18 @@ func _ready() -> void:
 	audio.name = "RaceAudio"
 	add_child(audio)
 	_apply_phase_visuals()
+
+
+## Phone-sized windows render the 1280-unit canvas at ~30% under canvas_items
+## stretch — 10 px tap targets, measured by the QA gate. Scale the UI back up,
+## bounded by what must stay visible; desktop is untouched (factor 1.0).
+func _apply_ui_scale() -> void:
+	var window := get_window()
+	var design := Vector2(
+		float(ProjectSettings.get_setting("display/window/size/viewport_width", 1280)),
+		float(ProjectSettings.get_setting("display/window/size/viewport_height", 720)))
+	window.content_scale_factor = StudioUiScale.content_scale_for(
+		window.size, design, UI_MIN_VISIBLE)
 
 
 ## Subclasses swap the transport (the rider uses the authed main namespace)
@@ -164,8 +185,17 @@ func _build_hud() -> void:
 	var top := PanelContainer.new()
 	top.name = "TopPanel"
 	top.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	# The preset alone does not center: it pins the panel's LEFT edge at the
+	# anchor and containers grow rightward, so the title block sat off-center
+	# right on every device since it was built (measured by the QA gate at
+	# phone width, where it ran off the edge entirely). Grow both ways.
+	top.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	top.position.y = 12.0
 	top.self_modulate = Color(0.071, 0.063, 0.043, 0.82)
+	# qa_hud: the visual QA gate (studio_core qa_capture) checks members stay
+	# on screen at every device size. Tag the panels, whose rects are the
+	# thing that must fit.
+	top.add_to_group("qa_hud")
 	hud.add_child(top)
 	var top_box := VBoxContainer.new()
 	top_box.name = "TopBox"
@@ -182,13 +212,19 @@ func _build_hud() -> void:
 	_phase_label.add_theme_color_override("font_color", Color(0.847, 0.780, 0.635))
 	top_box.add_child(_phase_label)
 
-	var strip := PanelContainer.new()
-	strip.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	strip.position += Vector2(12.0, -12.0)
-	strip.self_modulate = Color(0.071, 0.063, 0.043, 0.82)
-	hud.add_child(strip)
+	_rank_strip = PanelContainer.new()
+	_rank_strip.name = "RunningOrder"
+	_rank_strip.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	_rank_strip.position += Vector2(12.0, -12.0)
+	# The preset anchors the strip's TOP at the bottom edge and containers grow
+	# downward, so a filled running order ran 132 px off the bottom of the
+	# screen (measured by the QA gate). Grow upward from the anchored corner.
+	_rank_strip.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_rank_strip.self_modulate = Color(0.071, 0.063, 0.043, 0.82)
+	_rank_strip.add_to_group("qa_hud")
+	hud.add_child(_rank_strip)
 	var strip_box := VBoxContainer.new()
-	strip.add_child(strip_box)
+	_rank_strip.add_child(strip_box)
 	for i in range(5):
 		var row := Label.new()
 		row.add_theme_font_size_override("font_size", 18)
@@ -197,16 +233,24 @@ func _build_hud() -> void:
 		_rank_labels.append(row)
 
 	_connection_label = Label.new()
+	_connection_label.name = "ConnectionState"
 	_connection_label.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
 	_connection_label.position += Vector2(-160.0, -24.0)
 	_connection_label.add_theme_font_size_override("font_size", 13)
 	_connection_label.add_theme_color_override("font_color", Color(0.847, 0.780, 0.635, 0.8))
+	_connection_label.add_to_group("qa_hud")
 	hud.add_child(_connection_label)
 
 	_results_panel = PanelContainer.new()
+	_results_panel.name = "LaurelBoard"
 	_results_panel.set_anchors_preset(Control.PRESET_CENTER)
+	# Same preset trap as the TopPanel: without growing both ways the board
+	# hangs down-right from the screen center instead of sitting on it.
+	_results_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_results_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
 	_results_panel.self_modulate = Color(0.071, 0.063, 0.043, 0.92)
 	_results_panel.visible = false
+	_results_panel.add_to_group("qa_hud")
 	hud.add_child(_results_panel)
 	_results_box = VBoxContainer.new()
 	_results_box.custom_minimum_size = Vector2(460.0, 0.0)
@@ -791,8 +835,13 @@ func _apply_phase_visuals() -> void:
 	_results_panel.visible = board
 	if board:
 		_rebuild_results_board()
+	var order_live := not board \
+		and (state.phase == RaceState.PHASE_RUNNING or state.phase == RaceState.PHASE_FINISHED)
+	# The panel too, not just its labels: a visible strip of empty labels
+	# renders as a collapsed dark sliver in every non-race phase.
+	_rank_strip.visible = order_live
 	for i in range(_rank_labels.size()):
-		_rank_labels[i].visible = not board and (state.phase == RaceState.PHASE_RUNNING or state.phase == RaceState.PHASE_FINISHED)
+		_rank_labels[i].visible = order_live
 	_apply_caption_text()
 
 
@@ -816,8 +865,13 @@ func _apply_caption_text() -> void:
 			_banner.text = state.race_name()
 			_phase_label.text = "Official result"
 		_:
+			# The wire can carry administrative statuses this view does not
+			# stage ("cancelled" when a race voids for want of entries). Raw
+			# state under the title read as a broken build on the live demo;
+			# to a spectator every such status means the same thing: no race
+			# right now.
 			_banner.text = "The Chariot Club"
-			_phase_label.text = state.phase
+			_phase_label.text = "The colosseum waits for the next race"
 	var ranks := state.ranked_names(_rank_labels.size())
 	for i in range(_rank_labels.size()):
 		_rank_labels[i].text = ranks[i] if i < ranks.size() else ""
