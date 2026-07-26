@@ -90,7 +90,7 @@ def gameready_lod(ctx, name, levels, ratios, keep_uvs, layout):
 
 @op(
     "gameready.collision",
-    summary="Generate a physics collision proxy. Convex hulls are what you want for anything a character walks into; box is cheapest; simplified trimesh is for concave shapes like arenas and rooms. Named <object>-convcol / <object>-col per the studio import convention.",
+    summary="Generate a physics collision proxy. Convex hulls are what you want for anything a character walks into; box is cheapest; simplified trimesh is for concave shapes like arenas and rooms. Named <object>-convcol / <object>-col per the studio import convention. SKIP for hulls that ride inside a moving body: Godot imports the proxy as a StaticBody3D child, and a static collider inside a CharacterBody3D blocks its own vehicle.",
     params={
         "name": ("str", None, "Source object"),
         "mode": ("enum:box|convex|simplified|cylinder|sphere|capsule", "convex", "Proxy shape"),

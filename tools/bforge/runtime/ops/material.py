@@ -530,7 +530,7 @@ def material_list(ctx):
         "object": ("str", None, "Object name"),
         "preset": ("str", "gold", "Material preset for the selected faces"),
         "select": ("enum:up|down|sides|top_band|bottom_band", "up", "Face selection rule"),
-        "band_min": ("num", 0.0, "top_band/bottom_band: lower bound as a fraction of height"),
+        "band_min": ("num", 0.0, "top_band/bottom_band: lower bound as a fraction of height. Bands select by face CENTER, so a thin band needs real face rows at that height - one tall quad (e.g. a column shaft) has its centre near the middle and a thin band elsewhere matches nothing"),
         "band_max": ("num", 1.0, "top_band/bottom_band: upper bound as a fraction of height"),
         "color": ("str", "", "Override colour"),
     },
