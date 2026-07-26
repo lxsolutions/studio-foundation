@@ -1,4 +1,8 @@
-# ADR 0014: Keep Studio Foundation product-neutral
+# ADR 0016: Keep Studio Foundation product-neutral
+
+> Renumbered from 0014 (2026-07-25): two ADRs landed as 0014 in the same week
+> from parallel lines. bforge keeps 0014 (it is the number cited by the skill,
+> the strategy docs, and the justfile); this one moves.
 
 - Status: Accepted
 - Date: 2026-07-22
