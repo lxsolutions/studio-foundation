@@ -121,6 +121,12 @@ test-godot:
 budget-godot PROFILE="browser_webgpu":
     {{PY}} tools/godot/run_godot.py --game "{{GAME}}" --budget --profile "{{PROFILE}}"
 
+# Render the game's declared QA shots through the real renderer and MEASURE
+# them (exposure, palette probes, HUD on-screen/tap-size). Not headless; works
+# GPU-less via ANGLE. Shots live in the game's res://tests/qa_shots.gd.
+qa-godot *ARGS:
+    {{PY}} tools/godot/qa_capture.py --game "{{GAME}}" {{ARGS}}
+
 # DB-backed integration tests (requires `just services-up`)
 test-db:
     {{PY}} tools/infra/db.py test-env -- {{PY}} tools/cargo_env.py test --manifest-path services/Cargo.toml -p studio-integration-tests -- --ignored
