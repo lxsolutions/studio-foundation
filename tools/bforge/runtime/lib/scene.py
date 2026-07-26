@@ -60,6 +60,12 @@ def unique_name(name: str) -> str:
 
 
 def get_object(name: str):
+    # Guard before touching bpy: bpy_prop_collection.get(None) raises a raw
+    # SystemError from C, which surfaces as an inscrutable daemon error
+    # instead of the helpful message below (found via Riftline's asset pack,
+    # where an op reached here with a missing name argument).
+    if not isinstance(name, str) or not name:
+        raise ValueError(f"object name must be a non-empty string, got {name!r}")
     obj = bpy.data.objects.get(name)
     if obj is None:
         available = sorted(o.name for o in bpy.context.scene.objects)[:25]

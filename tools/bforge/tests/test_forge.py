@@ -92,6 +92,15 @@ class Daemon(ForgeCase):
             self.forge.call("object.inspect", name="does_not_exist")
         self.assertEqual(self.forge.call("build.box", name="after")["name"], "after")
 
+    def test_missing_object_name_is_a_clean_error_not_a_systemerror(self):
+        # bpy_prop_collection.get(None) raises a raw SystemError from C; the
+        # object lookup must guard before bpy so the caller gets the normal
+        # helpful message (found by Riftline's hellenic pack build).
+        with self.assertRaises(ForgeError) as ctx:
+            self.forge.call("object.inspect", name=None)
+        self.assertIn("name", str(ctx.exception).lower())
+        self.assertNotIn("SystemError", str(ctx.exception))
+
 
 class Geometry(ForgeCase):
     def test_box_dimensions_are_exact(self):
