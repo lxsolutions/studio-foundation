@@ -16,6 +16,7 @@ NAME := ""
 DISPLAY_NAME := ""
 GAME := "templates/godot-game"
 PROFILE := "desktop_high"
+DEST := ""
 # bforge (ADR 0014): `just NAME=crate_a RECIPE=prop.crate bforge-make`
 RECIPE := "prop.crate"
 TAG := ""
@@ -108,6 +109,7 @@ test-python:
     {{PY}} -m unittest discover -s engine/scripts/tests -p "test_*.py" -v
     uv run --project tools python -m unittest discover -s tools/bforge/tests -p "test_schema.py" -v
     uv run --project tools python -m unittest discover -s tools/bforge/tests -p "test_mcp.py" -v
+    uv run --project tools python -m unittest discover -s tools/asset-pipeline/tests -p "test_*.py" -v
 
 # Cross-language protocol golden-fixture checks (Rust side runs in test-rust too)
 test-protocol:
@@ -183,6 +185,12 @@ asset-export:
 # Cook all assets of GAME for PROFILE (desktop_high|browser_webgpu|browser_webgl|mobile_high|mobile_low)
 asset-cook:
     uv run --project tools python tools/asset-pipeline/pipeline.py cook --profile "{{PROFILE}}" --game "{{GAME}}"
+
+# Cook GAME's assets and sync the pack + manifest into DEST (a consuming repo's
+# asset dir, ADR 0015) instead of the game's own project tree. Example:
+#   just PROFILE=browser_webgl GAME=games/asha_world DEST=../platosplaza/games/the-deep/assets asset-cook-to
+asset-cook-to:
+    uv run --project tools python tools/asset-pipeline/pipeline.py cook --profile "{{PROFILE}}" --game "{{GAME}}" --dest "{{DEST}}"
 
 asset-preview:
     uv run --project tools python tools/asset-pipeline/pipeline.py preview "{{FILE}}"
