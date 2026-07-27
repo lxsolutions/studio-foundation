@@ -29,15 +29,20 @@ jobs:
         with:
           python-version: '3.11'
 
+      # The validator parses YAML, and pyyaml is a `tools` dev dependency rather
+      # than stdlib -- so this runs through uv exactly as `just lint-workflows`
+      # does, not with a bare interpreter.
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+
       # Enforces the studio's CI security contract on this very directory:
       # every action pinned to a full commit, no self-hosted job reachable from
       # an untrusted pull request. It is deliberately run first -- a workflow
       # that violates the policy should fail before it does any work.
       - name: Validate workflow trust and action pins
-        run: python tools/ci/validate_workflows.py
+        run: uv run --project tools python tools/ci/validate_workflows.py
 
       - name: Scan for committed secrets
-        run: python tools/ci/secret_scan.py
+        run: uv run --project tools python tools/ci/secret_scan.py
 
   python:
     name: python unit suites
@@ -65,12 +70,12 @@ jobs:
       - name: asset pipeline
         run: uv run --project tools python -m unittest discover -s tools/asset-pipeline/tests -p "test_*.py"
 
-      # bforge's Blender-driven ops need Blender; these two suites are the parts
-      # that do not (schema validation and the MCP tool surface).
-      - name: bforge schema and MCP surface
-        run: |
-          uv run --project tools python -m unittest discover -s tools/bforge/tests -p "test_schema.py"
-          uv run --project tools python -m unittest discover -s tools/bforge/tests -p "test_mcp.py"
+      # Only bforge's schema suite runs here. test_mcp.py looks like a pure
+      # tool-surface test but constructs a Forge, which resolves a Blender
+      # binary in its constructor and raises DaemonError without one -- so it
+      # belongs to the self-hosted suite, not a bare hosted runner.
+      - name: bforge schema
+        run: uv run --project tools python -m unittest discover -s tools/bforge/tests -p "test_schema.py"
 
       - name: Protocol golden fixtures
         run: uv run --project tools python tools/asset-pipeline/check_fixtures.py

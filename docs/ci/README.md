@@ -45,10 +45,16 @@ The checker's own failure paths are covered by
   every action pinned to a full 40-character commit, no self-hosted job
   reachable from an untrusted pull request. Then
   [`secret_scan.py`](../../tools/ci/secret_scan.py) scans for committed secrets.
-- **python unit suites** — the stdlib-only suites: engine scripts (including the
-  patch checker's own failure paths — the gate that guards the gate), studio-mcp,
-  infra, the asset pipeline, bforge's schema and MCP surface, and the
-  cross-language protocol golden fixtures.
+- **python unit suites** — the suites that need no external binary: engine
+  scripts (including the patch checker's own failure paths — the gate that
+  guards the gate), studio-mcp, infra, the asset pipeline, bforge's schema, and
+  the cross-language protocol golden fixtures.
+
+  `tools/bforge/tests/test_mcp.py` is deliberately **not** here. It reads as a
+  pure tool-surface test, but `Server()` builds a `Forge`, which resolves a
+  Blender binary in its constructor — so it passes on any developer machine with
+  Blender installed and fails on a bare runner. It belongs to the self-hosted
+  suite.
 
 Locally: `just lint-workflows`, `just test-python`, `just test-protocol`.
 
