@@ -1,0 +1,76 @@
+name: checks
+
+# The fast, hosted half of the repository's own gate. `validate.yml` (the
+# self-hosted studio workflow described in tools/ci/validate_workflows.py) runs
+# the heavy suites -- Godot, Rust, the engine build -- on trusted hardware. This
+# runs the part that needs no toolchain at all, so a fork or a first-time reader
+# can see the same result without a runner.
+#
+# Everything here is stdlib-only Python. No Godot, no Emscripten, no GPU, no
+# database, no network beyond the checkout and the uv install.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  policy:
+    name: workflow and secret policy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+
+      # Enforces the studio's CI security contract on this very directory:
+      # every action pinned to a full commit, no self-hosted job reachable from
+      # an untrusted pull request. It is deliberately run first -- a workflow
+      # that violates the policy should fail before it does any work.
+      - name: Validate workflow trust and action pins
+        run: python tools/ci/validate_workflows.py
+
+      - name: Scan for committed secrets
+        run: python tools/ci/secret_scan.py
+
+  python:
+    name: python unit suites
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+
+      # The engine-script suite is plain stdlib and covers the patch-series
+      # checker's own failure paths -- the gate that guards the gate.
+      - name: Engine scripts
+        run: python -m unittest discover -s engine/scripts/tests -p "test_*.py"
+
+      - name: studio-mcp
+        run: uv run --project tools python -m unittest discover -s tools/studio-mcp/tests -p "test_*.py"
+
+      - name: infra
+        run: uv run --project tools python -m unittest discover -s tools/infra/tests -p "test_*.py"
+
+      - name: asset pipeline
+        run: uv run --project tools python -m unittest discover -s tools/asset-pipeline/tests -p "test_*.py"
+
+      # bforge's Blender-driven ops need Blender; these two suites are the parts
+      # that do not (schema validation and the MCP tool surface).
+      - name: bforge schema and MCP surface
+        run: |
+          uv run --project tools python -m unittest discover -s tools/bforge/tests -p "test_schema.py"
+          uv run --project tools python -m unittest discover -s tools/bforge/tests -p "test_mcp.py"
+
+      - name: Protocol golden fixtures
+        run: uv run --project tools python tools/asset-pipeline/check_fixtures.py

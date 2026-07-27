@@ -151,9 +151,13 @@ def validate_file(path: Path) -> list[str]:
 
 
 def main() -> int:
+    # A missing directory used to return 0 with "policy validation skipped". That
+    # made this checker green for exactly as long as the repository had no CI at
+    # all -- the one state where the trust and action-pin policy protects nothing.
+    # Deleting .github/ must fail the policy gate, not satisfy it.
     if not WORKFLOWS.is_dir():
-        print("workflows absent; policy validation skipped")
-        return 0
+        print(f"FAIL no workflow directory at {WORKFLOWS.relative_to(REPO)}")
+        return 1
     files = sorted(WORKFLOWS.glob("*.yml")) + sorted(WORKFLOWS.glob("*.yaml"))
     if not files:
         print("FAIL no workflow files found")
