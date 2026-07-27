@@ -322,42 +322,15 @@ def build(forge, spec, quality):
     )
     parts.append("attic_colonnade")
 
-    # Vomitoria: the stair wedges that divide the seating into cunei. This
-    # vertical rhythm is half of what the eye reads as "Roman amphitheatre".
-    wedges = {"low": 10, "medium": 18, "high": 26}[quality]
-    # Spacing must be computed on the SAME radius the path is sampled at, or
-    # stadium_point wraps and the wedges bunch instead of dividing the bowl
-    # evenly.
-    wedge_perimeter = 2.0 * straight + 2.0 * math.pi * radius
-    # A vomitorium is a stair cut INTO the rake, not a slab standing on it.
-    # Built as a full-height box it becomes a 36 m blank wall that blots out
-    # half the bowl from any trackside camera — which is exactly how it looked
-    # in the first textured build. Sweeping the cavea profile, raised one step,
-    # along a short arc gives a divider that hugs the seating instead.
-    step_profile = [(lat, vert + 0.8) for lat, vert in cavea_points[:-3]]
-    for index in range(wedges):
-        centre = wedge_perimeter * index / wedges
-        span = 2.2  # metres of arc the stair occupies
-        path = []
-        for offset in (-span * 0.5, 0.0, span * 0.5):
-            px, py = stadium_point(centre + offset, straight, radius)
-            path += [px, py, 0.0]
-        forge.call(
-            "build.sweep",
-            name=f"vomitorium_{index}",
-            profile=flat(step_profile),
-            path=path,
-            path_shape="custom",
-            closed_path=False,
-            closed_profile=False,
-            material="stone",
-            color=STONE_SHADE,
-            uv="box",
-            uv_scale=3.0,
-            origin="world",
-            _timeout=600,
-        )
-        parts.append(f"vomitorium_{index}")
+    # NO STAIR WEDGES. They were built here as full-height blocks standing at
+    # the FRONT of the cavea, so from every seat and every camera in the venue
+    # they were a ring of blank slabs parked in front of the audience — the
+    # first thing anyone looking at this venue asked about. Reshaping them into
+    # rising wedges did not help: at 1.6m wide, 35m deep and 33m tall, the side
+    # face is simply enormous whatever its silhouette, and a divider that hides
+    # the crowd it divides is worth less than no divider at all. The cavea
+    # reads as Roman from the arcade, the attic colonnade and the raked
+    # courses; it does not need this.
 
     # Velarium masts: the awning rig along the rim. Even bare, the ring of
     # masts against the sky is an instantly Roman silhouette.
