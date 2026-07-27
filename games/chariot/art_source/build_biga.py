@@ -174,8 +174,15 @@ def build_car(forge):
         rein = f"rein_{side}"
         forge.call(
             "build.cylinder",
-            name=rein, radius=0.017, depth=3.95, segments=4,
-            location=[sign * 0.20, 1.52, 1.58],
+            # A REIN ENDS AT THE BIT, NOT PAST THE HORSE'S EARS. Measured in
+            # the horse's own space the chariot's forward geometry reached
+            # -2.18 while the horse's nose is at -1.56, so both reins ran 0.6m
+            # out into open air ahead of the animal — which is what made the
+            # rig read as a horse and a cart that were not attached to each
+            # other. Shortened, and the centre moved back by half of what came
+            # off, so the near end stays in the driver's hands.
+            name=rein, radius=0.017, depth=3.07, segments=4,
+            location=[sign * 0.20, 1.08, 1.58],
             # Rubber, not cloth: `cloth` has to stay unambiguously the LIVERY
             # surface, because that is the one the game recolours per stable
             # and it finds it by material name.
