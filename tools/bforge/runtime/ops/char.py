@@ -687,10 +687,11 @@ def char_pose(ctx, rig, preset, bones):
         "bone": ("str", "hand_r", "Bone to attach to"),
         "offset": ("vec3", [0.0, 0.0, 0.0], "Local offset in metres"),
         "rotation": ("vec3", [0.0, 0.0, 0.0], "Local rotation in degrees"),
+        "keep_transform": ("bool", False, "Keep the prop exactly where it already is, ignoring offset/rotation"),
     },
     tags=["char", "rig"],
 )
-def char_attach(ctx, prop, rig, bone, offset, rotation):
+def char_attach(ctx, prop, rig, bone, offset, rotation, keep_transform):
     item = _get(prop)
     armature = _get(rig)
     if armature.type != "ARMATURE":
@@ -700,12 +701,30 @@ def char_attach(ctx, prop, rig, bone, offset, rotation):
         raise OpError(
             f"no bone '{bone}' on '{rig}'. Bones: {sorted(b.name for b in armature.data.bones)}"
         )
+    # KEEP_TRANSFORM IS FOR KIT THAT IS ALREADY IN THE RIGHT PLACE.
+    #
+    # Bone parenting anchors at the bone TAIL, so attaching normally THROWS AWAY
+    # wherever the prop was authored and snaps it to the joint. That is right
+    # for a sword you are placing into a fist, and exactly wrong for a shield, a
+    # greave or an arm-guard band that was already modelled against the body —
+    # re-deriving each of those as a bone-relative offset is a dozen blind
+    # tuning cycles for no gain.
+    #
+    # With keep_transform the prop does not move at all; it simply starts
+    # following the bone from where it stands.
+    world = item.matrix_world.copy()
     item.parent = armature
     item.parent_type = "BONE"
     item.parent_bone = bone
-    item.matrix_parent_inverse = Matrix.Identity(4)
-    item.location = Vector(offset)
-    item.rotation_euler = [math.radians(a) for a in rotation]
+    if keep_transform:
+        # Assigning matrix_world after parenting makes Blender solve for the
+        # local basis, bone parent and all.
+        scene_lib.sync()
+        item.matrix_world = world
+    else:
+        item.matrix_parent_inverse = Matrix.Identity(4)
+        item.location = Vector(offset)
+        item.rotation_euler = [math.radians(a) for a in rotation]
     return {
         "prop": item.name,
         "rig": armature.name,
