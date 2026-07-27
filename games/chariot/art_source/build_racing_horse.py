@@ -156,12 +156,23 @@ HIND_SCALE = [
     (0.056, 0.050),
 ]
 
+# WHERE ALONG THE HORSE EACH PAIR OF LEGS STANDS.
+#
+# FORE_LEG and HIND_LEG describe the SHAPE of a leg — the S of a foreleg, the
+# stifle-and-hock zigzag of a hind leg — around their own origin. They were
+# never translated to where the legs actually attach, so all four columns
+# descended at y~0 and every hoof landed in a bunch under the belly, with
+# nothing under the chest and nothing under the quarters. That is what made the
+# gallop read as a kangaroo hop: the animation was fine, the horse had its legs
+# in the wrong place. Rewriting the gait could never have fixed it.
+FORE_Y = 0.38
+HIND_Y = -0.30
 FORE_X = 0.155
 HIND_X = 0.175
 
 
-def offset(points, dx):
-    return [(x + dx, y, z) for x, y, z in points]
+def offset(points, dx, dy=0.0):
+    return [(x + dx, y + dy, z) for x, y, z in points]
 
 
 def build_horse(forge, quality):
@@ -195,7 +206,7 @@ def build_horse(forge, quality):
             name=f"foreleg_{side}",
             profile=ellipse(max(6, ring - 4)),
             profile_scales=flat2(FORE_SCALE),
-            path=flat3(offset(FORE_LEG, sign * FORE_X)),
+            path=flat3(offset(FORE_LEG, sign * FORE_X, FORE_Y)),
             path_shape="custom",
             closed_path=False,
             closed_profile=True,
@@ -211,7 +222,7 @@ def build_horse(forge, quality):
             name=f"hindleg_{side}",
             profile=ellipse(max(6, ring - 4)),
             profile_scales=flat2(HIND_SCALE),
-            path=flat3(offset(HIND_LEG, sign * HIND_X)),
+            path=flat3(offset(HIND_LEG, sign * HIND_X, HIND_Y)),
             path_shape="custom",
             closed_path=False,
             closed_profile=True,
@@ -233,7 +244,7 @@ def build_horse(forge, quality):
             radius_top=0.056,
             depth=0.075,
             segments=8,
-            location=[sign * FORE_X, 0.05, 0.037],
+            location=[sign * FORE_X, 0.05 + FORE_Y, 0.037],
             material="rubber",
             color="#2b2118",
             uv="cylinder",
@@ -247,7 +258,7 @@ def build_horse(forge, quality):
             radius_top=0.056,
             depth=0.075,
             segments=8,
-            location=[sign * HIND_X, 0.03, 0.037],
+            location=[sign * HIND_X, 0.03 + HIND_Y, 0.037],
             material="rubber",
             color="#2b2118",
             uv="cylinder",
@@ -579,49 +590,49 @@ def horse_bones():
             {
                 "name": f"shoulder_{side}",
                 "head": [0, 0.40, 1.12],
-                "tail": [x_f, 0.04, 0.98],
+                "tail": [x_f, 0.04 + FORE_Y, 0.98],
                 "parent": "chest",
             },
             {
                 "name": f"forearm_{side}",
-                "head": [x_f, 0.04, 0.98],
-                "tail": [x_f, 0.00, 0.44],
+                "head": [x_f, 0.04 + FORE_Y, 0.98],
+                "tail": [x_f, 0.00 + FORE_Y, 0.44],
                 "parent": f"shoulder_{side}",
             },
             {
                 "name": f"fore_cannon_{side}",
-                "head": [x_f, 0.00, 0.44],
-                "tail": [x_f, 0.01, 0.10],
+                "head": [x_f, 0.00 + FORE_Y, 0.44],
+                "tail": [x_f, 0.01 + FORE_Y, 0.10],
                 "parent": f"forearm_{side}",
             },
             {
                 "name": f"fore_hoof_{side}",
-                "head": [x_f, 0.01, 0.10],
-                "tail": [x_f, 0.06, 0.0],
+                "head": [x_f, 0.01 + FORE_Y, 0.10],
+                "tail": [x_f, 0.06 + FORE_Y, 0.0],
                 "parent": f"fore_cannon_{side}",
             },
             {
                 "name": f"thigh_{side}",
                 "head": [0, -0.30, 1.10],
-                "tail": [x_h, -0.03, 0.66],
+                "tail": [x_h, -0.03 + HIND_Y, 0.66],
                 "parent": "croup",
             },
             {
                 "name": f"gaskin_{side}",
-                "head": [x_h, -0.03, 0.66],
-                "tail": [x_h, -0.11, 0.34],
+                "head": [x_h, -0.03 + HIND_Y, 0.66],
+                "tail": [x_h, -0.11 + HIND_Y, 0.34],
                 "parent": f"thigh_{side}",
             },
             {
                 "name": f"hind_cannon_{side}",
-                "head": [x_h, -0.11, 0.34],
-                "tail": [x_h, -0.01, 0.10],
+                "head": [x_h, -0.11 + HIND_Y, 0.34],
+                "tail": [x_h, -0.01 + HIND_Y, 0.10],
                 "parent": f"gaskin_{side}",
             },
             {
                 "name": f"hind_hoof_{side}",
-                "head": [x_h, -0.01, 0.10],
-                "tail": [x_h, 0.04, 0.0],
+                "head": [x_h, -0.01 + HIND_Y, 0.10],
+                "tail": [x_h, 0.04 + HIND_Y, 0.0],
                 "parent": f"hind_cannon_{side}",
             },
         ]

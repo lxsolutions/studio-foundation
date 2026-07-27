@@ -1,10 +1,10 @@
 {
   "comment": "Single source of truth for the hippodrome. art_source/build_hippodrome.py builds the meshes from this file, src/core/track_geometry.gd positions horses, and src/presentation/crowd_director.gd seats the crowd. Loop length = 2*straight_m + 2*PI*turn_radius_m at the lane-1 centerline.",
-  "straight_m": 380.0,
-  "turn_radius_m": 110.0,
+  "straight_m": 68.0,
+  "turn_radius_m": 30.0,
   "lane_width_m": 2.5,
   "lanes": 10,
-  "finish_s_m": 342.0,
+  "finish_s_m": 61.0,
   "rail_inner_offset_lanes": -0.6,
   "rail_outer_offset_lanes": 10.6,
   "post_every_m": 12.0,
