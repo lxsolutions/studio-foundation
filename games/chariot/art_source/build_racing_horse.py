@@ -701,6 +701,22 @@ LEG_PHASE = {
     "fore_r": 0.47,
     "fore_l": 0.60,
 }
+
+# A GALLOP IS NOT SYMMETRIC. It has a LEAD.
+#
+# The footfall order above — off-hind, near-hind, off-fore, near-fore — is a
+# LEFT lead: the near fore lands last and reaches furthest, and it is the limb
+# the horse balances the whole stride around. Giving both sides the same
+# amplitude produces a gait that is technically four-beat and still reads
+# mechanical, because a real horse is visibly lopsided and every photograph of
+# one shows it.
+#
+# Left is also the correct lead to bake for this track. The oval turns one way,
+# horses lead with the INSIDE leg, and a single clip can only carry one lead —
+# so it should be the one the corners actually ask for.
+LEAD_SIDE = "l"
+LEAD_REACH = 1.18     # the leading limb swings this much further
+OFF_REACH = 0.86      # and its partner correspondingly less
 # Each joint down a limb lags the one above it and swings less: that delay is
 # what makes a leg look jointed rather than like a swinging stick.
 # A LEG JOINT ONLY BENDS ONE WAY.
@@ -808,14 +824,16 @@ def gallop_keys(length):
         for side, leg in (("l", "hind_l"), ("r", "hind_r")):
             phase = LEG_PHASE[leg]
             gaskin, cannon = HIND_FLEX
+            reach = LEAD_REACH if side == LEAD_SIDE else OFF_REACH
             # Positive is forward, measured off the rig rather than guessed.
-            pose[f"thigh_{side}"] = [_swing(turn, phase, HIND_SWING), 0, 0]
+            pose[f"thigh_{side}"] = [_swing(turn, phase, HIND_SWING * reach), 0, 0]
             pose[f"gaskin_{side}"] = [_flex(turn, phase, gaskin, JOINT_LAG), 0, 0]
             pose[f"hind_cannon_{side}"] = [_flex(turn, phase, cannon, 2.0 * JOINT_LAG), 0, 0]
         for side, leg in (("l", "fore_l"), ("r", "fore_r")):
             phase = LEG_PHASE[leg]
             forearm, cannon = FORE_FLEX
-            pose[f"shoulder_{side}"] = [_swing(turn, phase, FORE_SWING), 0, 0]
+            reach = LEAD_REACH if side == LEAD_SIDE else OFF_REACH
+            pose[f"shoulder_{side}"] = [_swing(turn, phase, FORE_SWING * reach), 0, 0]
             pose[f"forearm_{side}"] = [_flex(turn, phase, forearm, JOINT_LAG), 0, 0]
             pose[f"fore_cannon_{side}"] = [_flex(turn, phase, cannon, 2.0 * JOINT_LAG), 0, 0]
         # The back rounds and extends once per stride; the neck and head work
@@ -932,7 +950,17 @@ def main() -> int:
             loop=True,
             _timeout=600,
         )
-        stride = 2.0 * HIP_HEIGHT_M * math.sin(math.radians(HIND_SWING)) / STANCE
+        # The lead limb reaches further than its partner, so no single limb's
+        # sweep is "the" stride — the horse's body travel is their mean, and
+        # that is the number the client has to divide by.
+        stride = (
+            HIP_HEIGHT_M
+            * (
+                math.sin(math.radians(HIND_SWING * LEAD_REACH))
+                + math.sin(math.radians(HIND_SWING * OFF_REACH))
+            )
+            / STANCE
+        )
         print(
             f"gallop   : {clip['fcurves']} curves, {clip['keyframes']} keys, "
             f"{clip['frames']} frames, stride {stride:.2f} m"
