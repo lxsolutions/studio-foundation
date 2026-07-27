@@ -719,10 +719,26 @@ JOINT_LAG = 0.05
 # A galloping horse reaches: the lead foreleg swings well ahead of the chest and
 # the hind legs drive out behind the quarters. Small amplitudes read as a horse
 # running on the spot, which is what these were.
-HIND_SWING = 42.0                 # hip, fore and aft
-HIND_FLEX = (62.0, 34.0)          # gaskin (hock), cannon — flexion only
-FORE_SWING = 44.0                 # shoulder, fore and aft
-FORE_FLEX = (68.0, 28.0)          # forearm (knee), cannon — flexion only
+HIND_SWING = 50.0                 # hip, fore and aft
+HIND_FLEX = (66.0, 36.0)          # gaskin (hock), cannon — flexion only
+FORE_SWING = 50.0                 # shoulder, fore and aft
+FORE_FLEX = (72.0, 30.0)          # forearm (knee), cannon — flexion only
+
+# HOW FAR THE ANIMATION ITSELF SAYS ONE STRIDE COVERS.
+#
+# This is not a taste value, it falls out of the geometry: a planted hoof has to
+# stay still, so the ground the body covers during stance must equal the sweep
+# of the leg over the same time. Sweep is 2 * (hip height) * sin(swing), and
+# stance is STANCE of the cycle:
+#
+#     stride = 2 * 1.10 * sin(50 deg) / 0.30 = 5.62 m
+#
+# The client divides by this to pick the playback rate, so the hooves hold the
+# ground at ANY speed instead of only at the one the clip happened to suit.
+# Change the swing or the stance and this changes with it — recompute, do not
+# guess, and keep the number in step with games/chariot/project (track_spec's
+# neighbours) via the constant in broadcast_view.gd.
+HIP_HEIGHT_M = 1.10
 
 
 # A GALLOPING HORSE IS AIRBORNE MOST OF THE TIME.
@@ -916,9 +932,10 @@ def main() -> int:
             loop=True,
             _timeout=600,
         )
+        stride = 2.0 * HIP_HEIGHT_M * math.sin(math.radians(HIND_SWING)) / STANCE
         print(
             f"gallop   : {clip['fcurves']} curves, {clip['keyframes']} keys, "
-            f"{clip['frames']} frames"
+            f"{clip['frames']} frames, stride {stride:.2f} m"
         )
 
         check = forge.call("check.asset", triangle_budget=6000, material_budget=6)
