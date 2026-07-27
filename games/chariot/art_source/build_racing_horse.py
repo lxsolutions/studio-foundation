@@ -768,8 +768,33 @@ HIP_HEIGHT_M = 1.10
 # and it is what a horse actually does.
 STANCE = 0.30
 
+# Where each limb pivots, in metres off the ground. thigh_* turns about its head
+# at 1.10 and shoulder_* about its head at 1.12, so a hind leg and a fore leg
+# sweep slightly different arcs for the same angle.
+HIND_PIVOT_M = 1.10
+FORE_PIVOT_M = 1.12
 
-def _flex(turn, phase, amplitude, lag=0.0):
+
+def limb_sweep(pivot_m, swing_deg):
+    """How far this limb's foot travels backward relative to the body."""
+    return 2.0 * pivot_m * math.sin(math.radians(swing_deg))
+
+
+def _stride_m():
+    """Ground one stride covers — the mean of what the four limbs sweep.
+
+    Every limb then takes `its own sweep / this` as its stance fraction, which
+    is what makes each planted foot hold still. Averaging over the four is what
+    keeps those fractions centred on STANCE rather than drifting off it.
+    """
+    from_limbs = []
+    for reach in (LEAD_REACH, OFF_REACH):
+        from_limbs.append(limb_sweep(HIND_PIVOT_M, HIND_SWING * reach))
+        from_limbs.append(limb_sweep(FORE_PIVOT_M, FORE_SWING * reach))
+    return sum(from_limbs) / len(from_limbs) / STANCE
+
+
+def _flex(turn, phase, amplitude, stance, lag=0.0):
     """One joint's flexion, in degrees, always <= 0.
 
     Dead straight through the whole stance, carrying the horse. All the folding
@@ -782,13 +807,13 @@ def _flex(turn, phase, amplitude, lag=0.0):
     paws at the ground instead of striding, and never covers any distance.
     """
     turned = (turn - phase - lag) % 1.0
-    if turned < STANCE:
+    if turned < stance:
         return 0.0
-    swing = (turned - STANCE) / (1.0 - STANCE)
+    swing = (turned - stance) / (1.0 - stance)
     return -amplitude * math.sin(math.pi * swing)
 
 
-def _swing(turn, phase, amplitude, lag=0.0):
+def _swing(turn, phase, amplitude, stance, lag=0.0):
     """Hip or shoulder angle: forward is positive.
 
     Two different motions, not one sine. While the hoof is PLANTED the horse
@@ -799,15 +824,20 @@ def _swing(turn, phase, amplitude, lag=0.0):
     join never snaps.
     """
     turned = (turn - phase - lag) % 1.0
-    if turned < STANCE:
-        return amplitude * (1.0 - 2.0 * (turned / STANCE))
-    airborne = (turned - STANCE) / (1.0 - STANCE)
+    if turned < stance:
+        return amplitude * (1.0 - 2.0 * (turned / stance))
+    airborne = (turned - stance) / (1.0 - stance)
     return -amplitude * math.cos(math.pi * airborne)
 
 
 def _sine_swing(turn, phase, amplitude, lag=0.0):
     """One joint's angle at this point in the stride."""
     return amplitude * math.sin(2.0 * math.pi * (turn - phase - lag))
+
+
+# Fixed at import, once every constant it depends on exists. The build prints
+# it and broadcast_view.gd holds the same number as GALLOP_STRIDE_M.
+STRIDE_M = _stride_m()
 
 
 def gallop_keys(length):
@@ -821,21 +851,37 @@ def gallop_keys(length):
     for frame in range(1, length + 1):
         turn = float(frame - 1) / float(length)
         pose = {}
+        # EACH LIMB IS ON THE GROUND FOR ITS OWN LENGTH OF TIME.
+        #
+        # Once the lead limb reaches further than its partner, one stance
+        # fraction cannot serve both: the horse's body covers the same ground
+        # per stride whatever the leg is doing, so a limb that sweeps 1.89m and
+        # a limb that sweeps 1.50m must be down for different lengths of time or
+        # one of them is dragging. A real gallop does exactly this — the four
+        # contact times are not equal — and it is the last of the slip.
+        #
+        # The rule falls out of the requirement itself: stance = sweep / stride.
         for side, leg in (("l", "hind_l"), ("r", "hind_r")):
             phase = LEG_PHASE[leg]
             gaskin, cannon = HIND_FLEX
             reach = LEAD_REACH if side == LEAD_SIDE else OFF_REACH
+            swing_deg = HIND_SWING * reach
+            stance = limb_sweep(HIND_PIVOT_M, swing_deg) / STRIDE_M
             # Positive is forward, measured off the rig rather than guessed.
-            pose[f"thigh_{side}"] = [_swing(turn, phase, HIND_SWING * reach), 0, 0]
-            pose[f"gaskin_{side}"] = [_flex(turn, phase, gaskin, JOINT_LAG), 0, 0]
-            pose[f"hind_cannon_{side}"] = [_flex(turn, phase, cannon, 2.0 * JOINT_LAG), 0, 0]
+            pose[f"thigh_{side}"] = [_swing(turn, phase, swing_deg, stance), 0, 0]
+            pose[f"gaskin_{side}"] = [_flex(turn, phase, gaskin, stance, JOINT_LAG), 0, 0]
+            pose[f"hind_cannon_{side}"] = [
+                _flex(turn, phase, cannon, stance, 2.0 * JOINT_LAG), 0, 0]
         for side, leg in (("l", "fore_l"), ("r", "fore_r")):
             phase = LEG_PHASE[leg]
             forearm, cannon = FORE_FLEX
             reach = LEAD_REACH if side == LEAD_SIDE else OFF_REACH
-            pose[f"shoulder_{side}"] = [_swing(turn, phase, FORE_SWING * reach), 0, 0]
-            pose[f"forearm_{side}"] = [_flex(turn, phase, forearm, JOINT_LAG), 0, 0]
-            pose[f"fore_cannon_{side}"] = [_flex(turn, phase, cannon, 2.0 * JOINT_LAG), 0, 0]
+            swing_deg = FORE_SWING * reach
+            stance = limb_sweep(FORE_PIVOT_M, swing_deg) / STRIDE_M
+            pose[f"shoulder_{side}"] = [_swing(turn, phase, swing_deg, stance), 0, 0]
+            pose[f"forearm_{side}"] = [_flex(turn, phase, forearm, stance, JOINT_LAG), 0, 0]
+            pose[f"fore_cannon_{side}"] = [
+                _flex(turn, phase, cannon, stance, 2.0 * JOINT_LAG), 0, 0]
         # The back rounds and extends once per stride; the neck and head work
         # against it, which is the counterweight a galloping horse actually is.
         # A galloping horse's head and neck are a COUNTERWEIGHT, swinging
@@ -964,17 +1010,7 @@ def main() -> int:
             loop=True,
             _timeout=600,
         )
-        # The lead limb reaches further than its partner, so no single limb's
-        # sweep is "the" stride — the horse's body travel is their mean, and
-        # that is the number the client has to divide by.
-        stride = (
-            HIP_HEIGHT_M
-            * (
-                math.sin(math.radians(HIND_SWING * LEAD_REACH))
-                + math.sin(math.radians(HIND_SWING * OFF_REACH))
-            )
-            / STANCE
-        )
+        stride = STRIDE_M
         print(
             f"gallop   : {clip['fcurves']} curves, {clip['keyframes']} keys, "
             f"{clip['frames']} frames, stride {stride:.2f} m"
