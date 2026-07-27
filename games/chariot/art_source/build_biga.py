@@ -198,8 +198,12 @@ def build_driver(forge):
         "char.humanoid",
         name="driver",
         height=1.72,
-        build="lithe",
-        bulk=0.95,
+        # HEROIC, not lithe. A charioteer really was a lean man, but at the
+        # distance this is read from, "lean" is indistinguishable from "thin
+        # stick" — the figure has to hold its shape against sand and stone
+        # before it can hold its character.
+        build="heroic",
+        bulk=1.25,
         detail=8,
         skin=SKIN,
         location=[0.0, -0.92, 0.55],

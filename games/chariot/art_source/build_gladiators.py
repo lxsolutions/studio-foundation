@@ -67,7 +67,8 @@ def fighter_base(forge, name, bulk):
 
 def build_murmillo(forge):
     """Tower shield, short sword, the big crested helmet."""
-    parts = fighter_base(forge, "murmillo", 1.15)
+    # A murmillo was the heavy: he should look it beside the net-man.
+    parts = fighter_base(forge, "murmillo", 1.45)
     # The scutum: a tall curved shield on the left arm. Curved, because a flat
     # slab is the difference between a shield and a door.
     # A bevelled PANEL. An uncapped cylinder is a barrel, not a shield: it
@@ -149,7 +150,8 @@ def build_murmillo(forge):
 
 def build_retiarius(forge):
     """Trident, net, one shoulder guard, and no helmet at all."""
-    parts = fighter_base(forge, "retiarius", 1.0)
+    # Lighter than the murmillo by design, but still a fighting man.
+    parts = fighter_base(forge, "retiarius", 1.20)
     # Galerus: the shoulder guard that let him keep his face open.
     forge.call(
         "build.box",
