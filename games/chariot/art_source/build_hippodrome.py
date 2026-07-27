@@ -74,6 +74,33 @@ def stadium_point(s, straight, radius):
     return (-half - math.sin(theta) * radius, math.cos(theta) * radius)
 
 
+def stadium_normal(s, straight, radius):
+    """Outward unit normal at arc length `s`, matching `stadium_point`.
+
+    A stadium is NOT a circle, so `atan2(y, x)` of the point is not the way
+    out. Along a straight the normal is constant while atan2 keeps turning, and
+    on the turns the centre sits at +/- half the straight rather than at the
+    origin, so atan2 is wrong there too. Anything that has to FACE outward —
+    the stair wedges that divide the cavea — needs this, or it ends up stood
+    broadside across the seating it is supposed to cut through.
+    """
+    perimeter = 2.0 * straight + 2.0 * math.pi * radius
+    s = s % perimeter
+    if s < straight:
+        return (0.0, -1.0)
+    s -= straight
+    arc = math.pi * radius
+    if s < arc:
+        theta = s / radius
+        return (math.sin(theta), -math.cos(theta))
+    s -= arc
+    if s < straight:
+        return (0.0, 1.0)
+    s -= straight
+    theta = s / radius
+    return (-math.sin(theta), math.cos(theta))
+
+
 def cavea_profile(stands, podium_offset):
     """Stepped grandstand cross-section, derived from the SHARED stands spec.
 
@@ -155,6 +182,31 @@ def build(forge, spec, quality):
         _timeout=600,
     )
     parts.append("track_surface")
+
+    # --- infield ---------------------------------------------------------
+    # The ground the spina stands on. Without it the middle of the venue is a
+    # HOLE: the consuming game renders a procedural sky, so every camera that
+    # looked across the oval saw straight through the infield to the sky's
+    # brown ground hemisphere, and the centre of the circus read as a pit of
+    # mud. Sits just under the racing surface, so the ribbon and the rails
+    # always win the depth fight along their shared edge; it is wider than the
+    # inner rail on purpose and everything past that edge is covered by the
+    # track, the podium and the cavea.
+    forge.call(
+        "build.plane",
+        name="infield",
+        size=[straight + 2.0 * (radius + inner), 2.0 * (radius + inner)],
+        location=[0.0, 0.0, -0.44],
+        material="sand",
+        # Unraked ground, a shade duller and cooler than the racing harena, so
+        # the ribbon still reads as the surface that matters.
+        color="#9c7d5e",
+        uv="box",
+        uv_scale=12.0,
+        origin="world",
+        cuts=6,
+    )
+    parts.append("infield")
 
     # --- rails ----------------------------------------------------------
     forge.call(
@@ -277,8 +329,10 @@ def build(forge, spec, quality):
     wedge_radius = radius + podium_offset
     wedge_perimeter = 2.0 * straight + 2.0 * math.pi * wedge_radius
     for index in range(wedges):
-        x, y = stadium_point(wedge_perimeter * index / wedges, straight, wedge_radius)
-        heading = math.degrees(math.atan2(y, x))
+        at = wedge_perimeter * index / wedges
+        x, y = stadium_point(at, straight, wedge_radius)
+        nx, ny = stadium_normal(at, straight, wedge_radius)
+        heading = math.degrees(math.atan2(ny, nx))
         forge.call(
             "build.box",
             name=f"vomitorium_{index}",
