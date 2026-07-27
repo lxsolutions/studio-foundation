@@ -725,27 +725,55 @@ FORE_SWING = 44.0                 # shoulder, fore and aft
 FORE_FLEX = (68.0, 28.0)          # forearm (knee), cannon — flexion only
 
 
+# A GALLOPING HORSE IS AIRBORNE MOST OF THE TIME.
+#
+# Each hoof is on the ground for about a quarter of a stride, not half of it.
+# The difference is not cosmetic, it is the whole reason the gait reads as
+# floating: at 16.5 m/s on a 0.533s cycle the body travels 4.4m during a
+# half-cycle stance, while the leg can only sweep 1.42m back relative to the
+# body (2 x 1.06m x sin 42). The other 3m is the planted hoof skating forward
+# across the sand. Cutting stance to 0.30 cuts that error by more than half,
+# and it is what a horse actually does.
+STANCE = 0.30
+
+
 def _flex(turn, phase, amplitude, lag=0.0):
     """One joint's flexion, in degrees, always <= 0.
 
-    All the folding happens inside the SWING half of the stride and none of it
-    outside. The leg leaves the ground straight, folds tightly as it passes
-    under the body, and is straight again by the time it reaches out to land;
-    through the whole stance it is dead straight, carrying the horse.
+    Dead straight through the whole stance, carrying the horse. All the folding
+    happens airborne: the leg leaves the ground straight, folds tightly as it
+    passes under the body, and is straight again by the time it reaches out to
+    land.
 
     A cosine that merely peaks at mid-swing is not the same thing — it leaves
     the leg still half folded at the moment it should be reaching, so the horse
     paws at the ground instead of striding, and never covers any distance.
     """
     turned = (turn - phase - lag) % 1.0
-    # Stance is 0.25..0.75 of the cycle: forward-most, planted, to backward-most.
-    swing = ((turned - 0.75) % 1.0) / 0.5
-    if swing > 1.0:
+    if turned < STANCE:
         return 0.0
+    swing = (turned - STANCE) / (1.0 - STANCE)
     return -amplitude * math.sin(math.pi * swing)
 
 
 def _swing(turn, phase, amplitude, lag=0.0):
+    """Hip or shoulder angle: forward is positive.
+
+    Two different motions, not one sine. While the hoof is PLANTED the horse
+    rotates over it at a constant rate, so the angle runs from full forward to
+    full back in a straight line — that steady sweep is what keeps a planted
+    foot still against the ground. Once it is airborne the leg swings back to
+    the front on an eased curve. Both halves meet at the same angle, so the
+    join never snaps.
+    """
+    turned = (turn - phase - lag) % 1.0
+    if turned < STANCE:
+        return amplitude * (1.0 - 2.0 * (turned / STANCE))
+    airborne = (turned - STANCE) / (1.0 - STANCE)
+    return -amplitude * math.cos(math.pi * airborne)
+
+
+def _sine_swing(turn, phase, amplitude, lag=0.0):
     """One joint's angle at this point in the stride."""
     return amplitude * math.sin(2.0 * math.pi * (turn - phase - lag))
 
