@@ -38,10 +38,10 @@ but a render probe needs a GPU runner and remains self-hosted work.
 **One sentence on which renderer that means.** Everything shipped and published —
 the live demo, the templates, the performance A/B — is **Forward Mobile**, which
 `tools/godot/export_game.py` calls "the hardware-verified default". **Forward+**
-is opt-in (`--rendering-method forward_plus`), and as of patch 0022 it boots and
-compiles its whole GI stack on hardware but still raises **18
-`GPUValidationError`** — see §Forward+ on hardware. Do not read a Forward Mobile
-result as a Forward+ result.
+is opt-in (`--rendering-method forward_plus`), and as of patch 0022 it compiles
+its whole GI stack on hardware but **has never rendered a frame** — 18
+`GPUValidationError` remain. See §Forward+ on hardware. Do not read a Forward
+Mobile result as a Forward+ result.
 
 | Gate | Status | Evidence |
 | --- | --- | --- |
@@ -55,8 +55,8 @@ result as a Forward+ result.
 | **3D scene-shader translation** | 🟢 **177/182 translate offline** (was 174); the runtime-specialized scene shader also translates *and renders* after patches 0011–0013 | §3D rendering gap |
 | Template artifacts locked in `engine-lock.toml` | ✅ | `[artifacts.export_templates]`: release + debug + sha256 |
 | **Forward+ (clustered) shader translation** | 🟢 **translates offline** after patch 0015 — was impossible before | §Forward+ |
-| **Forward+ boots on hardware** | 🟢 2026‑07‑25 — patches 0018–0022 | Tesla P40: full GI/SDFGI/SSAO/SSIL/VoxelGI stack compiles, **0 aborts, 0 wasm traps** |
-| **Forward+ renders clean on hardware** | 🟡 **not yet** — **18 `GPUValidationError`** remain (from 168) | §Forward+ on hardware |
+| **Forward+ compiles on hardware** | 🟢 2026‑07‑25 — patches 0018–0022 | Tesla P40: full GI/SDFGI/SSAO/SSIL/VoxelGI stack compiles, **0 aborts, 0 wasm traps**. Compilation, not rendering |
+| **Forward+ renders a frame** | 🔴 **no** — **no frame has ever rendered under Forward+**; 18 `GPUValidationError` remain (from 168) | §Forward+ on hardware |
 
 Reference point: a **release** WebGPU export passed a (shallow, non‑ASAN) browser
 proof on 2026‑07‑22 — `navigator.gpu` + adapter + active canvas context + 103/103
@@ -145,12 +145,21 @@ Run on a **Tesla P40** through Chrome/WebGPU, exporting with
 | 0021 | the storage-format table recorded its `RGBA8Unorm` *initialiser* on no match, so an unknown format silently succeeded with the wrong answer; `rgb10a2unorm` appears 26× in Forward+'s WGSL and was missing | 26 | 0 |
 | 0022 | the same format-vs-shader correction at the two shadow-entry sites 0020 missed | **18** | 0 |
 
-**Status: boots, compiles, does not yet render clean.** The full
-GI/SDFGI/SSAO/SSIL/VoxelGI stack compiles on real hardware and nothing aborts —
-which matters, because a `GPUValidationError` fails one pipeline gracefully
-whereas an abort is a wasm trap and a dead page. But 18 validation errors is not
-zero, so **`mobile` remains the default and everything published runs on Forward
-Mobile.** Forward+ is available to try, not to ship.
+**Status: compiles, does not render. Forward+ has never produced a frame.**
+
+Be exact about this, because the progression above is easy to over-read. What
+0018–0022 bought is that the full GI/SDFGI/SSAO/SSIL/VoxelGI stack **compiles**
+on real hardware and nothing aborts — which genuinely matters, since a
+`GPUValidationError` fails one pipeline gracefully whereas an abort is a wasm
+trap and a dead page. It is not a rendering claim. #29 said so in as many words
+— *"Forward+ still does not render. This clears the abort layer, not the finish
+line"* — and no patch since has claimed otherwise: 0019–0022 report validation
+counts and abort counts, never an fps figure or a draw count, which is exactly
+what the Forward Mobile verifications do report.
+
+**`mobile` therefore remains the default and everything published runs Forward
+Mobile.** Forward+ is an investigation path, not something to ship or to cite.
+Pipeline warm-up and shader compilation are not a rendered-frame claim.
 
 The recurring lesson across all five: **WebGPU validates a bind-group layout
 against the *shader*, not against our idea of the texture's format.** Wherever
