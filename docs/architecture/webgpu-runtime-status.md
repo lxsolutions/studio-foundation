@@ -5,8 +5,9 @@
 > build/smoke logs under `engine/.cache/` and uncommitted edits in this worktree.
 > This file is the handoff — update it whenever the runtime status changes.
 >
-> **Last reconciled:** 2026-07-23 (evening, local UTC−6), from
-> `codex/godot-webgpu-recenter` @ `d70a27e` + uncommitted WIP.
+> **Last reconciled:** 2026-07-27, from `origin/main` @ `0f2bab8` (patch series
+> 0001–0022). Supersedes the 2026-07-23 reconciliation, which predated patches
+> 0018–0022 and still listed Forward+ on hardware as untested.
 > **Scope:** the ADR 0002 runtime-acceptance gate. The editor and WebGL fallback
 > are unaffected and green.
 
@@ -30,11 +31,21 @@ neutral template's 2D menu**, and `engine-lock.toml [artifacts.export_templates]
 records `web_webgpu_release` (`3642cf5e…`) + `web_webgpu_debug` (`1f1ed2b5…`). The
 automated gate historically rendered only a 2D Control scene; 3D is now **verified
 manually on GPU hardware** (NVIDIA Tesla P40 — six PBR meshes with real-time shadows, 59–60 fps, 0 `GPUValidationError`).
-Folding that 3D render into the automated gate is the remaining CI task.
+Folding that 3D render into the automated gate is the remaining CI task — hosted
+CI now proves the patch series (checksums + a clean-tree apply) on every change,
+but a render probe needs a GPU runner and remains self-hosted work.
+
+**One sentence on which renderer that means.** Everything shipped and published —
+the live demo, the templates, the performance A/B — is **Forward Mobile**, which
+`tools/godot/export_game.py` calls "the hardware-verified default". **Forward+**
+is opt-in (`--rendering-method forward_plus`), and as of patch 0022 it compiles
+its whole GI stack on hardware but **has never rendered a frame** — 18
+`GPUValidationError` remain. See §Forward+ on hardware. Do not read a Forward
+Mobile result as a Forward+ result.
 
 | Gate | Status | Evidence |
 | --- | --- | --- |
-| Patch series (0001–0013) applies to official 4.7.1 `a13da4feb8` | ✅ | `just engine-versions` → "patch series: 13 patch(es)" |
+| Patch series (0001–0022) applies to official 4.7.1 `a13da4feb8` | ✅ **enforced in CI** | `.github/workflows/patch-series.yml` — checksums + a clean-tree apply on every push and PR |
 | Web templates compile (release + debug, `nothreads`, `webgpu=yes`) | ✅ | `bin/godot.web.template_*.wasm32.nothreads.*` |
 | Tint SPIR‑V→WGSL translation (storage‑buffer + OpImage ordering) | ✅ | patches 0007, 0008 |
 | **Emdawn/Godot `RefCounted` ODR collision** (the heap‑buffer‑overflow) | ✅ **fixed in source** | `engine/toolchain/patches/0001-emdawn-private-namespace.patch`, locked in `[toolchain.emdawnwebgpu]` |
@@ -44,7 +55,8 @@ Folding that 3D render into the automated gate is the remaining CI task.
 | **3D scene-shader translation** | 🟢 **177/182 translate offline** (was 174); the runtime-specialized scene shader also translates *and renders* after patches 0011–0013 | §3D rendering gap |
 | Template artifacts locked in `engine-lock.toml` | ✅ | `[artifacts.export_templates]`: release + debug + sha256 |
 | **Forward+ (clustered) shader translation** | 🟢 **translates offline** after patch 0015 — was impossible before | §Forward+ |
-| **Forward+ on hardware** | ⬜ **not yet tested** — needs a GPU box | §Forward+ |
+| **Forward+ compiles on hardware** | 🟢 2026‑07‑25 — patches 0018–0022 | Tesla P40: full GI/SDFGI/SSAO/SSIL/VoxelGI stack compiles, **0 aborts, 0 wasm traps**. Compilation, not rendering |
+| **Forward+ renders a frame** | 🔴 **no** — **no frame has ever rendered under Forward+**; 18 `GPUValidationError` remain (from 168) | §Forward+ on hardware |
 
 Reference point: a **release** WebGPU export passed a (shallow, non‑ASAN) browser
 proof on 2026‑07‑22 — `navigator.gpu` + adapter + active canvas context + 103/103
@@ -114,12 +126,50 @@ clustered scene shader all translate. Note that `ssao_blur`, `ssil_blur` and
 never compiled, because the harness enumerated them without the `MODE_`/
 `USE_*_SAMPLES` defines the engine actually builds them with (fixed in 0016).
 
-**None of this is hardware-verified.** Translating offline is not rendering.
-Forward+ also binds far more aggressively than Mobile, and patch 0013 exists
-because Mobile *alone* already tripped WebGPU's 16-samplers-per-stage limit —
-expect that to be the next thing to break. Export a Forward+ build with
-`export_game.py --preset web-webgpu --rendering-method forward_plus` and run it on
-the P40; `mobile` remains the default until that passes.
+**None of the above is hardware-verified — it is offline translation only.**
+Translating is not rendering. That prediction held: Forward+ binds far more
+aggressively than Mobile, and the next five patches were all things only
+hardware could show. See the section below.
+
+## Forward+ on hardware — 168 → 18 (patches 0018–0022, 2026‑07‑25)
+
+Run on a **Tesla P40** through Chrome/WebGPU, exporting with
+`export_game.py --preset web-webgpu --rendering-method forward_plus`.
+
+| Patch | What hardware showed | `GPUValidationError` | Aborts / wasm traps |
+| --- | --- | --- | --- |
+| — | first Forward+ run: page died mid shader-compile, only 2D canvas shaders built | 168 | 1 |
+| 0018 | `ShaderRD` compiles *every* variant, and Tint aborts rather than erroring — **a variant the device will never select is fatal merely by being listed**. Plus nine device limits that predated Forward+'s compute passes | 106 | **0** |
+| 0019 | sampled-texture `sampleType` was hardcoded `Float`; Forward+ reads cluster data, VoxelGI and SDFGI as **integer** textures — 32 of the remaining failures, the largest single class | 42 | 0 |
+| 0020 | negative sampler `min_lod` (legal in Vulkan, rejected by WebGPU) + storage-to-sampled sample type taken from format instead of the shader | 38 | 0 |
+| 0021 | the storage-format table recorded its `RGBA8Unorm` *initialiser* on no match, so an unknown format silently succeeded with the wrong answer; `rgb10a2unorm` appears 26× in Forward+'s WGSL and was missing | 26 | 0 |
+| 0022 | the same format-vs-shader correction at the two shadow-entry sites 0020 missed | **18** | 0 |
+
+**Status: compiles, does not render. Forward+ has never produced a frame.**
+
+Be exact about this, because the progression above is easy to over-read. What
+0018–0022 bought is that the full GI/SDFGI/SSAO/SSIL/VoxelGI stack **compiles**
+on real hardware and nothing aborts — which genuinely matters, since a
+`GPUValidationError` fails one pipeline gracefully whereas an abort is a wasm
+trap and a dead page. It is not a rendering claim. #29 said so in as many words
+— *"Forward+ still does not render. This clears the abort layer, not the finish
+line"* — and no patch since has claimed otherwise: 0019–0022 report validation
+counts and abort counts, never an fps figure or a draw count, which is exactly
+what the Forward Mobile verifications do report.
+
+**`mobile` therefore remains the default and everything published runs Forward
+Mobile.** Forward+ is an investigation path, not something to ship or to cite.
+Pipeline warm-up and shader compilation are not a rendered-frame claim.
+
+The recurring lesson across all five: **WebGPU validates a bind-group layout
+against the *shader*, not against our idea of the texture's format.** Wherever
+the driver still infers a type from a format, expect the next one.
+
+Worth recording from 0021: three consecutive attempts reported "no change" and
+the fix was twice reverted as unproven. The build script piped `engine.py build`
+through `tail`, so the pipeline's exit status was `tail`'s — **a failed build
+looked successful**, and every measurement was of a stale binary. `CLAUDE.md`
+warns about exactly this.
 
 ### Reproducing the sweep
 
