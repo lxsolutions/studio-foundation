@@ -192,21 +192,46 @@ def build(forge, spec, quality):
     # always win the depth fight along their shared edge; it is wider than the
     # inner rail on purpose and everything past that edge is covered by the
     # track, the podium and the cavea.
+    # A stadium is a rectangle plus two half-discs — NOT a box. Built as one
+    # plane spanning the whole bounding box, the corners stuck out past the
+    # inner rail at both turns and sliced across the racing surface: a hard
+    # ledge running through the sand, which is what it looked like in game.
+    # Centre panel first, exactly the length of the straights so it cannot
+    # reach the turns at all.
     forge.call(
         "build.plane",
         name="infield",
-        size=[straight + 2.0 * (radius + inner), 2.0 * (radius + inner)],
+        size=[straight, 2.0 * (radius + inner)],
         location=[0.0, 0.0, -0.44],
         material="sand",
-        # Unraked ground, a shade duller and cooler than the racing harena, so
-        # the ribbon still reads as the surface that matters.
         color="#9c7d5e",
         uv="box",
         uv_scale=12.0,
         origin="world",
-        cuts=6,
+        cuts=4,
     )
     parts.append("infield")
+    # ...then a disc at each turn's own centre, which is at +/- half the
+    # straight, never at the origin.
+    for index, sign in enumerate((-1.0, 1.0)):
+        cap = f"infield_turn_{index}"
+        forge.call(
+            "build.cylinder",
+            name=cap,
+            radius=radius + inner,
+            depth=0.04,
+            segments=segments * 2,
+            # A centimetre UNDER the centre panel. Level with it the two
+            # z-fight; proud of it the disc's rim draws a hard line across the
+            # sand where it crosses, which is the seam this leaves behind.
+            location=[sign * straight * 0.5, 0.0, -0.47],
+            material="sand",
+            color="#9c7d5e",
+            uv="box",
+            uv_scale=12.0,
+            origin="center",
+        )
+        parts.append(cap)
 
     # --- rails ----------------------------------------------------------
     forge.call(

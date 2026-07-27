@@ -628,102 +628,66 @@ def horse_bones():
     return bones
 
 
-def gallop_keys(length):
-    """A transverse gallop: a four-beat asymmetric gait with a suspension phase.
+# A transverse gallop is FOUR separate beats, and the whole difference between
+# a gallop and a bound is that the four legs are out of PHASE with each other.
+# The hand-authored poses this replaces moved left and right together — thigh_l
+# and thigh_r both swinging forward, then both back — which is a bound, the
+# gait a rabbit or a kangaroo uses. It read exactly like that in game.
+#
+# Footfall order, left lead: off-hind, near-hind, off-fore, near-fore, then all
+# four leave the ground. These are fractions of one stride.
+LEG_PHASE = {
+    "hind_r": 0.00,
+    "hind_l": 0.13,
+    "fore_r": 0.47,
+    "fore_l": 0.60,
+}
+# Each joint down a limb lags the one above it and swings less: that delay is
+# what makes a leg look jointed rather than like a swinging stick.
+JOINT_LAG = 0.08
+HIND_SWING = (34.0, 30.0, 20.0)   # thigh, gaskin, cannon amplitudes
+FORE_SWING = (32.0, 30.0, 26.0)   # shoulder, forearm, cannon
 
-    Not a trot and not a sine wave. The sequence is
-    off-hind, near-hind, off-fore, near-fore, then all four feet leave the
-    ground. Diagonal pairs are deliberately OFFSET — a horse whose legs move in
-    symmetric pairs reads as a rocking-horse toy, which is exactly what the
-    previous model looked like.
+
+def _swing(turn, phase, amplitude, lag=0.0):
+    """One joint's angle at this point in the stride."""
+    return amplitude * math.sin(2.0 * math.pi * (turn - phase - lag))
+
+
+def gallop_keys(length):
+    """A four-beat transverse gallop, generated from per-leg phase offsets.
+
+    Driving every joint from one phase per leg makes it impossible for the two
+    hinds (or the two fores) to move together by accident, which is the failure
+    the hand-written version had.
     """
-    q = max(1, length // 4)
-    frames = {
-        # 1: gathered — hind legs reaching forward under the body, back rounded
-        1: {
-            "spine": [-4, 0, 0],
-            "croup": [7, 0, 0],
-            "neck": [10, 0, 0],
-            "head": [-8, 0, 0],
-            "thigh_l": [-38, 0, 0],
-            "gaskin_l": [56, 0, 0],
-            "hind_cannon_l": [-34, 0, 0],
-            "thigh_r": [-24, 0, 0],
-            "gaskin_r": [44, 0, 0],
-            "hind_cannon_r": [-26, 0, 0],
-            "shoulder_l": [30, 0, 0],
-            "forearm_l": [-46, 0, 0],
-            "fore_cannon_l": [40, 0, 0],
-            "shoulder_r": [40, 0, 0],
-            "forearm_r": [-58, 0, 0],
-            "fore_cannon_r": [48, 0, 0],
-            "tail_a": [-16, 0, 0],
-            "tail_b": [-10, 0, 0],
-        },
-        # 2: hind drive — hindquarters push off, forelegs begin to reach
-        q: {
-            "spine": [3, 0, 0],
-            "croup": [-6, 0, 0],
-            "neck": [-4, 0, 0],
-            "head": [4, 0, 0],
-            "thigh_l": [26, 0, 0],
-            "gaskin_l": [-14, 0, 0],
-            "hind_cannon_l": [8, 0, 0],
-            "thigh_r": [34, 0, 0],
-            "gaskin_r": [-6, 0, 0],
-            "hind_cannon_r": [4, 0, 0],
-            "shoulder_l": [-14, 0, 0],
-            "forearm_l": [-8, 0, 0],
-            "fore_cannon_l": [6, 0, 0],
-            "shoulder_r": [4, 0, 0],
-            "forearm_r": [-26, 0, 0],
-            "fore_cannon_r": [22, 0, 0],
-            "tail_a": [-26, 0, 0],
-            "tail_b": [-18, 0, 0],
-        },
-        # 3: extension — front legs stretched out, hind trailing behind
-        q * 2: {
-            "spine": [5, 0, 0],
-            "croup": [-9, 0, 0],
-            "neck": [-12, 0, 0],
-            "head": [8, 0, 0],
-            "thigh_l": [40, 0, 0],
-            "gaskin_l": [-26, 0, 0],
-            "hind_cannon_l": [14, 0, 0],
-            "thigh_r": [30, 0, 0],
-            "gaskin_r": [-18, 0, 0],
-            "hind_cannon_r": [10, 0, 0],
-            "shoulder_l": [-34, 0, 0],
-            "forearm_l": [10, 0, 0],
-            "fore_cannon_l": [-6, 0, 0],
-            "shoulder_r": [-22, 0, 0],
-            "forearm_r": [-2, 0, 0],
-            "fore_cannon_r": [2, 0, 0],
-            "tail_a": [-30, 0, 0],
-            "tail_b": [-22, 0, 0],
-        },
-        # 4: suspension — legs folding back under, body at its highest
-        q * 3: {
-            "spine": [-2, 0, 0],
-            "croup": [4, 0, 0],
-            "neck": [4, 0, 0],
-            "head": [-4, 0, 0],
-            "thigh_l": [-8, 0, 0],
-            "gaskin_l": [28, 0, 0],
-            "hind_cannon_l": [-18, 0, 0],
-            "thigh_r": [4, 0, 0],
-            "gaskin_r": [16, 0, 0],
-            "hind_cannon_r": [-12, 0, 0],
-            "shoulder_l": [10, 0, 0],
-            "forearm_l": [-38, 0, 0],
-            "fore_cannon_l": [34, 0, 0],
-            "shoulder_r": [22, 0, 0],
-            "forearm_r": [-48, 0, 0],
-            "fore_cannon_r": [42, 0, 0],
-            "tail_a": [-22, 0, 0],
-            "tail_b": [-14, 0, 0],
-        },
-    }
+    frames = {}
+    for frame in range(1, length + 1):
+        turn = float(frame - 1) / float(length)
+        pose = {}
+        for side, leg in (("l", "hind_l"), ("r", "hind_r")):
+            phase = LEG_PHASE[leg]
+            thigh, gaskin, cannon = HIND_SWING
+            pose[f"thigh_{side}"] = [_swing(turn, phase, thigh), 0, 0]
+            # The gaskin folds AGAINST the thigh — a leg that folds the same
+            # way it swings is a stilt.
+            pose[f"gaskin_{side}"] = [-_swing(turn, phase, gaskin, JOINT_LAG), 0, 0]
+            pose[f"hind_cannon_{side}"] = [_swing(turn, phase, cannon, 2.0 * JOINT_LAG), 0, 0]
+        for side, leg in (("l", "fore_l"), ("r", "fore_r")):
+            phase = LEG_PHASE[leg]
+            shoulder, forearm, cannon = FORE_SWING
+            pose[f"shoulder_{side}"] = [_swing(turn, phase, shoulder), 0, 0]
+            pose[f"forearm_{side}"] = [-_swing(turn, phase, forearm, JOINT_LAG), 0, 0]
+            pose[f"fore_cannon_{side}"] = [_swing(turn, phase, cannon, 2.0 * JOINT_LAG), 0, 0]
+        # The back rounds and extends once per stride; the neck and head work
+        # against it, which is the counterweight a galloping horse actually is.
+        pose["spine"] = [4.5 * math.sin(2.0 * math.pi * turn), 0, 0]
+        pose["croup"] = [-7.0 * math.sin(2.0 * math.pi * turn), 0, 0]
+        pose["neck"] = [-9.0 * math.sin(2.0 * math.pi * turn + 0.6), 0, 0]
+        pose["head"] = [6.0 * math.sin(2.0 * math.pi * turn + 1.1), 0, 0]
+        pose["tail_a"] = [-20.0 - 8.0 * math.sin(2.0 * math.pi * turn), 0, 0]
+        pose["tail_b"] = [-13.0 - 6.0 * math.sin(2.0 * math.pi * turn + 0.5), 0, 0]
+        frames[frame] = {bone: [round(v, 2) for v in angles] for bone, angles in pose.items()}
     frames[length] = dict(frames[1])
     return {str(k): v for k, v in frames.items()}
 
