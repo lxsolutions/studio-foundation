@@ -104,6 +104,13 @@ static hosts with no COOP/COEP headers). Point your `web` preset's
 cannot emit, and skipping it produces a build that fails to start. Both files are
 SHA-256 listed in the release notes and reproducible from source.
 
+**What this download is not.** It is pinned at patch **0014**, while `main`
+carries **0022**. Those eight patches are what made Forward+ work on hardware
+(0015 and 0018–0022) — so the published templates render **Forward Mobile only**,
+which is also the default and what every published demo runs. If you want to try
+Forward+, build from source below; the release cannot do it. A templates build
+matching the current series is not yet published.
+
 ### Build the WebGPU path yourself
 
 ```sh
