@@ -843,10 +843,24 @@ def gallop_keys(length):
         # stiff-necked rocking-horse; this is the motion that sells the effort.
         pose["spine"] = [6.0 * math.sin(2.0 * math.pi * turn), 0, 0]
         pose["croup"] = [-9.0 * math.sin(2.0 * math.pi * turn), 0, 0]
-        pose["neck"] = [-15.0 * math.sin(2.0 * math.pi * turn + 0.6), 0, 0]
-        pose["head"] = [9.0 * math.sin(2.0 * math.pi * turn + 1.1), 0, 0]
-        pose["tail_a"] = [-20.0 - 8.0 * math.sin(2.0 * math.pi * turn), 0, 0]
-        pose["tail_b"] = [-13.0 - 6.0 * math.sin(2.0 * math.pi * turn + 0.5), 0, 0]
+        # A GALLOPING HORSE REACHES WITH ITS HEAD. It does not run in the
+        # collected, head-up carriage of a dressage horse — it stretches the
+        # neck out and low and drives from behind. These oscillated around the
+        # REST carriage, so the animal nodded politely while sprinting.
+        #
+        # Measured, not guessed: negative neck takes the muzzle from 2.08m down
+        # to 1.65m and pushes it forward, so the extension is a negative BIAS
+        # under the swing. The head takes a small positive bias back so the face
+        # stays level instead of pointing at the sand.
+        pose["neck"] = [-20.0 - 15.0 * math.sin(2.0 * math.pi * turn + 0.6), 0, 0]
+        pose["head"] = [8.0 + 9.0 * math.sin(2.0 * math.pi * turn + 1.1), 0, 0]
+        # And the tail STREAMS. Negative extends it back — rear reach goes 1.16m
+        # at rest to 1.46m by -40 — so at a gallop it flies out behind instead
+        # of hanging off the quarters like a rope. It is only ever the gallop
+        # clip: stop the animation and the horse returns to its rest pose with
+        # the tail down, which is what a standing horse does.
+        pose["tail_a"] = [-42.0 - 8.0 * math.sin(2.0 * math.pi * turn), 0, 0]
+        pose["tail_b"] = [-24.0 - 7.0 * math.sin(2.0 * math.pi * turn + 0.5), 0, 0]
         frames[frame] = {bone: [round(v, 2) for v in angles] for bone, angles in pose.items()}
     frames[length] = dict(frames[1])
     return {str(k): v for k, v in frames.items()}
