@@ -56,6 +56,30 @@ def ellipse(sides=RING, width=1.0, height=1.0):
     return out
 
 
+# How much narrower the top of the section is than the bottom.
+BARREL_TAPER = 0.26
+
+
+def barrel(sides=RING, taper=BARREL_TAPER):
+    """A horse's cross-section, which is an EGG and not an ellipse.
+
+    The belly is broad and round; the back narrows towards the ridge of the
+    spine. Swept with a plain ellipse the whole animal comes out slab-sided —
+    the same width at the backbone as at the deepest part of the barrel — which
+    is most of why it read as a goat rather than a horse.
+
+    The same egg is right the whole way along the sweep: a neck is narrow at the
+    crest and wide where it meets the shoulder, and a head is narrow across the
+    forehead and broad through the jaw.
+    """
+    out = []
+    for index in range(sides):
+        theta = 2.0 * math.pi * index / sides
+        vertical = math.sin(theta)
+        out.extend([math.cos(theta) * (1.0 - taper * vertical), vertical])
+    return out
+
+
 def flat3(points):
     return [value for point in points for value in point]
 
@@ -74,12 +98,16 @@ def flat2(pairs):
 # a llama — which is exactly what the first attempt produced at 0.36 m.
 SPINE = [
     (0.0, -0.86, 1.14),  # dock (tail base)
-    (0.0, -0.66, 1.24),  # croup
-    (0.0, -0.42, 1.24),  # rump: widest point behind
+    # THE WITHERS ARE THE HIGH POINT OF A HORSE. Level with the croup — which
+    # is how this was — the topline reads as a pony or a goat however good the
+    # rest is. The back dips slightly between them, and rises again to the
+    # quarters.
+    (0.0, -0.66, 1.21),  # croup
+    (0.0, -0.42, 1.22),  # rump: widest point behind
     (0.0, -0.14, 1.15),  # loin
-    (0.0, 0.14, 1.14),  # barrel
-    (0.0, 0.34, 1.16),  # girth: deepest part of the horse
-    (0.0, 0.52, 1.22),  # withers
+    (0.0, 0.14, 1.15),  # barrel
+    (0.0, 0.34, 1.18),  # girth: deepest part of the horse
+    (0.0, 0.52, 1.27),  # withers: highest point of the back
     (0.0, 0.68, 1.34),  # base of neck
     (0.0, 0.84, 1.54),  # mid crest
     (0.0, 0.96, 1.68),  # upper crest
@@ -93,16 +121,18 @@ SPINE = [
 # wide-and-shallow through the barrel, narrow-and-deep up the crest of the neck.
 SPINE_SCALE = [
     (0.10, 0.12),  # dock: thin
-    (0.27, 0.26),  # croup: broad and round
-    (0.30, 0.30),  # rump
-    (0.26, 0.32),  # loin: tucks in laterally, stays deep
-    (0.29, 0.36),  # barrel
-    (0.30, 0.37),  # girth: deepest
-    (0.26, 0.34),  # withers
-    (0.19, 0.28),  # neck base
-    (0.15, 0.24),  # crest: narrow and deep
-    (0.12, 0.20),
-    (0.10, 0.15),  # poll
+    (0.28, 0.27),  # croup: broad and round
+    (0.32, 0.31),  # rump: the quarters are the engine, and look it
+    (0.235, 0.30),  # loin: tucks up and in — a racehorse is cut away here
+    (0.29, 0.37),  # barrel
+    (0.31, 0.40),  # girth: deepest, and deeper than the flank by a clear margin
+    (0.25, 0.35),  # withers
+    # DEEP BUT NARROW. A neck as wide as it is deep is a llama's; a horse's is
+    # a blade, tall from crest to gullet and thin across.
+    (0.145, 0.30),  # neck base
+    (0.110, 0.25),  # crest: narrow and deep
+    (0.090, 0.21),
+    (0.078, 0.16),  # poll
     (0.095, 0.13),  # forehead
     (0.075, 0.105),  # nasal
     (0.070, 0.085),  # muzzle
@@ -121,16 +151,19 @@ FORE_LEG = [
     (0.0, 0.04, 0.015),  # pastern
     (0.0, 0.05, 0.0),  # hoof
 ]
+# A foreleg is a heavy muscled forearm running down to a fine cannon — the
+# taper is most of what says "horse". At barely 1.5x from forearm to cannon it
+# was a spindle with a knee drawn on it; a real one is nearer 2.5x.
 FORE_SCALE = [
-    (0.105, 0.115),
-    (0.090, 0.105),
-    (0.072, 0.086),
-    (0.055, 0.070),
-    (0.052, 0.058),
-    (0.036, 0.040),
-    (0.042, 0.044),
-    (0.048, 0.044),
-    (0.056, 0.050),
+    (0.135, 0.150),  # shoulder
+    (0.120, 0.135),  # upper arm
+    (0.100, 0.116),  # elbow
+    (0.078, 0.095),  # forearm: the muscle
+    (0.058, 0.066),  # knee
+    (0.036, 0.044),  # cannon: the fine bone
+    (0.042, 0.048),  # fetlock
+    (0.046, 0.046),  # pastern
+    (0.056, 0.052),  # hoof
 ]
 
 HIND_LEG = [
@@ -184,7 +217,7 @@ def build_horse(forge, quality):
     forge.call(
         "build.sweep",
         name="horse",
-        profile=ellipse(ring),
+        profile=barrel(ring),
         profile_scales=flat2(SPINE_SCALE),
         path=flat3(SPINE),
         path_shape="custom",
