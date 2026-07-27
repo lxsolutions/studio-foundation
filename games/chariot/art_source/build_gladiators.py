@@ -105,15 +105,24 @@ def build_murmillo(forge):
     spin(forge, "murmillo_grip", [90.0, 0.0, 0.0])
     parts.append("murmillo_grip")
     # Manica: the segmented sleeve on the sword arm.
+    #
+    # A SLEEVE RUNS DOWN THE ARM. These marched along Y at a fixed height, so
+    # instead of banding the arm they hung in the air beside the man in a neat
+    # horizontal row — the single most obviously wrong thing in the render.
+    # The arm centre is measured, not guessed: the body is 0.720 wide, so the
+    # hanging arm sits at x ~ 0.28.
+    #
+    # No spin, either. A torus already encircles its own Z, which is what a band
+    # round a vertical arm needs; spun 90 degrees it encircled the FORWARD axis
+    # and read as a hoop standing off the shoulder.
     for i in range(4):
         seg = f"murmillo_manica_{i}"
         forge.call(
             "build.torus",
-            name=seg, major=0.075, minor=0.022, major_segments=8, minor_segments=4,
-            location=[0.30, 0.10 + i * 0.10, 1.22],
+            name=seg, major=0.088, minor=0.022, major_segments=10, minor_segments=4,
+            location=[0.28, 0.0, 1.32 - i * 0.11],
             material="iron", color=IRON, origin="center",
         )
-        spin(forge, seg, [90.0, 0.0, 0.0])
         parts.append(seg)
     # Galea: bowl, brim and the crest that names him.
     forge.call(
@@ -160,15 +169,16 @@ def build_retiarius(forge):
         material="bronze", color=BRONZE, origin="center",
     )
     parts.append("retiarius_galerus")
+    # The net-man's manica is on his LEFT arm, the one that throws. Same fix as
+    # the murmillo's: down the arm, not along the ground.
     for i in range(4):
         seg = f"retiarius_manica_{i}"
         forge.call(
             "build.torus",
-            name=seg, major=0.072, minor=0.020, major_segments=8, minor_segments=4,
-            location=[-0.28, 0.04 + i * 0.09, 1.24],
+            name=seg, major=0.078, minor=0.020, major_segments=10, minor_segments=4,
+            location=[-0.276, 0.0, 1.32 - i * 0.11],
             material="iron", color=IRON, origin="center",
         )
-        spin(forge, seg, [90.0, 0.0, 0.0])
         parts.append(seg)
     # The trident: thick enough to survive the silhouette at forty metres.
     forge.call(
