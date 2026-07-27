@@ -341,18 +341,29 @@ def build_horse(forge, quality):
     parts.append("jaw")
 
     # --- mane: a crest strip, swept along the neck -----------------------
+    # A MANE SITS ON THE CREST, NOT INSIDE THE NECK.
+    #
+    # This path used to follow the spine's own centreline, which is where the
+    # sweep for the NECK is generated from — so the whole mane was buried a
+    # quarter of a metre inside the animal and had never once been visible. It
+    # is the neck's TOP SURFACE that is wanted: the spine station plus that
+    # station's vertical half-scale.
+    # A mane runs from the WITHERS to the poll, not just the top third — and it
+    # sits a little proud of the crest so the hair stands off the neck.
     mane_path = [
-        (0.0, 0.72, 1.30),
-        (0.0, 0.84, 1.52),
-        (0.0, 0.96, 1.70),
-        (0.0, 1.04, 1.82),
-        (0.0, 1.10, 1.84),
+        (0.0, 0.54, 1.65),  # withers:    1.27 + 0.35, where the mane starts
+        (0.0, 0.70, 1.68),  # neck base:  1.34 + 0.30
+        (0.0, 0.84, 1.83),  # mid crest:  1.54 + 0.25
+        (0.0, 0.96, 1.92),  # upper:      1.68 + 0.21
+        (0.0, 1.06, 1.94),  # poll:       1.76 + 0.16
     ]
     forge.call(
         "build.sweep",
         name="mane",
         profile=[-0.018, -0.10, 0.018, -0.10, 0.030, 0.055, -0.030, 0.055],
-        profile_scales=[0.7, 0.55, 1.0, 1.0, 1.0, 0.95, 0.8, 0.6, 0.5, 0.3],
+        # Fuller along the crest so it reads at race distance instead of
+        # vanishing into the neck it sits on.
+        profile_scales=[1.05, 0.95, 1.30, 1.25, 1.35, 1.25, 1.15, 1.00, 0.80, 0.55],
         path=flat3(mane_path),
         path_shape="custom",
         closed_path=False,
@@ -395,17 +406,21 @@ def build_horse(forge, quality):
         "build.sweep",
         name="tail",
         profile=ellipse(8),
+        # A TAIL IS A MASS OF HAIR, NOT A CONE. Tapering steadily to 0.022 gave
+        # a rat's tail — a smooth horn coming off the quarters. A real one is
+        # thin only at the dock, swells immediately below it where the hair
+        # falls, and carries most of that volume nearly to the end.
         profile_scales=[
-            0.085,
-            0.095,
-            0.078,
-            0.090,
-            0.062,
             0.075,
-            0.042,
-            0.052,
-            0.022,
-            0.028,
+            0.085,   # dock: the bone, and the only thin part
+            0.105,
+            0.130,   # the hair takes over and it thickens at once
+            0.105,
+            0.140,
+            0.085,
+            0.125,
+            0.055,
+            0.085,   # still full at the tip, not a point
         ],
         path=flat3(tail_path),
         path_shape="custom",
