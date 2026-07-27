@@ -267,7 +267,11 @@ def char_rig(ctx, name, height, build, falloff, armature_name):
         bpy.ops.object.mode_set(mode="OBJECT")
     view_layer.objects.active = previous_active
 
-    weights = _skin(obj, joints, falloff)
+    # The bones were just written in ARMATURE-LOCAL space and the armature sits
+    # at the mesh's location, so the depsgraph has to catch up before _skin can
+    # read matrix_world off it.
+    scene_lib.sync()
+    weights = _skin(obj, joints, falloff, rig)
 
     modifier = obj.modifiers.new("armature", "ARMATURE")
     modifier.object = rig
@@ -288,7 +292,42 @@ def char_rig(ctx, name, height, build, falloff, armature_name):
     }
 
 
-def _skin(obj, joints, falloff):
+# Bone pairs that may share a vertex: a bone and its direct parent. Built from
+# PARENTS so it stays correct if the skeleton ever gains bones.
+_RELATED = frozenset(
+    pair
+    for child, parent in PARENTS.items()
+    for pair in ((child, parent), (parent, child))
+)
+
+
+def _distance_to_segment(point, head, tail):
+    axis = tail - head
+    length_sq = axis.length_squared
+    if length_sq < 1e-9:
+        return (point - head).length
+    t = max(0.0, min(1.0, (point - head).dot(axis) / length_sq))
+    return (point - (head + axis * t)).length
+
+
+def _components(mesh):
+    """Vertex -> shell id, by union-find over the edges."""
+    parent = list(range(len(mesh.vertices)))
+
+    def find(a):
+        while parent[a] != a:
+            parent[a] = parent[parent[a]]
+            a = parent[a]
+        return a
+
+    for edge in mesh.edges:
+        a, b = (find(v) for v in edge.vertices)
+        if a != b:
+            parent[a] = b
+    return [find(i) for i in range(len(mesh.vertices))]
+
+
+def _skin(obj, joints, falloff, rig=None):
     """Distance-to-bone-segment weighting, normalised over the best 2 bones.
 
     Blender's automatic weights are a bone-heat solve that needs an operator
@@ -296,36 +335,83 @@ def _skin(obj, joints, falloff):
     predictable and never fails with "Bone Heat Weighting: failed to find
     solution", which is the error every automated rigging attempt eventually
     hits.
+
+    Distance alone is not enough, though. A humanoid rests with its arms at its
+    sides, which runs the arm bones about 3cm from the flank of the torso while
+    the spine is 19cm away — so by distance the arm owns the waist, and the
+    first time the character reaches forward it drags a bat-wing of torso with
+    it. The mesh knows better than the distances do: the arm is a separate
+    shell from the body, so a bone is confined to the shell it lives in.
     """
     for group in list(obj.vertex_groups):
         obj.vertex_groups.remove(group)
     groups = {n: obj.vertex_groups.new(name=n) for n in joints}
     matrix = obj.matrix_world
-    segments = {n: (Vector(a), Vector(b)) for n, (a, b) in joints.items()}
-    weighted = 0
+    # BOTH SIDES OF THIS COMPARISON MUST BE IN THE SAME SPACE.
+    #
+    # `joints` is in armature-local space, but the armature is placed at the
+    # mesh's location, and the vertices below are taken to world space. Compare
+    # the two directly and every bone is displaced by exactly the character's
+    # offset from the origin — so a figure built at [0, -0.92, 0.55] gets its
+    # torso weighted to its head bone and its pelvis to its shins, and the
+    # first pose you apply tears the mesh into flat sheets. Characters authored
+    # at the origin were unaffected, which is why this survived so long.
+    rig_matrix = rig.matrix_world if rig is not None else Matrix.Identity(4)
+    segments = {
+        n: (rig_matrix @ Vector(a), rig_matrix @ Vector(b)) for n, (a, b) in joints.items()
+    }
 
-    for vertex in obj.data.vertices:
-        world = matrix @ vertex.co
-        distances = []
+    mesh = obj.data
+    world = [matrix @ v.co for v in mesh.vertices]
+    shell = _components(mesh)
+
+    # Which shell does each bone live in? Take the vertices that bone is nearest
+    # to and let them vote on their shell.
+    #
+    # Not "the single closest vertex" — a resting arm interpenetrates the torso,
+    # so the one vertex nearest the arm bone is quite often a torso vertex, and
+    # picking it hands the entire torso to the arm. The arm cylinder outvotes
+    # that handful every time.
+    claims = {}
+    for index, point in enumerate(world):
+        nearest, owner = 1e9, None
         for bone_name, (head, tail) in segments.items():
-            axis = tail - head
-            length_sq = axis.length_squared
-            if length_sq < 1e-9:
-                t = 0.0
-            else:
-                t = max(0.0, min(1.0, (world - head).dot(axis) / length_sq))
-            closest = head + axis * t
-            distances.append((( world - closest).length, bone_name))
-        distances.sort()
+            distance = _distance_to_segment(point, head, tail)
+            if distance < nearest:
+                nearest, owner = distance, bone_name
+        if owner is not None:
+            claims.setdefault(owner, []).append(shell[index])
+    bone_shell = {}
+    for bone_name in segments:
+        votes = claims.get(bone_name, [])
+        bone_shell[bone_name] = (
+            max(set(votes), key=votes.count) if votes else None
+        )
+
+    weighted = 0
+    for index, point in enumerate(world):
+        here = shell[index]
+        candidates = [n for n in segments if bone_shell[n] == here]
+        if not candidates:
+            # A decorative shell no bone claims — fall back to every bone so it
+            # is carried by something rather than left behind at the origin.
+            candidates = list(segments)
+        distances = sorted(
+            (_distance_to_segment(point, *segments[n]), n) for n in candidates
+        )
         best = distances[:2]
-        influences = []
-        for distance, bone_name in best:
-            influences.append((bone_name, 1.0 / (distance + 1e-4) ** falloff))
+        # Within a shell a vertex may still be shared only by a bone and its
+        # direct parent — that is what makes an elbow bend smoothly. Anything
+        # else takes the nearest bone outright, so the two thighs cannot stretch
+        # a web across the crotch.
+        if len(best) == 2 and (best[0][1], best[1][1]) not in _RELATED:
+            best = best[:1]
+        influences = [(n, 1.0 / (d + 1e-4) ** falloff) for d, n in best]
         total = sum(w for _n, w in influences)
         if total <= 0.0:
             continue
         for bone_name, weight in influences:
-            groups[bone_name].add([vertex.index], weight / total, "REPLACE")
+            groups[bone_name].add([index], weight / total, "REPLACE")
         weighted += 1
     return weighted
 
@@ -631,6 +717,91 @@ def char_attach(ctx, prop, rig, bone, offset, rotation):
             "negative Y offset; render.contact_sheet is the fastest way to check it."
         ),
     }
+
+
+@op(
+    "char.bake_pose",
+    summary=(
+        "Freeze a posed rig into the mesh vertices and drop the skin. Turns a "
+        "char.rig + char.pose result into a plain static mesh that keeps the pose "
+        "through export — for background figures, props and NPCs that never animate."
+    ),
+    params={
+        "mesh": ("str", None, "Skinned mesh object to freeze"),
+        "rig": ("str", None, "Armature to delete afterwards (default: the one deforming this mesh; pass \"\" to keep it)"),
+        "keep_groups": ("bool", False, "Keep the vertex groups after baking"),
+    },
+    tags=["char", "rig"],
+)
+def char_bake_pose(ctx, mesh, rig, keep_groups):
+    """Bake the armature deformation down into the mesh.
+
+    `char.pose` only moves POSE BONES. The mesh follows in the viewport because
+    of its armature modifier, but the vertices themselves never move — so a mesh
+    exported without its armature comes out in the rest pose, standing to
+    attention, and a mesh exported WITH its armature drags a Skeleton3D into the
+    scene for a figure that was never going to animate.
+
+    This is the third option: evaluate the deformation, write it into the
+    vertices, delete the rig. What you posed is what ships.
+    """
+    obj = _get(mesh)
+    if obj.type != "MESH":
+        raise OpError(f"'{mesh}' is a {obj.type}, not a mesh")
+    modifier = next((m for m in obj.modifiers if m.type == "ARMATURE"), None)
+    if modifier is None:
+        raise OpError(
+            f"'{mesh}' has no armature modifier, so there is no pose to bake. "
+            "Call char.rig on it first, then char.pose the rig."
+        )
+
+    armature = modifier.object
+    if rig is None:
+        target = armature
+    elif rig == "":
+        target = None
+    else:
+        target = _get(rig)
+
+    # The pose is written straight to the data API, so the depsgraph has not
+    # necessarily seen it yet. Without this the bake silently freezes the REST
+    # pose and everything looks fine until you open the export.
+    scene_lib.sync()
+    before = _bounds(obj)
+    scene_lib.apply_modifiers(obj)
+    after = _bounds(obj)
+
+    if not keep_groups:
+        obj.vertex_groups.clear()
+    removed = None
+    if target is not None:
+        removed = target.name
+        scene_lib.delete(target)
+
+    moved = max(abs(a - b) for a, b in zip(before, after))
+    return {
+        "mesh": obj.name,
+        "rig_removed": removed,
+        "vertex_groups_kept": bool(keep_groups),
+        "bounds_before": [round(v, 4) for v in before],
+        "bounds_after": [round(v, 4) for v in after],
+        "moved": round(moved, 4),
+        "note": (
+            "moved is the largest change in the bounding box, in metres. If it is "
+            "0 the rig was still in its rest pose when you baked — char.pose it first."
+        ),
+    }
+
+
+def _bounds(obj):
+    """Local-space min/max of the mesh itself, not the evaluated object."""
+    verts = obj.data.vertices
+    if not verts:
+        return (0.0,) * 6
+    xs = [v.co.x for v in verts]
+    ys = [v.co.y for v in verts]
+    zs = [v.co.z for v in verts]
+    return (min(xs), min(ys), min(zs), max(xs), max(ys), max(zs))
 
 
 def _get(name):
