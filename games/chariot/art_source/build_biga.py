@@ -187,6 +187,12 @@ def build_car(forge):
     return "car_floor"
 
 
+TUNIC_HEM = 0.245
+TUNIC_NECK = 0.205
+TUNIC_BOTTOM = 0.42
+TUNIC_TOP = 0.82
+
+
 def build_driver(forge):
     """The charioteer: a proportioned figure, not seven cuboids.
 
@@ -208,24 +214,98 @@ def build_driver(forge):
         skin=SKIN,
         location=[0.0, -0.92, 0.55],
     )
+    # POSE THE BODY BEFORE THE CLOTH EXISTS.
+    #
+    # A bare char.humanoid stands in an A-pose with its arms out and its feet
+    # together — the pose of a crash-test dummy, and it read as exactly that:
+    # a man standing to attention on a moving chariot.
+    #
+    # The cloth is deliberately NOT joined yet. Skinning is a distance falloff,
+    # and the fasciae are 0.205m rings around a chest whose shoulder joints sit
+    # at 0.18m — every band vertex is nearer an arm bone than the spine, so
+    # rotating the arms drags the man's chest armour out into metre-long
+    # shards. Rigid gear must not be skinned.
+    #
+    # So only the LIMBS are posed, and the torso chain is left at rest. The
+    # tunic, belt, bands, helmet and knife are all torso-mounted, so a torso
+    # that never moves is a torso they still fit.
+    rig = forge.call("char.rig", name="driver", height=1.72, build="heroic")
+    forge.call(
+        "char.pose",
+        rig=rig.get("armature"),
+        preset="custom",
+        bones={
+            # Braced against the floor of a car that has no seat: weight on the
+            # front foot, back leg taking the shock.
+            "thigh_l": [-26.0, 0.0, 3.0],
+            "thigh_r": [-12.0, 0.0, -3.0],
+            "shin_l": [30.0, 0.0, 0.0],
+            "shin_r": [20.0, 0.0, 0.0],
+            # Both arms out to the reins, elbows soft, hands drawn together.
+            #
+            # The arm chain's X sign is the OPPOSITE of the leg chain's — a
+            # thigh bone points down and an arm bone points sideways, so their
+            # local axes differ. Measured, not guessed: +64 on upper_arm reaches
+            # 0.517m forward, -64 reaches 0.517m BEHIND, which is how the first
+            # cut of this pose had him rowing a boat.
+            "upper_arm_l": [64.0, 0.0, -34.0],
+            "upper_arm_r": [64.0, 0.0, 34.0],
+            "forearm_l": [18.0, 0.0, -8.0],
+            "forearm_r": [18.0, 0.0, 8.0],
+            "hand_l": [12.0, 0.0, 0.0],
+            "hand_r": [12.0, 0.0, 0.0],
+        },
+    )
+    # Freeze the stance into the vertices and drop the skeleton. The driver
+    # never animates — he is a silhouette on a moving chariot — so a Skeleton3D
+    # per chariot would buy nothing, and exporting the mesh WITHOUT its skeleton
+    # would ship him standing to attention.
+    baked = forge.call("char.bake_pose", mesh="driver", rig=rig.get("armature"))
+    if float(baked.get("moved", 0.0)) < 0.05:
+        raise SystemExit(
+            "charioteer pose did not bake — he would ship in the rest pose: %r" % (baked,)
+        )
+
+    # DRESS HIM OFF HIS OWN BODY, NOT OFF HARD-CODED HEIGHTS.
+    #
+    # The kit below used to be placed at absolute Z. The figure stands on the
+    # car floor at 0.55, so every piece was authored half a metre low: the
+    # helmet sat at his stomach and his head went bare, which is most of why he
+    # read as a crash-test dummy no matter what the pose did.
+    body = forge.call("object.inspect", name="driver")["bounds"]
+    sole, crown = body["min"][2], body["max"][2]
+    stature = crown - sole
+
+    def at(fraction):
+        """Height up the man himself: 0.0 is the sole, 1.0 the crown."""
+        return sole + fraction * stature
+
+    def _tunic_radius(fraction):
+        """The tunic's radius at a given height, so the kit can hug it."""
+        span = (fraction - TUNIC_BOTTOM) / (TUNIC_TOP - TUNIC_BOTTOM)
+        return TUNIC_HEM + (TUNIC_NECK - TUNIC_HEM) * max(0.0, min(1.0, span))
+
     # Tunic over the body, belted — the livery surface the game recolours.
     forge.call(
         "build.cylinder",
         name="driver_tunic",
-        radius=0.20,
-        radius_top=0.17,
-        depth=0.62,
-        segments=8,
-        location=[0.0, -0.92, 1.22],
+        # Wider than the torso it covers. Sized to match, the body pokes
+        # through the flat of an 8-sided cylinder and the tunic stops reading
+        # as clothing — it becomes a board strapped to his chest.
+        radius=TUNIC_HEM,
+        radius_top=TUNIC_NECK,
+        depth=0.40 * stature,
+        segments=12,
+        location=[0.0, -0.92, at(0.62)],
         material="cloth",
         color=LIVERY,
         origin="center",
     )
     forge.call(
         "build.torus",
-        name="driver_belt", major=0.19, minor=0.028,
-        major_segments=10, minor_segments=4,
-        location=[0.0, -0.92, 1.00],
+        name="driver_belt", major=0.235, minor=0.026,
+        major_segments=12, minor_segments=4,
+        location=[0.0, -0.92, at(0.53)],
         material="cloth", color=LEATHER, origin="center",
     )
     # Helmet and crest: the crest is the second livery surface.
@@ -235,7 +315,7 @@ def build_driver(forge):
         radius=0.135,
         segments=10,
         rings=6,
-        location=[0.0, -0.92, 1.62],
+        location=[0.0, -0.92, at(0.93)],
         material="metal",
         color=BRONZE,
         origin="center",
@@ -243,8 +323,10 @@ def build_driver(forge):
     forge.call(
         "build.wedge",
         name="driver_crest",
-        size=[0.05, 0.34, 0.16],
-        location=[0.0, -0.94, 1.78],
+        # Runs fore-and-aft along the dome, and SEATED IN IT — placed above the
+        # crown it reads as a signboard held behind his head.
+        size=[0.05, 0.26, 0.15],
+        location=[0.0, -0.92, at(0.96)],
         material="cloth",
         color=LIVERY,
         origin="center",
@@ -256,9 +338,12 @@ def build_driver(forge):
         band = f"driver_fascia_{i}"
         forge.call(
             "build.torus",
-            name=band, major=0.205, minor=0.022,
-            major_segments=12, minor_segments=4,
-            location=[0.0, -0.92, 1.06 + i * 0.085],
+            # Follow the tunic's taper. Held at one radius they stand off the
+            # narrowing chest like a set of shelves instead of bands wound
+            # round it.
+            name=band, major=_tunic_radius(0.60 + i * 0.046) + 0.008, minor=0.018,
+            major_segments=14, minor_segments=4,
+            location=[0.0, -0.92, at(0.60 + i * 0.046)],
             material="rubber", color=LEATHER, origin="center",
         )
         forge.call("object.transform", name=band, scale=[1.0, 0.72, 1.0], apply=True)
@@ -266,7 +351,7 @@ def build_driver(forge):
     forge.call(
         "build.box",
         name="driver_knife", size=[0.035, 0.055, 0.18],
-        location=[0.16, -0.86, 0.96],
+        location=[0.16, -0.86, at(0.50)],
         material="metal", color=IRON, origin="center",
     )
     forge.call(
