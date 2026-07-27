@@ -62,13 +62,56 @@ def fighter_base(forge, name, bulk):
         major_segments=12, minor_segments=4, location=[0.0, 0.0, 1.02],
         material="rubber", color=LEATHER, origin="center",
     )
-    return [name, f"{name}_kilt", f"{name}_belt"]
+    rig = forge.call("char.rig", name=name, height=HEIGHT, build="heroic")
+    return [name, f"{name}_kilt", f"{name}_belt"], rig.get("armature")
+
+
+
+def brace(forge, name, rig, parts):
+    """Set the fighter on his back foot, then freeze it into the mesh.
+
+    ONLY THE BACK LEG MOVES, and that is deliberate. Every other piece of a
+    gladiator's kit — shield, sword, manica, helmet, greave — is rigid and
+    placed in world coordinates against the body, so any bone that moves under
+    one of them leaves it hanging in the air. The torso and both arms stay at
+    rest, which keeps all of it valid; the greave is on the LEFT shin, so the
+    left leg is the one left planted and the right steps back.
+
+    A stance is not a pose sequence, but it is the difference between a fighter
+    and a man standing to attention holding a shield.
+
+    (Posing the arms as well is a bigger job and the path is proven: attach each
+    hand-held piece to its bone with char.attach, pose, join, then bake — a
+    blade parented to hand_r follows the arm and survives the join. It needs the
+    gear re-authored as bone-relative offsets, because char.attach snaps a prop
+    to the bone tail and discards wherever it was placed.)
+    """
+    forge.call(
+        "char.pose", rig=rig, preset="custom",
+        bones={
+            # Negative is backward on this rig — measured, not assumed.
+            "thigh_r": [-32.0, 0.0, -4.0],
+            "shin_r": [26.0, 0.0, 0.0],
+            "foot_r": [10.0, 0.0, 0.0],
+            # The planted leg takes a little bend rather than locking straight.
+            "shin_l": [8.0, 0.0, 0.0],
+        },
+    )
+    # BAKE BEFORE JOINING. object.join does not carry the armature modifier
+    # across, so a join first leaves nothing to bake and the stance is silently
+    # lost. Freezing the body first is safe here precisely because no kit rides
+    # the leg that moves.
+    baked = forge.call("char.bake_pose", mesh=name, rig=rig)
+    if float(baked.get("moved", 0.0)) < 0.02:
+        raise SystemExit(f"{name} stance did not bake: {baked!r}")
+    forge.call("object.join", names=parts, into=name)
+    return name
 
 
 def build_murmillo(forge):
     """Tower shield, short sword, the big crested helmet."""
     # A murmillo was the heavy: he should look it beside the net-man.
-    parts = fighter_base(forge, "murmillo", 1.45)
+    parts, rig = fighter_base(forge, "murmillo", 1.45)
     # The scutum: a tall curved shield on the left arm. Curved, because a flat
     # slab is the difference between a shield and a door.
     # A bevelled PANEL. An uncapped cylinder is a barrel, not a shield: it
@@ -153,14 +196,13 @@ def build_murmillo(forge):
         material="bronze", color=BRONZE, origin="center",
     )
     parts.append("murmillo_greave")
-    forge.call("object.join", names=parts, into="murmillo")
-    return "murmillo"
+    return brace(forge, "murmillo", rig, parts)
 
 
 def build_retiarius(forge):
     """Trident, net, one shoulder guard, and no helmet at all."""
     # Lighter than the murmillo by design, but still a fighting man.
-    parts = fighter_base(forge, "retiarius", 1.20)
+    parts, rig = fighter_base(forge, "retiarius", 1.20)
     # Galerus: the shoulder guard that let him keep his face open.
     forge.call(
         "build.box",
@@ -215,8 +257,7 @@ def build_retiarius(forge):
     )
     spin(forge, "retiarius_net", [86.0, 0.0, 14.0])
     parts.append("retiarius_net")
-    forge.call("object.join", names=parts, into="retiarius")
-    return "retiarius"
+    return brace(forge, "retiarius", rig, parts)
 
 
 def main():
