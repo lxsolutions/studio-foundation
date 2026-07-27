@@ -1685,6 +1685,40 @@
               0.0,
               0.0
             ]
+          },
+          "keep_transform": {
+            "type": "boolean",
+            "description": "Keep the prop exactly where it already is, ignoring offset/rotation",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "char.bake_pose",
+      "summary": "Freeze a posed rig into the mesh vertices and drop the skin. Turns a char.rig + char.pose result into a plain static mesh that keeps the pose through export \u2014 for background figures, props and NPCs that never animate.",
+      "tags": [
+        "char",
+        "rig"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "mesh": {
+            "type": "string",
+            "description": "Skinned mesh object to freeze"
+          },
+          "rig": {
+            "type": "string",
+            "description": "Armature to delete afterwards (default: the one deforming this mesh; pass \"\" to keep it)"
+          },
+          "keep_groups": {
+            "type": "boolean",
+            "description": "Keep the vertex groups after baking",
+            "default": false
           }
         },
         "additionalProperties": false
@@ -2937,7 +2971,7 @@
     },
     {
       "name": "gameready.collision",
-      "summary": "Generate a physics collision proxy. Convex hulls are what you want for anything a character walks into; box is cheapest; simplified trimesh is for concave shapes like arenas and rooms. Named <object>-convcol / <object>-col per the studio import convention.",
+      "summary": "Generate a physics collision proxy. Convex hulls are what you want for anything a character walks into; box is cheapest; simplified trimesh is for concave shapes like arenas and rooms. Named <object>-convcol / <object>-col per the studio import convention. SKIP for hulls that ride inside a moving body: Godot imports the proxy as a StaticBody3D child, and a static collider inside a CharacterBody3D blocks its own vehicle.",
       "tags": [
         "gameready",
         "physics"
@@ -3726,7 +3760,7 @@
           },
           "band_min": {
             "type": "number",
-            "description": "top_band/bottom_band: lower bound as a fraction of height",
+            "description": "top_band/bottom_band: lower bound as a fraction of height. Bands select by face CENTER, so a thin band needs real face rows at that height - one tall quad (e.g. a column shaft) has its centre near the middle and a thin band elsewhere matches nothing",
             "default": 0.0
           },
           "band_max": {
@@ -3738,6 +3772,16 @@
             "type": "string",
             "description": "Override colour",
             "default": ""
+          },
+          "roughness": {
+            "type": "number",
+            "description": "Override roughness 0..1; -1 keeps the preset value",
+            "default": -1.0
+          },
+          "metallic": {
+            "type": "number",
+            "description": "Override metallic 0..1; -1 keeps the preset value. Metals read black without something bright to reflect - painted trim (metallic ~0.15) survives dark environments",
+            "default": -1.0
           }
         },
         "additionalProperties": false

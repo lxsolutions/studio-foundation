@@ -1,6 +1,6 @@
 # bforge op reference
 
-108 operations.
+109 operations.
 
 ## `arch.*`
 
@@ -366,6 +366,17 @@ Parent a prop to a character bone — a sword to hand_r, a shield to hand_l, a h
 | `bone` | string | 'hand_r' | Bone to attach to |
 | `offset` | array | [0.0, 0.0, 0.0] | Local offset in metres |
 | `rotation` | array | [0.0, 0.0, 0.0] | Local rotation in degrees |
+| `keep_transform` | boolean | False | Keep the prop exactly where it already is, ignoring offset/rotation |
+
+### `char.bake_pose`
+
+Freeze a posed rig into the mesh vertices and drop the skin. Turns a char.rig + char.pose result into a plain static mesh that keeps the pose through export — for background figures, props and NPCs that never animate.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `mesh` | string | None | Skinned mesh object to freeze |
+| `rig` | string | None | Armature to delete afterwards (default: the one deforming this mesh; pass "" to keep it) |
+| `keep_groups` | boolean | False | Keep the vertex groups after baking |
 
 ### `char.humanoid`
 
@@ -670,7 +681,7 @@ Check the scene against a platform triangle/texture budget and say what to do ab
 
 ### `gameready.collision`
 
-Generate a physics collision proxy. Convex hulls are what you want for anything a character walks into; box is cheapest; simplified trimesh is for concave shapes like arenas and rooms. Named <object>-convcol / <object>-col per the studio import convention.
+Generate a physics collision proxy. Convex hulls are what you want for anything a character walks into; box is cheapest; simplified trimesh is for concave shapes like arenas and rooms. Named <object>-convcol / <object>-col per the studio import convention. SKIP for hulls that ride inside a moving body: Godot imports the proxy as a StaticBody3D child, and a static collider inside a CharacterBody3D blocks its own vehicle.
 
 | parameter | type | default | description |
 | --- | --- | --- | --- |
@@ -860,9 +871,11 @@ Give a subset of faces its own material — trim strips, emissive panels, painte
 | `object` | string | None | Object name |
 | `preset` | string | 'gold' | Material preset for the selected faces |
 | `select` | up \| down \| sides \| top_band \| bottom_band | 'up' | Face selection rule |
-| `band_min` | number | 0.0 | top_band/bottom_band: lower bound as a fraction of height |
+| `band_min` | number | 0.0 | top_band/bottom_band: lower bound as a fraction of height. Bands select by face CENTER, so a thin band needs real face rows at that height - one tall quad (e.g. a column shaft) has its centre near the middle and a thin band elsewhere matches nothing |
 | `band_max` | number | 1.0 | top_band/bottom_band: upper bound as a fraction of height |
 | `color` | string | '' | Override colour |
+| `roughness` | number | -1.0 | Override roughness 0..1; -1 keeps the preset value |
+| `metallic` | number | -1.0 | Override metallic 0..1; -1 keeps the preset value. Metals read black without something bright to reflect - painted trim (metallic ~0.15) survives dark environments |
 
 ### `material.list`
 
