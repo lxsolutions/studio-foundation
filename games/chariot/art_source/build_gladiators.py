@@ -67,45 +67,46 @@ def fighter_base(forge, name, bulk):
 
 
 
-def brace(forge, name, rig, parts):
-    """Set the fighter on his back foot, then freeze it into the mesh.
+def brace(forge, name, rig, parts, harness, pose):
+    """Put the fighter on guard, and freeze it into the mesh.
 
-    ONLY THE BACK LEG MOVES, and that is deliberate. Every other piece of a
-    gladiator's kit — shield, sword, manica, helmet, greave — is rigid and
-    placed in world coordinates against the body, so any bone that moves under
-    one of them leaves it hanging in the air. The torso and both arms stay at
-    rest, which keeps all of it valid; the greave is on the LEFT shin, so the
-    left leg is the one left planted and the right steps back.
+    Every piece of a gladiator's kit is rigid and was modelled in world
+    coordinates against a body standing to attention. `char.attach` normally
+    THROWS THAT AWAY and snaps the prop to the bone's tail, which is right for
+    placing a sword into an empty fist and useless for a shield, a greave or an
+    arm band that is already sitting exactly where it belongs. So each piece is
+    attached with keep_transform: it does not move at all, it simply starts
+    following the bone it is strapped to.
 
-    A stance is not a pose sequence, but it is the difference between a fighter
-    and a man standing to attention holding a shield.
-
-    (Posing the arms as well is a bigger job and the path is proven: attach each
-    hand-held piece to its bone with char.attach, pose, join, then bake — a
-    blade parented to hand_r follows the arm and survives the join. It needs the
-    gear re-authored as bone-relative offsets, because char.attach snaps a prop
-    to the bone tail and discards wherever it was placed.)
+    That is what makes posing the arms affordable. Without it every one of these
+    pieces would have to be re-derived as a bone-relative offset and eyeballed
+    back into place one render at a time.
     """
-    forge.call(
-        "char.pose", rig=rig, preset="custom",
-        bones={
-            # Negative is backward on this rig — measured, not assumed.
-            "thigh_r": [-32.0, 0.0, -4.0],
-            "shin_r": [26.0, 0.0, 0.0],
-            "foot_r": [10.0, 0.0, 0.0],
-            # The planted leg takes a little bend rather than locking straight.
-            "shin_l": [8.0, 0.0, 0.0],
-        },
-    )
-    # BAKE BEFORE JOINING. object.join does not carry the armature modifier
-    # across, so a join first leaves nothing to bake and the stance is silently
-    # lost. Freezing the body first is safe here precisely because no kit rides
-    # the leg that moves.
-    baked = forge.call("char.bake_pose", mesh=name, rig=rig)
+    for piece, bone in harness:
+        forge.call("char.attach", prop=piece, rig=rig, bone=bone, keep_transform=True)
+    forge.call("char.pose", rig=rig, preset="custom", bones=pose)
+    # BAKE BEFORE JOINING, and keep the rig while doing it. object.join does not
+    # carry the armature modifier across, so a join first leaves nothing to bake
+    # and the pose is lost without a word; and the kit is still parented to the
+    # rig, so the rig has to outlive the bake.
+    baked = forge.call("char.bake_pose", mesh=name, rig="")
     if float(baked.get("moved", 0.0)) < 0.02:
-        raise SystemExit(f"{name} stance did not bake: {baked!r}")
+        raise SystemExit(f"{name} pose did not bake: {baked!r}")
     forge.call("object.join", names=parts, into=name)
+    forge.call("object.delete", names=[rig])
     return name
+
+
+# Legs: back foot away and bent, front leg planted with a little bend rather
+# than locked straight. Arms: measured convention — positive X is FORWARD on
+# this rig, and Z lowers the arm.
+STANCE_POSE = {
+    "thigh_r": [-32.0, 0.0, -4.0],
+    "shin_r": [26.0, 0.0, 0.0],
+    "foot_r": [10.0, 0.0, 0.0],
+    "thigh_l": [10.0, 0.0, 2.0],
+    "shin_l": [10.0, 0.0, 0.0],
+}
 
 
 def build_murmillo(forge):
@@ -196,7 +197,23 @@ def build_murmillo(forge):
         material="bronze", color=BRONZE, origin="center",
     )
     parts.append("murmillo_greave")
-    return brace(forge, "murmillo", rig, parts)
+    murmillo_pose = dict(STANCE_POSE)
+    murmillo_pose.update({
+        # Shield arm out in front, covering him.
+        "upper_arm_l": [52.0, 0.0, -22.0],
+        "forearm_l": [26.0, 0.0, 0.0],
+        # Sword arm drawn back with the elbow closed, blade up and ready.
+        "upper_arm_r": [-18.0, 0.0, 18.0],
+        "forearm_r": [58.0, 0.0, 0.0],
+    })
+    harness = [
+        ("murmillo_scutum", "hand_l"), ("murmillo_boss", "hand_l"),
+        ("murmillo_gladius", "hand_r"), ("murmillo_grip", "hand_r"),
+        ("murmillo_manica_0", "upper_arm_r"), ("murmillo_manica_1", "upper_arm_r"),
+        ("murmillo_manica_2", "forearm_r"), ("murmillo_manica_3", "forearm_r"),
+        ("murmillo_greave", "shin_l"),
+    ]
+    return brace(forge, "murmillo", rig, parts, harness, murmillo_pose)
 
 
 def build_retiarius(forge):
@@ -257,7 +274,23 @@ def build_retiarius(forge):
     )
     spin(forge, "retiarius_net", [86.0, 0.0, 14.0])
     parts.append("retiarius_net")
-    return brace(forge, "retiarius", rig, parts)
+    retiarius_pose = dict(STANCE_POSE)
+    retiarius_pose.update({
+        # Trident arm thrusting forward.
+        "upper_arm_r": [46.0, 0.0, 14.0],
+        "forearm_r": [16.0, 0.0, 0.0],
+        # Net arm out wide, ready to cast.
+        "upper_arm_l": [28.0, 0.0, -34.0],
+        "forearm_l": [34.0, 0.0, 0.0],
+    })
+    harness = [
+        ("retiarius_shaft", "hand_r"), ("retiarius_head", "hand_r"),
+        ("retiarius_net", "hand_l"),
+        ("retiarius_galerus", "shoulder_l"),
+        ("retiarius_manica_0", "upper_arm_l"), ("retiarius_manica_1", "upper_arm_l"),
+        ("retiarius_manica_2", "forearm_l"), ("retiarius_manica_3", "forearm_l"),
+    ]
+    return brace(forge, "retiarius", rig, parts, harness, retiarius_pose)
 
 
 def main():
