@@ -323,35 +323,15 @@ def build(forge, spec, quality):
     )
     parts.append("attic_colonnade")
 
-    # Vomitoria: the stair wedges that divide the seating into cunei. This
-    # vertical rhythm is half of what the eye reads as "Roman amphitheatre".
-    wedges = {"low": 10, "medium": 18, "high": 26}[quality]
-    wedge_radius = radius + podium_offset
-    wedge_perimeter = 2.0 * straight + 2.0 * math.pi * wedge_radius
-    for index in range(wedges):
-        at = wedge_perimeter * index / wedges
-        x, y = stadium_point(at, straight, wedge_radius)
-        nx, ny = stadium_normal(at, straight, wedge_radius)
-        heading = math.degrees(math.atan2(ny, nx))
-        forge.call(
-            "build.box",
-            name=f"vomitorium_{index}",
-            size=[1.8, stand_depth * 0.96, stand_top * 1.02],
-            location=[x, y, 0.0],
-            bevel=0.06,
-            material="stone",
-            color=STONE_SHADE,
-            uv="box",
-            uv_scale=3.0,
-            origin="bottom",
-        )
-        forge.call(
-            "object.transform",
-            name=f"vomitorium_{index}",
-            rotation=[0, 0, heading],
-            apply=True,
-        )
-        parts.append(f"vomitorium_{index}")
+    # NO STAIR WEDGES. They were built here as full-height blocks standing at
+    # the FRONT of the cavea, so from every seat and every camera in the venue
+    # they were a ring of blank slabs parked in front of the audience — the
+    # first thing anyone looking at this venue asked about. Reshaping them into
+    # rising wedges did not help: at 1.6m wide, 35m deep and 33m tall, the side
+    # face is simply enormous whatever its silhouette, and a divider that hides
+    # the crowd it divides is worth less than no divider at all. The cavea
+    # reads as Roman from the arcade, the attic colonnade and the raked
+    # courses; it does not need this.
 
     # Velarium masts: the awning rig along the rim. Even bare, the ring of
     # masts against the sky is an instantly Roman silhouette.
