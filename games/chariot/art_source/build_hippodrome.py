@@ -74,6 +74,33 @@ def stadium_point(s, straight, radius):
     return (-half - math.sin(theta) * radius, math.cos(theta) * radius)
 
 
+def stadium_normal(s, straight, radius):
+    """Outward unit normal at arc length `s`, matching `stadium_point`.
+
+    A stadium is NOT a circle, so `atan2(y, x)` of the point is not the way
+    out. Along a straight the normal is constant while atan2 keeps turning, and
+    on the turns the centre sits at +/- half the straight rather than at the
+    origin, so atan2 is wrong there too. Anything that has to FACE outward —
+    the stair wedges that divide the cavea — needs this, or it ends up stood
+    broadside across the seating it is supposed to cut through.
+    """
+    perimeter = 2.0 * straight + 2.0 * math.pi * radius
+    s = s % perimeter
+    if s < straight:
+        return (0.0, -1.0)
+    s -= straight
+    arc = math.pi * radius
+    if s < arc:
+        theta = s / radius
+        return (math.sin(theta), -math.cos(theta))
+    s -= arc
+    if s < straight:
+        return (0.0, 1.0)
+    s -= straight
+    theta = s / radius
+    return (-math.sin(theta), math.cos(theta))
+
+
 def cavea_profile(stands, podium_offset):
     """Stepped grandstand cross-section, derived from the SHARED stands spec.
 
@@ -155,6 +182,56 @@ def build(forge, spec, quality):
         _timeout=600,
     )
     parts.append("track_surface")
+
+    # --- infield ---------------------------------------------------------
+    # The ground the spina stands on. Without it the middle of the venue is a
+    # HOLE: the consuming game renders a procedural sky, so every camera that
+    # looked across the oval saw straight through the infield to the sky's
+    # brown ground hemisphere, and the centre of the circus read as a pit of
+    # mud. Sits just under the racing surface, so the ribbon and the rails
+    # always win the depth fight along their shared edge; it is wider than the
+    # inner rail on purpose and everything past that edge is covered by the
+    # track, the podium and the cavea.
+    # A stadium is a rectangle plus two half-discs — NOT a box. Built as one
+    # plane spanning the whole bounding box, the corners stuck out past the
+    # inner rail at both turns and sliced across the racing surface: a hard
+    # ledge running through the sand, which is what it looked like in game.
+    # Centre panel first, exactly the length of the straights so it cannot
+    # reach the turns at all.
+    forge.call(
+        "build.plane",
+        name="infield",
+        size=[straight, 2.0 * (radius + inner)],
+        location=[0.0, 0.0, -0.44],
+        material="sand",
+        color="#9c7d5e",
+        uv="box",
+        uv_scale=12.0,
+        origin="world",
+        cuts=4,
+    )
+    parts.append("infield")
+    # ...then a disc at each turn's own centre, which is at +/- half the
+    # straight, never at the origin.
+    for index, sign in enumerate((-1.0, 1.0)):
+        cap = f"infield_turn_{index}"
+        forge.call(
+            "build.cylinder",
+            name=cap,
+            radius=radius + inner,
+            depth=0.04,
+            segments=segments * 2,
+            # A centimetre UNDER the centre panel. Level with it the two
+            # z-fight; proud of it the disc's rim draws a hard line across the
+            # sand where it crosses, which is the seam this leaves behind.
+            location=[sign * straight * 0.5, 0.0, -0.47],
+            material="sand",
+            color="#9c7d5e",
+            uv="box",
+            uv_scale=12.0,
+            origin="center",
+        )
+        parts.append(cap)
 
     # --- rails ----------------------------------------------------------
     forge.call(
@@ -270,42 +347,15 @@ def build(forge, spec, quality):
     )
     parts.append("attic_colonnade")
 
-    # Vomitoria: the stair wedges that divide the seating into cunei. This
-    # vertical rhythm is half of what the eye reads as "Roman amphitheatre".
-    wedges = {"low": 10, "medium": 18, "high": 26}[quality]
-    # Spacing must be computed on the SAME radius the path is sampled at, or
-    # stadium_point wraps and the wedges bunch instead of dividing the bowl
-    # evenly.
-    wedge_perimeter = 2.0 * straight + 2.0 * math.pi * radius
-    # A vomitorium is a stair cut INTO the rake, not a slab standing on it.
-    # Built as a full-height box it becomes a 36 m blank wall that blots out
-    # half the bowl from any trackside camera — which is exactly how it looked
-    # in the first textured build. Sweeping the cavea profile, raised one step,
-    # along a short arc gives a divider that hugs the seating instead.
-    step_profile = [(lat, vert + 0.8) for lat, vert in cavea_points[:-3]]
-    for index in range(wedges):
-        centre = wedge_perimeter * index / wedges
-        span = 2.2  # metres of arc the stair occupies
-        path = []
-        for offset in (-span * 0.5, 0.0, span * 0.5):
-            px, py = stadium_point(centre + offset, straight, radius)
-            path += [px, py, 0.0]
-        forge.call(
-            "build.sweep",
-            name=f"vomitorium_{index}",
-            profile=flat(step_profile),
-            path=path,
-            path_shape="custom",
-            closed_path=False,
-            closed_profile=False,
-            material="stone",
-            color=STONE_SHADE,
-            uv="box",
-            uv_scale=3.0,
-            origin="world",
-            _timeout=600,
-        )
-        parts.append(f"vomitorium_{index}")
+    # NO STAIR WEDGES. They were built here as full-height blocks standing at
+    # the FRONT of the cavea, so from every seat and every camera in the venue
+    # they were a ring of blank slabs parked in front of the audience — the
+    # first thing anyone looking at this venue asked about. Reshaping them into
+    # rising wedges did not help: at 1.6m wide, 35m deep and 33m tall, the side
+    # face is simply enormous whatever its silhouette, and a divider that hides
+    # the crowd it divides is worth less than no divider at all. The cavea
+    # reads as Roman from the arcade, the attic colonnade and the raked
+    # courses; it does not need this.
 
     # Velarium masts: the awning rig along the rim. Even bare, the ring of
     # masts against the sky is an instantly Roman silhouette.
