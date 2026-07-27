@@ -655,9 +655,46 @@ LEG_PHASE = {
 }
 # Each joint down a limb lags the one above it and swings less: that delay is
 # what makes a leg look jointed rather than like a swinging stick.
-JOINT_LAG = 0.08
-HIND_SWING = (34.0, 30.0, 20.0)   # thigh, gaskin, cannon amplitudes
-FORE_SWING = (32.0, 30.0, 26.0)   # shoulder, forearm, cannon
+# A LEG JOINT ONLY BENDS ONE WAY.
+#
+# The hip and shoulder swing fore and aft, so a sine is right for them. A hock
+# or a knee does not: it flexes from straight and returns to straight, and it
+# cannot go past straight in the other direction. Driving them with a sine like
+# the hip meant that for half of every stride they bent FORWARD through
+# straight — a hyperextension no horse can make — which is the cross-legged,
+# broken-stick look the gallop had.
+#
+# Flexion is therefore a raised cosine pinned at zero: fully folded at mid-swing
+# when the leg is passing under the body, dead straight at mid-stance when it is
+# carrying weight, and never once positive.
+JOINT_LAG = 0.05
+# A galloping horse reaches: the lead foreleg swings well ahead of the chest and
+# the hind legs drive out behind the quarters. Small amplitudes read as a horse
+# running on the spot, which is what these were.
+HIND_SWING = 42.0                 # hip, fore and aft
+HIND_FLEX = (62.0, 34.0)          # gaskin (hock), cannon — flexion only
+FORE_SWING = 44.0                 # shoulder, fore and aft
+FORE_FLEX = (68.0, 28.0)          # forearm (knee), cannon — flexion only
+
+
+def _flex(turn, phase, amplitude, lag=0.0):
+    """One joint's flexion, in degrees, always <= 0.
+
+    All the folding happens inside the SWING half of the stride and none of it
+    outside. The leg leaves the ground straight, folds tightly as it passes
+    under the body, and is straight again by the time it reaches out to land;
+    through the whole stance it is dead straight, carrying the horse.
+
+    A cosine that merely peaks at mid-swing is not the same thing — it leaves
+    the leg still half folded at the moment it should be reaching, so the horse
+    paws at the ground instead of striding, and never covers any distance.
+    """
+    turned = (turn - phase - lag) % 1.0
+    # Stance is 0.25..0.75 of the cycle: forward-most, planted, to backward-most.
+    swing = ((turned - 0.75) % 1.0) / 0.5
+    if swing > 1.0:
+        return 0.0
+    return -amplitude * math.sin(math.pi * swing)
 
 
 def _swing(turn, phase, amplitude, lag=0.0):
@@ -678,24 +715,26 @@ def gallop_keys(length):
         pose = {}
         for side, leg in (("l", "hind_l"), ("r", "hind_r")):
             phase = LEG_PHASE[leg]
-            thigh, gaskin, cannon = HIND_SWING
-            pose[f"thigh_{side}"] = [_swing(turn, phase, thigh), 0, 0]
-            # The gaskin folds AGAINST the thigh — a leg that folds the same
-            # way it swings is a stilt.
-            pose[f"gaskin_{side}"] = [-_swing(turn, phase, gaskin, JOINT_LAG), 0, 0]
-            pose[f"hind_cannon_{side}"] = [_swing(turn, phase, cannon, 2.0 * JOINT_LAG), 0, 0]
+            gaskin, cannon = HIND_FLEX
+            # Positive is forward, measured off the rig rather than guessed.
+            pose[f"thigh_{side}"] = [_swing(turn, phase, HIND_SWING), 0, 0]
+            pose[f"gaskin_{side}"] = [_flex(turn, phase, gaskin, JOINT_LAG), 0, 0]
+            pose[f"hind_cannon_{side}"] = [_flex(turn, phase, cannon, 2.0 * JOINT_LAG), 0, 0]
         for side, leg in (("l", "fore_l"), ("r", "fore_r")):
             phase = LEG_PHASE[leg]
-            shoulder, forearm, cannon = FORE_SWING
-            pose[f"shoulder_{side}"] = [_swing(turn, phase, shoulder), 0, 0]
-            pose[f"forearm_{side}"] = [-_swing(turn, phase, forearm, JOINT_LAG), 0, 0]
-            pose[f"fore_cannon_{side}"] = [_swing(turn, phase, cannon, 2.0 * JOINT_LAG), 0, 0]
+            forearm, cannon = FORE_FLEX
+            pose[f"shoulder_{side}"] = [_swing(turn, phase, FORE_SWING), 0, 0]
+            pose[f"forearm_{side}"] = [_flex(turn, phase, forearm, JOINT_LAG), 0, 0]
+            pose[f"fore_cannon_{side}"] = [_flex(turn, phase, cannon, 2.0 * JOINT_LAG), 0, 0]
         # The back rounds and extends once per stride; the neck and head work
         # against it, which is the counterweight a galloping horse actually is.
-        pose["spine"] = [4.5 * math.sin(2.0 * math.pi * turn), 0, 0]
-        pose["croup"] = [-7.0 * math.sin(2.0 * math.pi * turn), 0, 0]
-        pose["neck"] = [-9.0 * math.sin(2.0 * math.pi * turn + 0.6), 0, 0]
-        pose["head"] = [6.0 * math.sin(2.0 * math.pi * turn + 1.1), 0, 0]
+        # A galloping horse's head and neck are a COUNTERWEIGHT, swinging
+        # against the back once per stride. At a few degrees it reads as a
+        # stiff-necked rocking-horse; this is the motion that sells the effort.
+        pose["spine"] = [6.0 * math.sin(2.0 * math.pi * turn), 0, 0]
+        pose["croup"] = [-9.0 * math.sin(2.0 * math.pi * turn), 0, 0]
+        pose["neck"] = [-15.0 * math.sin(2.0 * math.pi * turn + 0.6), 0, 0]
+        pose["head"] = [9.0 * math.sin(2.0 * math.pi * turn + 1.1), 0, 0]
         pose["tail_a"] = [-20.0 - 8.0 * math.sin(2.0 * math.pi * turn), 0, 0]
         pose["tail_b"] = [-13.0 - 6.0 * math.sin(2.0 * math.pi * turn + 0.5), 0, 0]
         frames[frame] = {bone: [round(v, 2) for v in angles] for bone, angles in pose.items()}
@@ -718,7 +757,11 @@ def gallop_locations(length):
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--quality", default="medium", choices=["low", "medium", "high"]
+        # HIGH by default. The horse is the thing the camera is pointed at for
+        # a whole race and it was shipping at 1,488 triangles against a 6,000
+        # budget — a quarter of what it was allowed, spent on a silhouette that
+        # goes faceted the moment it fills the frame.
+        "--quality", default="high", choices=["low", "medium", "high"]
     )
     parser.add_argument("--render", action="store_true")
     parser.add_argument("--install", action="store_true")
