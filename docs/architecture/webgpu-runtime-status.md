@@ -38,7 +38,7 @@ but a render probe needs a GPU runner and remains self-hosted work.
 **One sentence on which renderer that means.** Everything shipped and published —
 the live demo, the templates, the performance A/B — is **Forward Mobile**, which
 `tools/godot/export_game.py` calls "the hardware-verified default". **Forward+**
-is opt-in (`--rendering-method forward_plus`) and **has never rendered a frame.**
+is opt-in (`--rendering-method forward_plus`) and, as of patch 0033, **renders**.
 As of patches 0023–0029 it gets substantially further — the scene shader
 translates, the cluster builder exists, scene pipelines are created and command
 buffers encoded, and clears attachment compatibility across 44 measured
@@ -60,7 +60,7 @@ Forward+ result, and do not read "the render loop runs" as "a frame rendered".
 | Template artifacts locked in `engine-lock.toml` | ✅ | `[artifacts.export_templates]`: release + debug + sha256 |
 | **Forward+ (clustered) shader translation** | 🟢 **translates offline** after patch 0015 — was impossible before | §Forward+ |
 | **Forward+ compiles on hardware** | 🟢 2026‑07‑25 — patches 0018–0022 | Tesla P40: full GI/SDFGI/SSAO/SSIL/VoxelGI stack compiles, **0 aborts, 0 wasm traps**. Compilation, not rendering |
-| **Forward+ renders a 3D frame** | 🔴 **no** — the 2D UI draws, the 3D scene is black. As of 0023–0029 it runs at 53 fps submitting 319 draws / 2.0M primitives and clears attachment validation (44 pairs, 0 mismatches); the geometry never reaches the presented image | §Forward+ on hardware (0023–0029), with a side-by-side against the Forward Mobile control |
+| **Forward+ renders a 3D frame** | 🟢 **YES — first verified frame 2026‑07‑28, patches 0023–0033** | Tesla P40, headed Chrome/WebGPU, non-fallback adapter: the colosseum draws at 59 fps, 188 objects / 2,015,266 primitives, canvas dominance 0.085, **0 rejected command buffers**, 0 wasm traps. `docs/images/forward-plus-first-frame.png` |
 | **Forward+ D24 fallback on adapters without `depth32float-stencil8`** | ⚪ **not measured** — implemented in 0028, but this box has the feature, so the fallback path has never run | §Forward+ on hardware (0023–0029) |
 
 Reference point: a **release** WebGPU export passed a (shallow, non‑ASAN) browser
@@ -175,6 +175,70 @@ the fix was twice reverted as unproven. The build script piped `engine.py build`
 through `tail`, so the pipeline's exit status was `tail`'s — **a failed build
 looked successful**, and every measurement was of a stale binary. `CLAUDE.md`
 warns about exactly this.
+
+## Forward+ renders — first verified frame (patches 0023–0033, 2026‑07‑28)
+
+![Forward+ renders the colosseum](../images/forward-plus-first-frame.png)
+
+**Godot Forward+ presented its first verified 3D frame through WebGPU.** Measured
+on a Tesla P40 through headed Chrome under Xvfb, Chariot exported with
+`--rendering-method forward_plus`, by `tests/browser/render-probe.mjs` — which is
+calibrated against three controls on the same host and reports `rendered` only
+when a non-fallback adapter, varied composited pixels and non-zero engine draw
+counters all agree.
+
+| | before 0033 | after 0033 |
+| --- | --- | --- |
+| verdict | `not-rendered` | **`rendered`** |
+| canvas dominant-colour fraction | 0.987 (a clear) | **0.085** |
+| non-black fraction | 0.013 (UI text only) | **1.00** |
+| distinct colours | — | 758 |
+| `commandEncoder.finish` invalid | 514 | **0** of 10842 |
+| `queue.submit` rejected | 514 | **0** of 10842 |
+| rejected buffers carrying scene work | 514 | **0** |
+| distinct bind-group failure classes | 1 | **0** |
+| Godot objects / primitives | — | 188 / **2,015,266** |
+| fps | 53 | **59** |
+| adapter | `isFallbackAdapter=false` | `isFallbackAdapter=false` |
+| wasm traps / device loss | 0 | **0** |
+
+**What is claimed, precisely.** Forward+ renders. What is *not* claimed: that the
+renderer is complete or error-free. **Three distinct validation errors remain** —
+all instances of `Binding type in the shader (texture) doesn't match the type in
+the layout (sampler)`, the `sampler2DMS` class in `ResolveShaderRD` and
+`SsEffectsDownsample`. They are measurably not on the path to the presented
+frame: zero command buffers are rejected and the frame draws with them present.
+One benign warning also appears, from 0031 declining an sRGB view of a storage
+texture and using the physical linear format — the designed behaviour.
+
+Nor is this a performance or quality claim. It is one scene, on one GPU, in one
+browser. The hardware matrix, Safari/iOS, and the AMD/Intel/Apple paths remain
+unverified, as does the D24 depth fallback (0028) and the float32→float16 view
+case (0031), because this adapter exposes both features.
+
+### The chain that had to be cleared
+
+Each layer, once fixed, revealed a different problem rather than the same one
+restated:
+
+| | |
+| --- | --- |
+| 0023 | the driver text-edited Tint's correct WGSL into invalid WGSL |
+| 0024 | `textureLoad` rewriting matched name *prefixes* |
+| 0025 | claimed WebGPU allows attachment-less render passes |
+| 0026 | the scene shader's unguarded subgroup ops — no cluster builder |
+| 0027/0028 | `depth32float-stencil8` device negotiation |
+| 0029 | unused fragment outputs became real `rgba8unorm` targets |
+| 0030/0031 | shared views undid the physical format the texture was allocated with |
+| 0032 | a stale `layout(rgba8)` over an `R8_UNORM` target — backported from upstream |
+| 0033 | a **dead** comparison sampler bound to a resource the shader never uses |
+
+The last one is the one worth remembering. Every step in it was individually
+correct — Godot declares the sampler, the variant never uses it, Tint emits a
+plain `sampler`, the driver derives `filtering` faithfully, and Godot binds its
+real comparison sampler. Nothing inferred anything wrongly, and the result was
+still an invalid bind group that took the whole scene command buffer with it.
+The fix was to delete the dead resource, not to describe it more accurately.
 
 ## Forward+ on hardware — 18 → the render loop runs (patches 0023–0029, 2026‑07‑28)
 

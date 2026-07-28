@@ -1,0 +1,89 @@
+Subject: [PATCH] volumetric fog: remove the unused shadow_sampler declaration and binding
+
+The last remaining bind-group failure was a comparison sampler bound into a slot
+the layout declared as filtering:
+
+  bgl:VolumetricFogProcessShaderRD:9:set0   binding 22
+    supplied  sampler  compare="greater"
+    expected  sampler  type="filtering"   visibility=ShaderStage::None
+
+Nothing in that chain was inferred wrongly, which is why it needed a different
+kind of fix from 0021, 0029 and 0032. WebGPU binding 22 is Godot binding 11
+doubled by the combined-sampler split, and volumetric_fog_process.glsl declares:
+
+  layout(set = 0, binding = 11) uniform sampler shadow_sampler;
+
+That declaration is the only occurrence of shadow_sampler in the entire file.
+Every real shadow read builds its sampled image from linear_sampler instead:
+
+  texture(sampler2D(directional_shadow_atlas, linear_sampler), ...)
+  texture(sampler2D(shadow_atlas, linear_sampler), ...)
+
+So the reflection was right: ShaderStage::None is not a defect in the use
+analyser, it is the correct answer for a resource that is declared and never
+referenced. Tint had no compare-sampling to infer from and emitted a plain
+sampler; the driver correctly derived "filtering" from that; and fog.cpp
+nevertheless inserts the renderer's comparison-enabled sampler at binding 11, in
+both the process and copy uniform sets. Visibility zero does not disable
+bind-group resource validation -- the entry still exists and the supplied
+resource still has to match its declared type.
+
+The resource is dead, so the fix is to remove it rather than to describe it more
+accurately. Removing the declaration and its matching uniform block eliminates
+the entry entirely, which is the only outcome that does not leave the layout
+claiming behaviour the shader never performs.
+
+Bindings are explicitly numbered, so removing 11 leaves a hole rather than
+renumbering 12-21; WebGPU binding 22 simply ceases to exist.
+
+Deliberately NOT done:
+  * marking the entry Comparison -- validates the bound object while keeping a
+    resource in the shader interface that has no semantic role
+  * substituting a dummy filtering sampler -- 0014's adaptation machinery could
+    silence this, but it would conceal dead state instead of removing it
+  * generically dropping every visibility-None entry -- too broad for one dead
+    binding, and 0014 exists partly because an earlier textual use analysis
+    wrongly marked genuinely used helper-function resources invisible. That rule
+    could resurrect exactly that class of failure.
+
+The renderer's comparison sampler itself is untouched. Forward+ scene shaders,
+Forward Mobile and render_forward_clustered all create and use one legitimately;
+only volumetric fog's dead copy is removed.
+
+Unlike 0032, this is NOT a backport: current Godot master still carries the
+unused declaration. It is a clean candidate for an upstream pull request, and the
+evidence is unusually strong -- the shader's real shadow reads use
+linear_sampler, reflection reports no stage visibility, the bound object has an
+incompatible comparison type, and removal can have no effect on shader output
+because the resource is statically unreachable.
+
+diff --git a/servers/rendering/renderer_rd/shaders/environment/volumetric_fog_process.glsl b/servers/rendering/renderer_rd/shaders/environment/volumetric_fog_process.glsl
+--- a/servers/rendering/renderer_rd/shaders/environment/volumetric_fog_process.glsl
++++ b/servers/rendering/renderer_rd/shaders/environment/volumetric_fog_process.glsl
+@@ -74,7 +74,6 @@
+ layout(rgba16f, set = 0, binding = 10) uniform restrict writeonly image3D dest_map;
+ #endif
+ 
+-layout(set = 0, binding = 11) uniform sampler shadow_sampler;
+ 
+ #define MAX_VOXEL_GI_INSTANCES 8
+ 
+diff --git a/servers/rendering/renderer_rd/environment/fog.cpp b/servers/rendering/renderer_rd/environment/fog.cpp
+--- a/servers/rendering/renderer_rd/environment/fog.cpp
++++ b/servers/rendering/renderer_rd/environment/fog.cpp
+@@ -910,15 +910,6 @@
+ 
+ 		{
+ 			RD::Uniform u;
+-			u.uniform_type = RD::UNIFORM_TYPE_SAMPLER;
+-			u.binding = 11;
+-			u.append_id(p_settings.shadow_sampler);
+-			uniforms.push_back(u);
+-			copy_uniforms.push_back(u);
+-		}
+-
+-		{
+-			RD::Uniform u;
+ 			u.uniform_type = RD::UNIFORM_TYPE_UNIFORM_BUFFER;
+ 			u.binding = 12;
+ 			u.append_id(p_settings.voxel_gi_buffer);
