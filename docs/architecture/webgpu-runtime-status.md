@@ -231,6 +231,36 @@ That distinction points the investigation at **command validity** — not at
 culling, camera placement, lighting, attachment formats, or whether geometry was
 submitted, all of which are now ruled out.
 
+**And command validity is now measured, with the rejections attributed.**
+`binding-trace.mjs` carries the shader families each encoder recorded through
+`finish()` and `submit()`, because the aggregate counts alone cannot say *which*
+submissions died:
+
+```
+commandEncoder.finish : 11570 calls,  888 invalid
+queue.submit          : 11570 calls,  888 rejected
+
+submissions, by the shader families the submitted buffers recorded:
+   accepted   2639   rejected      0   (none)
+   accepted    889   rejected      0   SkyShaderRD
+   accepted   4490   rejected    888   SceneForwardClusteredShaderRD
+   accepted    888   rejected      0   TonemapShaderRD
+   accepted    888   rejected      0   CanvasShaderRD
+   accepted    888   rejected      0   BlitShaderRD
+```
+
+**Every rejected submission carried clustered scene work, and no other family had
+a single rejection.** That distinguishes the two mechanisms that both explain a
+black scene: the invalid bind group poisons the command buffer *containing the
+scene draws*, rather than a separate compute submission whose missing output a
+later valid pass consumes. WebGPU rejects a submission as a whole if any command
+buffer in it is invalid, so those draws never reach the queue timeline.
+
+Scene work also appears in 4490 *accepted* submissions, so it is a subset of
+scene submissions that dies — consistent with depth and shadow passes surviving
+while the pass that produces visible colour does not. Which subset is not yet
+established.
+
 `tests/browser/binding-trace.mjs` settles which resource fails first. It wraps
 each `createBindGroup` in its own `pushErrorScope('validation')`, so a failure is
 attributed to that exact call rather than correlated by timestamp, and it records
