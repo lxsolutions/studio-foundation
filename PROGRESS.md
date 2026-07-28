@@ -401,3 +401,58 @@ WebGPU patch series — an instancing storage buffer whose std430 layout is
 mis-declared. That is worth its own investigation and is the single highest-value
 thing found in this whole run, because it is a real bug in shipped code rather
 than a template exercise.
+
+## R12 — Tint struct-size bug: narrowed, not yet fixed (owner: engine)
+
+Chased the black-screen defect. Ruled out and established, in order:
+
+1. **Not the shader source.** `InstanceData` in
+   `forward_clustered/scene_forward_clustered_inc.glsl` is byte-identical
+   between `godot-official` and `studio-webgpu`. Its std430 layout computes to
+   176 bytes (208 with USE_DOUBLE_PRECISION), so a declared size of 32 is not
+   something the GLSL asks for.
+2. **Not `strip_restrict_decoration`.** It removes only Restrict (19),
+   InputAttachmentIndex (43) and Volatile (21) — none affect layout — and its
+   OpDecorate/OpMemberDecorate word offsets are correct.
+3. **It is not one struct — it is four, with identical numbers:**
+
+```
+InstanceDataBuffer_1_1_a64  @(1,2)   size 32, last member ends 224
+OmniLights_1_1_a64          @(0,6)   size 32, last member ends 224
+SpotLights_1_1_a64          @(0,8)   size 32, last member ends 224
+AreaLights_1_1_a64          @(0,10)  size 32, last member ends 224
+```
+
+`InstanceData`, `LightData` and `AreaLight` have completely different layouts.
+They cannot all genuinely be 32 bytes ending at 224. **Identical constants
+across unrelated types means these are synthesized, not computed** — something
+in the SPIR-V pipeline is emitting a fixed size/stride for every storage buffer
+it rewrites. All four share the mangled suffix `_1_1_a64`.
+
+4. **All four are Forward+ (clustered) shaders**, and
+   `project.godot` sets `renderer/rendering_method.web="gl_compatibility"`. That
+   is why `web-webgl` works at all — it uses the GL Compatibility renderer and
+   never touches RenderingDevice. The WebGPU export is compiling
+   forward_clustered regardless.
+
+**Two candidate fixes, in order of cost:**
+
+- **Cheap and probably shippable today:** force Forward *Mobile* for the WebGPU
+  web target. Existing studio knowledge is that Mobile is the shipping tier and
+  Forward+ has never been clean under WebGPU; avoiding forward_clustered avoids
+  these four buffers entirely. Needs an export-preset/override change plus a
+  re-export and a harness run to confirm.
+- **The actual bug:** find the pass synthesizing size 32 / stride for rewritten
+  storage buffers. `flatten_binding_arrays` (p11) and `infer_readonly_storage`
+  (p12) are the prime suspects since they rewrite storage-buffer types. Proving
+  it needs a per-pass SPIR-V dump and a decoration diff, then an engine rebuild
+  to test — more than one loop.
+
+**Not attempted:** editing `project.godot` to test the Mobile override. That
+file lives in the main checkout, which currently has ~20 uncommitted files from a
+parallel session, and a speculative renderer change there is not a safe end-of-
+loop action.
+
+Harness improvement from this round: console-error capture was truncating at 400
+chars, which cut the Tint diagnostic mid-sentence and hid the fact that four
+buffers were failing rather than one. Raised to 8000.

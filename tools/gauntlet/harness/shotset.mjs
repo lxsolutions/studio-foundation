@@ -241,9 +241,9 @@ async function main() {
   const consoleErrors = [];
   const pageErrors = [];
   page.on('console', (m) => {
-    if (m.type() === 'error') consoleErrors.push(m.text().slice(0, 400));
+    if (m.type() === 'error') consoleErrors.push(m.text().slice(0, 8000));
   });
-  page.on('pageerror', (e) => pageErrors.push(String(e).slice(0, 400)));
+  page.on('pageerror', (e) => pageErrors.push(String(e).slice(0, 8000)));
 
   await page.addInitScript(INSTRUMENT);
   const cdp = await context.newCDPSession(page);
