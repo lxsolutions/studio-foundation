@@ -201,10 +201,31 @@ Forward Mobile control:
 
 The engine is running Forward+ at 53 fps and submitting two million primitives
 across 319 draws. **The 2D UI renders correctly; the entire 3D scene is black.**
-The 1.3% of non-black pixels is the UI text. So the failure is now specific: the
-scene's geometry is submitted and never reaches the presented image, while the
-canvas/2D path is unaffected — consistent with the remaining validation errors
-invalidating the scene's bind groups and command buffers.
+The 1.3% of non-black pixels is the UI text.
+
+Godot's global draw counter includes canvas and tonemap work, so it alone does
+not show that the *scene* path submitted anything. Counting actual
+`draw`/`drawIndexed` commands per pipeline through `pass-trace.mjs` does:
+
+```json
+{"draw_calls_total": 233159,
+ "draw_calls_by_shader": {"SceneForwardClusteredShaderRD": 223338,
+                          "CanvasShaderRD": 6874, "SkyShaderRD": 983,
+                          "TonemapShaderRD": 982, "BlitShaderRD": 982},
+ "distinct_pairs": 50, "matched_pairs": 50, "mismatched_pairs": 0}
+```
+
+**223,338 real geometry draws are issued under the clustered scene shader**, and
+sky, tonemap and blit all run. So the whole Forward+ chain executes; the result
+does not reach the screen.
+
+That, together with `[Invalid CommandBuffer] is invalid due to a previous error`,
+gives a coherent mechanism to test next: an invalid bind group poisons the
+scene's command buffer, so the entire submission is discarded at submit time,
+while the canvas UI — encoded in a separate, valid command buffer — presents
+normally. **This is a hypothesis consistent with the evidence, not a proven root
+cause.** The way to settle it is to trace the first non-cascade binding failure
+in command order rather than the largest repeated count.
 
 Through 0022 it stopped in shader translation. It now compiles the scene shader,
 builds its cluster list, creates scene pipelines, encodes command buffers, and
