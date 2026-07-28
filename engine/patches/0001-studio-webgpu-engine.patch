@@ -1972,7 +1972,7 @@ new file mode 100644
 index 0000000000000000000000000000000000000000..722a25559c210487494691555e247177c884ec8b
 --- /dev/null
 +++ b/drivers/webgpu/rendering_device_driver_webgpu.cpp
-@@ -0,0 +1,8856 @@
+@@ -0,0 +1,8869 @@
 +/**************************************************************************/
 +/*  rendering_device_driver_webgpu.cpp                                    */
 +/**************************************************************************/
@@ -6239,7 +6239,15 @@ index 0000000000000000000000000000000000000000..722a25559c210487494691555e247177
 +					  tex_entry.texture.multisampled = is_ms;
 +					  // MSAA texture bindings with UnfilterableFloat require a NonFiltering sampler —
 +					  // override the sampler for this combined binding.
-+					  if (is_ms && !is_depth) {
++					  // MSAA needs NonFiltering; so does Depth. WebGPU rejects a
++					  // TextureSampleType::Depth binding used with a Filtering sampler,
++					  // where Vulkan permits it. Comparison samplers are already legal
++					  // for depth, so only downgrade the non-comparison case.
++					  if (is_depth) {
++						  if (samp_entry.sampler.type != WGPUSamplerBindingType_Comparison) {
++							  samp_entry.sampler.type = WGPUSamplerBindingType_NonFiltering;
++						  }
++					  } else if (is_ms) {
 +						  samp_entry.sampler.type = WGPUSamplerBindingType_NonFiltering;
 +					  }
 +					}
@@ -6539,7 +6547,12 @@ index 0000000000000000000000000000000000000000..722a25559c210487494691555e247177
 +							  : (is_ms ? WGPUTextureSampleType_UnfilterableFloat : WGPUTextureSampleType_Float);
 +						  te.texture.viewDimension = wgsl_tex_dims.has(k) ? wgsl_tex_dims[k] : WGPUTextureViewDimension_2D;
 +						  te.texture.multisampled = is_ms;
-+						  if (is_ms && !is_depth) {
++						  // Same rule: Depth cannot pair with a Filtering sampler.
++						  if (is_depth) {
++							  if (se.sampler.type != WGPUSamplerBindingType_Comparison) {
++								  se.sampler.type = WGPUSamplerBindingType_NonFiltering;
++							  }
++						  } else if (is_ms) {
 +							  se.sampler.type = WGPUSamplerBindingType_NonFiltering;
 +						  }
 +						}

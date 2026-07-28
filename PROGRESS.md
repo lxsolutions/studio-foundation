@@ -570,3 +570,29 @@ spurious "495908h older" break.
 **Next:** the depth-sampler validation error. Concrete and bounded: find where
 the WebGPU driver builds bind-group layouts and declare samplers paired with
 depth textures as non-filtering (or comparison).
+
+## R16 — second engine bug: Depth textures paired with Filtering samplers (owner: engine)
+
+Traced the blocker that surfaced after the SPIR-V fix. Both sites in
+`rendering_device_driver_webgpu.cpp` that build bind-group layouts carried:
+
+```cpp
+if (is_ms && !is_depth) {
+    samp_entry.sampler.type = WGPUSamplerBindingType_NonFiltering;
+}
+```
+
+The override existed for multisampled textures and **explicitly excluded depth**.
+But WebGPU rejects a `TextureSampleType::Depth` binding used with a
+`SamplerBindingType::Filtering` sampler — Vulkan permits it, WebGPU does not.
+So the one case that needed the downgrade was the one case guarded out.
+
+Fixed at both sites: depth downgrades to NonFiltering unless the sampler is
+already Comparison (which is legal for depth). Applied to the build tree and to
+`engine/patches/0001-...` (driver hunk 8856 -> 8869), patch re-verified against
+pristine 4.7.1, lock checksum updated. Build of both profiles running.
+
+**Not verified.** Same discipline as before: no claim until the templates
+install, Chariot re-exports, and the harness confirms. Two engine defects are now
+fixed in the series; whether the frame renders depends on whether more remain —
+the prior history here is a chain, not a single blocker.
