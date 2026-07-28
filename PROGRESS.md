@@ -272,3 +272,45 @@ distance fog for aerial depth.
 Objective gate flat throughout (warn 4, fps 60, edgeEnergy 19.6, instability 0),
 which remains the point: three judge rounds found four new defect classes that
 no metric here can see.
+
+## R9 — judge-directed material work on the two largest surfaces (owner: lighting/materials, sequential)
+
+The judge named the fix outright: "texture and break up the two largest
+surfaces — the ring beams and the sand plane". Did exactly that.
+
+**Ground.** Replaced the flat untextured PlaneGeometry with `env.terrain`
+(110x110m dunes, 24.2k tris, `flatten_center=26` so the colonnade and plinth
+stay level), surfaced with `material.pbr` + baked at **253.5 px/m**. Relief in
+the distance also removes the hard straight plane-meets-sky seam the judge
+flagged in an earlier round. edgeEnergy 19.62 -> 20.60.
+
+**Entablature — the black beams were a BAKE failure, not a shading one.**
+`uv.report` on the colonnade:
+
+| stage | uv_area | coverage | texel density |
+|---|---|---|---|
+| recipe UVs | **138.6** | 1.0 | 330 px/m |
+| after unwrap | 0.043 | 4.3% | 5.8 px/m |
+| after uv.pack | 0.043 | 4.3% | 5.8 px/m |
+
+`uv_area 138.6` means the recipe's UVs deliberately TILE (uv_scale 3m per tile).
+Baking into tiled UVs makes many faces share the same 0-1 region, so the bake
+overwrites itself and the entablature received no valid texels — it rendered
+black. Re-unwrapping fixes the black but atlases 1333 m² into one 2048 map,
+which can only ever give ~6 px/m; matching the terrain would need a ~40k texture.
+
+**Pipeline rule, and it generalises:** `material.bake_pbr` is for props with
+unique UVs. Large architecture authored with a `uv_scale` tiling layout must
+keep those UVs and take a TILING material in-engine instead. Baking it is the
+wrong pipeline, not a wrong setting.
+
+Shipped the re-unwrapped version for now because lit-but-soft beats black; the
+correct fix (export unbaked, apply a tiling stone material in-engine) is the
+next material task. edgeEnergy 22.69, fps 60, instability 0, warn 4.
+
+**Not done: the games.** Fourth loop without touching Chariot Club, The Deep,
+Riftline or Plato's Plaza. The justification each time was that the defect being
+chased lived in shared tooling and would propagate — true for the AO scale bug
+and true for this bake/tiling rule. It is no longer true: nothing in the template
+now blocks taking the harness to a real game. Chariot Club is next, first action,
+no preconditions.
