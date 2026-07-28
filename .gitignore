@@ -74,3 +74,6 @@ playwright-report/
 *.log
 .pytest_cache/
 tests/artifacts/
+
+# gauntlet capture output: reproducible, never committed
+runs/

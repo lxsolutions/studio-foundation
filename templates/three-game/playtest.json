@@ -1,0 +1,24 @@
+{
+  "settleMs": 2500,
+  "checks": [
+    { "name": "no NaN transforms in the scene", "nanScan": true },
+    {
+      "name": "camera poses actually move the camera",
+      "probe": "cameraPos",
+      "input": { "script": "globalThis.__gauntlet.setCamera('wide')" },
+      "expect": { "distanceMin": 5 }
+    },
+    {
+      "name": "the world animates over time",
+      "probe": "monumentSpin",
+      "input": { "settleMs": 1500 },
+      "expect": { "changed": true }
+    },
+    {
+      "name": "reseeding rebuilds the world",
+      "probe": "objects",
+      "input": { "script": "globalThis.__gauntlet.seed(42)" },
+      "expect": { "changed": false, "unchanged": true }
+    }
+  ]
+}

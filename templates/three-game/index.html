@@ -1,0 +1,28 @@
+<!doctype html>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>gauntlet starter</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #05070c; }
+  canvas { display: block; }
+  #hud {
+    position: fixed; left: 14px; bottom: 12px;
+    font: 12px/1.5 ui-monospace, monospace; color: #cfe3ff; opacity: .75;
+    text-shadow: 0 1px 3px #000; pointer-events: none;
+  }
+</style>
+<div id="hud"></div>
+<!--
+  No bundler. The import map points at the installed three, served by
+  harness/serve.mjs from the gauntlet root. One less moving part between an
+  edit and a rendered frame, which is the whole point.
+-->
+<script type="importmap">
+{
+  "imports": {
+    "three": "/node_modules/three/build/three.module.js",
+    "three/addons/": "/node_modules/three/examples/jsm/"
+  }
+}
+</script>
+<script type="module" src="./main.js"></script>

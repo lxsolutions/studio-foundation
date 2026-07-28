@@ -22,6 +22,12 @@ RECIPE := "prop.crate"
 TAG := ""
 SEARCH := ""
 FILE := ""
+# gauntlet (ADR 0017): `just URL=http://127.0.0.1:8099/templates/three-game/ gauntlet-round`
+URL := "http://127.0.0.1:8099/templates/three-game/"
+SHOTS := "templates/three-game/shots.json"
+REFS := ""
+REMOTE := ""
+NOTE := ""
 
 default:
     @just --list
@@ -403,6 +409,33 @@ visual-baseline:
 
 visual-compare:
     {{PY}} tools/screenshots/visual_regression.py compare --game "{{GAME}}"
+
+# ------------------------------------------------------------------ gauntlet (engine-neutral quality layer, ADR 0017)
+
+# Serve the repo so templates, the runtime contract and node_modules share one origin.
+gauntlet-serve:
+    node tools/gauntlet/harness/serve.mjs --root . --port 8099
+
+# One measured round: preflight -> capture on real hardware -> objective gate ->
+# blind deck when clean. Set REMOTE=smeagol to render on the GPU host; without it
+# the report will say SOFTWARE RENDERER and the numbers are not usable.
+#   just REFS=tools/gauntlet/references/mybar REMOTE=smeagol NOTE="what changed" gauntlet-round
+gauntlet-round:
+    node tools/gauntlet/harness/round.mjs --url "{{URL}}" --shots "{{SHOTS}}"       {{ if REFS != "" { "--references " + REFS } else { "" } }}       {{ if REMOTE != "" { "--remote " + REMOTE } else { "" } }}       {{ if NOTE != "" { "--note '" + NOTE + "'" } else { "" } }}
+
+# Derive objective thresholds from reference frames. Run once per bar.
+#   just REFS=tools/gauntlet/references/mybar gauntlet-calibrate
+gauntlet-calibrate:
+    node tools/gauntlet/harness/calibrate.mjs --references "{{REFS}}"
+
+# Playability assertions: does input move the player, do events fire, any NaN
+# transforms. Needs the runtime contract; runs without a GPU.
+gauntlet-playtest:
+    node tools/gauntlet/harness/playtest.mjs --url "{{URL}}" --checks templates/three-game/playtest.json
+
+# Verify the harness itself against the dependency-free fixture.
+gauntlet-doctor:
+    node tools/gauntlet/harness/shotset.mjs --url http://127.0.0.1:8099/tools/gauntlet/fixtures/contract-demo/       --shots tools/gauntlet/fixtures/contract-demo/shots.json --out runs/gauntlet-doctor --seconds 3
 
 # ------------------------------------------------------------------ housekeeping
 

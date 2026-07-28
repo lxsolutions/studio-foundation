@@ -1,0 +1,22 @@
+{
+  "name": "studio-foundation",
+  "private": true,
+  "type": "module",
+  "description": "Browser runtime toolchain: TypeScript templates and the gauntlet quality layer (ADR 0017)",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc",
+    "gauntlet:serve": "node tools/gauntlet/harness/serve.mjs --root . --port 8099",
+    "gauntlet:round": "node tools/gauntlet/harness/round.mjs",
+    "gauntlet:calibrate": "node tools/gauntlet/harness/calibrate.mjs",
+    "gauntlet:playtest": "node tools/gauntlet/harness/playtest.mjs"
+  },
+  "dependencies": {
+    "three": "^0.185.1"
+  },
+  "devDependencies": {
+    "@types/three": "^0.185.0",
+    "playwright-core": "^1.55.0",
+    "typescript": "^7.0.2"
+  }
+}
