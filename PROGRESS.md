@@ -456,3 +456,39 @@ loop action.
 Harness improvement from this round: console-error capture was truncating at 400
 chars, which cut the Tint diagnostic mid-sentence and hid the fact that four
 buffers were failing rather than one. Raised to 8000.
+
+## R13 — root cause found: SPIR-V literal corruption (owner: engine)
+
+**`flatten_binding_arrays` corrupts std430 layout literals.** It does a blunt
+whole-word ID substitution across every instruction, and excludes literal
+operands for only three opcodes — `OpConstant`, `OpSpecConstant`, `OpSwitch`.
+It does NOT exclude `OpDecorate` or `OpMemberDecorate`, whose operands include
+**ArrayStride** and **Offset**. Any layout literal whose numeric value happens to
+equal a flattened array type ID is rewritten to that array's element type ID.
+
+That is exactly the observed signature: four unrelated buffers
+(`InstanceDataBuffer`, `OmniLights`, `SpotLights`, `AreaLights`) all reporting
+the same impossible size 32 ending at 224. Identical constants across types with
+different layouts means substitution, not miscomputation.
+
+What made it solvable: raising the harness's console truncation 400 -> 8000,
+which revealed four failures instead of one. At 400 chars this looked like a
+single-struct layout bug and would have been chased in the wrong place.
+
+Fix written and specified in
+`docs/architecture/webgpu-spirv-literal-corruption.md`: add `OP_DECORATE`,
+`OP_MEMBER_DECORATE`, `OP_NAME`/`OP_MEMBER_NAME` to the literal-exclusion block
+with `literal_start = 2`, plus the missing `OP_MEMBER_NAME = 6` constant. The
+change only *stops* substituting words that were never IDs, so it cannot regress
+a case that previously worked.
+
+**NOT built or verified.** The generated tree at `engine/.cache/studio-webgpu/`
+is rebuilt from the patch series, so the edit there does not persist; per ADR
+0002/0008 it belongs in `engine/patches/0001-studio-webgpu-engine.patch` (the
+patch that adds the file — 77 references; 0002 has none), followed by a checksum
+refresh, `engine-fetch`, `engine-build`, re-export and a harness run. That is a
+long build and a checksummed patch-series change, neither of which is a safe
+end-of-loop action.
+
+Interim shipping option, unchanged: force Forward Mobile for the WebGPU web
+target. All four failing buffers are Forward+ shaders.
