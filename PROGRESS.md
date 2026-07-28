@@ -151,3 +151,43 @@ Playtest: 4/4 pass, 0 NaN transforms across 65 objects.
 scored this build, it named four specific gaps, and two are now addressed. A
 second run tells us whether the win rate moved — which is half the stop
 condition and currently unmeasured.
+
+## R6 — second blind judge, and an UNRESOLVED AO failure (owner: single, sequential)
+
+**Judge round 2: 0W / 4L — 0%. Win rate FLAT (0 -> 0).**
+Brief SHA identical to round 1 (`3a476a74f6671ea9`), so the judge was provably
+not softened between runs.
+
+A second, independent judge named the *same* dominant gap in nearly the same
+words: "only a dithered shadow-map fringe instead of a darkening contact
+shadow", "~30 column bases meet the sand with zero occlusion". It said this
+**while GTAOPass was enabled**, which means the fix from R5 did not land.
+
+Diagnosis so far, measured not guessed:
+
+1. GTAO's default radius is **0.25 world units**. This scene has 7.5m columns on
+   a 200m plane, so it darkened within 25cm of a surface — invisible at every
+   framing. Set to 2.0m. Still no visible occlusion.
+2. Captured the raw AO buffer (`OUTPUT.AO`): luma p50 **228/255**, dynamic range
+   20. White means unoccluded, so the pass computes ~zero occlusion everywhere.
+3. Suspected depth precision (camera was near 0.1 / far 400 — a 4000:1 ratio).
+   Changed to 0.5/220. AO buffer came back **byte-identical** (227.327 both
+   runs), which is itself the finding: the buffer does not respond to scene
+   changes at all.
+
+**UNRESOLVED. Stated rather than papered over.** The near/far change is kept
+because it is correct regardless. The diagnostic is also confounded: `OutputPass`
+sits after GTAO and tone-maps whatever it emits, so `OUTPUT.AO` was not a clean
+read of the buffer.
+
+Next, in order: (a) re-run the AO-only capture with OutputPass removed so the
+buffer is read raw; (b) drop in `SSAOPass` as a control — if SSAO produces
+occlusion on the same scene, the problem is GTAO configuration, and if it does
+not, the problem is the depth/normal input both passes share; (c) only then
+consider baked AO via a second UV channel.
+
+Objective metrics were flat across all of this (edgeEnergy 19.45 -> 19.65, warn
+4, fps 60, instability 0), which is the point: **no metric in this harness can
+see the defect two independent judges named twice.**
+
+Stop condition NOT met: win rate is flat, but each round produced new findings.
