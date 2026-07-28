@@ -87,6 +87,7 @@ series = [
   { file = "patches/0027-webgpu-request-depth32float-stencil8.patch", sha256 = "da9d8947e48f1d0d0c281ba6cf30eab895cc5a0689c17abb8aec65cb175634b4" },
   { file = "patches/0028-webgpu-depth-support-from-the-device.patch", sha256 = "d9bf864c6e567ea77e8ec3ad734ce9571895d91ef150c5cab27f6846bd4adf11" },
   { file = "patches/0029-webgpu-unused-color-targets-are-absent.patch", sha256 = "6da7b9fecb477ac6ac288270e38e500159827b9e931a132a4908b57bbb2aab50" },
+  { file = "patches/0030-webgpu-view-format-follows-the-texture.patch", sha256 = "c63417574fd85a672ca884b535f2d1ca7c29ac997959de94afe29809ed3df809" },
 ]
 
 [artifacts.export_templates]

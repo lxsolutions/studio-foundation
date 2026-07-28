@@ -267,20 +267,28 @@ const pixelsUniform =
   canvasReport.readable === true &&
   canvasReport.dominantColorFraction >= UNIFORM_DOMINANCE;
 
+// Order matters, and it is not the obvious one. Hardware identity is checked
+// BEFORE a blank canvas is called a negative: a uniform frame on a fallback
+// adapter, an unidentified adapter, or a page that never initialised WebGPU
+// proves nothing about the build under test, and reporting it as a definite
+// negative is the same overclaim in the opposite direction.
 let verdict;
 let why;
-if (pixelsUniform) {
-  verdict = "not-rendered";
-  why = "canvas is readable and shows a single colour — a cleared buffer";
-} else if (!hardwareAdapter) {
+if (!hardwareAdapter) {
   verdict = "inconclusive";
   why =
     adapter === null
       ? "the page never requested a WebGPU adapter, so nothing was measured"
       : `adapter isFallbackAdapter=${adapter.isFallbackAdapter} — not verified hardware`;
+} else if (canvasReport.present !== true || canvasReport.readable !== true) {
+  verdict = "inconclusive";
+  why = "the canvas could not be captured";
+} else if (pixelsUniform) {
+  verdict = "not-rendered";
+  why = "verified hardware, and the canvas is a single colour — a cleared buffer";
 } else if (!pixelsVaried) {
   verdict = "inconclusive";
-  why = "canvas pixels could not be read back";
+  why = "canvas brightness is between the flat and detailed calibration bands";
 } else if (!countersPositive) {
   verdict = "inconclusive";
   why =

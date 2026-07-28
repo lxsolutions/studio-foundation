@@ -1,0 +1,112 @@
+Subject: [PATCH] webgpu: a texture view must follow the physical format, not the logical one
+
+The 3D scene was black while the 2D UI rendered. binding-trace.mjs, wrapping each
+createBindGroup in its own validation error scope, named the first non-cascade
+failure in command order:
+
+  createBindGroup #282   layout bgl:SsEffectsDownsampleShaderRD:1:set1
+    binding 0
+      supplied  textureView  viewFormat=r16float  textureFormat=r32float
+      expected  storageTexture format=r32float
+
+The texture is correctly promoted: R8/RG8/R16/RG16 are not WebGPU storage texel
+formats, so _promote_storage_format upgrades them to 32-bit at creation. The VIEW
+was not. texture_create_shared and texture_create_shared_from_slice both took the
+requested view format straight from Godot, which supplies its LOGICAL format --
+r16float -- for a texture physically allocated as r32float:
+
+  The texture view format (R16Float) is not compatible with the texture format
+  (R32Float)
+
+An invalid view is not a local failure. Every bind group referencing it becomes
+invalid, and so does the command buffer holding those draws, so one un-promoted
+view can sink an entire frame of scene submission while the 2D canvas -- encoded
+in a separate command buffer -- keeps presenting normally.
+
+_view_format_for_texture states the invariant in one place, used by both sites:
+promote the requested format the same way the texture was promoted, and if the
+two still disagree, pass it through unchanged so WebGPU can rule on a genuine
+reinterpretation rather than this function inventing an answer. That restraint is
+the lesson of 0021 and 0029, where a concrete placeholder format substituted for
+missing evidence caused the defect.
+
+Measured on a Tesla P40 through headed Chrome/WebGPU, Chariot on Forward+:
+
+  distinct bind-group failure classes    4 -> 2
+  R16Float-view-of-R32Float failures     2 -> 0
+  [Invalid TextureView] cascades         2 -> 0
+
+Still black. The next root failure in command order is now
+bgl:SsaoInterleaveShaderRD binding 0, where an r8unorm storage texture meets a
+layout expecting rgba8unorm -- the same placeholder-format shape again, on the
+layout side this time.
+
+diff --git a/drivers/webgpu/rendering_device_driver_webgpu.cpp b/drivers/webgpu/rendering_device_driver_webgpu.cpp
+--- a/drivers/webgpu/rendering_device_driver_webgpu.cpp
++++ b/drivers/webgpu/rendering_device_driver_webgpu.cpp
+@@ -1835,7 +1835,7 @@
+ 	// Create a new view with potentially different format.
+ 	WGPUTextureViewDescriptor view_desc = {};
+ 	if (p_view.format != DATA_FORMAT_MAX) {
+-		view_desc.format = _data_format_to_wgpu(p_view.format);
++		view_desc.format = _view_format_for_texture(orig, _data_format_to_wgpu(p_view.format));
+ 		tex->format = view_desc.format;
+ 		tex->rd_format = p_view.format;
+ 	} else {
+@@ -1878,7 +1878,7 @@
+ 	*tex = *orig;
+ 
+ 	WGPUTextureViewDescriptor view_desc = {};
+-	view_desc.format = (p_view.format != DATA_FORMAT_MAX) ? _data_format_to_wgpu(p_view.format) : orig->format;
++	view_desc.format = (p_view.format != DATA_FORMAT_MAX) ? _view_format_for_texture(orig, _data_format_to_wgpu(p_view.format)) : orig->format;
+ 	if (p_view.format != DATA_FORMAT_MAX) {
+ 		tex->rd_format = p_view.format;
+ 	}
+@@ -2516,6 +2516,36 @@
+ // gets bound to a pipeline that was built for R8Unorm and every submit fails with a
+ // GPUValidationError. Canvas SDF (R8_UNORM + STORAGE_BIT + COLOR_ATTACHMENT_BIT) is
+ // the motivating case.
++WGPUTextureFormat RenderingDeviceDriverWebGPU::_view_format_for_texture(const WGTexture *p_texture, WGPUTextureFormat p_requested) const {
++	// Godot asks for a view in its LOGICAL format. When the parent is a storage
++	// texture its physical format was promoted (R8/RG8/R16/RG16 -> 32-bit, see
++	// _promote_storage_format), so the logical format no longer describes the
++	// allocation and WebGPU rejects the view outright:
++	//
++	//   The texture view format (R16Float) is not compatible with the texture
++	//   format (R32Float)
++	//
++	// An invalid view is not a local failure. Every bind group referencing it
++	// becomes invalid, and so does the command buffer holding those draws, so a
++	// single un-promoted view can discard an entire frame of scene submission
++	// while leaving the 2D canvas -- encoded separately -- rendering normally.
++	//
++	// Promoting the request the same way the texture was promoted makes the two
++	// agree. If they still disagree the caller wants a genuine reinterpretation,
++	// which is passed through unchanged so WebGPU can rule on it rather than
++	// this function inventing an answer it cannot justify.
++	if (p_requested == p_texture->format) {
++		return p_requested;
++	}
++	if (p_texture->usage & WGPUTextureUsage_StorageBinding) {
++		const WGPUTextureFormat promoted = _promote_storage_format(p_requested);
++		if (promoted == p_texture->format) {
++			return promoted;
++		}
++	}
++	return p_requested;
++}
++
+ WGPUTextureFormat RenderingDeviceDriverWebGPU::_promote_storage_format(WGPUTextureFormat p_format) const {
+ 	switch (p_format) {
+ 		// 8-bit formats: with texture-formats-tier1, these are valid storage texel
+diff --git a/drivers/webgpu/rendering_device_driver_webgpu.h b/drivers/webgpu/rendering_device_driver_webgpu.h
+--- a/drivers/webgpu/rendering_device_driver_webgpu.h
++++ b/drivers/webgpu/rendering_device_driver_webgpu.h
+@@ -188,6 +188,7 @@
+ 	// or render target needs STORAGE usage (base WebGPU does not support those as
+ 	// storage texel formats). With texture-formats-tier1, these formats are valid
+ 	// storage formats natively and promotion is skipped.
++	WGPUTextureFormat _view_format_for_texture(const WGTexture *p_texture, WGPUTextureFormat p_requested) const;
+ 	WGPUTextureFormat _promote_storage_format(WGPUTextureFormat p_format) const;
+ 	WGPUBufferUsage _buffer_usage_to_wgpu(BitField<BufferUsageBits> p_usage) const;
+ 	WGPUTextureUsage _texture_usage_to_wgpu(BitField<TextureUsageBits> p_usage) const;

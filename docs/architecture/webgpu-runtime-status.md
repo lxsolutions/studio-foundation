@@ -215,17 +215,39 @@ not show that the *scene* path submitted anything. Counting actual
  "distinct_pairs": 50, "matched_pairs": 50, "mismatched_pairs": 0}
 ```
 
-**223,338 real geometry draws are issued under the clustered scene shader**, and
-sky, tonemap and blit all run. So the whole Forward+ chain executes; the result
-does not reach the screen.
+**223,338 real geometry draw calls are issued under the clustered scene shader**,
+and sky, tonemap and blit pipelines are all driven.
 
-That, together with `[Invalid CommandBuffer] is invalid due to a previous error`,
-gives a coherent mechanism to test next: an invalid bind group poisons the
-scene's command buffer, so the entire submission is discarded at submit time,
-while the canvas UI — encoded in a separate, valid command buffer — presents
-normally. **This is a hypothesis consistent with the evidence, not a proven root
-cause.** The way to settle it is to trace the first non-cascade binding failure
-in command order rather than the largest repeated count.
+Be precise about what that does and does not establish. It shows the CPU-side
+Godot renderer and the browser's command *recording* path reach the scene shaders
+and issue the draws. It does **not** show those draws executed on the GPU: an
+invalid bind group or texture view poisons its command buffer, and the rejection
+happens at `finish()`/`submit()` — after Godot has already incremented its
+counters and after these wrappers have already observed the calls. So the
+correct statement is "the scene workload is recorded", not "the scene workload
+runs and its output is discarded".
+
+That distinction points the investigation at **command validity** — not at
+culling, camera placement, lighting, attachment formats, or whether geometry was
+submitted, all of which are now ruled out.
+
+`tests/browser/binding-trace.mjs` settles which resource fails first. It wraps
+each `createBindGroup` in its own `pushErrorScope('validation')`, so a failure is
+attributed to that exact call rather than correlated by timestamp, and it records
+the descriptor at creation time because WebGPU objects will not report afterwards
+what they were made from. The first non-cascade failure, in command order:
+
+```
+createBindGroup #282   layout bgl:SsEffectsDownsampleShaderRD:1:set1
+  binding 0
+    supplied  textureView  viewFormat=r16float  textureFormat=r32float
+    expected  storageTexture format=r32float
+```
+
+The texture is correctly promoted to `r32float`; the **view was created with the
+un-promoted logical format**. That view is invalid, every bind group referencing
+it is invalid, and so is the command buffer holding the scene draws — while the
+canvas UI, encoded separately, presents normally. Fixed by patch 0030.
 
 Through 0022 it stopped in shader translation. It now compiles the scene shader,
 builds its cluster list, creates scene pipelines, encodes command buffers, and
