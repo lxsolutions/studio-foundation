@@ -15,7 +15,7 @@ Foundation's own licence does not extend to it.
 
 You need the patched WebGPU export templates. They are not stock Godot templates
 and they are not in this repo — download both from the
-`godot-4.7.1-webgpu-p0014` release and unpack them where
+`godot-4.7.1-webgpu-p0033` release and unpack them where
 `project/export_presets.cfg` expects (`engine/artifacts/templates/`), or build
 them yourself with `just engine-build`.
 

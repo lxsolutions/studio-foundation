@@ -7,6 +7,11 @@
 >
 > **Measured:** 2026-07-24, NVIDIA Tesla P40, headed Chrome under Xvfb.
 > **Engine:** patch series 0001-0014 (tag `godot-4.7.1-webgpu-p0014`).
+>
+> **These numbers were measured on 0001-0014 and have not been re-measured since.**
+> They describe Forward Mobile, which is what that series could render. The current
+> series is 0001-0033 and additionally renders Forward+; no performance comparison
+> has been run against it. Do not read these figures as current.
 
 ---
 
