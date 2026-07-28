@@ -99,3 +99,55 @@ another material pass.
 in descending order: `env.terrain` with real relief instead of a flat plane,
 `env.scatter` for denser mid-ground props, and an enclosed space rather than an
 open plaza — the bar is an interior, where every pixel lands on something.
+
+## R5 — FIRST BLIND JUDGE RUN (owner: single, sequential)
+
+The judge is the component the whole method rests on and it had never actually
+been run — only smoke-tested with synthetic verdicts. Ran it for real: fresh
+sub-agent, given only the deck directory and JUDGE_BRIEF.md, no build history,
+no knowledge of which slot was ours.
+
+**Result: 0W / 4L — 0% — BELOW_REFERENCE.**
+
+Protocol validated: the judge picked the reference in all four pairs across
+*randomised* slots (three A, one B), so it tracked content rather than position.
+It also declined to speculate about provenance, as the brief requires.
+
+Gaps it named, by frequency — note that three of the four are invisible to every
+objective metric in this harness:
+
+| gap | pairs | objective gate |
+|---|---|---|
+| no contact shadows / AO — "the set floats on its own shadows" | 001,002,003 | **invisible** |
+| flat-shaded, one matte response everywhere | 001,004 | partially (`edgeEnergy`) |
+| polygonised sphere silhouette | 001,003 | **invisible** |
+| ground plane ends in a hard seam against the sky | 004 | **invisible** |
+
+**The two gates disagree, and both are right.** The objective gate says content
+density (`dead-space`). The judge says light transport. Neither could have found
+the other's problem. This is the argument for keeping both.
+
+Fixes applied (largest gap first, one owner): GTAOPass for contact darkening,
+and sphere subdivision 1 -> 4 to kill the polygon silhouette.
+
+| metric | R3 | R4 | note |
+|---|---|---|---|
+| warn | 4 | 4 | — |
+| edgeEnergy | 18.83 | 19.45 | +0.62 |
+| dynamicRange | 186.25 | 183.25 | −3 |
+| dead-space (hero) | 0.23 | 0.15 | **worse** |
+
+`dead-space` moved the wrong way because AO darkens low-contrast regions — the
+fix trades against the metric while addressing what the judge named. Recorded
+rather than resolved; do not "fix" it by removing the AO.
+
+Also caught by looking: routing through EffectComposer broke the stats hook
+(HUD read `1 draws · 1 tris`) because `renderer.info` resets per render call and
+the final fullscreen pass overwrote the scene counts. Now `autoReset = false`
+with one reset per frame, so the figure covers the whole frame including post.
+Playtest: 4/4 pass, 0 NaN transforms across 65 objects.
+
+**Next, highest leverage:** re-judge. The judge is the only gate that has ever
+scored this build, it named four specific gaps, and two are now addressed. A
+second run tells us whether the win rate moved — which is half the stop
+condition and currently unmeasured.

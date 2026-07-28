@@ -17,6 +17,10 @@
 
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { gauntlet } from '/tools/gauntlet/runtime/gauntlet-hooks.js';
 
 // ---------------------------------------------------------------------------
@@ -30,10 +34,18 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.05;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.info.autoReset = false;
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(48, innerWidth / innerHeight, 0.1, 400);
+
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const gtao = new GTAOPass(scene, camera, innerWidth, innerHeight);
+gtao.output = GTAOPass.OUTPUT.Default;
+composer.addPass(gtao);
+composer.addPass(new OutputPass());
 
 // Image-based lighting from a procedurally generated room. Free, no asset, and
 // it is the difference between materials that respond to light and materials
@@ -515,7 +527,7 @@ function buildWorld() {
   }
 
   // Focal object -- something metallic so the IBL has a job.
-  const monument = new THREE.Mesh(new THREE.IcosahedronGeometry(2.1, 1), bronze);
+  const monument = new THREE.Mesh(new THREE.IcosahedronGeometry(2.1, 4), bronze);
   monument.position.set(0, 3.2, 0);
   monument.castShadow = monument.receiveShadow = true;
   monument.name = 'monument';
@@ -566,9 +578,10 @@ const hud: HTMLElement = hudEl;
 const monument = () => world.getObjectByName('monument');
 
 function frame(t: number): void {
+  renderer.info.reset();
   const m = monument();
   if (m) m.rotation.y = t * 0.00022;
-  renderer.render(scene, camera);
+  composer.render();
   if (firstDraw) { firstDraw(); firstDraw = null; }
   hud.textContent = `seed ${seed} · ${renderer.info.render.calls} draws · ${renderer.info.render.triangles} tris`;
   requestAnimationFrame(frame);
@@ -579,6 +592,8 @@ addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
+  composer.setSize(innerWidth, innerHeight);
+  gtao.setSize(innerWidth, innerHeight);
 });
 
 // ---------------------------------------------------------------------------
