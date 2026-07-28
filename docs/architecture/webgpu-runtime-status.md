@@ -418,10 +418,55 @@ storage resource globally for one stale shader line).
   R8Unorm-vs-RGBA8Unorm bind-group failures   1 -> 0
   distinct bind-group failure classes         2 -> 1
 
-Still black. The remaining class is a comparison sampler bound to a
-non-comparison slot, first in command order at `bgl:VolumetricFogProcessShaderRD`
-`entries[10]`, binding 22, whose layout entry carries `ShaderStage::None`
-visibility.
+Still black. One known bind-group failure class remains, and unlike the previous
+four it is **not** a case of the driver inferring something wrong.
+
+### The comparison-sampler class: nobody is guessing, and that is the problem
+
+`bgl:VolumetricFogProcessShaderRD:9:set0`, binding 22:
+
+```
+supplied  sampler  compare="greater"  (a shadow sampler)
+expected  sampler  type="filtering"   visibility=ShaderStage::None
+```
+
+The captured WGSL declares it plainly:
+
+```wgsl
+@group(0u) @binding(22u) var shadow_sampler : sampler;
+```
+
+and `shadow_sampler` appears **nowhere else in the module** — which is why the
+layout entry has `ShaderStage::None` visibility. Variant 9 does not use it.
+
+So the chain is internally consistent and still wrong. Godot's uniform set
+declares a shadow sampler; this variant never samples with it; Tint therefore has
+no `textureSampleCompare` to infer comparison-ness from and emits a plain
+`sampler`; the driver correctly derives `filtering` from that declaration; and
+Godot then binds the genuine comparison sampler. WebGPU validates the bound
+resource against the layout entry **regardless of visibility**, so it rejects.
+
+That makes this different in kind from 0021, 0029 and 0032. Those were the driver
+substituting a concrete value for missing evidence. Here the shader genuinely
+cannot express the answer — an unused sampler has no kind — and the driver has no
+authoritative source at bind-group-layout creation time, which is before any
+sampler is bound.
+
+Candidate sources of authority, none yet chosen:
+
+* `p_immutable_samplers`, which `shader_create_from_container` already receives
+  and currently **ignores entirely** (one occurrence in the file: the parameter
+  itself). If Godot populates it for shadow samplers, it is authoritative and
+  available at exactly the right moment.
+* Deferring the sampler-type decision to `uniform_set_create`, where the actual
+  sampler is known, and building the layout entry from it.
+* Recording comparison-ness on the driver's own sampler objects at
+  `sampler_create` so any later decision can consult the real descriptor rather
+  than re-deriving it from shader text.
+
+Name-based inference — treating anything called `shadow_*` as a comparison
+sampler — is deliberately not on that list. It is precisely the class of guess
+this series keeps having to undo.
 
 **Portability, not just this P40.** 0027 requests `depth32float-stencil8` only
 when `adapter.features` exposes it, and 0028 makes the driver answer D32 support
