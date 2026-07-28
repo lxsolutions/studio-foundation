@@ -191,3 +191,41 @@ Objective metrics were flat across all of this (edgeEnergy 19.45 -> 19.65, warn
 see the defect two independent judges named twice.**
 
 Stop condition NOT met: win rate is flat, but each round produced new findings.
+
+## R7 — AO RESOLVED via control experiment (owner: lighting/post, sequential)
+
+Closed the blocker from R6 rather than starting new work, because contact
+shadows apply to every game in this studio, not just this template.
+
+Diagnostic chain, each step measured:
+
+1. GTAO default radius is **0.25 world units**; scene is 200m with 7.5m columns.
+   Raised to 2.0m — still nothing.
+2. Raw AO buffer read luma p50 **228/255** (white = unoccluded), and was
+   **byte-identical** across a camera near/far change. A buffer that does not
+   respond to the scene is not merely mistuned.
+3. **Control: swapped GTAOPass for SSAOPass on the identical scene.** SSAO
+   responded immediately — edgeEnergy 19.65 -> 22.07, p01 214 -> 33 (dark areas
+   appeared). So the shared depth/normal input is VALID and the fault was GTAO
+   configuration, not the pipeline. This is what the control was for.
+4. SSAO at kernelRadius 4m gave broad ambient occlusion — measurable in the
+   histogram, but not the "objects meet the ground" cue the judges asked for.
+   Tightened to 1m / maxDistance 2m: **visible contact darkening on the plinth
+   under the sphere**, where it had been uniformly flat white.
+
+**Root cause class, and it generalises:** both AO passes ship defaults tuned for
+a ~1m scene (GTAO radius 0.25, SSAO maxDistance 0.1). A 200m world silently
+disables them — the pass runs, costs frame time, and produces nothing. Nothing
+in the objective gate can see this. Two independent blind judges named it twice
+before it was found.
+
+| metric | GTAO | SSAO tight |
+|---|---|---|
+| edgeEnergy (hero) | 19.65 | 21.97 |
+| dynamicRange (hero) | 183 | 175 |
+| p01 (hero) | 214 | 39 |
+| fps p50 | 60 | 60 |
+
+**Next:** re-judge. Two judge rounds both named occlusion as the dominant gap and
+it is now genuinely addressed, so this is the first change with a real chance of
+moving a win rate that has been flat at 0.
