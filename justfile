@@ -309,6 +309,13 @@ engine-rebase *ARGS:
 engine-classify-conflicts *ARGS:
     {{PY}} engine/scripts/classify_conflicts.py {{ARGS}}
 
+# Measure what a player waits through: transferred bytes after compression, on a
+# throttled connection, cold vs warm, and time to the first non-blank frame.
+# Needs a server that negotiates Content-Encoding — measuring against one that
+# does not reports a payload nobody with a real host would download.
+startup-profile *ARGS:
+    node tests/browser/startup-probe.mjs {{ARGS}}
+
 # Answer "does this build render?" end to end and write down the answer.
 # Exports, serves, probes, traces bind-group and command-buffer validity, and
 # emits ONE evidence file so a result from another machine is directly
