@@ -1,0 +1,45 @@
+Subject: [PATCH] webgpu: a render pass needs an attachment, so say side-effects-only is unsupported
+
+  case SUPPORTS_FRAGMENT_SHADER_WITH_ONLY_SIDE_EFFECTS:
+      return true; // WebGPU render passes work with no color attachments.
+
+The comment is wrong. WebGPU requires a render pass to carry at least one
+non-null color attachment or a depth-stencil attachment; a pass with neither is
+invalid, and reports exactly that:
+
+  No attachment was specified.
+
+Godot already has the fallback for APIs that cannot rasterize on side effects
+alone. cluster_builder_rd.cpp branches on this very capability: true takes
+framebuffer_format_create_empty(), false creates a real color attachment and
+selects the USE_ATTACHMENT shader variant that patch 0015 added. So the correct
+fix is to answer the capability question honestly and let Godot's own branch do
+the work, rather than inventing a dummy-attachment path inside the driver.
+
+Cost is one unused color attachment on the cluster-build pass. The alternative
+was a pass that never executed.
+
+Measured on a Tesla P40 through Chrome/WebGPU, Chariot on Forward+:
+
+  attachmentless render-pass errors   2 -> 0
+  GPUValidationError                 14 -> 6   (with 0024)
+
+diff --git a/drivers/webgpu/rendering_device_driver_webgpu.cpp b/drivers/webgpu/rendering_device_driver_webgpu.cpp
+--- a/drivers/webgpu/rendering_device_driver_webgpu.cpp
++++ b/drivers/webgpu/rendering_device_driver_webgpu.cpp
+@@ -9284,7 +9284,14 @@
+ 		case SUPPORTS_HALF_FLOAT:
+ 			return false; // WebGPU shader-f16 extension not reliably available; avoid f16 in generated SPIR-V.
+ 		case SUPPORTS_FRAGMENT_SHADER_WITH_ONLY_SIDE_EFFECTS:
+-			return true; // WebGPU render passes work with no color attachments.
++			// WebGPU requires a render pass to have at least one color attachment or
++			// a depth-stencil attachment; a pass with neither is a validation error
++			// ("No attachment was specified."). Reporting true made the cluster builder
++			// take framebuffer_format_create_empty() and fail every frame. Reporting
++			// false selects Godot's existing USE_ATTACHMENT path, which binds a
++			// throwaway color target -- the cost of one unused attachment, in exchange
++			// for the pass actually executing.
++			return false;
+ 		case SUPPORTS_IMAGE_ATOMIC_32_BIT:
+ 			return false; // WebGPU has no image atomics support.
+ 		case SUPPORTS_MULTIVIEW:

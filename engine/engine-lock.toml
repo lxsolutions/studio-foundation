@@ -80,6 +80,12 @@ series = [
   { file = "patches/0020-webgpu-lod-clamp-and-storage-sample-type.patch", sha256 = "627a913efc6ee78a5ca4fc9ac562f29d0b015e3f44f25bc6d040e8af885c9131" },
   { file = "patches/0021-webgpu-storage-texture-formats.patch", sha256 = "3e1e4a1ce9283988c735846c0059293fb4820cdb522c7a0f8e0bc803a3a36ca8" },
   { file = "patches/0022-webgpu-shadow-entry-sample-type.patch", sha256 = "74040ab292528f380aee705a41033322322e4a831f481b778c052f1fab00fa52" },
+  { file = "patches/0023-webgpu-stage-correct-storage-buffers.patch", sha256 = "4bac47f889508b7ebda1be0611123f3ffd7a80716b5cff2b2ea231f54f953186" },
+  { file = "patches/0024-webgpu-textureload-identifier-boundary.patch", sha256 = "88c4fccfc02261c723458cb8bb8c3578514b31962fee40eec0f123e27f6df17f" },
+  { file = "patches/0025-webgpu-render-pass-needs-an-attachment.patch", sha256 = "70aaad56b61ea98fc17b3637692a1814f23767f8fc2a8248b1525d64332a4af7" },
+  { file = "patches/0026-scene-shader-subgroup-fallback.patch", sha256 = "8da9778c5958561535b533de639d9b5f076ce4f390992c13e239718cfd1e7886" },
+  { file = "patches/0027-webgpu-request-depth32float-stencil8.patch", sha256 = "da9d8947e48f1d0d0c281ba6cf30eab895cc5a0689c17abb8aec65cb175634b4" },
+  { file = "patches/0028-webgpu-depth-support-from-the-device.patch", sha256 = "d9bf864c6e567ea77e8ec3ad734ce9571895d91ef150c5cab27f6846bd4adf11" },
 ]
 
 [artifacts.export_templates]

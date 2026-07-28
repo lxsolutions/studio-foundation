@@ -1,0 +1,210 @@
+Subject: [PATCH] webgpu: keep fragment storage buffers writable, and off the vertex stage
+
+Forward+ has never rendered a frame. This is the first of the reasons why.
+
+The WGSL post-pass demoted every read_write storage buffer to read-only in BOTH
+the vertex and fragment stages:
+
+  if (s.shader_stage == VERTEX || s.shader_stage == FRAGMENT) {
+      memcpy(q, "var<storage, read>      ", 24);
+
+WebGPU only forbids a writable storage buffer in the VERTEX stage. The fragment
+stage may write one -- that is what the adapter limit
+maxStorageBuffersInFragmentStage exists to bound. And the clustered renderer's
+cluster builder is exactly a fragment shader whose entire job is to atomicOr
+into an SSBO, so the demotion produced:
+
+  @group(0) @binding(6) var<storage, read>       cluster_render : ClusterRender_atomic;
+
+over a struct of atomic<u32>, which WGSL rejects outright:
+
+  atomic variables in 'storage' address space must have 'read_write' access mode
+
+The trailing spaces are the giveaway: the rewrite pads to preserve byte length,
+so Tint's correct output was being edited into an invalid module after the fact.
+Offline the same shader translates correctly; only the runtime path was wrong.
+
+Three corrections, all of the same defect:
+
+1. Demote in the vertex stage only, and never demote a buffer whose struct
+   contains atomic<> -- WGSL requires storage atomics to be read_write, so the
+   rewrite manufactures a syntax error out of an honest capability limit.
+
+2. wgsl_ssbo_readonly is keyed by (set,binding) and filled once per stage, so a
+   buffer written by the fragment stage and merely read by the vertex stage
+   resolved to whichever stage was scanned last. Read-write now wins.
+
+3. A binding whose resolved type is Storage must not carry vertex visibility --
+   WebGPU rejects that even when the vertex stage only reads it, because the
+   union of per-stage visibilities is what gets validated. The layout is built
+   on two separate paths and the rule now lives in one helper, because applying
+   it to only one path is the bug this fixes.
+
+Measured on a Tesla P40 through Chrome/WebGPU, Chariot on --rendering-method
+forward_plus, each step rebuilt and re-exported:
+
+  WGSL parse failures (atomics)      3 -> 0
+  ClusterRender layout/pipeline      6 -> 0
+  read-write-in-vertex-visibility    2 -> 0
+  GPUValidationError                18 -> 14
+
+Fourteen is not a success; it is the next layer. See 0024-0026.
+
+diff --git a/drivers/webgpu/rendering_device_driver_webgpu.cpp b/drivers/webgpu/rendering_device_driver_webgpu.cpp
+--- a/drivers/webgpu/rendering_device_driver_webgpu.cpp
++++ b/drivers/webgpu/rendering_device_driver_webgpu.cpp
+@@ -168,6 +168,81 @@
+ 
+ // Run SPIR-V preprocessing passes and translate to WGSL via Tint.
+ // Returns a malloc'd null-terminated WGSL string, or nullptr on failure.
++// True when the storage variable declared at p_decl (which points at
++// "var<storage, read_write>") has a struct type with an atomic member.
++//
++// WGSL requires atomics in the storage address space to be read_write, so such a
++// buffer must never be rewritten to read-only: the result is a module that does
++// not parse. Resolving the declared type rather than trusting Tint's
++// "_atomic" name suffix keeps this correct if Tint's naming ever changes.
++static bool _wgsl_storage_decl_has_atomic(const char *p_wgsl, const char *p_decl) {
++	const char *colon = strchr(p_decl, ':');
++	if (!colon) {
++		return false;
++	}
++	const char *semi = strchr(colon, ';');
++	if (!semi) {
++		return false;
++	}
++	const char *type_begin = colon + 1;
++	while (type_begin < semi && (*type_begin == ' ' || *type_begin == '	')) {
++		type_begin++;
++	}
++	const char *type_end = semi;
++	while (type_end > type_begin && (type_end[-1] == ' ' || type_end[-1] == '	')) {
++		type_end--;
++	}
++	const size_t name_len = (size_t)(type_end - type_begin);
++	if (name_len == 0 || name_len > 240) {
++		return false;
++	}
++
++	char needle[256];
++	const int written = snprintf(needle, sizeof(needle), "struct %.*s", (int)name_len, type_begin);
++	if (written <= 0 || (size_t)written >= sizeof(needle)) {
++		return false;
++	}
++	const size_t needle_len = (size_t)written;
++
++	for (const char *s = strstr(p_wgsl, needle); s; s = strstr(s + 1, needle)) {
++		const char next = s[needle_len];
++		// Reject a longer type name that merely begins with the same characters.
++		if (next != 32 && next != 10 && next != 9 && next != 123) { // space, LF, tab, {
++			continue;
++		}
++		const char *open = strchr(s + needle_len, '{');
++		if (!open) {
++			return false;
++		}
++		const char *close = strchr(open, '}');
++		if (!close) {
++			return false;
++		}
++		for (const char *q = open; q + 7 <= close; q++) {
++			if (strncmp(q, "atomic<", 7) == 0) {
++				return true;
++			}
++		}
++		return false;
++	}
++	return false;
++}
++
++// WebGPU forbids a read-write storage binding from being *visible* to the vertex
++// stage at all -- not merely from being written there. A vertex stage that only
++// reads such a buffer still declares the binding, and the union of per-stage
++// visibilities then trips validation. Vertex WGSL is demoted to
++// var<storage, read> before this point, so clearing the bit costs the vertex
++// stage nothing it was permitted to do.
++//
++// This lives in one place because the layout is built on two paths, and applying
++// the rule to only one of them is exactly the bug it was written to fix.
++static inline void _drop_vertex_visibility_for_rw_storage(WGPUBindGroupLayoutEntry &r_entry) {
++	if (r_entry.buffer.type == WGPUBufferBindingType_Storage) {
++		r_entry.visibility = (WGPUShaderStage)((uint32_t)r_entry.visibility & ~(uint32_t)WGPUShaderStage_Vertex);
++	}
++}
++
+ static char *_translate_spirv_to_wgsl(const uint8_t *p_spv_ptr, int p_spv_size) {
+ 	if (p_spv_size < 20 || (p_spv_size % 4) != 0) {
+ 		return nullptr;
+@@ -3438,14 +3513,29 @@
+ 			}
+ 		}
+ 
+-		// WebGPU restriction: Storage buffers with read_write access cannot be used in vertex shaders.
+-		// Tint generates var<storage, read_write> for any SSBO without NonWritable decoration.
+-		// For render stages (vertex + fragment), demote all read_write storage to read (in-place,
+-		// same string length). This ensures the BGL can use ReadOnlyStorage with Vertex|Fragment
+-		// visibility. Compute stages keep read_write for actual writes.
+-		if (s.shader_stage == RDD::SHADER_STAGE_VERTEX || s.shader_stage == RDD::SHADER_STAGE_FRAGMENT) {
++		// WebGPU forbids a *writable* storage buffer in the VERTEX stage. It does not
++		// forbid one in the fragment stage -- that is exactly what the adapter limit
++		// maxStorageBuffersInFragmentStage governs. Demoting fragment storage buffers
++		// too is what kept Forward+ from ever rendering a frame: the clustered
++		// renderer's cluster builder is precisely a fragment shader whose job is to
++		// atomicOr into an SSBO. Demoting it emitted "var<storage, read>" over a
++		// struct of atomic<u32>, which WGSL rejects outright, so ClusterRenderShaderRD
++		// never compiled, no cluster list was ever built, and nothing drew.
++		//
++		// Buffers holding atomics are never demoted, in any stage: WGSL requires
++		// storage atomics to be read_write, so the rewrite manufactures a syntax
++		// error out of what would otherwise be an honest capability report.
++		//
++		// Per-binding visibility still comes from wgsl_buffer_stages below, so a
++		// buffer that survives here as read_write is bound FRAGMENT-only and never
++		// gains the vertex visibility WebGPU would reject.
++		if (s.shader_stage == RDD::SHADER_STAGE_VERTEX) {
+ 			char *q = wgsl_str;
+ 			while ((q = strstr(q, "var<storage, read_write>")) != nullptr) {
++				if (_wgsl_storage_decl_has_atomic(wgsl_str, q)) {
++					q += 24;
++					continue;
++				}
+ 				// "var<storage, read_write>" = 24 chars → "var<storage, read>      " = 24 chars
+ 				memcpy(q, "var<storage, read>      ", 24);
+ 				q += 24;
+@@ -4201,11 +4291,18 @@
+ 						} else if (strncmp(fwd, "var<storage, read>", 18) == 0 ||
+ 								strncmp(fwd, "var<storage,read>", 17) == 0) {
+ 							uint32_t key = ((uint32_t)grp << 16) | (uint32_t)bnd;
+-							wgsl_ssbo_readonly[key] = true;
++							// One binding, scanned once per stage. If any stage writes it
++							// the binding is read-write; a later read-only stage must not
++							// overwrite that, or the layout contradicts the shader.
++							if (!wgsl_ssbo_readonly.has(key)) {
++								wgsl_ssbo_readonly[key] = true;
++							}
+ 							break;
+ 						} else if (strncmp(fwd, "var<storage>", 12) == 0) {
+ 							uint32_t key = ((uint32_t)grp << 16) | (uint32_t)bnd;
+-							wgsl_ssbo_readonly[key] = true;
++							if (!wgsl_ssbo_readonly.has(key)) {
++								wgsl_ssbo_readonly[key] = true;
++							}
+ 							break;
+ 						} else if (strncmp(fwd, "var<uniform", 11) == 0) {
+ 							uint32_t key = ((uint32_t)grp << 16) | (uint32_t)bnd;
+@@ -4610,6 +4707,7 @@
+ 							// Set visibility to None — doesn't count against any stage's limit.
+ 							entry.visibility = (WGPUShaderStage)0;
+ 						}
++						_drop_vertex_visibility_for_rw_storage(entry);
+ 					}
+ 					bge.layout_entry = entry;
+ 				} break;
+@@ -4654,6 +4752,7 @@
+ 						  } else if (!wgsl_buffer_stages.is_empty()) {
+ 							  entry.visibility = (WGPUShaderStage)0;
+ 						  }
++						  _drop_vertex_visibility_for_rw_storage(entry);
+ 					  } }
+ 					// Only buffer bindings support dynamic offsets; storage textures must not set it.
+ 					entry.buffer.hasDynamicOffset = !is_storage_tex;

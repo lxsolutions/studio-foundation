@@ -1,0 +1,37 @@
+Subject: [PATCH] webgpu: request the depth32float-stencil8 device feature
+
+Forward+ allocates its depth-stencil target as D32_SFLOAT_S8_UINT. WebGPU
+exposes that combined format only behind the optional device feature
+depth32float-stencil8, and asking for it without enabling the feature does not
+produce a validation error -- createRenderPipeline throws:
+
+  TypeError: Failed to execute 'createRenderPipeline' on 'GPUDevice': Use of the
+  'depth32float-stencil8' texture format requires the 'depth32float-stencil8'
+  feature to be enabled
+
+A thrown TypeError stops the renderer outright rather than failing one pipeline,
+so nothing after it draws.
+
+The JS shell already builds an optional-feature list and filters it against
+adapter.features, so this is one entry in that list; adapters without the
+feature are unaffected. Forward Mobile never requested a stencil alongside a
+32-bit depth buffer, which is why the gap only surfaces once Forward+ gets far
+enough to create its depth attachment.
+
+diff --git a/platform/web/js/engine/engine.js b/platform/web/js/engine/engine.js
+--- a/platform/web/js/engine/engine.js
++++ b/platform/web/js/engine/engine.js
+@@ -319,6 +319,13 @@
+ 			// Request optional texture format tiers used by Godot (r16snorm, rg16snorm, etc.).
+ 			var optionalFeatures = [
+ 				'readonly-and-readwrite-storage-textures',
++				// Forward+ allocates its depth-stencil target as D32_SFLOAT_S8_UINT,
++				// which WebGPU exposes only behind this optional feature. Without it
++				// createRenderPipeline throws a TypeError -- not a validation error --
++				// and the whole renderer stops before drawing. Forward Mobile never
++				// asked for a stencil alongside a 32-bit depth, which is why the gap
++				// only appears now.
++				'depth32float-stencil8',
+ 				'texture-formats-tier1',
+ 				'texture-formats-tier2',
+ 				'float32-filterable',

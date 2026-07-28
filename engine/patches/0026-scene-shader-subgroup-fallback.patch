@@ -1,0 +1,97 @@
+Subject: [PATCH] webgpu: give the clustered scene shader a no-subgroups path
+
+With 0023-0025 in, Forward+ still drew nothing, and the reason was not a
+validation error at all:
+
+  1234x ERROR: Parameter "current_cluster_builder" is null.
+              at: _render_scene (render_forward_clustered.cpp:1770)
+    18x ERROR: Tint SPIR-V->WGSL failed: 'subgroupOr' must only be called from
+              subgroup uniform control flow
+    18x ERROR: WebGPU: SPIR-V->WGSL conversion failed for stage 1.
+
+Patch 0015 gave cluster_render.glsl an explicit no-subgroups variant and taught
+the cluster builder to honour LIMIT_SUBGROUP_*. It did not touch
+scene_forward_clustered.glsl, which calls subgroupMin, subgroupMax, subgroupOr
+and subgroupBroadcastFirst with no #ifdef of any kind, and whose include
+enables the subgroup extensions unconditionally. WebGPU exposes no subgroup
+support, so the scene shader failed translation, so no cluster builder was ever
+created, so _render_scene returned early on every single frame.
+
+The reductions are a divergence optimisation, not a correctness requirement.
+subgroupBroadcastFirst(subgroupMin(item_from)) makes every lane in a subgroup
+walk the same cluster item range so the loop branches coherently; each lane
+already holds its own correct item_from, item_to and mask. Defining the four
+reductions as identity therefore gathers exactly the same lights, decals and
+reflection probes, with less coherent branching -- the same argument 0015
+recorded for the cluster builder's atomicOr fallback.
+
+Rather than guard ten call sites, the fallback is four identity macros in
+scene_forward_clustered_inc.glsl behind #ifdef USE_SUBGROUPS, and
+render_forward_clustered.cpp now defines USE_SUBGROUPS only when the device
+reports ballot + arithmetic subgroup ops in the fragment stage -- the same test
+cluster_builder_rd.cpp already applies.
+
+diff --git a/servers/rendering/renderer_rd/shaders/forward_clustered/scene_forward_clustered_inc.glsl b/servers/rendering/renderer_rd/shaders/forward_clustered/scene_forward_clustered_inc.glsl
+--- a/servers/rendering/renderer_rd/shaders/forward_clustered/scene_forward_clustered_inc.glsl
++++ b/servers/rendering/renderer_rd/shaders/forward_clustered/scene_forward_clustered_inc.glsl
+@@ -5,8 +5,32 @@
+ #define MAX_VOXEL_GI_INSTANCES 8
+ #define MAX_VIEWS 2
+ 
++// The clustered scene shader uses subgroup reductions to make every lane in a
++// subgroup walk the SAME cluster item range, so the loop below branches
++// coherently. It is a divergence optimisation, not a correctness requirement:
++// each lane already holds its own correct item_from/item_to and its own mask.
++//
++// WebGPU exposes subgroups only as an optional feature (Chrome 134+), so no
++// portable baseline may assume them, and this build does not request them.
++// Unlike the cluster builder --
++// which patch 0015 gave an explicit no-subgroups variant -- these call sites had
++// no guard whatsoever, so Tint rejected the whole scene shader with
++// "subgroupOr must only be called from subgroup uniform control flow". A scene
++// shader that does not translate means no cluster builder, which means
++// _render_scene returns early and Forward+ never draws anything.
++//
++// Defining the reductions as identity leaves each lane using its own value:
++// the same lights, decals and reflections are gathered, just with less coherent
++// branching. Correct everywhere, optimal only where subgroups exist.
++#ifdef USE_SUBGROUPS
+ #extension GL_KHR_shader_subgroup_ballot : enable
+ #extension GL_KHR_shader_subgroup_arithmetic : enable
++#else
++#define subgroupBroadcastFirst(m_value) (m_value)
++#define subgroupMin(m_value) (m_value)
++#define subgroupMax(m_value) (m_value)
++#define subgroupOr(m_value) (m_value)
++#endif
+ 
+ #include "../cluster_data_inc.glsl"
+ #include "../decal_data_inc.glsl"
+diff --git a/servers/rendering/renderer_rd/forward_clustered/render_forward_clustered.cpp b/servers/rendering/renderer_rd/forward_clustered/render_forward_clustered.cpp
+--- a/servers/rendering/renderer_rd/forward_clustered/render_forward_clustered.cpp
++++ b/servers/rendering/renderer_rd/forward_clustered/render_forward_clustered.cpp
+@@ -5147,6 +5147,24 @@
+ 		}
+ #endif
+ 
++		{
++			// Match the cluster builder's rule (cluster_builder_rd.cpp): the scene
++			// shader's subgroup reductions may only be compiled in when the device
++			// actually exposes ballot + arithmetic subgroup ops in the fragment
++			// stage. WebGPU exposes none, and emitting them anyway fails shader
++			// translation outright rather than degrading.
++			RenderingDevice *rd = RD::get_singleton();
++			const uint64_t subgroup_stages = rd->limit_get(RD::LIMIT_SUBGROUP_IN_SHADERS);
++			const uint64_t subgroup_ops = rd->limit_get(RD::LIMIT_SUBGROUP_OPERATIONS);
++			const bool subgroups_usable =
++					(subgroup_stages & RD::SHADER_STAGE_FRAGMENT_BIT) &&
++					(subgroup_ops & RD::SUBGROUP_BALLOT_BIT) &&
++					(subgroup_ops & RD::SUBGROUP_ARITHMETIC_BIT);
++			if (subgroups_usable) {
++				defines += "\n#define USE_SUBGROUPS\n";
++			}
++		}
++
+ 		scene_shader.init(defines);
+ 	}
+ 

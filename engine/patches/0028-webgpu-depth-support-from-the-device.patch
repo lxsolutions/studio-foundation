@@ -1,0 +1,90 @@
+Subject: [PATCH] webgpu: answer D32 depth support from the device, not a table
+
+Patch 0027 requests depth32float-stencil8 when the adapter offers it. That is
+only half of the negotiation, and without this half the stack works on hardware
+that happens to have the feature and fails everywhere else.
+
+Godot does not require D32_SFLOAT_S8_UINT. It prefers it and falls back to
+D24_UNORM_S8_UINT -- but only when texture_is_format_supported_for_usage() says
+the preferred format is unavailable. That question reaches this driver through
+texture_get_usages_supported_by_format(), which answered from the static format
+table: if a WGPUTextureFormat enum existed, the format was reported supported.
+
+So on an adapter without the optional feature:
+
+  adapter lacks depth32float-stencil8
+      -> the shell correctly omits it from requiredFeatures
+      -> this driver still reports D32_SFLOAT_S8_UINT supported
+      -> Godot selects D32 and never reaches its own D24 fallback
+      -> texture creation fails, with no fallback left
+
+The authority is the created GPUDevice's enabled feature set, not the adapter's
+capabilities and not the header enum. This mirrors the gating the same function
+already applies to the BC/ETC2/ASTC compression families.
+
+Reported once at device creation under --verbose, so a bug report from an
+unfamiliar adapter says which depth format was chosen and why.
+
+NOT VERIFIED ON HARDWARE LACKING THE FEATURE. The verification host (Tesla P40)
+exposes depth32float-stencil8, so the fallback branch has never executed here.
+It is recorded as unmeasured in docs/architecture/webgpu-runtime-status.md
+rather than claimed.
+
+diff --git a/drivers/webgpu/rendering_device_driver_webgpu.cpp b/drivers/webgpu/rendering_device_driver_webgpu.cpp
+--- a/drivers/webgpu/rendering_device_driver_webgpu.cpp
++++ b/drivers/webgpu/rendering_device_driver_webgpu.cpp
+@@ -926,6 +926,10 @@
+ 	// Optional texture-compression families. The JS shell opts in to these when
+ 	// the adapter supports them; we must match that here so Godot only advertises
+ 	// the corresponding DataFormats when they'll actually work.
++	// Optional; see texture_get_usages_supported_by_format for why the DEVICE and
++	// not the adapter is the authority here.
++	has_depth32float_stencil8 = wgpuDeviceHasFeature(device, WGPUFeatureName_Depth32FloatStencil8);
++	print_verbose(vformat("WebGPU: depth32float-stencil8 %s", has_depth32float_stencil8 ? "enabled" : "unavailable (Godot will use D24_UNORM_S8_UINT)"));
+ 	has_texture_compression_bc = wgpuDeviceHasFeature(device, WGPUFeatureName_TextureCompressionBC);
+ 	has_texture_compression_etc2 = wgpuDeviceHasFeature(device, WGPUFeatureName_TextureCompressionETC2);
+ 	has_texture_compression_astc = wgpuDeviceHasFeature(device, WGPUFeatureName_TextureCompressionASTC);
+@@ -2240,6 +2244,16 @@
+ 		case DATA_FORMAT_D16_UNORM_S8_UINT:
+ 		case DATA_FORMAT_D24_UNORM_S8_UINT:
+ 		case DATA_FORMAT_D32_SFLOAT_S8_UINT:
++			// depth32float-stencil8 is an OPTIONAL WebGPU device feature. Godot
++			// prefers D32_SFLOAT_S8_UINT and falls back to D24_UNORM_S8_UINT, but
++			// only if this call says the preferred one is unsupported. Answering
++			// from the static format table instead of the device would make Godot
++			// choose D32 on an adapter that cannot create it, and texture creation
++			// would fail later with no fallback left -- a bug that is invisible on
++			// hardware that happens to have the feature.
++			if (!has_depth32float_stencil8) {
++				return 0;
++			}
+ 			is_depth_stencil = true;
+ 			break;
+ 
+@@ -9286,11 +9300,11 @@
+ 		case SUPPORTS_FRAGMENT_SHADER_WITH_ONLY_SIDE_EFFECTS:
+ 			// WebGPU requires a render pass to have at least one color attachment or
+ 			// a depth-stencil attachment; a pass with neither is a validation error
+-			// ("No attachment was specified."). Reporting true made the cluster builder
++			// ("No attachment was specified"). Reporting true made the cluster builder
+ 			// take framebuffer_format_create_empty() and fail every frame. Reporting
+-			// false selects Godot's existing USE_ATTACHMENT path, which binds a
+-			// throwaway color target -- the cost of one unused attachment, in exchange
+-			// for the pass actually executing.
++			// false selects the USE_ATTACHMENT variant, which binds a throwaway color
++			// target -- the cost of one unused attachment, in exchange for the pass
++			// actually executing.
+ 			return false;
+ 		case SUPPORTS_IMAGE_ATOMIC_32_BIT:
+ 			return false; // WebGPU has no image atomics support.
+diff --git a/drivers/webgpu/rendering_device_driver_webgpu.h b/drivers/webgpu/rendering_device_driver_webgpu.h
+--- a/drivers/webgpu/rendering_device_driver_webgpu.h
++++ b/drivers/webgpu/rendering_device_driver_webgpu.h
+@@ -101,6 +101,7 @@
+ 	// shell at device creation; the driver must only report the corresponding
+ 	// DataFormats as supported when the feature is actually enabled, otherwise
+ 	// texture creation will fail at runtime.
++	bool has_depth32float_stencil8 = false;
+ 	bool has_texture_compression_bc = false;
+ 	bool has_texture_compression_etc2 = false;
+ 	bool has_texture_compression_astc = false;
