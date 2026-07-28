@@ -69,6 +69,7 @@ func boot() -> void:
 	router = StudioSceneRouter.new(self)
 	if OS.is_debug_build() and not platform.get("headless", false):
 		_install_dev_tools()
+	_install_render_counters()
 	booted = true
 	log.info("studio", "boot completed", {
 		"version": build_info.version,
@@ -76,6 +77,19 @@ func boot() -> void:
 		"profile": profiles.current_name,
 	})
 	boot_completed.emit()
+
+
+func _install_render_counters() -> void:
+	# Publish the renderer's own draw/object/primitive counts to the browser so an
+	# automated probe can corroborate "a frame rendered" with something other than
+	# pixels. Web-only and self-disabling elsewhere; render_counters.gd records why
+	# pixels alone are insufficient evidence in BOTH directions.
+	if not OS.has_feature("web"):
+		return
+	var counters_script: GDScript = load("res://addons/studio_core/testing/render_counters.gd")
+	if counters_script == null:
+		return
+	add_child(counters_script.new())
 
 
 func _install_dev_tools() -> void:

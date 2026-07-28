@@ -7,17 +7,21 @@ was made of — base engine commit, the ordered patch series, toolchain pins —
 a `provenance.json` next to the artifact. Anyone can recompute the series id from
 the public repository and confirm the stamp is honest.
 
-*Detection* is not cooperative, and is the half that matters. The patch series
-introduces symbols and strings that stock Godot does not contain. Given any
-Godot web build — one we did not produce, whose stamp may be absent or
-falsified — `scan_artifact` reports which of those markers are present, and
-`classify` turns that into a verdict about lineage. A build that carries the
-markers is a derivative work under MIT and owes the attribution in NOTICE.md,
-whether or not it kept the stamp.
+*Detection* is heuristic, and applies when no stamp is available. The patch
+series introduces strings that stock Godot does not contain, so `scan_artifact`
+reports which of them a build carries and `classify` turns that into a lineage
+indication.
+
+Be honest about its strength. In the calibration recorded in the marker table it
+found 11/11 expected markers in a Studio build and none in the stock Godot 4.7.1
+web template, which is useful discrimination for those two artifacts. It does not
+follow that every derivative is detectable — strings can be rewritten, optimised
+away, or independently coincide — nor that a match establishes legal
+noncompliance. A positive result is evidence worth investigating, not a verdict.
 
 The point is not to threaten anyone. MIT already requires the notice; this makes
-compliance a thing you can check and, via `required_attribution`, a thing you can
-comply with by copying two paragraphs.
+compliance something you can check and, via `required_attribution`, something you
+can satisfy by copying two paragraphs.
 
 Stdlib only, by repository policy.
 """
