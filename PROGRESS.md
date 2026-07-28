@@ -314,3 +314,42 @@ chased lived in shared tooling and would propagate — true for the AO scale bug
 and true for this bake/tiling rule. It is no longer true: nothing in the template
 now blocks taking the harness to a real game. Chariot Club is next, first action,
 no preconditions.
+
+## R10 — took the harness to Chariot Club, found a toolset gap (owner: tooling)
+
+First real game, as committed. Two results, one about the game and one about the
+harness.
+
+**About the game.** Chariot Club's `web-webgpu` export genuinely renders through
+WebGPU — `Application rendered through: webgpu`, fps p50 60 / p99 30 on the P40.
+Independent confirmation that ADR 0002's patch series works on hardware, from a
+shipped game rather than the template.
+
+**About the harness — the finding worth keeping.** The capture reported a boot
+frame showing the DEFAULT Godot splash, which would violate the standing
+Asha-Arena-laurels rule, and a `settled` frame at 98.95% black. Both looked like
+real regressions. They are not verifiable from this build: the export is dated
+2026-07-25 while Chariot's source last changed 2026-07-27.
+
+**The harness measured a two-day-old build and said nothing.** That is the same
+bug class as the stale-JS capture fixed earlier for TypeScript (preflight now
+emits before capturing), left unguarded for engine exports — and an engine export
+is far more likely to drift, because nothing rebuilds it automatically.
+
+Implemented `--source` / `--build`: compares newest mtime on each side, warns on
+stderr before anything expensive runs, and stamps a STALE BUILD banner into the
+report plus `summary.staleBuild`. Verified against the real export:
+
+```
+[shotset] STALE BUILD: source is 46.7h newer than the build.
+  source 2026-07-27T15:42:06Z   build 2026-07-25T16:59:18Z
+```
+
+No claim is made about the Godot splash or the black frame. They may be real
+defects or artefacts of a stale export; the honest answer is that this build
+cannot settle it.
+
+**Next:** re-export Chariot (`just GAME=games/chariot export-web`) and re-run
+with `--source`/`--build` set. If the splash and the black frame survive a fresh
+export they are real defects in a shipped game, found by the harness on its
+first outing against one.

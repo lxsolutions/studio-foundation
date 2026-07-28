@@ -9,7 +9,7 @@
 // harness measures a Three.js build, a Babylon build, and a Godot web export
 // without knowing which is which.
 
-import { mkdir, writeFile, readFile } from 'node:fs/promises';
+import { mkdir, writeFile, readFile, stat, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { launch, probeGpu } from './browser.mjs';
 import { connectRemote } from './remote.mjs';
@@ -34,12 +34,41 @@ function parseArgs(argv) {
     else if (k === '--serve-port') a.servePort = Number(next());
     else if (k === '--gpu-profile') a.gpuProfile = next(); // 'webgpu' (P40) | 'raster' (V100)
     else if (k === '--calibration') a.calibration = next(); // reference-derived thresholds
+    else if (k === '--source') a.source = next();   // source dir, to detect a stale build
+    else if (k === '--build') a.build = next();     // built artefact the URL serves
   }
   if (!a.url) throw new Error('--url is required');
   a.out = a.out || path.join('runs', `run-${Date.now()}`);
   const [w, h] = a.size.split('x').map(Number);
   a.viewport = { width: w, height: h };
   return a;
+}
+
+/**
+ * Newest mtime under a path, recursively.
+ *
+ * A quality gate that measures a build older than its source is reporting on
+ * work that no longer exists. This was already guarded for TypeScript (preflight
+ * emits before capture), but an engine export is just as capable of being days
+ * behind -- and nothing in the report would say so. Found by pointing the
+ * harness at a real game export that turned out to be two days stale.
+ */
+async function newestMtime(target, skip = /node_modules|\.git|exports|\.import|assets-generated/) {
+  let newest = 0;
+  async function walk(p) {
+    let st;
+    try { st = await stat(p); } catch { return; }
+    if (st.isFile()) { newest = Math.max(newest, st.mtimeMs); return; }
+    if (!st.isDirectory()) return;
+    let entries = [];
+    try { entries = await readdir(p, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      if (skip.test(e.name)) continue;
+      await walk(path.join(p, e.name));
+    }
+  }
+  await walk(target);
+  return newest;
 }
 
 // ---------------------------------------------------------------------------
@@ -204,6 +233,30 @@ async function main() {
   await page.addInitScript(INSTRUMENT);
   const cdp = await context.newCDPSession(page);
 
+  // Staleness check before anything expensive. Measuring a build that predates
+  // its source is worse than not measuring: the numbers look valid.
+  let staleness = null;
+  if (args.source && args.build) {
+    const [srcMs, buildMs] = await Promise.all([newestMtime(args.source), newestMtime(args.build)]);
+    const stale = srcMs > buildMs;
+    staleness = {
+      source: args.source,
+      build: args.build,
+      sourceNewest: new Date(srcMs).toISOString(),
+      buildNewest: new Date(buildMs).toISOString(),
+      stale,
+      behindHours: stale ? +((srcMs - buildMs) / 3.6e6).toFixed(1) : 0,
+    };
+    if (stale) {
+      console.error('');
+      console.error(`[shotset] STALE BUILD: source is ${staleness.behindHours}h newer than the build.`);
+      console.error(`  source ${staleness.sourceNewest}  (${args.source})`);
+      console.error(`  build  ${staleness.buildNewest}  (${args.build})`);
+      console.error('  Re-export before trusting anything below.');
+      console.error('');
+    }
+  }
+
   const analyzer = await openAnalyzer(browser);
 
   const t0 = Date.now();
@@ -321,6 +374,7 @@ async function main() {
     viewport,
     gpu,
     remote: remoteInfo, // null => rendered locally
+    staleness,          // null => not checked; .stale => the report describes an old build
     calibratedAgainst: calibration?.reference ?? null,
     contract, // null => shots are best-effort, not reproducible
     contractStats,
@@ -340,6 +394,7 @@ async function main() {
     consoleErrors: consoleErrors.length,
     pageErrors: pageErrors.length,
     softwareRenderer: gpu.software === true,
+    staleBuild: staleness?.stale === true,
   };
 
   await writeFile(path.join(args.out, 'report.json'), JSON.stringify(report, null, 2));
@@ -374,6 +429,13 @@ function renderMarkdown(r) {
   L.push(`- Browser capability — WebGPU adapter: ${r.gpu.availableWebGPU ?? 'n/a'}${r.gpu.hasWebGPU ? '' : ' (navigator.gpu absent)'}`);
   if (r.gpu.availableWebGPU && r.gpu.applicationRenderer && !String(r.gpu.applicationRenderer).includes('webgpu')) {
     L.push('  > A WebGPU adapter was available but this application did NOT use it.');
+  }
+  if (r.staleness?.stale) {
+    L.push('');
+    L.push(`> **STALE BUILD — source is ${r.staleness.behindHours}h newer than what was measured.**`);
+    L.push(`> build ${r.staleness.buildNewest} · source ${r.staleness.sourceNewest}`);
+    L.push('> Re-export before acting on anything in this report.');
+    L.push('');
   }
   if (r.contract) {
     L.push(`- runtime contract: **v${r.contract.version}, deterministic** · cameras: ${r.contract.cameras.join(', ') || '(none registered)'}`);
