@@ -229,3 +229,46 @@ before it was found.
 **Next:** re-judge. Two judge rounds both named occlusion as the dominant gap and
 it is now genuinely addressed, so this is the first change with a real chance of
 moving a win rate that has been flat at 0.
+
+## R8 — third blind judge: win rate STILL 0% (owner: single, sequential)
+
+| judge round | build | score |
+|---|---|---|
+| r003 | pre-AO | 0W/4L — 0% |
+| r005 | GTAO (silently disabled) | 0W/4L — 0% |
+| r007 | SSAO contact darkening working | 0W/4L — 0% |
+
+Brief SHA `3a476a74f6671ea9` unchanged across all three, so no round was graded
+on softer criteria than the one before it.
+
+**Three rounds, zero movement.** The AO fix was real — contact darkening is
+visible now and was not before — and it did not flip a single pair. Stated
+plainly rather than framed as progress.
+
+New findings this round (so the stop condition is NOT met despite the flat rate):
+
+- The sphere reflects a **two-band sky gradient**, never the twelve columns
+  physically surrounding it. The environment is a sky-only PMREM, not a scene
+  probe. Named in two of four pairs.
+- **No aerial depth**: near and far columns sit at identical contrast and
+  saturation. No distance haze.
+- **The ring beams are flat black boxes** with visibly misaligned segment joints
+  on the right side — a defect in the forged entablature, not in the shading.
+- Still "nothing sits on the ground" — the SSAO fix is real but insufficient at
+  the column bases and the plinth-to-sand junction.
+
+**The root cause all three judges keep circling, in different words:** "single
+flat albedo", "every element same untextured diffuse", "value range comes from
+albedo rather than light". Only the columns have baked PBR. The ground plane,
+the ring beams, the plinth and the debris do not — and by area those are most of
+the frame.
+
+**Next, highest leverage, and the judge named it outright:** texture the two
+largest surfaces in frame — the ground plane and the ring beams. Everything else
+is second-order while most of the screen is untextured diffuse. Then a real
+reflection probe (CubeCamera) so the hero metal reflects its own scene, and
+distance fog for aerial depth.
+
+Objective gate flat throughout (warn 4, fps 60, edgeEnergy 19.6, instability 0),
+which remains the point: three judge rounds found four new defect classes that
+no metric here can see.
