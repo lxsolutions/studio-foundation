@@ -288,7 +288,7 @@ handful of classes, repeated every frame. Normalised, the remaining classes are:
 | *(all four below are measured mismatches; a shared root cause is suspected, not proven)* | | |
 | `sampler2DMS` texture-vs-sampler binding (`ResolveShaderRD`, `SsEffectsDownsample`) | 1 | open |
 | comparison sampler bound as non-comparison | 1 | open |
-| R8Unorm texture where RGBA8Unorm expected | 1 | open — likely a concrete placeholder format standing in for missing metadata, the same shape of defect as 0029 |
+| R8Unorm texture where RGBA8Unorm expected | 1 | open, and **root-caused** — see below. Not a placeholder bug |
 | R16Float view of an R32Float texture | 1 | open — likely a view derived from the logical rather than the physical (promoted) format |
 | invalid CommandBuffer / BindGroup / TextureView | 3 | cascades from the above |
 
@@ -326,6 +326,46 @@ current_cluster_builder null  1234 -> 0
 honour `LIMIT_SUBGROUP_*`. The scene shader was never touched and had no guard
 at all. "Forward+ compiles" was true of the cluster builder and false of the
 thing that actually shades.
+
+### The R8Unorm/RGBA8Unorm mismatch is upstream Godot's, not the driver's
+
+Worth recording because two plausible diagnoses were both wrong, and the trace
+settled it without a rebuild.
+
+The failing bind group is `bgl:SsaoInterleaveShaderRD:1:set0` binding 0: an
+`r8unorm` storage texture against a layout expecting `rgba8unorm`.
+
+*First guess — the texture should have been promoted and wasn't.* Wrong. The
+probe reports `texture-formats-tier1` **enabled** on this adapter, and
+`_promote_storage_format` deliberately preserves `r8unorm` when tier 1 is
+available, because the format is then natively valid for storage and promoting it
+would throw away its blendable/filterable properties. The texture is correct.
+
+*Second guess — the layout invented `rgba8unorm` as a placeholder, like 0021 and
+0029.* Also wrong. The captured runtime WGSL says:
+
+```wgsl
+@group(0u) @binding(0u) var dest_image : texture_storage_2d<rgba8unorm, write>;
+```
+
+The layout faithfully reflects the shader. Nothing was invented.
+
+The mismatch originates upstream, in Godot's own source. `ssao_interleave.glsl`
+declares `layout(rgba8, ...) uniform restrict writeonly image2D dest_image;`
+while the AO buffer it is bound to is allocated `R8_UNORM`. Vulkan tolerates that
+combination; **WebGPU requires the storage-texture format in the layout to match
+the bound texture exactly.**
+
+It has never been reachable before. Forward Mobile returns `false` from
+`_render_buffers_can_be_storage()`, so SSAO does not run at all under it — this
+code path executes for the first time under Forward+.
+
+Fixing it therefore means choosing how to reconcile an upstream mismatch, not
+correcting a driver defect, and the options differ in what they cost:
+rewrite the WGSL storage format to match the bound texture; allocate the AO
+buffer as RGBA8; or decline tier-1 preservation for storage textures whose
+shaders declare a wider format. That choice is deliberately left open rather than
+guessed at.
 
 **Portability, not just this P40.** 0027 requests `depth32float-stencil8` only
 when `adapter.features` exposes it, and 0028 makes the driver answer D32 support

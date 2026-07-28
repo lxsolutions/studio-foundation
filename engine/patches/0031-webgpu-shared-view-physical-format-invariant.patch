@@ -1,0 +1,204 @@
+Subject: [PATCH] webgpu: generalise the shared-view format invariant
+
+Patch 0030 fixed the measured case: a shared view of a storage texture whose
+physical format had been promoted. It did so by asking whether the REQUESTED
+format, promoted the same way, matched the physical one. That works for the case
+it was measured on, and it is narrower than the invariant it claims.
+
+Two gaps.
+
+First, several logical formats promote to the same physical format, so "promotes
+to the same thing" admits reinterpretations the caller never declared. The
+question worth asking is whether the caller wants another view of the SAME
+LOGICAL TEXTURE, which is what rd_format records.
+
+Second, promotion is not the only physical transformation this driver performs.
+Where float32-filterable is unavailable, some logical float32 textures are
+allocated as float16. A later shared view of such a texture would be resolved by
+0030 to float32 -- recreating exactly the class of invalid view 0030 was written
+to eliminate, on a device that exercises the other transformation.
+
+_resolve_shared_view_format() states the rule so it holds in both directions:
+
+  rd_format is Godot's LOGICAL format; format is the PHYSICAL WebGPU format
+  actually allocated. A shared or sliced view of the same logical texture
+  inherits the physical format, whatever transformation produced it. Only a
+  format explicitly declared in the texture's viewFormats may differ, and
+  texture_create() declares exactly one -- the linear/sRGB counterpart, for
+  non-storage textures.
+
+Also fixed here: the format is resolved BEFORE the WGTexture wrapper is
+allocated, so an unsupported request cannot leak one on the error path; and
+tex->format is assigned in BOTH paths. The slice path previously updated only
+rd_format, leaving stale physical metadata that later bind-group and dimension
+fix-up paths read when creating further views. That was harmless only because
+every resolved view happened to equal the inherited parent format.
+
+An unsupported reinterpretation is refused rather than replaced with something
+plausible. Inventing a concrete format to stand in for missing evidence is the
+defect behind 0021 and 0029; repeating it here would only move the failure.
+
+MEASURED: no change on this host, and that is expected. A Tesla P40 through
+Chrome reports texture-formats-tier1 AND float32-filterable enabled, so neither
+the 8-bit storage promotion nor the float32-to-float16 downgrade is exercised
+here. Re-measured after the change: distinct bind-group failure classes still 2,
+command-buffer rejections unchanged, no regression.
+
+The float32-to-float16 case this patch generalises to is therefore UNVERIFIED on
+hardware, exactly like the D24 depth fallback added in 0028. Both are recorded as
+unmeasured in docs/architecture/webgpu-runtime-status.md rather than claimed. A
+feature deny-list in the JS shell would let one machine exercise both.
+
+diff --git a/drivers/webgpu/rendering_device_driver_webgpu.cpp b/drivers/webgpu/rendering_device_driver_webgpu.cpp
+--- a/drivers/webgpu/rendering_device_driver_webgpu.cpp
++++ b/drivers/webgpu/rendering_device_driver_webgpu.cpp
+@@ -1829,17 +1829,23 @@
+ 	WGTexture *orig = (WGTexture *)(p_original_texture.id);
+ 	ERR_FAIL_NULL_V(orig, TextureID());
+ 
++	// Resolve before allocating the wrapper, so an unsupported request cannot leak
++	// a WGTexture on the error path.
++	const WGPUTextureFormat resolved_format = _resolve_shared_view_format(orig, p_view.format);
++	ERR_FAIL_COND_V_MSG(resolved_format == WGPUTextureFormat_Undefined, TextureID(),
++			"WebGPU: requested texture view format is not compatible with the underlying physical texture format.");
++
+ 	WGTexture *tex = new WGTexture();
+ 	*tex = *orig; // Copy base properties.
+ 
+-	// Create a new view with potentially different format.
+ 	WGPUTextureViewDescriptor view_desc = {};
++	view_desc.format = resolved_format;
++	// format always describes the ACTUAL GPU view; rd_format keeps the logical
++	// value Godot asked for. Later bind-group and dimension fix-up paths create
++	// further views from tex->format, so leaving it stale is not harmless.
++	tex->format = resolved_format;
+ 	if (p_view.format != DATA_FORMAT_MAX) {
+-		view_desc.format = _view_format_for_texture(orig, _data_format_to_wgpu(p_view.format));
+-		tex->format = view_desc.format;
+ 		tex->rd_format = p_view.format;
+-	} else {
+-		view_desc.format = orig->format;
+ 	}
+ 	view_desc.dimension = tex->view_dimension;
+ 	view_desc.baseMipLevel = 0;
+@@ -1874,11 +1880,18 @@
+ 	WGTexture *orig = (WGTexture *)(p_original_texture.id);
+ 	ERR_FAIL_NULL_V(orig, TextureID());
+ 
++	const WGPUTextureFormat resolved_format = _resolve_shared_view_format(orig, p_view.format);
++	ERR_FAIL_COND_V_MSG(resolved_format == WGPUTextureFormat_Undefined, TextureID(),
++			"WebGPU: requested texture slice view format is not compatible with the underlying physical texture format.");
++
+ 	WGTexture *tex = new WGTexture();
+ 	*tex = *orig;
+ 
+ 	WGPUTextureViewDescriptor view_desc = {};
+-	view_desc.format = (p_view.format != DATA_FORMAT_MAX) ? _view_format_for_texture(orig, _data_format_to_wgpu(p_view.format)) : orig->format;
++	view_desc.format = resolved_format;
++	// The slice path previously left tex->format at the original value, which is
++	// stale metadata for any view that legitimately differs.
++	tex->format = resolved_format;
+ 	if (p_view.format != DATA_FORMAT_MAX) {
+ 		tex->rd_format = p_view.format;
+ 	}
+@@ -2516,34 +2529,63 @@
+ // gets bound to a pipeline that was built for R8Unorm and every submit fails with a
+ // GPUValidationError. Canvas SDF (R8_UNORM + STORAGE_BIT + COLOR_ATTACHMENT_BIT) is
+ // the motivating case.
+-WGPUTextureFormat RenderingDeviceDriverWebGPU::_view_format_for_texture(const WGTexture *p_texture, WGPUTextureFormat p_requested) const {
+-	// Godot asks for a view in its LOGICAL format. When the parent is a storage
+-	// texture its physical format was promoted (R8/RG8/R16/RG16 -> 32-bit, see
+-	// _promote_storage_format), so the logical format no longer describes the
+-	// allocation and WebGPU rejects the view outright:
++WGPUTextureFormat RenderingDeviceDriverWebGPU::_resolve_shared_view_format(const WGTexture *p_original, DataFormat p_requested_logical) const {
++	// THE INVARIANT, stated once: rd_format is Godot's LOGICAL format; format is
++	// the PHYSICAL WebGPU format the texture was actually allocated with. A shared
++	// or sliced view of the same logical texture must inherit the physical format,
++	// including every transformation applied at allocation. Only a format
++	// explicitly declared in the texture's viewFormats may differ, and
++	// texture_create() declares exactly one: the linear/sRGB counterpart, for
++	// non-storage textures.
+ 	//
+-	//   The texture view format (R16Float) is not compatible with the texture
+-	//   format (R32Float)
++	// Getting this wrong is what turned the Forward+ scene black. The driver
++	// promotes R8/RG8/R16/RG16 storage textures to 32-bit at allocation, and the
++	// shared-view paths then remapped Godot's LOGICAL format straight back to
++	// WebGPU -- undoing the promotion and asking for an r16float view of an
++	// r32float texture. WebGPU rejects that; the view is invalid, every bind group
++	// referencing it is invalid, and the command buffer holding the scene draws
++	// goes with them, while the separately encoded 2D canvas keeps presenting.
+ 	//
+-	// An invalid view is not a local failure. Every bind group referencing it
+-	// becomes invalid, and so does the command buffer holding those draws, so a
+-	// single un-promoted view can discard an entire frame of scene submission
+-	// while leaving the 2D canvas -- encoded separately -- rendering normally.
+-	//
+-	// Promoting the request the same way the texture was promoted makes the two
+-	// agree. If they still disagree the caller wants a genuine reinterpretation,
+-	// which is passed through unchanged so WebGPU can rule on it rather than
+-	// this function inventing an answer it cannot justify.
+-	if (p_requested == p_texture->format) {
+-		return p_requested;
+-	}
+-	if (p_texture->usage & WGPUTextureUsage_StorageBinding) {
+-		const WGPUTextureFormat promoted = _promote_storage_format(p_requested);
+-		if (promoted == p_texture->format) {
+-			return promoted;
+-		}
++	// Matching on the LOGICAL format rather than on "whatever promotes to the same
++	// physical format" matters: several logical formats promote to one physical
++	// format, so the looser test would admit an unrelated reinterpretation. It also
++	// covers transformation in the other direction for free -- a float32 texture
++	// allocated as float16 where float32-filterable is unavailable must likewise
++	// keep its physical format.
++	ERR_FAIL_NULL_V(p_original, WGPUTextureFormat_Undefined);
++
++	// No override, or another view of the same logical format: inherit physical.
++	if (p_requested_logical == DATA_FORMAT_MAX || p_requested_logical == p_original->rd_format) {
++		return p_original->format;
++	}
++
++	const WGPUTextureFormat requested = _data_format_to_wgpu(p_requested_logical);
++	if (requested == WGPUTextureFormat_Undefined) {
++		return WGPUTextureFormat_Undefined;
++	}
++	if (requested == p_original->format) {
++		return requested;
++	}
++
++	const bool storage = (p_original->usage & WGPUTextureUsage_StorageBinding) != 0;
++
++	// The one alternate viewFormat texture_create() actually declares.
++	if (!storage && requested == _get_srgb_view_format(p_original->format)) {
++		return requested;
++	}
++
++	// Existing policy, preserved: sRGB views of storage textures are impossible in
++	// WebGPU, so fall back to the physical linear format rather than failing.
++	if (storage && _is_srgb_format(requested)) {
++		WARN_PRINT_ONCE("WebGPU: sRGB views of storage textures are unavailable; using the physical linear format.");
++		return p_original->format;
+ 	}
+-	return p_requested;
++
++	// Anything else was never declared as a legal view format on the underlying
++	// GPUTexture. Refuse rather than substitute something plausible: inventing a
++	// concrete format to stand in for missing evidence is the defect behind 0021,
++	// 0029 and this patch alike.
++	return WGPUTextureFormat_Undefined;
+ }
+ 
+ WGPUTextureFormat RenderingDeviceDriverWebGPU::_promote_storage_format(WGPUTextureFormat p_format) const {
+diff --git a/drivers/webgpu/rendering_device_driver_webgpu.h b/drivers/webgpu/rendering_device_driver_webgpu.h
+--- a/drivers/webgpu/rendering_device_driver_webgpu.h
++++ b/drivers/webgpu/rendering_device_driver_webgpu.h
+@@ -188,7 +188,7 @@
+ 	// or render target needs STORAGE usage (base WebGPU does not support those as
+ 	// storage texel formats). With texture-formats-tier1, these formats are valid
+ 	// storage formats natively and promotion is skipped.
+-	WGPUTextureFormat _view_format_for_texture(const WGTexture *p_texture, WGPUTextureFormat p_requested) const;
++	WGPUTextureFormat _resolve_shared_view_format(const WGTexture *p_original, DataFormat p_requested_logical) const;
+ 	WGPUTextureFormat _promote_storage_format(WGPUTextureFormat p_format) const;
+ 	WGPUBufferUsage _buffer_usage_to_wgpu(BitField<BufferUsageBits> p_usage) const;
+ 	WGPUTextureUsage _texture_usage_to_wgpu(BitField<TextureUsageBits> p_usage) const;
