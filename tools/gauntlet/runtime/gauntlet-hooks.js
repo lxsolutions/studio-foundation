@@ -236,6 +236,37 @@ export const gauntlet = {
     return { objects, nonFinite: bad, offenders: names };
   },
 
+  /**
+   * Swap every material for a neutral matte one, or swap them back.
+   *
+   * WHY: `edgeEnergy` measures high-frequency contrast. It cannot tell detail
+   * that was MODELLED from detail that was PRINTED on a texture. Three separate
+   * times this harness reported "at the reference bar" for a scene whose
+   * geometry was nearly flat and whose score came entirely from a tiling map.
+   *
+   * Measured on the greebled hold, same frame, same camera:
+   *
+   *     flat matte, no maps ....... edgeEnergy  5.12   <- what is actually built
+   *     full material ............. edgeEnergy 26.58   <- what the gate saw
+   *
+   * Rendering the identical frame twice -- once shaded, once matte -- separates
+   * the two. The ratio is the honest question: how much of this detail survives
+   * turning the textures off? Texture is not cheating; a scene needs both. But a
+   * scene that scores only with its textures on has no form, and that is exactly
+   * what a still-frame gate is blindest to.
+   *
+   * Games opt in by registering a `materials(mode)` hook; without one this
+   * returns `{ ok: false }` and the harness skips the pass rather than
+   * reporting a fabricated number.
+   */
+  setMaterialMode(mode) {
+    if (!state.registered.materials) {
+      return { ok: false, reason: 'no materials hook registered' };
+    }
+    state.registered.materials(mode);
+    return { ok: true, mode };
+  },
+
   stats() {
     const extra = state.registered.stats ? state.registered.stats() : {};
     const sorted = (a) => [...a].sort((x, y) => x - y);

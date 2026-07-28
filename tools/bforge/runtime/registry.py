@@ -42,7 +42,7 @@ class OpError(Exception):
 
 
 class Op:
-    __slots__ = ("name", "fn", "summary", "params", "returns", "tags", "mutates")
+    __slots__ = ("name", "fn", "summary", "params", "returns", "tags", "mutates", "last_aliases")
 
     def __init__(self, name, fn, summary, params, returns, tags, mutates):
         self.name = name
@@ -52,6 +52,7 @@ class Op:
         self.returns = returns
         self.tags = tags
         self.mutates = mutates
+        self.last_aliases = []
 
     # -- schema ---------------------------------------------------------
     def json_schema(self) -> dict:
@@ -84,6 +85,9 @@ class Op:
     def coerce(self, args: dict) -> dict:
         if not isinstance(args, dict):
             raise OpError(f"{self.name}: arguments must be a JSON object")
+
+        args, self.last_aliases = self._resolve_selector(args)
+
         unknown = sorted(set(args) - set(self.params))
         if unknown:
             known = ", ".join(sorted(self.params)) or "(none)"
@@ -99,6 +103,81 @@ class Op:
             else:
                 out[key] = default
         return out
+
+
+    # -- selector normalisation ------------------------------------------
+    #
+    # Across 109 ops, "which object do I act on" is spelled five different
+    # ways: name (64 ops), object (12), objects (11), target (4), mesh (2).
+    # An agent composing a recipe has to remember which spelling each op wants,
+    # and a wrong guess costs a whole round-trip. Worse, `material.set` declares
+    # BOTH `object` (the target) and `name` (the MATERIAL's name), so the most
+    # common guess is silently accepted as something else entirely and fails
+    # later with "object name must be a non-empty string, got None".
+    #
+    # This normalises the spelling and, where it genuinely cannot, says exactly
+    # what went wrong instead of failing three frames deep.
+
+    SELECTORS = ("object", "objects", "name", "target", "mesh")
+    OUTPUTS = ("out", "path", "file", "filepath", "dest", "output")
+
+    # Groups of parameter names that mean the same thing to a caller. Ops within
+    # a group are interchangeable spellings; `strict` names the members that must
+    # never be silently reinterpreted (a group member that some ops declare with
+    # a DIFFERENT meaning, e.g. `name` = material name in `material.set`).
+    ALIAS_GROUPS = (
+        {"names": SELECTORS, "primary": ("object", "objects", "target", "mesh"), "noun": "object"},
+        {"names": OUTPUTS, "primary": ("out", "path"), "noun": "output path"},
+    )
+
+    def _resolve_selector(self, args: dict) -> tuple[dict, list[str]]:
+        args = dict(args)
+        notes: list[str] = []
+        for group in self.ALIAS_GROUPS:
+            self._resolve_group(args, group, notes)
+        return args, notes
+
+    def _resolve_group(self, args: dict, group: dict, notes: list) -> None:
+        names = group["names"]
+        declared = [s for s in names if s in self.params]
+        if not declared:
+            return
+
+        # 1. A spelling this op does not declare -> map it onto the one this op
+        #    does declare and the caller left unset. Only when that is
+        #    unambiguous; otherwise fall through to the normal unknown-param error.
+        for given in [k for k in list(args) if k in names and k not in self.params]:
+            free = [s for s in declared if args.get(s) in (None, "", [])]
+            if len(free) != 1:
+                continue
+            target = free[0]
+            value = args.pop(given)
+            given_value = value
+            wants_list = self.params[target][0].endswith("[]")
+            if wants_list and not isinstance(value, (list, tuple)):
+                value = [value]
+            elif not wants_list and isinstance(value, (list, tuple)):
+                if len(value) != 1:
+                    args[given] = value  # put it back; let the normal error fire
+                    continue
+                value = value[0]
+            args[target] = value
+            notes.append(f"{given}={given_value!r} -> {target}")
+
+        # 2. The case aliasing cannot fix: this op declares the canonical
+        #    parameter, it is still unset, and the caller supplied a different
+        #    spelling that THIS op reads as something else entirely.
+        primary = next((s for s in group["primary"] if s in self.params), None)
+        if primary and args.get(primary) in (None, "", []):
+            confusable = [k for k in names if k != primary and k in args and args[k]]
+            if confusable:
+                k = confusable[0]
+                _, _, desc = self.params[k]
+                raise OpError(
+                    f"{self.name}: no {group['noun']} given. You passed {k}={args[k]!r}, but in "
+                    f"this op '{k}' means \"{desc}\" — the {group['noun']} goes in '{primary}'. "
+                    f"Did you mean {primary}={args[k]!r}?"
+                )
 
 
 def op(name, *, summary, params=None, returns="object", tags=(), mutates=True):

@@ -53,6 +53,8 @@ let firstDraw = null;
 const ready = new Promise((r) => (firstDraw = r));
 const world = new THREE.Group();
 scene.add(world);
+// Populated once the GLB loads; the harness's --geometry-pass flips between them.
+const materialModes = {};
 const loader = new GLTFLoader();
 try {
     const gltf = await loader.loadAsync('/assets-generated/bforge/gauntlet/hold_interior.glb');
@@ -64,11 +66,17 @@ try {
     const detail = panelCanvas(512, { cells: 4, grime: 0.5, seed: 21 });
     const albedo = srgb(toTexture(detail, 1));
     const normal = toNormal(detail, 1.6, 1);
-    const rough = toTexture(noiseCanvas(256, 5, 1.8), 3);
+    const rough = toTexture(noiseCanvas(256, 5, 2.6), 3);
+    // Roughness 0.65 + metalness 0.35 made every surface read as WET PLASTIC:
+    // uniform sheen, blown speculars on both lights, no material variety. Painted
+    // industrial steel is mostly rough and barely metallic; the shine belongs in
+    // the roughness MAP's variation, not in the base value. Widening the map's
+    // range (contrast 1.8 -> 2.6) and pushing the base rough/dielectric puts the
+    // gloss only where the map says worn.
     const mat = new THREE.MeshStandardMaterial({
         color: 0x8f9299, map: albedo, normalMap: normal,
         normalScale: new THREE.Vector2(1.0, 1.0),
-        roughnessMap: rough, roughness: 0.65, metalness: 0.35, dithering: true,
+        roughnessMap: rough, roughness: 0.92, metalness: 0.08, dithering: true,
     });
     gltf.scene.traverse((o) => {
         const m = o;
@@ -79,6 +87,12 @@ try {
         }
     });
     world.add(gltf.scene);
+    // Geometry pass: swap in an unlit-ish neutral matte so the harness can measure
+    // how much of the frame's detail is MODELLED versus PRINTED. Same mesh, same
+    // camera, same simulation time -- only the shading changes.
+    const flat = new THREE.MeshStandardMaterial({ color: 0x9a9a9a, roughness: 1.0, metalness: 0.0 });
+    materialModes.beauty = mat;
+    materialModes.flat = flat;
 }
 catch (e) {
     console.warn('hold_interior.glb missing — forge it first:', e);
@@ -103,6 +117,16 @@ gauntlet.register({
     ready, scene,
     camera: CAMERAS,
     seed: () => { },
+    materials: (mode) => {
+        const m = materialModes[mode];
+        if (!m)
+            return;
+        world.traverse((o) => {
+            const mesh = o;
+            if (mesh.isMesh)
+                mesh.material = m;
+        });
+    },
     probe: () => ({ cameraPos: [camera.position.x, camera.position.y, camera.position.z] }),
     stats: () => ({ drawCalls: renderer.info.render.calls, triangles: renderer.info.render.triangles }),
 });

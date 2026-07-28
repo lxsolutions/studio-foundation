@@ -28,6 +28,15 @@ export interface GauntletHooks {
   ready?: Promise<unknown>;
   /** Rebuild the world deterministically from a seed. */
   seed?: (n: number) => void;
+
+  /**
+   * Swap the whole scene between shading modes so the harness can measure how
+   * much of a frame's detail is modelled versus textured. `'beauty'` is the
+   * real look; `'flat'` is a neutral matte with no maps. Games that skip this
+   * simply do not get the geometry pass -- the harness reports it as skipped
+   * rather than inventing a number.
+   */
+  materials?: (mode: 'beauty' | 'flat') => void;
   /** Named camera poses. Named poses are what make captures comparable. */
   camera?: Record<string, () => void>;
   /** Renderer/scene counters merged into stats(). */
@@ -54,6 +63,9 @@ export interface Gauntlet {
    */
   step(n?: number, dtMs?: number): Promise<number>;
   seed(n: number): { ok: boolean; reason?: string };
+
+  /** Switch shading mode; see `GauntletHooks.materials`. */
+  setMaterialMode(mode: 'beauty' | 'flat'): { ok: boolean; mode?: string; reason?: string };
   cameras(): string[];
   setCamera(name: string): { ok: boolean; reason?: string; available?: string[] };
   stats(): GauntletStats;

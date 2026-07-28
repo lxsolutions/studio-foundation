@@ -26,6 +26,7 @@ function parseArgs(argv) {
     if (k === '--url') a.url = next();
     else if (k === '--out') a.out = next();
     else if (k === '--shots') a.shots = next();
+    else if (k === '--geometry-pass') a.geometryPass = true;
     else if (k === '--seconds') a.seconds = Number(next());
     else if (k === '--size') a.size = next();
     else if (k === '--boot-timeout') a.bootTimeoutMs = Number(next());
@@ -402,6 +403,44 @@ async function main() {
 
     const metrics = await analyzeFrame(analyzer, pngA);
 
+    // Geometry pass: re-render THIS frame with shading stripped, to separate
+    // detail that was modelled from detail that was printed on a texture. See
+    // the long note on `setMaterialMode` in runtime/gauntlet-hooks.js -- the
+    // short version is that edgeEnergy alone called a nearly-flat room "at the
+    // reference bar" three times running.
+    let geometry = null;
+    if (args.geometryPass && contract) {
+      const swapped = await page.evaluate(async () => {
+        const g = globalThis.__gauntlet;
+        if (!g.setMaterialMode) return { ok: false, reason: 'harness newer than runtime hooks' };
+        const r = g.setMaterialMode('flat');
+        if (r.ok) await g.step(1, 0); // dt=0: identical world state, different shading
+        return r;
+      });
+      if (swapped.ok) {
+        const pngG = await safeScreenshot(page, cdp);
+        const fileG = path.join(framesDir, `${shot.name}.flat.png`);
+        await writeFile(fileG, pngG);
+        const gm = await analyzeFrame(analyzer, pngG);
+        geometry = {
+          file: path.relative(args.out, fileG).split(path.sep).join('/'),
+          edgeEnergy: gm.edgeEnergy,
+          blockEdgeP50: gm.composition?.blockEdgeP50 ?? null,
+          // What fraction of the shaded frame's edge energy survives with the
+          // textures off. Low means the form is carried by maps, not by mesh.
+          earnedDetailPct: metrics.edgeEnergy > 0
+            ? +((gm.edgeEnergy / metrics.edgeEnergy) * 100).toFixed(1)
+            : null,
+        };
+        await page.evaluate(async () => {
+          globalThis.__gauntlet.setMaterialMode('beauty');
+          await globalThis.__gauntlet.step(1, 0);
+        });
+      } else {
+        geometry = { skipped: swapped.reason };
+      }
+    }
+
     let staticDiff = null;
     if (shot.static) {
       // Advance the world without moving the camera. On a correct renderer this
@@ -429,6 +468,7 @@ async function main() {
       name: shot.name,
       file: path.relative(args.out, fileA).split(path.sep).join('/'),
       metrics,
+      geometry,
       staticDiff,
       findings: findings(metrics, { staticDiff, calibration }),
     });
@@ -553,6 +593,13 @@ function renderMarkdown(r) {
     );
     L.push(`- black ${m.blackPct}% · white ${m.whitePct}% · levels ${m.occupiedLevels} · chroma ${m.chromaMean}`);
     L.push(`- edge energy ${m.edgeEnergy} · smooth span ${m.smoothSpan} over ${m.smoothLevels} levels (${m.combGaps} gaps)`);
+    if (s.geometry && !s.geometry.skipped) {
+      L.push(
+        `- geometry pass (shading off): edge energy ${s.geometry.edgeEnergy} — ` +
+          `**${s.geometry.earnedDetailPct}%** of the shaded frame's detail is modelled, not textured  ` +
+          `_(diagnostic; not validated as a gate)_`,
+      );
+    }
     if (s.staticDiff) {
       L.push(`- static-camera instability: ${s.staticDiff.changedPct}% pixels changed (max delta ${s.staticDiff.maxDelta})`);
     }

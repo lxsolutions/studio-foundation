@@ -690,3 +690,64 @@ the box photographing an exterior wall.
 **Next:** roof on, metalness down and roughness variation up, greeble depth up
 (~0.15m) so panels actually read, and props in the room. Then judge it — the
 objective gate has now said "at the bar" three times while the frame was not.
+
+## R19 — a metric that separates modelled detail from printed detail
+
+R18 ended with `edgeEnergy` reporting "at the reference bar" for the third time
+on a frame whose form was carried almost entirely by a tiling texture. A metric
+that cannot tell earned detail from printed detail should not be the only thing
+gating a still frame, so this round built the instrument that separates them.
+
+**`--geometry-pass`**: with the world paused, re-render the SAME frame with all
+materials swapped for a neutral matte, at dt=0 so the simulation state is
+byte-identical. Only the shading differs. Games opt in through a new
+`materials(mode)` runtime hook; without it the harness reports the pass as
+skipped rather than inventing a number.
+
+Measured on the hold, same frame, same camera:
+
+| shot | shaded | matte | earned |
+|---|---|---|---|
+| hero   | 16.18 | 6.56 | 40.5% |
+| corner | 23.66 | 9.82 | 41.5% |
+| low    | 15.48 | 6.31 | 40.8% |
+| detail | 18.26 | 9.15 | 50.1% |
+
+It paid for itself on the first run. The matte frame made two things obvious
+that the beauty frame's sheen was hiding: **the greeble panels have almost no
+relief** (they read as inset outlines, not extruded plates), and **there is
+still no roof**. Both were invisible in every number the harness produces.
+
+**Correction to what this round set out to test.** The re-forge did not land:
+`export.gltf` wants `objects`/`out`, not `object`/`path`, so it failed and the
+old GLB stayed on disk. This round therefore measured the SAME geometry as R18
+with only the material changed. The honest reading is that the material change
+(roughness .65 -> .92, metalness .35 -> .08) lowered shaded edge energy 26.58 ->
+23.66 and cut crushed blacks 12.6% -> 4.6%. The 9.82 matte number is the first
+trustworthy measure of what the geometry actually contributes, because it is the
+same frame; R18's 5.12 was two different scenes and should not be compared to it.
+
+**Also caught: `tsc --noEmit` in the capture path.** Typechecking does not emit,
+so the browser ran a stale `interior.js` for a whole capture round -- the exact
+staleness class `--source`/`--build` exists to catch, bypassed because I called
+`shotset.mjs` directly instead of `round.mjs`, which emits. Numbers barely moved
+and the new hook was absent; that was the tell.
+
+**The tooling defect this round actually fixed.** Writing one eight-step recipe
+cost four failed runs, one per parameter-spelling mismatch. Measured across the
+catalog: "which object" is spelled five ways -- `name` (64 ops), `object` (12),
+`objects` (11), `target` (4), `mesh` (2) -- and the output path two ways, `out`
+(9) and `path` (7). Worse, `material.set` declares BOTH `object` and `name`,
+where `name` is the MATERIAL's name, so the most common guess was silently
+accepted as something else and failed three frames later with "object name must
+be a non-empty string, got None".
+
+`Op.coerce` now normalises alias groups: any spelling maps onto the one the op
+declares, with scalar/list coercion, and where the op genuinely means two
+different things by two spellings it raises an error that names the fix instead
+of mis-assigning. 10 tests, built from the committed catalog so they track the
+real ops, including a sweep asserting all four alternate spellings resolve for
+every single-selector op (40+).
+
+**Next:** re-forge with the roof and deeper greeble actually landing, then judge.
+The objective gate has now said "at the bar" three times while the frame was not.
