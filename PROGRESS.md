@@ -596,3 +596,46 @@ pristine 4.7.1, lock checksum updated. Build of both profiles running.
 install, Chariot re-exports, and the harness confirms. Two engine defects are now
 fixed in the series; whether the frame renders depends on whether more remain —
 the prior history here is a chain, not a single blocker.
+
+## R17 — depth-sampler fix applied to the WRONG binding path (owner: engine)
+
+Built both profiles, installed templates, re-exported, re-ran. **The
+depth/sampler error is unchanged.** My fix did not address this case.
+
+Why: the error is texture `group:1 binding:8` with sampler `group:1 binding:28`.
+I fixed `UNIFORM_TYPE_SAMPLER_WITH_TEXTURE`, where the preprocessor emits the
+pair adjacently at `binding*2+0` / `binding*2+1`. Bindings 8 and 28 are not a
+pair — `entry.binding = u.binding * 2` puts them at uniform indices 4 and 14.
+This is a **standalone** `UNIFORM_TYPE_SAMPLER` used in-shader with a
+**standalone** depth `UNIFORM_TYPE_TEXTURE`.
+
+`UNIFORM_TYPE_SAMPLER` (line ~4267) sets Filtering unless reflection marks it
+comparison, and has no notion of what texture it is used with — that pairing
+exists only in the shader.
+
+**What the real fix needs:** the driver already reflects WGSL into
+`wgsl_is_depth_texture` and `wgsl_is_comparison_sampler`
+(`rendering_device_driver_webgpu.cpp`, map populated ~line 3979). It needs a
+companion pass recording `textureSample*(tex, samp, ...)` pairings, so a sampler
+used with a depth texture can be declared NonFiltering. Well-scoped, but a
+reflection addition rather than a one-line guard.
+
+**The combined-case fix is kept.** The same WebGPU rule applies there and the
+`!is_depth` guard was wrong regardless; it is a latent bug fixed, just not this
+one. Labelled as such rather than reverted or claimed.
+
+**Scoreboard, honest:**
+
+| defect | status |
+|---|---|
+| SPIR-V literal corruption | **fixed, confirmed on hardware** |
+| Depth+Filtering, combined bindings | fixed, untested, NOT this bug |
+| Depth+Filtering, standalone bindings | **open** — needs sampler/texture pairing reflection |
+
+Chariot's WebGPU export still renders black.
+
+**Aside — The Deep measured** (no engine dependency): `applicationRenderer:
+no-canvas`, 0 canvases. It is a DOM/CSS game, not canvas-rendered. 60 fps p50,
+script 0.01 ms/frame, dynamic range 224, boot 21.3s. The harness handles it, but
+`edgeEnergy`-style surface metrics are meaningless for DOM content — worth a
+note before anyone calibrates a bar against it.
