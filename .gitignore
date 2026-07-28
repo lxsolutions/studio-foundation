@@ -77,3 +77,9 @@ tests/artifacts/
 
 # gauntlet capture output: reproducible, never committed
 runs/
+
+# Reference frames are captures of someone else's product and this repo is
+# public. The method ships; the bar does not. See
+# tools/gauntlet/references/README.md for how to create one locally.
+tools/gauntlet/references/*
+!tools/gauntlet/references/README.md

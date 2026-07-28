@@ -6,6 +6,14 @@ rather than reported. Re-run these after any change to the harness.
 All GPU measurements run the browser on **smeagol** (Tesla P40, driver 580.173.02)
 over one SSH tunnel. `awesome-o` has no GPU — see "Hardware provenance" below.
 
+## 0. Preflight builds, it does not merely typecheck
+
+The browser loads the emitted `.js`. A preflight of `tsc --noEmit` would let an
+edited `.ts` pass while the capture measured the *previous* compile — four
+minutes spent on a stale frame with nothing in the report to reveal it. The
+default preflight therefore runs `npx tsc` (emit), and `tsconfig.json` sets
+`noEmitOnError` so a failed build cannot leave loadable output behind.
+
 ## 1. Harness self-test (no GPU required)
 
 ```bash
@@ -34,15 +42,17 @@ node tools/gauntlet/harness/round.mjs \
 Observed 2026-07-28, `feat/gauntlet-quality-layer` @ `origin/main`:
 
 ```
-[round 1] preflight: npx tsc --noEmit
+[round 1] preflight: npx tsc
 [round 1] capturing...
-Rendered on: smeagol · profile `webgpu` — Tesla P40 (Pascal) — hardware WebGL + hardware WebGPU
-WebGL adapter:  ANGLE (NVIDIA, Vulkan 1.4.312 (NVIDIA Tesla P40 (0x00001B38)), NVIDIA)
-WebGPU adapter: nvidia
+Rendered on: smeagol · Tesla P40
+Application rendered through: `webgl2` (1 canvas)
+Browser capability — WebGL adapter:  ANGLE (NVIDIA, Vulkan 1.4.312 (NVIDIA Tesla P40), NVIDIA)
+Browser capability — WebGPU adapter: nvidia
+  > A WebGPU adapter was available but this application did NOT use it.
 runtime contract: v1, deterministic · cameras: hero, wide, low, detail
 
 fatal 0 · warn 0 · pageErrors 0
-fpsP50 60 · edgeEnergy 9.17 · dynamicRange 130.25 · instability 0
+fpsP50 60 · edgeEnergy 9.17 · instability 0
 VERDICT: JUDGE (no --references supplied, so no deck was built)
 ```
 
@@ -54,7 +64,33 @@ it to raise the figure:
 just NAME=gauntlet_column RECIPE=prop.pillar bforge-make
 ```
 
-## 3. Engine neutrality — the evidence ADR 0017 rests on
+## 3. Does the Godot WebGPU patch series actually render through WebGPU?
+
+Capability and application backend are different claims. A healthy
+`WebGPU adapter: nvidia` line proves only that the *browser* could reach one; a
+build using `THREE.WebGLRenderer`, or a `web-webgl` export, reports exactly the
+same line while rendering every pixel through WebGL. The harness therefore
+detects the page's own canvas context and reports it separately.
+
+```bash
+node tools/gauntlet/harness/shotset.mjs --remote smeagol --serve-port 8098   --url http://127.0.0.1:8098/games/chariot/project/exports/web-webgpu/index.html   --out runs/godot-webgpu-probe --seconds 5 --boot-timeout 90000
+```
+
+Observed 2026-07-28:
+
+```
+Application rendered through: `webgpu` (1 canvas)
+Browser capability — WebGL adapter:  ANGLE (NVIDIA, ... Tesla P40 ...)
+Browser capability — WebGPU adapter: nvidia
+fps p50 60 / p99 20
+```
+
+**This is the first evidence that ADR 0002's patch series renders through WebGPU
+on real hardware.** The control is the `web-webgl` export and the Three.js
+template, both of which report `webgl2` on the same host in the same session —
+so the detector discriminates rather than always answering "webgpu".
+
+## 4. Engine neutrality — the evidence ADR 0017 rests on
 
 The same harness, **no code changes**, measuring a Godot web export:
 
@@ -69,9 +105,8 @@ node tools/gauntlet/harness/shotset.mjs \
 Observed:
 
 ```
-Rendered on: smeagol · profile `webgpu` — Tesla P40
-WebGL adapter:  ANGLE (NVIDIA, Vulkan 1.4.312 (NVIDIA Tesla P40 (0x00001B38)), NVIDIA)
-WebGPU adapter: nvidia
+Rendered on: smeagol · Tesla P40
+Application rendered through: `webgl2` (1 canvas)
 Boot to first non-empty frame: 19155 ms
 fps p50 60 / p99 30
 runtime contract: absent — shots are best-effort and NOT reproducible run-to-run
@@ -102,10 +137,13 @@ report therefore stamps the adapter, and a run that prints
 
 ### GPU profiles
 
-| profile | device | WebGL | WebGPU |
+| profile | device | WebGL available | WebGPU available |
 |---|---|---|---|
 | `webgpu` (default) | Tesla P40 (Pascal) | hardware | **hardware** |
-| `raster` | Tesla V100 (Volta, 32GB) | hardware | software |
+| `raster` | Tesla V100 (Volta, 32GB) | hardware | software only |
+
+These columns describe what the browser *can* reach. What a given build actually
+used is reported per run as `Application rendered through:`.
 
 Hardware WebGPU requires a real X surface (xvfb, headed). Headless yields real
 WebGL but a SwiftShader WebGPU adapter that reports itself as working, so the

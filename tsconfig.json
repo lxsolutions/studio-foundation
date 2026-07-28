@@ -20,6 +20,9 @@
     // Emit .js beside each .ts. The templates load through an import map with
     // no bundler, which keeps one less step between an edit and a frame.
     "sourceMap": true,
+    // A failed build must not leave the previous .js in place for the harness
+    // to capture. Emit only on success.
+    "noEmitOnError": true,
     "paths": {
       // Served by tools/gauntlet/harness/serve.mjs with --root at the repo root,
       // so browser URLs and disk paths line up.

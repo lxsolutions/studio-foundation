@@ -366,8 +366,15 @@ function renderMarkdown(r) {
   } else {
     L.push('- Rendered on: this machine (no GPU) — use `--remote smeagol` for anything you intend to trust');
   }
-  L.push(`- WebGL adapter: ${r.gpu.webgl ?? 'n/a'}`);
-  L.push(`- WebGPU adapter: ${r.gpu.webgpu ?? 'n/a'}${r.gpu.hasWebGPU ? '' : ' (navigator.gpu absent)'}`);
+  // Capability and actual backend are separate claims. Reporting only the
+  // former invites "webgpu=nvidia" to be read as "this rendered via WebGPU",
+  // which it never meant.
+  L.push(`- **Application rendered through: \`${r.gpu.applicationRenderer ?? 'unknown'}\`** (${r.gpu.canvases ?? 0} canvas${(r.gpu.canvases ?? 0) === 1 ? '' : 'es'})`);
+  L.push(`- Browser capability — WebGL adapter: ${r.gpu.availableWebGL ?? 'n/a'}`);
+  L.push(`- Browser capability — WebGPU adapter: ${r.gpu.availableWebGPU ?? 'n/a'}${r.gpu.hasWebGPU ? '' : ' (navigator.gpu absent)'}`);
+  if (r.gpu.availableWebGPU && r.gpu.applicationRenderer && !String(r.gpu.applicationRenderer).includes('webgpu')) {
+    L.push('  > A WebGPU adapter was available but this application did NOT use it.');
+  }
   if (r.contract) {
     L.push(`- runtime contract: **v${r.contract.version}, deterministic** · cameras: ${r.contract.cameras.join(', ') || '(none registered)'}`);
   } else {

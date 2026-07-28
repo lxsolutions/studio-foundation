@@ -43,6 +43,14 @@ const BANDED = [
   'occupiedLevels',
   'chromaMean',
   'combGaps',
+  // Composition. `blockEdgeP10` was the strongest discriminator found against
+  // labelled sets: the reference never drops below 2.47 while every one of our
+  // builds bottoms out at 0.23. It measures dead space -- how empty your
+  // emptiest areas are -- which whole-frame edge energy cannot see.
+  'emptyBlockPct',
+  'detailedBlockPct',
+  'blockEdgeP10',
+  'blockEdgeP50',
 ];
 
 function stats(values) {
@@ -77,13 +85,18 @@ async function main() {
     const buf = await readFile(path.join(refDir, f));
     const m = await analyzeFrame(analyzer, buf);
     perFrame.push({ file: f, metrics: m });
-    console.log(`[calibrate] ${f}  edgeEnergy=${m.edgeEnergy} dynamicRange=${m.dynamicRange} black=${m.blackPct}%`);
+    console.log(
+      `[calibrate] ${f}  edgeEnergy=${m.edgeEnergy} dynamicRange=${m.dynamicRange}` +
+        ` emptyBlk=${m.composition?.emptyBlockPct}% blkEdgeP10=${m.composition?.blockEdgeP10}`,
+    );
   }
   await browser.close();
 
   const bands = {};
   for (const k of BANDED) {
-    const vals = perFrame.map((p) => p.metrics[k]).filter((v) => typeof v === 'number');
+    const vals = perFrame
+      .map((p) => (k in p.metrics ? p.metrics[k] : p.metrics.composition?.[k]))
+      .filter((v) => typeof v === 'number');
     if (vals.length) bands[k] = stats(vals);
   }
 

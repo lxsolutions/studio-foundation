@@ -8,7 +8,7 @@ against those builders' own published data.
   where the popular summary of it is wrong. Read this first.
 - **`PROMPT.md`** — the overnight prompt, ready to paste.
 - **`harness/`** — the sensor and the judge.
-- **`runtime/gauntlet-hooks.js`** — drop into a game to make it poseable.
+- **`tools/gauntlet/runtime/gauntlet-hooks.js`** — drop into a game to make it poseable.
 - **`references/`** — you supply the bar: real frames from the thing to beat.
 
 ## Why this exists
@@ -28,11 +28,18 @@ numbers came from.**
 
 ## One round, one command
 
+`just` is the front door; the raw commands below are equivalent.
+
 ```bash
-node harness/serve.mjs --root . --port 8099 &
-node harness/round.mjs --url http://127.0.0.1:8099/templates/three-starter/ \
-  --shots templates/three-starter/shots.json \
-  --references references/<bar> --remote smeagol --note "what changed"
+just gauntlet-serve
+just REFS=tools/gauntlet/references/<bar> REMOTE=smeagol NOTE="what changed" gauntlet-round
+```
+
+```bash
+node tools/gauntlet/harness/serve.mjs --root . --port 8099 &
+node tools/gauntlet/harness/round.mjs --url http://127.0.0.1:8099/templates/three-game/ \
+  --shots templates/three-game/shots.json \
+  --references tools/gauntlet/references/<bar> --remote smeagol --note "what changed"
 ```
 
 Verdicts: **VOID** (software renderer, round is meaningless) · **REGRESSED**
@@ -48,27 +55,27 @@ built (`edgeEnergy` 10.85 → 7.29 after a bad lighting change).
 
 ```bash
 # 1. serve whatever you are building
-node harness/serve.mjs --root . --port 8099
+node tools/gauntlet/harness/serve.mjs --root . --port 8099
 
 # 2. measure it (objective, no opinions)
-node harness/shotset.mjs --url http://127.0.0.1:8099/fixtures/contract-demo/ \
-  --shots fixtures/contract-demo/shots.json --out runs/r001
+node tools/gauntlet/harness/shotset.mjs --url http://127.0.0.1:8099/tools/gauntlet/fixtures/contract-demo/ \
+  --shots tools/gauntlet/fixtures/contract-demo/shots.json --out runs/r001
 
 # 3. build a blind deck against your reference frames
-node harness/judge.mjs pair --candidates runs/r001/frames \
-  --references references/<bar> --out runs/r001/judge
+node tools/gauntlet/harness/judge.mjs pair --candidates runs/r001/frames \
+  --references tools/gauntlet/references/<bar> --out runs/r001/judge
 
 # 4. hand ONLY runs/r001/judge/deck + JUDGE_BRIEF.md to a fresh sub-agent,
 #    collect its JSON verdicts, then:
-node harness/judge.mjs reveal --dir runs/r001/judge --answers verdict.json
+node tools/gauntlet/harness/judge.mjs reveal --dir runs/r001/judge --answers verdict.json
 ```
 
-`fixtures/contract-demo/` is a dependency-free scene that implements the full
+`tools/gauntlet/fixtures/contract-demo/` is a dependency-free scene that implements the full
 runtime contract — use it to verify the harness works before trusting it.
 
 ## The contract
 
-A game that imports `runtime/gauntlet-hooks.js` and calls
+A game that imports `tools/gauntlet/runtime/gauntlet-hooks.js` and calls
 `gauntlet.register({ seed, camera, stats, ready })` becomes **poseable**: the
 harness pauses it, seeds it, points the camera, steps a fixed number of frames,
 and captures. Same shot definition, same pixels, every run.
@@ -86,10 +93,10 @@ So the harness runs the browser on **smeagol** (Tesla P40 + V100) over one SSH
 tunnel, while the dev server and the loop stay local:
 
 ```bash
-node harness/serve.mjs --root . --port 8099 &
-node harness/shotset.mjs --remote smeagol \
-  --url http://127.0.0.1:8099/templates/three-starter/ \
-  --shots templates/three-starter/shots.json --out runs/r001
+node tools/gauntlet/harness/serve.mjs --root . --port 8099 &
+node tools/gauntlet/harness/shotset.mjs --remote smeagol \
+  --url http://127.0.0.1:8099/templates/three-game/ \
+  --shots templates/three-game/shots.json --out runs/r001
 ```
 
 ```

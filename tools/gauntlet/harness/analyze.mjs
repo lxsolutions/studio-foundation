@@ -147,6 +147,100 @@ export async function analyzeFrame(analyzerPage, pngBuffer, regions = DEFAULT_RE
       }
     }
 
+    // --- composition: emptiness and repetition -----------------------------
+    //
+    // Whole-frame edge energy cannot tell these three apart, and all three
+    // occurred while building this framework:
+    //
+    //   tiled  one texture repeated everywhere -> edgeEnergy 38, looked worse
+    //   empty  honest but sparse               -> edgeEnergy 12, looked bare
+    //   good   densely authored                -> edgeEnergy 28, actually good
+    //
+    // A block grid separates them. Repetition is duplicate DETAILED blocks;
+    // emptiness is featureless blocks. Restricting the duplicate test to
+    // detailed blocks matters: a large plain sky produces many identical blocks
+    // and is not tiling.
+    const BX = 16;
+    const BY = 9;
+    const blocks = [];
+    for (let by = 0; by < BY; by++) {
+      for (let bx = 0; bx < BX; bx++) {
+        const x0 = Math.floor((bx * w) / BX);
+        const x1 = Math.floor(((bx + 1) * w) / BX);
+        const y0 = Math.floor((by * h) / BY);
+        const y1 = Math.floor(((by + 1) * h) / BY);
+        let n2 = 0, sum = 0, sumSq = 0, edge = 0;
+        for (let y = Math.max(1, y0); y < Math.min(h - 1, y1); y++) {
+          for (let x = Math.max(1, x0); x < Math.min(w - 1, x1); x++) {
+            const i = y * w + x;
+            const v = luma[i];
+            sum += v;
+            sumSq += v * v;
+            edge += Math.abs(luma[i - 1] - luma[i + 1]) + Math.abs(luma[i - w] - luma[i + w]);
+            n2++;
+          }
+        }
+        if (!n2) continue;
+        const mean = sum / n2;
+        blocks.push({
+          bx, by,
+          mean,
+          std: Math.sqrt(Math.max(0, sumSq / n2 - mean * mean)),
+          edge: edge / n2,
+        });
+      }
+    }
+
+    const blockEdges = blocks.map((b) => b.edge).sort((a, b) => a - b);
+    const bpct = (p) =>
+      blockEdges.length ? +blockEdges[Math.min(blockEdges.length - 1, Math.round((p / 100) * (blockEdges.length - 1)))].toFixed(2) : 0;
+
+    // Featureless: essentially nothing for the eye to land on.
+    const emptyBlocks = blocks.filter((b) => b.edge < 2.0).length;
+
+    // Duplicate detail: a block with a near-identical, non-adjacent twin.
+    //
+    // MEASURED NON-DISCRIMINATING -- diagnostic only, never gate on this.
+    // Against labelled sets (harness/discriminate.mjs) it comes out INVERTED:
+    //   good (dense authored interior) 51.3%   <- highest
+    //   tiled (the actual failure)     33.1%
+    //   empty                          28.2%
+    // A uniformly dense authored frame produces many statistically similar
+    // detailed blocks, and a mean/std/edge signature cannot separate that from
+    // genuine tiling. Detecting repetition needs spatial autocorrelation or a
+    // frequency-domain test, not block statistics. Left in the output so the
+    // next attempt has a baseline to beat.
+    const DETAIL_FLOOR = 4.0;
+    const detailed = blocks.filter((b) => b.edge >= DETAIL_FLOOR);
+    let repeated = 0;
+    for (let i = 0; i < detailed.length; i++) {
+      const a = detailed[i];
+      for (let j = 0; j < detailed.length; j++) {
+        if (i === j) continue;
+        const c = detailed[j];
+        if (Math.abs(a.bx - c.bx) <= 1 && Math.abs(a.by - c.by) <= 1) continue; // adjacent
+        if (
+          Math.abs(a.mean - c.mean) < 3 &&
+          Math.abs(a.std - c.std) < 3 &&
+          Math.abs(a.edge - c.edge) < 1.5
+        ) {
+          repeated++;
+          break;
+        }
+      }
+    }
+
+    const composition = {
+      blocks: blocks.length,
+      blockEdgeP10: bpct(10),
+      blockEdgeP50: bpct(50),
+      blockEdgeP90: bpct(90),
+      emptyBlockPct: +((emptyBlocks / blocks.length) * 100).toFixed(1),
+      detailedBlockPct: +((detailed.length / blocks.length) * 100).toFixed(1),
+      // Share of DETAILED blocks that have a near-identical twin elsewhere.
+      repeatBlockPct: detailed.length ? +((repeated / detailed.length) * 100).toFixed(1) : 0,
+    };
+
     // --- named regions -----------------------------------------------------
     const regionStats = {};
     for (const r of regionSpec ?? []) {
@@ -203,6 +297,7 @@ export async function analyzeFrame(analyzerPage, pngBuffer, regions = DEFAULT_RE
       smoothLevels,
       combGaps,
       regions: regionStats,
+      composition,
     };
   }, [b64, regions]);
 }
@@ -306,6 +401,24 @@ export function findings(m, { staticDiff = null, calibration = null } = {}) {
     }
     if (b.combGaps && m.smoothSpan > 24 && m.combGaps > Math.max(b.combGaps.max * 1.4, b.combGaps.max + 20)) {
       add('warn', 'banding-vs-bar', `Gradient banding: ${m.combGaps} skipped levels vs ${ref} max ${b.combGaps.max}. Dither before the tonemap.`);
+    }
+    // Composition, against the bar. These catch what edgeEnergy cannot: a frame
+    // can score well overall and still be mostly dead space, and a frame can be
+    // honest and simply too sparse.
+    const c = m.composition;
+    if (c && b.blockEdgeP10 && c.blockEdgeP10 < b.blockEdgeP10.p25 * tol) {
+      add(
+        'warn',
+        'dead-space',
+        `Emptiest areas score ${c.blockEdgeP10} vs ${ref} band ${b.blockEdgeP10.min}-${b.blockEdgeP10.max}. The bar has no dead space: even its least-detailed regions carry structure. Fill the frame -- this is content, not lighting or materials.`,
+      );
+    }
+    if (c && b.emptyBlockPct && c.emptyBlockPct > Math.max(b.emptyBlockPct.max * 1.4, b.emptyBlockPct.max + 8)) {
+      add(
+        'warn',
+        'sparse-frame',
+        `${c.emptyBlockPct}% of the frame is featureless; ${ref} peaks at ${b.emptyBlockPct.max}%. Add geometry, props and set dressing, or reframe onto an enclosed space.`,
+      );
     }
     if (b.chromaMean && m.chromaMean < b.chromaMean.min * 0.5) {
       add('info', 'desaturated-vs-bar', `Chroma ${m.chromaMean} vs ${ref} min ${b.chromaMean.min} — much less colour than the bar. Intentional?`);

@@ -77,8 +77,9 @@ function summarize(report) {
     dynamicRange: avg((s) => s.metrics.dynamicRange),
     combGaps: avg((s) => s.metrics.combGaps),
     instability: avg((s) => s.staticDiff?.changedPct),
-    adapter: report.gpu?.webgl ?? null,
+    adapter: report.gpu?.availableWebGL ?? null,
     renderedOn: report.remote ? `${report.remote.host}/${report.remote.gpuProfile}` : 'local',
+    applicationRenderer: report.gpu?.applicationRenderer ?? null,
   };
 }
 
@@ -136,9 +137,15 @@ async function main() {
   // A capture round costs ~4 minutes on the remote GPU. A type error costs 2
   // seconds to detect. Never spend the former to discover the latter -- this
   // is the entire practical argument for TypeScript in this workflow.
+  //
+  // This BUILDS rather than only typechecking. The browser loads the emitted
+  // .js, so `tsc --noEmit` would let an edited .ts pass preflight while the
+  // capture measured the previous compile -- four minutes spent on a stale
+  // frame, with nothing in the report to reveal it. tsconfig sets
+  // noEmitOnError so a broken build cannot leave usable output behind.
   const preflight =
     args.preflight ??
-    (existsSync(path.join(ROOT, 'tsconfig.json')) ? 'npx tsc --noEmit' : null);
+    (existsSync(path.join(ROOT, 'tsconfig.json')) ? 'npx tsc' : null);
   if (preflight) {
     console.log(`[round ${roundNo}] preflight: ${preflight}`);
     const [cmd, ...rest] = preflight.split(' ');
@@ -216,6 +223,7 @@ async function main() {
   L.push(`# Round ${roundNo} — ${verdict}`);
   L.push('');
   L.push(`Rendered on: **${now.renderedOn}** · ${now.adapter ?? 'unknown adapter'}`);
+  L.push(`Application rendered through: **${now.applicationRenderer ?? 'unknown'}**`);
   if (args.note) L.push(`Change under test: ${args.note}`);
   L.push('');
   L.push('| metric | now | prev | delta |');

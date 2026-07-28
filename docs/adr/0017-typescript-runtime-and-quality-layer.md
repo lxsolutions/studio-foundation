@@ -66,7 +66,15 @@ harness, with no code changes, produced full reports for:
 - `templates/three-game/` (TypeScript/Three.js) — 60 fps p50 on a Tesla P40
 - a third-party Three.js reference build
 - `games/chariot/project/exports/web-webgl/` (Godot web export) — 60 fps p50 on
-  the same host, `WebGPU adapter: nvidia`
+  the same host
+
+Capability and application backend are reported separately, because conflating
+them overstates the claim: every run above had a hardware WebGPU adapter
+*available*, while the Three.js template and the `web-webgl` export both render
+through `webgl2`. Probing the page's own canvas also produced the first evidence
+that ADR 0002's patch series genuinely renders through WebGPU — the
+`web-webgpu` export reports `Application rendered through: webgpu` at 60 fps p50
+on the same host.
 
 ## Consequences
 

@@ -90,8 +90,18 @@ export async function launch({ headed = process.env.GAUNTLET_HEADED === '1' } = 
 }
 
 /**
- * Ask the page what hardware it is actually on. Returns a provenance record
- * that gets stamped into every run manifest.
+ * Ask the page what hardware it is on, AND which backend the application
+ * actually renders through. These are different questions and conflating them
+ * produces a claim the evidence does not support.
+ *
+ * `availableWebGPU` comes from a throwaway canvas this probe creates. It proves
+ * the BROWSER can reach a hardware WebGPU adapter. It says nothing about the
+ * page: a build using THREE.WebGLRenderer, or a Godot web-webgl export, will
+ * report a healthy WebGPU adapter while rendering every pixel through WebGL.
+ *
+ * `applicationRenderer` inspects the page's own canvases. getContext() returns
+ * an existing context only when the requested type matches the one already
+ * created, so probing each type is a real detection rather than an inference.
  *
  * `software: true` means every fps number from this run is fiction. Callers
  * should surface that loudly rather than quietly publishing the numbers.
@@ -99,23 +109,44 @@ export async function launch({ headed = process.env.GAUNTLET_HEADED === '1' } = 
 export async function probeGpu(page) {
   const info = await page.evaluate(async () => {
     const out = {
-      webgl: null,
-      webglVendor: null,
-      webgpu: null,
-      webgpuArchitecture: null,
+      // Browser CAPABILITY -- what the environment could do, not what ran.
+      availableWebGL: null,
+      availableWebGLVendor: null,
+      availableWebGPU: null,
+      availableWebGPUArchitecture: null,
       hasWebGPU: typeof navigator !== 'undefined' && !!navigator.gpu,
+      // What the APPLICATION actually rendered through.
+      applicationRenderer: null,
+      canvases: 0,
     };
+
+    // Detect the page's real backend before creating any canvas of our own.
+    try {
+      const found = new Set();
+      const list = Array.from(document.querySelectorAll('canvas'));
+      out.canvases = list.length;
+      for (const cv of list) {
+        for (const type of ['webgpu', 'webgl2', 'webgl', '2d']) {
+          let ctx = null;
+          try { ctx = cv.getContext(type); } catch { /* wrong type for this canvas */ }
+          if (ctx) { found.add(type); break; }
+        }
+      }
+      out.applicationRenderer = found.size ? Array.from(found).join('+') : (list.length ? 'unknown' : 'no-canvas');
+    } catch (e) {
+      out.applicationRenderer = `error: ${e.message}`;
+    }
 
     try {
       const c = document.createElement('canvas');
       const gl = c.getContext('webgl2') || c.getContext('webgl');
       if (gl) {
         const ext = gl.getExtension('WEBGL_debug_renderer_info');
-        out.webgl = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
-        out.webglVendor = ext ? gl.getParameter(ext.UNMASKED_VENDOR_WEBGL) : gl.getParameter(gl.VENDOR);
+        out.availableWebGL = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+        out.availableWebGLVendor = ext ? gl.getParameter(ext.UNMASKED_VENDOR_WEBGL) : gl.getParameter(gl.VENDOR);
       }
     } catch (e) {
-      out.webgl = `error: ${e.message}`;
+      out.availableWebGL = `error: ${e.message}`;
     }
 
     try {
@@ -125,21 +156,21 @@ export async function probeGpu(page) {
           // adapter.info is the modern surface; requestAdapterInfo() was removed.
           const ai = adapter.info || (adapter.requestAdapterInfo ? await adapter.requestAdapterInfo() : null);
           if (ai) {
-            out.webgpu = [ai.vendor, ai.device, ai.description].filter(Boolean).join(' ') || '(adapter, no info)';
-            out.webgpuArchitecture = ai.architecture || null;
+            out.availableWebGPU = [ai.vendor, ai.device, ai.description].filter(Boolean).join(' ') || '(adapter, no info)';
+            out.availableWebGPUArchitecture = ai.architecture || null;
           } else {
-            out.webgpu = '(adapter, no info)';
+            out.availableWebGPU = '(adapter, no info)';
           }
         }
       }
     } catch (e) {
-      out.webgpu = `error: ${e.message}`;
+      out.availableWebGPU = `error: ${e.message}`;
     }
 
     return out;
   });
 
-  const haystack = `${info.webgl || ''} ${info.webgpu || ''}`.toLowerCase();
+  const haystack = `${info.availableWebGL || ''} ${info.availableWebGPU || ''}`.toLowerCase();
   info.software = /swiftshader|llvmpipe|software|microsoft basic|warp/.test(haystack);
   return info;
 }

@@ -53,13 +53,13 @@ const BASE_ARGS = [
 // So: you cannot currently have hardware WebGPU *and* the V100. Pick per run.
 export const GPU_PROFILES = {
   webgpu: {
-    label: 'Tesla P40 (Pascal) — hardware WebGL + hardware WebGPU',
+    label: 'Tesla P40 (Pascal) — hardware WebGL and WebGPU AVAILABLE (what the app uses is reported separately)',
     args: [],
     env: {},
     headed: true,
   },
   raster: {
-    label: 'Tesla V100 (Volta, 32GB) — hardware WebGL only, WebGPU is SOFTWARE',
+    label: 'Tesla V100 (Volta, 32GB) — hardware WebGL; WebGPU available only as SOFTWARE',
     args: ['--ozone-platform=headless'],
     env: { MESA_VK_DEVICE_SELECT: '10de:1df0' },
     headed: false,
