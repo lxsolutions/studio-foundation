@@ -45,35 +45,7 @@ format-promotion mismatches (R8Unorm vs RGBA8Unorm, R16Float view of R32Float).
 diff --git a/drivers/webgpu/rendering_device_driver_webgpu.cpp b/drivers/webgpu/rendering_device_driver_webgpu.cpp
 --- a/drivers/webgpu/rendering_device_driver_webgpu.cpp
 +++ b/drivers/webgpu/rendering_device_driver_webgpu.cpp
-@@ -926,6 +926,10 @@
- 	// Optional texture-compression families. The JS shell opts in to these when
- 	// the adapter supports them; we must match that here so Godot only advertises
- 	// the corresponding DataFormats when they'll actually work.
-+	// Optional; see texture_get_usages_supported_by_format for why the DEVICE and
-+	// not the adapter is the authority here.
-+	has_depth32float_stencil8 = wgpuDeviceHasFeature(device, WGPUFeatureName_Depth32FloatStencil8);
-+	print_verbose(vformat("WebGPU: depth32float-stencil8 %s", has_depth32float_stencil8 ? "enabled" : "unavailable (Godot will use D24_UNORM_S8_UINT)"));
- 	has_texture_compression_bc = wgpuDeviceHasFeature(device, WGPUFeatureName_TextureCompressionBC);
- 	has_texture_compression_etc2 = wgpuDeviceHasFeature(device, WGPUFeatureName_TextureCompressionETC2);
- 	has_texture_compression_astc = wgpuDeviceHasFeature(device, WGPUFeatureName_TextureCompressionASTC);
-@@ -2240,6 +2244,16 @@
- 		case DATA_FORMAT_D16_UNORM_S8_UINT:
- 		case DATA_FORMAT_D24_UNORM_S8_UINT:
- 		case DATA_FORMAT_D32_SFLOAT_S8_UINT:
-+			// depth32float-stencil8 is an OPTIONAL WebGPU device feature. Godot
-+			// prefers D32_SFLOAT_S8_UINT and falls back to D24_UNORM_S8_UINT, but
-+			// only if this call says the preferred one is unsupported. Answering
-+			// from the static format table instead of the device would make Godot
-+			// choose D32 on an adapter that cannot create it, and texture creation
-+			// would fail later with no fallback left -- a bug that is invisible on
-+			// hardware that happens to have the feature.
-+			if (!has_depth32float_stencil8) {
-+				return 0;
-+			}
- 			is_depth_stencil = true;
- 			break;
- 
-@@ -8459,8 +8473,31 @@
+@@ -8473,8 +8473,31 @@
  	memset(blend_states.ptr(), 0, sizeof(WGPUBlendState) * color_target_count);
  
  	for (uint32_t i = 0; i < color_target_count; i++) {
@@ -106,7 +78,7 @@ diff --git a/drivers/webgpu/rendering_device_driver_webgpu.cpp b/drivers/webgpu/
  		if (i < (uint32_t)subpass.color_references.size()) {
  			int32_t att_idx = subpass.color_references[i].attachment;
  			if (att_idx != ATTACHMENT_UNUSED && (uint32_t)att_idx < (uint32_t)rp->attachments.size()) {
-@@ -8481,11 +8518,6 @@
+@@ -8495,11 +8518,6 @@
  		}
  		color_targets[i].format = fmt;
  
@@ -118,19 +90,3 @@ diff --git a/drivers/webgpu/rendering_device_driver_webgpu.cpp b/drivers/webgpu/
  		// Blend state from p_blend_state.attachments[i].
  		if (i < (uint32_t)p_blend_state.attachments.size()) {
  			const PipelineColorBlendState::Attachment &ba = p_blend_state.attachments[i];
-@@ -9286,11 +9318,11 @@
- 		case SUPPORTS_FRAGMENT_SHADER_WITH_ONLY_SIDE_EFFECTS:
- 			// WebGPU requires a render pass to have at least one color attachment or
- 			// a depth-stencil attachment; a pass with neither is a validation error
--			// ("No attachment was specified."). Reporting true made the cluster builder
-+			// ("No attachment was specified"). Reporting true made the cluster builder
- 			// take framebuffer_format_create_empty() and fail every frame. Reporting
--			// false selects Godot's existing USE_ATTACHMENT path, which binds a
--			// throwaway color target -- the cost of one unused attachment, in exchange
--			// for the pass actually executing.
-+			// false selects the USE_ATTACHMENT variant, which binds a throwaway color
-+			// target -- the cost of one unused attachment, in exchange for the pass
-+			// actually executing.
- 			return false;
- 		case SUPPORTS_IMAGE_ATOMIC_32_BIT:
- 			return false; // WebGPU has no image atomics support.

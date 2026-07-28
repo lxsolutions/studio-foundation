@@ -86,7 +86,7 @@ series = [
   { file = "patches/0026-scene-shader-subgroup-fallback.patch", sha256 = "8da9778c5958561535b533de639d9b5f076ce4f390992c13e239718cfd1e7886" },
   { file = "patches/0027-webgpu-request-depth32float-stencil8.patch", sha256 = "da9d8947e48f1d0d0c281ba6cf30eab895cc5a0689c17abb8aec65cb175634b4" },
   { file = "patches/0028-webgpu-depth-support-from-the-device.patch", sha256 = "d9bf864c6e567ea77e8ec3ad734ce9571895d91ef150c5cab27f6846bd4adf11" },
-  { file = "patches/0029-webgpu-unused-color-targets-are-absent.patch", sha256 = "273e078de5e383aa0798a0ede79528ded52f6b3d3a009a2d4d46a0132942fcbd" },
+  { file = "patches/0029-webgpu-unused-color-targets-are-absent.patch", sha256 = "6da7b9fecb477ac6ac288270e38e500159827b9e931a132a4908b57bbb2aab50" },
 ]
 
 [artifacts.export_templates]
