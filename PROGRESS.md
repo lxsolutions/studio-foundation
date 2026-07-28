@@ -639,3 +639,54 @@ no-canvas`, 0 canvases. It is a DOM/CSS game, not canvas-rendered. 60 fps p50,
 script 0.01 ms/frame, dynamic range 224, boot 21.3s. The harness handles it, but
 `edgeEnergy`-style surface metrics are meaningless for DOM content — worth a
 note before anyone calibrates a bar against it.
+
+## R18 — interior probe: the number is reachable, the frame is not yet (owner: content)
+
+Target sharpened by the owner: make Long-Silence-class work easy. Went at the
+mechanism the reference names in its own README — `greeble.js`, one system
+surfacing everything, welded per material.
+
+Built the bforge equivalent: `kit.room` (16x16m, 4.2m) + `build.greeble`
+(density 0.45, depth 0.06, cuts=1) -> 5,616 -> **115,054 tris** of panel geometry.
+
+**Three tooling lessons, each measured:**
+
+1. `cuts=2` blew the 300s daemon budget. Subdividing every face twice before
+   panelling is exponential; `cuts=1` plus material layers is the right shape.
+2. Baking it to a unique atlas gave **0.4 px/m** (1688 m2 into one 2048 map).
+   Box-projecting at a shared 2m scale gave **507 px/m** — a ~1200x difference.
+   This is the same rule the colonnade taught, violated again: **bake_pbr is for
+   props; large architecture takes geometry + a tiling material in-engine.**
+3. `check.critique` caught 43 zero-area faces left by greeble and named
+   `gameready.optimize`. Applied; 42 removed.
+
+**The measurement that matters:**
+
+| configuration | edgeEnergy (best shot) |
+|---|---|
+| greeble geometry only, flat `iron` preset | 5.12 |
+| greeble + tiling material through box UVs | **26.58** |
+| the bar | 28.38 median |
+
+So the toolset **can** reach the bar's surface-density number, and an enclosed
+space is what makes it reachable — nine rounds on an open plaza never passed 22.
+
+**But the frame is not there, and the number is again texture-driven.** Looking
+at it: no ceiling (kit.room's roof option unset), surfaces read as wet plastic
+(roughness needs variation, metalness too high), and **the 115k triangles of
+greeble are invisible** — 0.06m panels on a 16m wall do not resolve at these
+framings. The 26.58 comes from the tiling panel seams, not from the geometry.
+
+That is the third time `edgeEnergy` has been satisfied by a tiling texture
+rather than authored density. The metric measures high-frequency contrast; it
+cannot tell earned detail from printed detail. Only the blind judge has ever
+caught that distinction.
+
+**Also fixed by looking, invisible in metrics:** the first interior run scored
+edgeEnergy 0 on two shots. Cause: Blender Z-up -> glTF (x, z, -y) puts the room
+on NEGATIVE Z, and all four cameras were at positive Z — every shot was outside
+the box photographing an exterior wall.
+
+**Next:** roof on, metalness down and roughness variation up, greeble depth up
+(~0.15m) so panels actually read, and props in the room. Then judge it — the
+objective gate has now said "at the bar" three times while the frame was not.

@@ -1,0 +1,5 @@
+{"viewport":[1600,900],"shots":[
+ {"name":"hero","camera":"hero","steps":20,"static":true},
+ {"name":"corner","camera":"corner","steps":20,"static":true},
+ {"name":"low","camera":"low","steps":20,"static":true},
+ {"name":"detail","camera":"detail","steps":20,"static":true}]}
