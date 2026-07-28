@@ -390,19 +390,35 @@ scene.add(world);
 // is coherent by construction.
 const loader = new GLTFLoader();
 let columnProto: THREE.Object3D | null = null;
+let colonnadeProto: THREE.Object3D | null = null;
+let debrisProto: THREE.Object3D | null = null;
 
-async function loadAssets(): Promise<void> {
+const ASSET_DIR = '/assets-generated/bforge/gauntlet';
+
+async function loadOne(file: string): Promise<THREE.Object3D | null> {
   try {
-    const gltf = await loader.loadAsync('/assets-generated/bforge/gauntlet/gauntlet_column.glb');
-    const proto = gltf.scene;
-    proto.traverse((o: THREE.Object3D) => {
+    const gltf = await loader.loadAsync(`${ASSET_DIR}/${file}`);
+    gltf.scene.traverse((o: THREE.Object3D) => {
       const m = o as THREE.Mesh;
       if (m.isMesh) {
         m.castShadow = true;
         m.receiveShadow = true;
       }
     });
-    columnProto = proto;
+    return gltf.scene;
+  } catch {
+    return null;
+  }
+}
+
+async function loadAssets(): Promise<void> {
+  try {
+    [columnProto, colonnadeProto, debrisProto] = await Promise.all([
+      loadOne('gauntlet_column.glb'),
+      loadOne('plaza_colonnade.glb'),
+      loadOne('plaza_debris.glb'),
+    ]);
+    if (!columnProto) throw new Error('column GLB missing');
   } catch (e) {
     // Fall back to the procedural column rather than rendering nothing. A
     // missing asset should degrade the frame, not blank it.
@@ -479,6 +495,22 @@ function buildWorld() {
       cap.position.set(x + jitter, 7.7, z);
       cap.castShadow = cap.receiveShadow = true;
       world.add(cap);
+    }
+  }
+
+  if (colonnadeProto) {
+    const ring = colonnadeProto.clone(true);
+    ring.position.set(0, 0, 0);
+    world.add(ring);
+  }
+  if (debrisProto) {
+    // Three offset copies at different yaw so the scatter does not read as one
+    // stamped pattern -- the per-instance rule that tiling violated.
+    for (let i = 0; i < 3; i++) {
+      const d = debrisProto.clone(true);
+      d.rotation.y = rnd() * Math.PI * 2;
+      d.position.set((rnd() - 0.5) * 6, 0, (rnd() - 0.5) * 6);
+      world.add(d);
     }
   }
 

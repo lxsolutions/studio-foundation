@@ -65,3 +65,37 @@ Three correctness issues raised in review, all real:
 frame with authored geometry (`arch.colonnade`, `env.scatter`, `prop.debris`,
 `build.greeble`) rather than tuning one hero asset — round 9 proved a single
 authored prop cannot carry a frame that is 70% empty ground.
+
+## R4 — content density via bforge dressing (owner: single, sequential)
+
+The measured gap for nine rounds. Attacked it with authored geometry rather than
+another material pass.
+
+- Forged `arch.colonnade` (circle, 40 columns + entablature, 2560 tris) and
+  `prop.debris` (48 pieces), both through `material.pbr` + `material.bake_pbr`,
+  replacing 12 hand-placed columns.
+- `check.critique` flagged 80 n-gons with the exact fix (`gameready.optimize
+  triangulate=true`); applied rather than shipping unpredictable shading.
+
+| round | change | warn | edgeEnergy | dynRange | blkEdgeP10 (hero) |
+|---|---|---|---|---|---|
+| R2 | ring r15 + debris | 6 | 16.56 | 160 | **0.06** |
+| R3 | ring r15 -> r22 | 4 | 18.83 | 186.25 | 0.23 |
+
+- **R2 flagged REGRESSED, and the comparison was invalid**: R1 ran with no
+  `--references`, so no calibrated findings existed at all. Warn 0 -> 6 was a
+  gate change, not a regression. Same class of error as comparing across a
+  threshold change — check what moved, the build or the ruler.
+- **R2's real defect was found by looking**: the hero camera sits at radius 15
+  and the ring was radius 15, so the shot was a column 20cm from the lens.
+  Re-forged at r22 (outside every camera) rather than moving cameras, because
+  the shot set is the measurement contract.
+- R3 is the best frame produced so far. dynamicRange 186.25 against a bar median
+  of 195; fps p50 60; instability 0.
+- `dead-space` still fires on all four shots (0.23–0.36 vs bar 0.44–3.8). The
+  metric is doing its job: the ground plane is still a large low-detail expanse.
+
+**Next, highest leverage:** still coverage, now specifically the ground. Options
+in descending order: `env.terrain` with real relief instead of a flat plane,
+`env.scatter` for denser mid-ground props, and an enclosed space rather than an
+open plaza — the bar is an interior, where every pixel lands on something.
