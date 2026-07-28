@@ -41,7 +41,9 @@ the live demo, the templates, the performance A/B — is **Forward Mobile**, whi
 is opt-in (`--rendering-method forward_plus`) and **has never rendered a frame.**
 As of patches 0023–0029 it gets substantially further — the scene shader
 translates, the cluster builder exists, scene pipelines are created and command
-buffers encoded — and then fails render-pass/pipeline attachment compatibility.
+buffers encoded, and clears attachment compatibility across 44 measured
+pipeline/pass pairs. It renders the 2D UI; the 3D scene is black. The frontier is
+now resource and bind-group compatibility.
 See §Forward+ on hardware (0023–0029). Do not read a Forward Mobile result as a
 Forward+ result, and do not read "the render loop runs" as "a frame rendered".
 
@@ -58,7 +60,7 @@ Forward+ result, and do not read "the render loop runs" as "a frame rendered".
 | Template artifacts locked in `engine-lock.toml` | ✅ | `[artifacts.export_templates]`: release + debug + sha256 |
 | **Forward+ (clustered) shader translation** | 🟢 **translates offline** after patch 0015 — was impossible before | §Forward+ |
 | **Forward+ compiles on hardware** | 🟢 2026‑07‑25 — patches 0018–0022 | Tesla P40: full GI/SDFGI/SSAO/SSIL/VoxelGI stack compiles, **0 aborts, 0 wasm traps**. Compilation, not rendering |
-| **Forward+ renders a frame** | 🔴 **no** — **no frame has ever rendered under Forward+.** As of patches 0023–0029 it compiles the scene shader, builds a cluster list, creates pipelines and encodes command buffers, then fails render-pass/pipeline attachment compatibility | §Forward+ on hardware (0023–0029) |
+| **Forward+ renders a 3D frame** | 🔴 **no** — the 2D UI draws, the 3D scene is black. As of 0023–0029 it runs at 53 fps submitting 319 draws / 2.0M primitives and clears attachment validation (44 pairs, 0 mismatches); the geometry never reaches the presented image | §Forward+ on hardware (0023–0029), with a side-by-side against the Forward Mobile control |
 | **Forward+ D24 fallback on adapters without `depth32float-stencil8`** | ⚪ **not measured** — implemented in 0028, but this box has the feature, so the fallback path has never run | §Forward+ on hardware (0023–0029) |
 
 Reference point: a **release** WebGPU export passed a (shallow, non‑ASAN) browser
@@ -181,13 +183,46 @@ with `--rendering-method forward_plus`, measured by
 `tests/browser/render-probe.mjs` (which reads the canvas back and counts distinct
 colours, so a cleared-but-never-drawn buffer cannot be mistaken for a frame).
 
-**Forward+ still has not presented a frame. What changed is where it stops.**
+**Forward+ still has not presented a 3D frame — but it is no longer doing
+nothing.** Measured on the same host with the same scene and camera as the
+Forward Mobile control:
+
+| | Forward Mobile (control) | Forward+ |
+| --- | --- | --- |
+| renderer reported by the engine | `mobile` | `forward_plus` |
+| draw calls / frame | 93 | **319** |
+| primitives / frame | — | **2,024,578** |
+| fps | — | **53** |
+| canvas dominant-colour fraction | 0.336 (varied) | **0.987 (near-uniform)** |
+| `GPUValidationError` | 0 | 5816 |
+
+![Forward Mobile renders the colosseum](../images/forward-mobile-control.png)
+![Forward+ renders the 2D UI and nothing else](../images/forward-plus-3d-black.png)
+
+The engine is running Forward+ at 53 fps and submitting two million primitives
+across 319 draws. **The 2D UI renders correctly; the entire 3D scene is black.**
+The 1.3% of non-black pixels is the UI text. So the failure is now specific: the
+scene's geometry is submitted and never reaches the presented image, while the
+canvas/2D path is unaffected — consistent with the remaining validation errors
+invalidating the scene's bind groups and command buffers.
+
 Through 0022 it stopped in shader translation. It now compiles the scene shader,
 builds its cluster list, creates scene pipelines, encodes command buffers, and
 clears render-pass/pipeline attachment validation entirely — 44 distinct
-pipeline/pass pairs, zero mismatches. What remains are binding-level defects: a
-multisampled sampler, a comparison sampler, and two storage-format promotions.
-Each layer cleared has revealed a different problem, not the same one restated.
+pipeline/pass pairs, zero mismatches. What remains are four measured resource and
+binding mismatches. Each layer cleared has revealed a different problem, not the
+same one restated.
+
+> **How this was nearly missed.** The first version of the render probe read the
+> canvas back with `drawImage` + `getImageData`, which returns solid black on this
+> Chrome/Xvfb/WebGPU host *even while the page is demonstrably rendering*. It
+> reported the Forward Mobile control — the image above — as a uniform cleared
+> buffer. Every verdict it produced was a false negative, including the Forward+
+> ones. The probe now measures the composited screenshot clipped to the canvas,
+> and is calibrated against three controls on this host: a WebGPU clear-only page
+> (`not-rendered`), a page with HTML chrome outside a cleared canvas
+> (`not-rendered`), and Forward Mobile (`rendered`, 93 draws). A verification tool
+> without a positive control is an assumption.
 
 | Patch | What hardware showed | `GPUValidationError` | Frame |
 | --- | --- | --- | --- |
@@ -207,10 +242,11 @@ handful of classes, repeated every frame. Normalised, the remaining classes are:
 | Class | Distinct | Status |
 | --- | --- | --- |
 | ~~pipeline/render-pass attachment state incompatible~~ | — | **closed by 0029** |
+| *(all four below are measured mismatches; a shared root cause is suspected, not proven)* | | |
 | `sampler2DMS` texture-vs-sampler binding (`ResolveShaderRD`, `SsEffectsDownsample`) | 1 | open |
 | comparison sampler bound as non-comparison | 1 | open |
-| R8Unorm texture where RGBA8Unorm expected | 1 | open — storage-format promotion |
-| R16Float view of an R32Float texture | 1 | open — storage-format promotion |
+| R8Unorm texture where RGBA8Unorm expected | 1 | open — likely a concrete placeholder format standing in for missing metadata, the same shape of defect as 0029 |
+| R16Float view of an R32Float texture | 1 | open — likely a view derived from the logical rather than the physical (promoted) format |
 | invalid CommandBuffer / BindGroup / TextureView | 3 | cascades from the above |
 
 The attachment mismatch, captured from the browser and **closed by 0029**:
