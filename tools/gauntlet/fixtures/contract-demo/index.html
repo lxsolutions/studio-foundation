@@ -1,0 +1,102 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>gauntlet contract demo</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  canvas { display: block; width: 100vw; height: 100vh; }
+</style>
+<canvas id="c"></canvas>
+<script type="module">
+  // A deliberately small, deterministic scene used to verify the harness.
+  // It is not a game -- it exists so the sensor chain can be tested without
+  // pulling in an engine. It implements the full runtime contract.
+  import { gauntlet } from '../../runtime/gauntlet-hooks.js';
+
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+
+  function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  // Deterministic PRNG so a seed fully determines the layout.
+  function lcg(seed) {
+    let s = seed >>> 0 || 1;
+    return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
+  }
+
+  let seed = 1;
+  let boxes = [];
+  function buildWorld() {
+    const rnd = lcg(seed);
+    boxes = Array.from({ length: 40 }, () => ({
+      x: rnd(), y: rnd(), size: 0.03 + rnd() * 0.09,
+      hue: rnd() * 360, spin: (rnd() - 0.5) * 2,
+    }));
+  }
+  buildWorld();
+
+  let zoom = 1;
+  const CAMERAS = {
+    hero: () => { zoom = 1.6; },
+    wide: () => { zoom = 0.7; },
+    default: () => { zoom = 1; },
+  };
+
+  let firstDraw;
+  const ready = new Promise((r) => (firstDraw = r));
+
+  function draw(tMs) {
+    const w = canvas.width, h = canvas.height;
+    const t = tMs / 1000;
+
+    // Sky gradient -- a smooth ramp, which is exactly where banding shows up.
+    const g = ctx.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, '#0b1d3a');
+    g.addColorStop(0.55, '#2a4a7f');
+    g.addColorStop(1, '#c98b5e');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, w, h);
+
+    // Sun -- gives the histogram a bright tail without clipping everything.
+    const sx = w * 0.5, sy = h * 0.72;
+    const sun = ctx.createRadialGradient(sx, sy, 0, sx, sy, Math.min(w, h) * 0.28);
+    sun.addColorStop(0, 'rgba(255,240,210,0.95)');
+    sun.addColorStop(1, 'rgba(255,200,120,0)');
+    ctx.fillStyle = sun;
+    ctx.fillRect(0, 0, w, h);
+
+    // Shapes -- edge energy and chroma.
+    for (const b of boxes) {
+      const size = b.size * Math.min(w, h) * zoom;
+      const cx = b.x * w, cy = b.y * h * 0.85;
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(t * b.spin);
+      ctx.fillStyle = `hsl(${b.hue} 60% ${35 + 25 * Math.sin(t + b.hue)}%)`;
+      ctx.fillRect(-size / 2, -size / 2, size, size);
+      ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(-size / 2, -size / 2, size, size);
+      ctx.restore();
+    }
+
+    if (firstDraw) { firstDraw(); firstDraw = null; }
+  }
+
+  function frame(t) {
+    draw(t);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  gauntlet.register({
+    ready,
+    seed: (n) => { seed = n; buildWorld(); },
+    camera: CAMERAS,
+    stats: () => ({ boxes: boxes.length, zoom, seed }),
+  });
+</script>
