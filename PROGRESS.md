@@ -523,3 +523,50 @@ the 25 lines to the branch's own committed patch. The PR contains only my change
 `shotset.mjs --source/--build` against `web-webgpu`. Success is
 `applicationRenderer: webgpu` with black% in low single digits and zero console
 errors, matching the `web-webgl` control. Until that runs, no claim.
+
+## R15 — ENGINE BUG FIXED AND CONFIRMED; next blocker identified (owner: engine)
+
+**The SPIR-V literal fix works.** Built both profiles, installed the validated
+template pair, re-exported Chariot, re-ran the harness on the P40:
+
+**`Tint struct-size error: GONE.`**
+
+The four buffers (`InstanceDataBuffer`, `OmniLights`, `SpotLights`,
+`AreaLights`) no longer report impossible layouts. `flatten_binding_arrays` was
+substituting `ArrayStride`/`Offset` literals with array element type IDs; adding
+`OpDecorate`/`OpMemberDecorate`/`OpName`/`OpMemberName` to the literal-exclusion
+block resolved it.
+
+**Screen is still black — a different, well-scoped blocker now surfaces:**
+
+```
+[JS-PCREATE-FAIL#4] label="pipe#4:SceneForwardMobileShaderRD:9"
+Texture binding (group:1, binding:8) is TextureSampleType::Depth but used
+statically with a sampler (group:1, binding:28) that's
+SamplerBindingType::Filtering
+```
+
+A depth texture sampled with a **filtering** sampler. WebGPU forbids this —
+depth requires non-filtering or comparison — where Vulkan does not. Note the
+shader is `SceneForwardMobile`, not Forward+, so this is on the shipping tier.
+There is already a `fix_depth2_images` pass (p06) in the pipeline, so this
+family has been handled before; this is a distinct case in the bind-group
+layout rather than the image type.
+
+**Two false negatives on the way to this, both my own tooling:**
+
+1. Tested an export built from a **four-day-old installed template**, because
+   `--profile release` cannot install (the tool validates the release+debug
+   pair). Reported "still black, fix failed" — wrong, and withdrawn.
+2. `--source`/`--build` staleness could not catch it: the export was genuinely
+   newer than everything, while *consuming* a stale template. A fan-in check
+   cannot see a skipped middle step.
+
+Added `--chain a,b,c` — each element must be newer than the one before, which
+models `patches -> templates -> export` and catches exactly that. Also made a
+non-existent chain link an error rather than epoch 0, after a typo produced a
+spurious "495908h older" break.
+
+**Next:** the depth-sampler validation error. Concrete and bounded: find where
+the WebGPU driver builds bind-group layouts and declare samplers paired with
+depth textures as non-filtering (or comparison).

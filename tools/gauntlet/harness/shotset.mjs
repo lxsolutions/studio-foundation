@@ -34,8 +34,19 @@ function parseArgs(argv) {
     else if (k === '--serve-port') a.servePort = Number(next());
     else if (k === '--gpu-profile') a.gpuProfile = next(); // 'webgpu' (P40) | 'raster' (V100)
     else if (k === '--calibration') a.calibration = next(); // reference-derived thresholds
-    else if (k === '--source') a.source = next();   // source dir, to detect a stale build
+    // Repeatable: pass every upstream layer the build depends on. A game export
+    // is downstream of BOTH its project source AND the engine template it was
+    // built from, and only checking the former produced a confident "not stale"
+    // on an export made from a four-day-old template.
+    else if (k === '--source') (a.sources ??= []).push(next());
     else if (k === '--build') a.build = next();     // built artefact the URL serves
+    // Dependency CHAIN, in build order, e.g.
+    //   --chain engine/patches,engine/artifacts/templates,games/x/project/exports/web-webgpu
+    // Each element must be newer than the one before it. A fan-in check
+    // (many sources, one build) cannot catch a middle layer that was never
+    // rebuilt: an export made today from a four-day-old template is newer
+    // than everything and looks fresh, while consuming stale code.
+    else if (k === '--chain') a.chain = next().split(',').map((x) => x.trim()).filter(Boolean);
   }
   if (!a.url) throw new Error('--url is required');
   a.out = a.out || path.join('runs', `run-${Date.now()}`);
@@ -251,23 +262,75 @@ async function main() {
   // Staleness check before anything expensive. Measuring a build that predates
   // its source is worse than not measuring: the numbers look valid.
   let staleness = null;
-  if (args.source && args.build) {
-    const [srcMs, buildMs] = await Promise.all([newestMtime(args.source), newestMtime(args.build)]);
-    const stale = srcMs > buildMs;
+  if (args.chain?.length >= 2) {
+    const stamps = [];
+    for (const link of args.chain) {
+      const ms = await newestMtime(link);
+      // A path that does not exist must be an error, not "infinitely stale".
+      // Silently treating a typo as epoch 0 reports a spurious 495908h break
+      // and buries the real answer.
+      if (ms === 0) {
+        throw new Error(`--chain link does not exist or is empty: ${link}`);
+      }
+      stamps.push({ path: link, ms });
+    }
+    const breaks = [];
+    for (let i = 1; i < stamps.length; i++) {
+      if (stamps[i - 1].ms > stamps[i].ms) {
+        breaks.push({
+          upstream: stamps[i - 1].path,
+          downstream: stamps[i].path,
+          behindHours: +((stamps[i - 1].ms - stamps[i].ms) / 3.6e6).toFixed(1),
+        });
+      }
+    }
     staleness = {
-      source: args.source,
+      chain: stamps.map((s2) => ({ path: s2.path, newest: new Date(s2.ms).toISOString() })),
+      breaks,
+      stale: breaks.length > 0,
+      behindHours: breaks.length ? Math.max(...breaks.map((b) => b.behindHours)) : 0,
+      staleLayer: breaks.length ? breaks[0].downstream : null,
+    };
+    if (staleness.stale) {
+      console.error('');
+      console.error('[shotset] STALE CHAIN: a build step was skipped.');
+      for (const s2 of staleness.chain) console.error(`  ${s2.newest}  ${s2.path}`);
+      for (const b of breaks) {
+        console.error(`  BREAK: ${b.downstream} is ${b.behindHours}h older than ${b.upstream}`);
+      }
+      console.error('  Rebuild the stale step before trusting anything below.');
+      console.error('');
+    }
+  } else if (args.sources?.length && args.build) {
+    const buildMs = await newestMtime(args.build);
+    const layers = [];
+    for (const src of args.sources) {
+      const ms = await newestMtime(src);
+      layers.push({
+        source: src,
+        sourceNewest: new Date(ms).toISOString(),
+        stale: ms > buildMs,
+        behindHours: ms > buildMs ? +((ms - buildMs) / 3.6e6).toFixed(1) : 0,
+      });
+    }
+    const worst = layers.filter((l) => l.stale).sort((a, b) => b.behindHours - a.behindHours)[0];
+    const stale = !!worst;
+    staleness = {
+      layers,
       build: args.build,
-      sourceNewest: new Date(srcMs).toISOString(),
       buildNewest: new Date(buildMs).toISOString(),
       stale,
-      behindHours: stale ? +((srcMs - buildMs) / 3.6e6).toFixed(1) : 0,
+      behindHours: worst?.behindHours ?? 0,
+      staleLayer: worst?.source ?? null,
     };
     if (stale) {
       console.error('');
-      console.error(`[shotset] STALE BUILD: source is ${staleness.behindHours}h newer than the build.`);
-      console.error(`  source ${staleness.sourceNewest}  (${args.source})`);
-      console.error(`  build  ${staleness.buildNewest}  (${args.build})`);
-      console.error('  Re-export before trusting anything below.');
+      console.error(`[shotset] STALE BUILD: an upstream layer is ${staleness.behindHours}h newer than the build.`);
+      for (const l of staleness.layers) {
+        console.error(`  ${l.stale ? 'STALE' : '  ok '}  ${l.sourceNewest}  ${l.source}`);
+      }
+      console.error(`  build   ${staleness.buildNewest}  ${args.build}`);
+      console.error('  Rebuild every stale layer before trusting anything below.');
       console.error('');
     }
   }
@@ -447,8 +510,14 @@ function renderMarkdown(r) {
   }
   if (r.staleness?.stale) {
     L.push('');
-    L.push(`> **STALE BUILD — source is ${r.staleness.behindHours}h newer than what was measured.**`);
-    L.push(`> build ${r.staleness.buildNewest} · source ${r.staleness.sourceNewest}`);
+    L.push(`> **STALE — a build step was skipped (${r.staleness.behindHours}h).**`);
+    if (r.staleness.breaks) {
+      for (const b of r.staleness.breaks) {
+        L.push(`> \`${b.downstream}\` is ${b.behindHours}h older than \`${b.upstream}\``);
+      }
+    } else {
+      L.push(`> stale: \`${r.staleness.staleLayer}\``);
+    }
     L.push('> Re-export before acting on anything in this report.');
     L.push('');
   }
