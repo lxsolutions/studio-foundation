@@ -272,60 +272,75 @@ class EngineBuildToolchainTests(unittest.TestCase):
                 )
             self.assertEqual(lock_path.read_text(encoding="utf-8"), original)
 
+    @staticmethod
+    def _fake_emsdk(root: Path, version: str) -> Path:
+        """Lay out an emsdk the way the host platform's discovery expects it."""
+        (root / "upstream" / "emscripten").mkdir(parents=True)
+        (root / engine_tool.EMSDK_ENV_SCRIPT).write_text("", encoding="utf-8")
+        (root / "upstream" / "emscripten" / "emscripten-version.txt").write_text(
+            f'"{version}"\n', encoding="utf-8"
+        )
+        return root
+
     def test_explicit_emsdk_is_authoritative(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            explicit = root / "workspace-emsdk"
             home = root / "home"
-            (explicit / "upstream" / "emscripten").mkdir(parents=True)
-            (explicit / "emsdk_env.bat").write_text("", encoding="utf-8")
-            (explicit / "upstream" / "emscripten" / "emscripten-version.txt").write_text(
-                '"4.0.11"\n', encoding="utf-8"
-            )
-            home_sdk = home / "emsdk"
-            (home_sdk / "upstream" / "emscripten").mkdir(parents=True)
-            (home_sdk / "emsdk_env.bat").write_text("", encoding="utf-8")
-            (home_sdk / "upstream" / "emscripten" / "emscripten-version.txt").write_text(
-                '"4.0.11"\n', encoding="utf-8"
-            )
+            explicit = self._fake_emsdk(root / "workspace-emsdk", "4.0.11")
+            self._fake_emsdk(home / "emsdk", "4.0.11")
 
             with (
                 mock.patch.dict(os.environ, {"EMSDK": str(explicit)}),
                 mock.patch.object(engine_tool.Path, "home", return_value=home),
             ):
-                self.assertEqual(
-                    engine_tool._find_emsdk_env_bat("4.0.11"),
-                    explicit / "emsdk_env.bat",
-                )
+                self.assertEqual(engine_tool._find_emsdk_root("4.0.11"), explicit)
 
     def test_explicit_emsdk_must_match_locked_version(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            explicit = Path(temp_dir) / "workspace-emsdk"
-            (explicit / "upstream" / "emscripten").mkdir(parents=True)
-            (explicit / "emsdk_env.bat").write_text("", encoding="utf-8")
-            (explicit / "upstream" / "emscripten" / "emscripten-version.txt").write_text(
-                '"4.0.10"\n', encoding="utf-8"
-            )
+            explicit = self._fake_emsdk(Path(temp_dir) / "workspace-emsdk", "4.0.10")
 
             with mock.patch.dict(os.environ, {"EMSDK": str(explicit)}):
-                self.assertIsNone(engine_tool._find_emsdk_env_bat("4.0.11"))
+                self.assertIsNone(engine_tool._find_emsdk_root("4.0.11"))
 
     def test_invalid_explicit_emsdk_does_not_fall_back(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             home = root / "home"
-            home_sdk = home / "emsdk"
-            (home_sdk / "upstream" / "emscripten").mkdir(parents=True)
-            (home_sdk / "emsdk_env.bat").write_text("", encoding="utf-8")
-            (home_sdk / "upstream" / "emscripten" / "emscripten-version.txt").write_text(
-                '"4.0.11"\n', encoding="utf-8"
-            )
+            self._fake_emsdk(home / "emsdk", "4.0.11")
 
             with (
                 mock.patch.dict(os.environ, {"EMSDK": str(root / "missing")}),
                 mock.patch.object(engine_tool.Path, "home", return_value=home),
             ):
-                self.assertIsNone(engine_tool._find_emsdk_env_bat("4.0.11"))
+                self.assertIsNone(engine_tool._find_emsdk_root("4.0.11"))
+
+    def test_home_emsdk_is_discovered_when_env_is_unset(self) -> None:
+        """The no-EMSDK path is what a fresh contributor's machine hits."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            home = Path(temp_dir) / "home"
+            home_sdk = self._fake_emsdk(home / "emsdk", "4.0.11")
+
+            env = {k: v for k, v in os.environ.items() if k != "EMSDK"}
+            with (
+                mock.patch.dict(os.environ, env, clear=True),
+                mock.patch.object(engine_tool.Path, "home", return_value=home),
+            ):
+                self.assertEqual(engine_tool._find_emsdk_root("4.0.11"), home_sdk)
+
+    def test_emsdk_layout_matches_the_host_platform(self) -> None:
+        """A Windows-only emsdk layout must not be accepted on POSIX, or vice versa."""
+        other = "emsdk_env.sh" if engine_tool.IS_WINDOWS else "emsdk_env.bat"
+        self.assertNotEqual(engine_tool.EMSDK_ENV_SCRIPT, other)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            wrong = Path(temp_dir) / "wrong-platform-emsdk"
+            (wrong / "upstream" / "emscripten").mkdir(parents=True)
+            (wrong / other).write_text("", encoding="utf-8")
+            (wrong / "upstream" / "emscripten" / "emscripten-version.txt").write_text(
+                '"4.0.11"\n', encoding="utf-8"
+            )
+
+            with mock.patch.dict(os.environ, {"EMSDK": str(wrong)}):
+                self.assertIsNone(engine_tool._find_emsdk_root("4.0.11"))
 
 
 class TemplateInstallTests(unittest.TestCase):

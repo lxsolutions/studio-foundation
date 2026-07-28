@@ -1,0 +1,120 @@
+{
+  "schema": 1,
+  "description": "Byte strings that the Studio Foundation WebGPU patch series puts into a built Godot engine. Used to detect lineage in builds we did not produce. Calibrated, not guessed -- see calibration below.",
+  "calibration": {
+    "date": "2026-07-27",
+    "method": "Extract printable runs (8-120 chars) from a release wasm built from this patch series, subtract every printable run from the official Godot 4.7.1-stable web template, then keep only strings that also appear in an added (+) line of a specific patch. A marker must be present in ours, absent from stock, and traceable to the patch that introduced it.",
+    "positive_sample": "godot.web.template_release.wasm32.nothreads.wasm, patches 0001-0022, 45811426 bytes, 91132 distinct strings",
+    "negative_control": "Godot_v4.7.1-stable_export_templates.tpz -> templates/web_nothreads_release.zip (godot.wasm + godot.js), 63793 distinct strings",
+    "excluded_deliberately": [
+      "RenderingDeviceDriver virtual method names such as acceleration_structure_free, raytracing_pipeline_free, surface_get_hdr_output_enabled, swap_chain_get_color_space. These are Godot 4.7.1 core API names, not ours. They are absent from the stock WEB template only because that template is GL-Compatibility and carries no RenderingDevice driver at all; any stock Vulkan desktop build contains them. Using them would false-positive on unrelated Godot builds."
+    ]
+  },
+  "markers": [
+    {
+      "name": "cluster-atomic-fallback-usage",
+      "tier": "studio-series",
+      "pattern": "aux = atomicOr(cluster_render.data[usage_write_offset], usage_write_bit);",
+      "introduced_by": "0015-webgpu-cluster-builder-no-subgroups.patch",
+      "note": "The plain-atomics replacement for subgroupBallot in the cluster builder. WebGPU has no subgroup support, so this line is the reason Forward+ can build a cluster list at all. It exists in no other Godot tree."
+    },
+    {
+      "name": "cluster-atomic-fallback-z",
+      "tier": "studio-series",
+      "pattern": "aux = atomicOr(cluster_render.data[z_write_offset], z_write_bit);",
+      "introduced_by": "0015-webgpu-cluster-builder-no-subgroups.patch",
+      "note": "Second half of the same fallback, on the Z range write."
+    },
+    {
+      "name": "cluster-subgroup-variant",
+      "tier": "studio-series",
+      "pattern": "#define USE_SUBGROUPS",
+      "introduced_by": "0015-webgpu-cluster-builder-no-subgroups.patch",
+      "note": "The appended shader variant pair that lets one binary carry both the subgroup and no-subgroup cluster builders."
+    },
+    {
+      "name": "fog-nan-guard-decl",
+      "tier": "studio-series",
+      "pattern": "bool any_not_finite(vec4 v) {",
+      "introduced_by": "0018-webgpu-forward-plus-runtime.patch",
+      "note": "Volumetric fog non-finite guard added when Forward+ first ran on hardware."
+    },
+    {
+      "name": "fog-nan-guard-body",
+      "tier": "studio-series",
+      "pattern": "return !all(lessThanEqual(abs(v), vec4(3.402823466e+38)));",
+      "introduced_by": "0018-webgpu-forward-plus-runtime.patch",
+      "note": "The float-max comparison the guard is implemented with."
+    },
+    {
+      "name": "ssr-filter-storage-format",
+      "tier": "studio-series",
+      "pattern": "layout(rgba16f, set = 0, binding = 1) uniform restrict writeonly image2D dest;",
+      "introduced_by": "0017-webgpu-ssr-filter-storage-format.patch",
+      "note": "WGSL requires a concrete storage format on a write-only image; upstream leaves it undefined, which Tint rejects."
+    },
+    {
+      "name": "storage-format-table-rgb10a2unorm",
+      "tier": "studio-series",
+      "pattern": "rgb10a2unorm,",
+      "introduced_by": "0021-webgpu-storage-texture-formats.patch",
+      "note": "The comma-suffixed entry from our WGSL storage-format parse table. The trailing comma is what makes it a table entry rather than a plain format name."
+    },
+    {
+      "name": "storage-format-table-rg11b10ufloat",
+      "tier": "studio-series",
+      "pattern": "rg11b10ufloat,",
+      "introduced_by": "0021-webgpu-storage-texture-formats.patch",
+      "note": "Second entry from the same table."
+    },
+    {
+      "name": "fsr-upscale-normal-mode",
+      "tier": "studio-series",
+      "pattern": "#define MODE_FSR_UPSCALE_NORMAL",
+      "introduced_by": "0018-webgpu-forward-plus-runtime.patch",
+      "note": "Explicit FSR variant define added so the harness compiles the same variants the engine does."
+    },
+    {
+      "name": "webgpu-raytracing-unsupported",
+      "tier": "studio-series",
+      "pattern": "Ray tracing is not supported by the WebGPU driver.",
+      "introduced_by": "0004-godot-4.7.1-webgpu-interfaces.patch",
+      "note": "Studio Foundation's 4.7.1 interface adaptation; 4.7.1 added ray-tracing entry points the backend must answer."
+    },
+    {
+      "name": "webgpu-hdr-sdr-fallback",
+      "tier": "studio-series",
+      "pattern": "WebGPU: HDR canvas output is not available; using SDR.",
+      "introduced_by": "0004-godot-4.7.1-webgpu-interfaces.patch",
+      "note": "Same adaptation, on 4.7.1's new HDR surface API."
+    },
+    {
+      "name": "webgpu-device-driver-rtti",
+      "tier": "webgpu-backend",
+      "pattern": "27RenderingDeviceDriverWebGPU",
+      "introduced_by": "0001-studio-webgpu-engine.patch",
+      "note": "Itanium-mangled class name. Proves a Godot WebGPU RenderingDevice driver is present, which stock Godot has never shipped. Lineage runs back to dwalter/godotwebgpu."
+    },
+    {
+      "name": "webgpu-context-driver-rtti",
+      "tier": "webgpu-backend",
+      "pattern": "28RenderingContextDriverWebGPU",
+      "introduced_by": "0001-studio-webgpu-engine.patch",
+      "note": "Companion context driver class name."
+    },
+    {
+      "name": "webgpu-shader-container-rtti",
+      "tier": "webgpu-backend",
+      "pattern": "30RenderingShaderContainerWebGPU",
+      "introduced_by": "0001-studio-webgpu-engine.patch",
+      "note": "The WGSL shader container. Present in any build of this backend family."
+    },
+    {
+      "name": "webgpu-canvas-surface-error",
+      "tier": "webgpu-backend",
+      "pattern": "WebGPU: Failed to create canvas surface.",
+      "introduced_by": "0001-studio-webgpu-engine.patch",
+      "note": "Backend error string; survives into release builds."
+    }
+  ]
+}

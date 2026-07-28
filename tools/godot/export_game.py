@@ -26,6 +26,48 @@ from studio_tools import env as senv  # noqa: E402
 REPO = senv.repo_root()
 
 
+def _webgpu_template_identity_problem(artifacts: Path, lock: dict) -> str | None:
+    """Refuse to export against templates that are not this patch series.
+
+    Exporting is where a stale or foreign template becomes an invisible problem:
+    the export succeeds, the browser runs *something*, and every measurement taken
+    afterwards describes a build nobody meant to test. Checking the stamp here
+    turns that into a message instead of a wrong number.
+
+    A missing stamp is a warning, not a failure — templates built before stamping
+    existed are still usable, they just cannot be identified.
+    """
+    sys.path.insert(0, str(REPO / "tools" / "pylib"))
+    try:
+        from studio_tools.provenance import ProvenanceError, series_from_lock, series_id
+    except ImportError:
+        return None
+
+    stamp_file = artifacts / "provenance.json"
+    if not stamp_file.is_file():
+        print(
+            f"warning: {stamp_file.relative_to(REPO)} is missing — these templates "
+            "cannot be identified. Rebuild with `just engine-build` to stamp them.",
+            file=sys.stderr,
+        )
+        return None
+    try:
+        stamped = json.loads(stamp_file.read_text(encoding="utf-8")).get("series_id")
+        expected = series_id(*series_from_lock(lock))
+    except (OSError, json.JSONDecodeError, ProvenanceError) as exc:
+        print(f"warning: could not read template provenance: {exc}", file=sys.stderr)
+        return None
+
+    if stamped != expected:
+        return (
+            "Installed WebGPU templates are from a different patch series.\n"
+            f"  templates: {stamped}\n"
+            f"  this repo: {expected}\n"
+            "Fix: just engine-fetch && just engine-build"
+        )
+    return None
+
+
 def check_readiness(preset: str) -> str | None:
     """Return an error message if this machine cannot run the preset."""
     lock = senv.engine_lock()
@@ -48,7 +90,7 @@ def check_readiness(preset: str) -> str | None:
                 f"{lock['toolchain']['emscripten']} — see engine/README.md).\n"
                 "Until then, use the always-green fallback: just export-browser-webgl"
             )
-        return None
+        return _webgpu_template_identity_problem(artifacts, lock)
     if preset == "android":
         import os
 

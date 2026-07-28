@@ -1,0 +1,88 @@
+Subject: [PATCH] webgpu: match textureLoad on a whole identifier, not a prefix
+
+The read-only-storage-to-sampled conversion adds a mip-level argument to
+textureLoad calls on the variable it just converted, by searching for:
+
+  "textureLoad(" + info.var_name
+
+That is a prefix match. Godot's SDFGI preprocess shader declares both
+
+  uimage3D src_light;
+  uimage3D src_light_aniso;
+
+so the search for src_light also matched src_light_aniso, which then received a
+second mip argument when its own turn came around:
+
+  textureLoad(src_light,       pos, 0)     // correct
+  textureLoad(src_light_aniso, pos, 0, 0)  // four arguments
+
+  no matching call to 'textureLoad(texture_3d<u32>, vec3<i32>, abstract-int, abstract-int)'
+
+which invalidated SdfgiPreprocessShaderRD variant 8.
+
+The fix is an identifier-boundary test rather than a longer-names-first
+ordering: a rewrite for binding x may only touch a textureLoad whose first
+argument is exactly the identifier x. Anchoring on a trailing comma would also
+have worked against Tint's current formatting, but the rule being enforced is
+"whole identifier", so that is what the code now says. Applied at both the
+shadow-texture and direct-variable sites, which shared the hazard.
+
+Measured on a Tesla P40 through Chrome/WebGPU, Chariot on Forward+:
+
+  SDFGI WGSL parse failures   1 -> 0
+  cascading invalid-module    1 -> 0
+  GPUValidationError         14 -> 6   (with 0025)
+
+diff --git a/drivers/webgpu/rendering_device_driver_webgpu.cpp b/drivers/webgpu/rendering_device_driver_webgpu.cpp
+--- a/drivers/webgpu/rendering_device_driver_webgpu.cpp
++++ b/drivers/webgpu/rendering_device_driver_webgpu.cpp
+@@ -175,6 +175,19 @@
+ // buffer must never be rewritten to read-only: the result is a module that does
+ // not parse. Resolving the declared type rather than trusting Tint's
+ // "_atomic" name suffix keeps this correct if Tint's naming ever changes.
++// True when position p_at in p_wgsl is NOT inside an identifier -- i.e. the
++// identifier that ended just before it really ended there. Used so a rewrite for
++// one texture variable cannot reach into a longer name that starts the same way.
++static bool _wgsl_identifier_ends_at(const String &p_wgsl, int64_t p_at) {
++	if (p_at >= p_wgsl.length()) {
++		return true;
++	}
++	const char32_t c = p_wgsl[p_at];
++	const bool is_identifier_char =
++			(c >= U'a' && c <= U'z') || (c >= U'A' && c <= U'Z') || (c >= U'0' && c <= U'9') || c == U'_';
++	return !is_identifier_char;
++}
++
+ static bool _wgsl_storage_decl_has_atomic(const char *p_wgsl, const char *p_decl) {
+ 	const char *colon = strchr(p_decl, ':');
+ 	if (!colon) {
+@@ -3727,6 +3740,14 @@
+ 						String search = "textureLoad(" + shadow_name;
+ 						int64_t pos = 0;
+ 						while ((pos = ws.find(search, pos)) != -1) {
++							// "textureLoad(src_light" is a PREFIX of "textureLoad(src_light_aniso".
++							// Without a boundary test the mip argument is inserted into the
++							// longer name once for each variable, producing a four-argument
++							// textureLoad on a texture_3d that WGSL rejects.
++							if (!_wgsl_identifier_ends_at(ws, pos + search.length())) {
++								pos += search.length();
++								continue;
++							}
+ 							int64_t paren_start = pos + String("textureLoad").length();
+ 							int depth = 0;
+ 							int64_t insert_mip = -1;
+@@ -3856,6 +3877,14 @@
+ 						String search = "textureLoad(" + info.var_name;
+ 						int64_t pos = 0;
+ 						while ((pos = ws.find(search, pos)) != -1) {
++							// "textureLoad(src_light" is a PREFIX of "textureLoad(src_light_aniso".
++							// Without a boundary test the mip argument is inserted into the
++							// longer name once for each variable, producing a four-argument
++							// textureLoad on a texture_3d that WGSL rejects.
++							if (!_wgsl_identifier_ends_at(ws, pos + search.length())) {
++								pos += search.length();
++								continue;
++							}
+ 							int64_t paren_start = pos + String("textureLoad").length();
+ 							int depth = 0;
+ 							int64_t insert_mip = -1;
