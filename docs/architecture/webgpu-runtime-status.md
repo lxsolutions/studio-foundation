@@ -39,10 +39,10 @@ but a render probe needs a GPU runner and remains self-hosted work.
 the live demo, the templates, the performance A/B — is **Forward Mobile**, which
 `tools/godot/export_game.py` calls "the hardware-verified default". **Forward+**
 is opt-in (`--rendering-method forward_plus`) and **has never rendered a frame.**
-As of patches 0023–0028 it gets substantially further — the scene shader
+As of patches 0023–0029 it gets substantially further — the scene shader
 translates, the cluster builder exists, scene pipelines are created and command
 buffers encoded — and then fails render-pass/pipeline attachment compatibility.
-See §Forward+ on hardware (0023–0028). Do not read a Forward Mobile result as a
+See §Forward+ on hardware (0023–0029). Do not read a Forward Mobile result as a
 Forward+ result, and do not read "the render loop runs" as "a frame rendered".
 
 | Gate | Status | Evidence |
@@ -58,8 +58,8 @@ Forward+ result, and do not read "the render loop runs" as "a frame rendered".
 | Template artifacts locked in `engine-lock.toml` | ✅ | `[artifacts.export_templates]`: release + debug + sha256 |
 | **Forward+ (clustered) shader translation** | 🟢 **translates offline** after patch 0015 — was impossible before | §Forward+ |
 | **Forward+ compiles on hardware** | 🟢 2026‑07‑25 — patches 0018–0022 | Tesla P40: full GI/SDFGI/SSAO/SSIL/VoxelGI stack compiles, **0 aborts, 0 wasm traps**. Compilation, not rendering |
-| **Forward+ renders a frame** | 🔴 **no** — **no frame has ever rendered under Forward+.** As of patches 0023–0028 it compiles the scene shader, builds a cluster list, creates pipelines and encodes command buffers, then fails render-pass/pipeline attachment compatibility | §Forward+ on hardware (0023–0028) |
-| **Forward+ D24 fallback on adapters without `depth32float-stencil8`** | ⚪ **not measured** — implemented in 0028, but this box has the feature, so the fallback path has never run | §Forward+ on hardware (0023–0028) |
+| **Forward+ renders a frame** | 🔴 **no** — **no frame has ever rendered under Forward+.** As of patches 0023–0029 it compiles the scene shader, builds a cluster list, creates pipelines and encodes command buffers, then fails render-pass/pipeline attachment compatibility | §Forward+ on hardware (0023–0029) |
+| **Forward+ D24 fallback on adapters without `depth32float-stencil8`** | ⚪ **not measured** — implemented in 0028, but this box has the feature, so the fallback path has never run | §Forward+ on hardware (0023–0029) |
 
 Reference point: a **release** WebGPU export passed a (shallow, non‑ASAN) browser
 proof on 2026‑07‑22 — `navigator.gpu` + adapter + active canvas context + 103/103
@@ -174,7 +174,7 @@ through `tail`, so the pipeline's exit status was `tail`'s — **a failed build
 looked successful**, and every measurement was of a stale binary. `CLAUDE.md`
 warns about exactly this.
 
-## Forward+ on hardware — 18 → the render loop runs (patches 0023–0028, 2026‑07‑28)
+## Forward+ on hardware — 18 → the render loop runs (patches 0023–0029, 2026‑07‑28)
 
 Same host: a Tesla P40 through headed Chrome/WebGPU under Xvfb, Chariot exported
 with `--rendering-method forward_plus`, measured by
@@ -183,9 +183,11 @@ colours, so a cleared-but-never-drawn buffer cannot be mistaken for a frame).
 
 **Forward+ still has not presented a frame. What changed is where it stops.**
 Through 0022 it stopped in shader translation. It now compiles the scene shader,
-builds its cluster list, creates scene pipelines and encodes command buffers, and
-stops at render-pass/pipeline attachment compatibility. That is several layers
-deeper, and it is a different problem.
+builds its cluster list, creates scene pipelines, encodes command buffers, and
+clears render-pass/pipeline attachment validation entirely — 44 distinct
+pipeline/pass pairs, zero mismatches. What remains are binding-level defects: a
+multisampled sampler, a comparison sampler, and two storage-format promotions.
+Each layer cleared has revealed a different problem, not the same one restated.
 
 | Patch | What hardware showed | `GPUValidationError` | Frame |
 | --- | --- | --- | --- |
@@ -196,6 +198,7 @@ deeper, and it is a different problem.
 | 0026 | **the actual blocker.** `scene_forward_clustered.glsl` calls `subgroupMin`/`subgroupMax`/`subgroupOr` with no guard of any kind, so the scene shader never translated | 6 | no |
 | 0027 | `depth32float-stencil8` is an optional device feature; using it unrequested throws a `TypeError` from `createRenderPipeline`, which stops the renderer rather than failing one pipeline | 3952 | no |
 | 0028 | D32 support was answered from a static table, so Godot would pick a format the device cannot create and never reach its own D24 fallback | — | no |
+| 0029 | an **unused fragment output was becoming a real `rgba8unorm` target** — masking writes does not make a target absent, and the render-pass path already emitted null for the same slot | 4780 | no |
 
 **Read the 0027 row correctly.** The count rose because the renderer began
 running a per-frame loop instead of dying once — thousands of occurrences of a
@@ -203,19 +206,28 @@ handful of classes, repeated every frame. Normalised, the remaining classes are:
 
 | Class | Distinct | Status |
 | --- | --- | --- |
-| pipeline/render-pass attachment state incompatible | 1 | the current frontier |
-| invalid CommandBuffer / BindGroup | 2 | cascades from the above |
+| ~~pipeline/render-pass attachment state incompatible~~ | — | **closed by 0029** |
+| `sampler2DMS` texture-vs-sampler binding (`ResolveShaderRD`, `SsEffectsDownsample`) | 1 | open |
 | comparison sampler bound as non-comparison | 1 | open |
-| `sampler2DMS` texture-vs-sampler binding (`ResolveShaderRD`, `SsEffectsDownsample`) | 1 | open, tracked separately |
-| R16Float view of an R32Float texture | 1 | open |
+| R8Unorm texture where RGBA8Unorm expected | 1 | open — storage-format promotion |
+| R16Float view of an R32Float texture | 1 | open — storage-format promotion |
+| invalid CommandBuffer / BindGroup / TextureView | 3 | cascades from the above |
 
-The attachment mismatch, captured from the browser by hooking
-`createRenderPipeline` and `beginRenderPass`:
+The attachment mismatch, captured from the browser and **closed by 0029**:
 
 | | colour targets | depth | samples |
 | --- | --- | --- | --- |
-| `SceneForwardClusteredShaderRD:19` pipeline | `rgba16float, rgba8unorm, rgba8unorm` | `depth32float-stencil8` | 1 |
-| render passes observed | `rgba8unorm` | none | — |
+| `SceneForwardClusteredShaderRD:19` pipeline, before 0029 | `rgba16float, rgba8unorm, rgba8unorm` | `depth32float-stencil8` | 1 |
+| its actual render pass | `rgba16float, null, null` | `depth32float-stencil8` | 1 |
+| after 0029 | `rgba16float, null, null` | `depth32float-stencil8` | 1 |
+
+**How that was diagnosed matters, because the first attempt got it wrong.**
+Listing pipelines and passes as two independent sets suggested the scene pipeline
+was running against a single-target `rgba8unorm` pass with no depth. It was not —
+those were the Tonemap and Canvas passes. `tests/browser/pass-trace.mjs` records
+every `setPipeline` **against the pass it was issued inside**, which showed the
+scene pass had been correct all along and the pipeline was the wrong side. After
+0029 it reports 44 distinct pipeline/pass pairs with **zero mismatches**.
 
 **Two results worth keeping regardless of what the next layer costs.**
 

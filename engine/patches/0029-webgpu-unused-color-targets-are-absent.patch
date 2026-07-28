@@ -1,0 +1,136 @@
+Subject: [PATCH] webgpu: an unused color target is absent, not rgba8unorm
+
+An unused fragment output location was being turned into a real render target.
+
+  WGPUTextureFormat fmt = WGPUTextureFormat_RGBA8Unorm; // Placeholder for unused slots.
+  ...
+  color_targets[i].format = fmt;
+  if (p_color_attachments[i] == ATTACHMENT_UNUSED) {
+      color_targets[i].writeMask = WGPUColorWriteMask_None;
+
+Masking the writes does not make a target absent. It stays a real rgba8unorm
+target for render-pass compatibility, while the render-pass path in this same
+driver already emits a null view for the identical slot. The two sides therefore
+disagreed on every Forward+ scene pipeline:
+
+  pipeline  [rgba16float, rgba8unorm, rgba8unorm] + depth32float-stencil8
+  pass      [rgba16float, null,       null      ] + depth32float-stencil8
+
+  Attachment state of [RenderPipeline "SceneForwardClusteredShaderRD:19"] is not
+  compatible with [RenderPassEncoder]
+
+An unused location now emits WGPUTextureFormat_Undefined, which is how a null
+entry in the JS fragment.targets sequence is expressed through the C API. Holes
+are preserved in place rather than compacted: Godot reserves stable @location()s
+for optional outputs such as separate specular and motion vectors, so
+[used, unused, used] has to keep its middle hole.
+
+Measured on a Tesla P40 through Chrome/WebGPU, Chariot on Forward+:
+
+  attachment-state incompatibility   1018 -> 0
+  cascading invalid CommandBuffer    1005 -> 0
+  GPUValidationError                 9004 -> 4780
+
+Confirmed by pairing rather than by count: tests/browser/pass-trace.mjs records
+every setPipeline against the pass it was issued inside, and reports 44 distinct
+pipeline/pass pairs with ZERO mismatches. Comparing independent lists of
+pipelines and passes is what produced a wrong diagnosis earlier in this
+investigation -- the [rgba8unorm], no-depth passes turned out to be Tonemap and
+Canvas, not the scene pass.
+
+Still no frame. Remaining distinct classes are unrelated to attachments:
+sampler2DMS binding, comparison-sampler-as-non-comparison, and two storage
+format-promotion mismatches (R8Unorm vs RGBA8Unorm, R16Float view of R32Float).
+
+diff --git a/drivers/webgpu/rendering_device_driver_webgpu.cpp b/drivers/webgpu/rendering_device_driver_webgpu.cpp
+--- a/drivers/webgpu/rendering_device_driver_webgpu.cpp
++++ b/drivers/webgpu/rendering_device_driver_webgpu.cpp
+@@ -926,6 +926,10 @@
+ 	// Optional texture-compression families. The JS shell opts in to these when
+ 	// the adapter supports them; we must match that here so Godot only advertises
+ 	// the corresponding DataFormats when they'll actually work.
++	// Optional; see texture_get_usages_supported_by_format for why the DEVICE and
++	// not the adapter is the authority here.
++	has_depth32float_stencil8 = wgpuDeviceHasFeature(device, WGPUFeatureName_Depth32FloatStencil8);
++	print_verbose(vformat("WebGPU: depth32float-stencil8 %s", has_depth32float_stencil8 ? "enabled" : "unavailable (Godot will use D24_UNORM_S8_UINT)"));
+ 	has_texture_compression_bc = wgpuDeviceHasFeature(device, WGPUFeatureName_TextureCompressionBC);
+ 	has_texture_compression_etc2 = wgpuDeviceHasFeature(device, WGPUFeatureName_TextureCompressionETC2);
+ 	has_texture_compression_astc = wgpuDeviceHasFeature(device, WGPUFeatureName_TextureCompressionASTC);
+@@ -2240,6 +2244,16 @@
+ 		case DATA_FORMAT_D16_UNORM_S8_UINT:
+ 		case DATA_FORMAT_D24_UNORM_S8_UINT:
+ 		case DATA_FORMAT_D32_SFLOAT_S8_UINT:
++			// depth32float-stencil8 is an OPTIONAL WebGPU device feature. Godot
++			// prefers D32_SFLOAT_S8_UINT and falls back to D24_UNORM_S8_UINT, but
++			// only if this call says the preferred one is unsupported. Answering
++			// from the static format table instead of the device would make Godot
++			// choose D32 on an adapter that cannot create it, and texture creation
++			// would fail later with no fallback left -- a bug that is invisible on
++			// hardware that happens to have the feature.
++			if (!has_depth32float_stencil8) {
++				return 0;
++			}
+ 			is_depth_stencil = true;
+ 			break;
+ 
+@@ -8459,8 +8473,31 @@
+ 	memset(blend_states.ptr(), 0, sizeof(WGPUBlendState) * color_target_count);
+ 
+ 	for (uint32_t i = 0; i < color_target_count; i++) {
++		// A fragment output location Godot marks unused must become an ABSENT entry
++		// in fragment.targets, not a real target with its writes masked off.
++		// WGPUTextureFormat_Undefined is how a null entry in the JS targets sequence
++		// is expressed through the C API.
++		//
++		// A placeholder RGBA8Unorm here stays a real target for render-pass
++		// compatibility purposes, and the render-pass path already emits a null view
++		// for the very same slot -- so the two sides of this driver disagreed, and
++		// every Forward+ scene pipeline was rejected:
++		//
++		//   pipeline  [rgba16float, rgba8unorm, rgba8unorm] + depth32float-stencil8
++		//   pass      [rgba16float, null,       null      ] + depth32float-stencil8
++		//
++		// Godot reserves stable @location()s for optional outputs (separate specular,
++		// motion vectors). When those are inactive the location is a hole, so holes
++		// are preserved in place rather than compacted away -- [used, unused, used]
++		// has to keep its middle hole.
++		if (p_color_attachments[i] == ATTACHMENT_UNUSED) {
++			color_targets[i].format = WGPUTextureFormat_Undefined;
++			color_targets[i].writeMask = WGPUColorWriteMask_None;
++			continue;
++		}
++
+ 		// Get texture format from subpass color reference i.
+-		WGPUTextureFormat fmt = WGPUTextureFormat_RGBA8Unorm; // Placeholder for unused slots.
++		WGPUTextureFormat fmt = WGPUTextureFormat_RGBA8Unorm; // Fallback if the reference is missing.
+ 		if (i < (uint32_t)subpass.color_references.size()) {
+ 			int32_t att_idx = subpass.color_references[i].attachment;
+ 			if (att_idx != ATTACHMENT_UNUSED && (uint32_t)att_idx < (uint32_t)rp->attachments.size()) {
+@@ -8481,11 +8518,6 @@
+ 		}
+ 		color_targets[i].format = fmt;
+ 
+-		if (p_color_attachments[i] == ATTACHMENT_UNUSED) {
+-			color_targets[i].writeMask = WGPUColorWriteMask_None;
+-			continue;
+-		}
+-
+ 		// Blend state from p_blend_state.attachments[i].
+ 		if (i < (uint32_t)p_blend_state.attachments.size()) {
+ 			const PipelineColorBlendState::Attachment &ba = p_blend_state.attachments[i];
+@@ -9286,11 +9318,11 @@
+ 		case SUPPORTS_FRAGMENT_SHADER_WITH_ONLY_SIDE_EFFECTS:
+ 			// WebGPU requires a render pass to have at least one color attachment or
+ 			// a depth-stencil attachment; a pass with neither is a validation error
+-			// ("No attachment was specified."). Reporting true made the cluster builder
++			// ("No attachment was specified"). Reporting true made the cluster builder
+ 			// take framebuffer_format_create_empty() and fail every frame. Reporting
+-			// false selects Godot's existing USE_ATTACHMENT path, which binds a
+-			// throwaway color target -- the cost of one unused attachment, in exchange
+-			// for the pass actually executing.
++			// false selects the USE_ATTACHMENT variant, which binds a throwaway color
++			// target -- the cost of one unused attachment, in exchange for the pass
++			// actually executing.
+ 			return false;
+ 		case SUPPORTS_IMAGE_ATOMIC_32_BIT:
+ 			return false; // WebGPU has no image atomics support.
