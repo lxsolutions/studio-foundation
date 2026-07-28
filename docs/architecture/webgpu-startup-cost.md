@@ -51,25 +51,50 @@ This is the cheapest available improvement and it is a hosting configuration, no
 an engineering project. It should be stated in the deployment runbook rather than
 discovered.
 
-## An open defect: the warm run re-downloaded the wasm
+## Confirmed defect: the engine wasm is never cached
 
-The warm measurement transferred 11,834,888 bytes — the gzipped wasm, almost
-exactly — despite the server sending `Cache-Control: public, max-age=86400` and
-the browser having fetched it moments earlier.
+A returning visitor re-downloads the engine wasm in full, every time. Measured by
+Resource Timing `transferSize` on a genuine second navigation, with the cache
+enabled throughout:
 
-Warm was still 7.5 s faster than cold, which suggests Chrome's compiled-wasm code
-cache did help even though the bytes came over again. But the bytes should not
-have come over again.
+| Resource | Visit 1 transferred | Visit 2 transferred |
+| --- | --- | --- |
+| `index.js` | 68,940 | **0** — cached |
+| `index.pck` | 2,080,009 | **0** — cached |
+| `index.wasm` | 11,834,888 | **11,834,888** — re-downloaded |
 
-**Not yet diagnosed**, and it may be an artefact of how the probe sets up its warm
-run rather than a real caching failure. Confirming which is the first thing worth
-doing here, because if it is real, fixing it removes a third of the warm start for
-returning players at no engineering cost.
+**Everything caches except the wasm**, which is 85% of the transfer.
+
+Four explanations were tested and eliminated before this was written down:
+
+1. *Missing validators.* The test server was reissued with `ETag` and
+   `Last-Modified`. No change.
+2. *A reload rather than a navigation.* `page.goto()` twice to one URL is a
+   reload, which deliberately bypasses cache for navigation subresources. The
+   test now navigates away and back. No change.
+3. *The loader opting out.* Godot's loader calls
+   `fetch(url, {credentials: "same-origin"})` with no `cache` option, so it uses
+   the default policy. It is not opting out.
+4. *Measurement error.* `encodedDataLength` on CDP `Network.responseReceived` is
+   the header length, not the body, and reading it as a transfer size was wrong.
+   Three independent signals now agree: Resource Timing `transferSize`,
+   `fromDiskCache`, and the original startup profile.
+
+Two candidate causes remain, and this document does not pick between them:
+Chrome caps a single disk-cache entry at a fraction of total cache size, and
+11.8 MB may exceed it in this profile; or `WebAssembly.instantiateStreaming`
+interacts with the HTTP cache differently from an ordinary fetch. The 7.5 s that
+warm starts *do* save is consistent with Chrome's separate compiled-wasm code
+cache working even while the bytes come again.
+
+The impact is worth the attention: **fixing this removes 11.8 MB from every
+repeat visit**, which on the fast-4G profile is most of the download time.
 
 ## What this says to do, in order
 
 1. **Serve compressed.** 3.9× on the dominant asset, configuration-only.
-2. **Confirm or dismiss the caching defect above.** Cheap, and potentially large.
+2. **Fix wasm caching.** Confirmed above, and worth 11.8 MB per repeat visit.
+   Identify which of the two candidate causes applies before choosing a remedy.
 3. **Attack shader compilation.** This is where the remaining ~23 s lives.
    Godot compiles its shader variants at startup; the patch series already
    carries an offline WGSL precompilation harness
