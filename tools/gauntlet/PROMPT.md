@@ -1,131 +1,156 @@
 # The overnight prompt
 
-Paste this as a single message. Replace the three `<<< >>>` slots. Everything
-else is load-bearing — the clauses about the judge, the ownership rules and the
-stop condition are what separate this from "make me a cool game", and each one
-exists because its absence is visible in the public builds (see BLUEPRINT.md).
+Paste as one message, replace the two `<<< >>>` slots, go to sleep.
+
+Every clause exists because its absence cost a measured round. Do not trim it —
+the length is the point. `BLUEPRINT.md` holds the evidence behind each one.
 
 ---
 
 ```
 /loop /goal Build <<<TITLE>>> — a browser game whose visual craft beats <<<REAL GAME TO BEAT>>> — and do not stop until a sealed blind judge picks ours.
 
-THE BAR — establish before writing any game code
-- Reference frames live in gauntlet/references/<<<BAR NAME>>>/. If that directory is
-  empty, tell me exactly what to put there, then continue with everything that
-  does not depend on it. Do not proceed against an adjective.
-- "AAA quality" is not a bar. A frame is a bar.
+THE BAR — before any game code
+- Capture 4-8 frames of the target into tools/gauntlet/references/<name>/ covering
+  its real range, not only its best shot. Then:
+    node tools/gauntlet/harness/calibrate.mjs --references tools/gauntlet/references/<name>
+  That derives the thresholds. Fixed constants are wrong in BOTH directions: they
+  flagged four defects on a beautiful dark reference AND passed a build 3x short
+  of the real bar.
+- If you cannot capture the target lawfully, say so and propose the closest
+  inspectable substitute. Never proceed against an adjective.
+
+PICK A WINNABLE BAR
+Photoreal military realism is an asset-density war you lose. Matt Shumer aimed
+there and published the result: 5.05/10, and in blind A/B every critic in every
+round picked the real Call of Duty frame. Aim where art direction substitutes for
+asset budget: Journey, Sable, Obra Dinn, Outer Wilds, Hyper Light Drifter.
+PREFER AN INTERIOR OR ENCLOSED SPACE. This is the most underrated decision here:
+in an interior every pixel lands on something, which is exactly why the densest
+reference frames are ship interiors and corridors.
 
 SUBSTRATE
-- **TypeScript**, strict, with `tsc --noEmit` as a preflight gate. Not for
-  cleanliness — for feedback latency. A capture round costs ~4 minutes on the
-  remote GPU; a typecheck costs ~2 seconds. Never spend the former to discover
-  the latter. `round.mjs` runs it automatically when tsconfig.json exists.
-- Three.js. Default to WebGL2 so it runs everywhere including this box, which
-  has no GPU at all. WebGPU IS available on smeagol (verified: webgpu=nvidia /
-  pascal), so you may target it if the game genuinely needs compute — but then
-  ALL iteration must go through --remote smeagol.
-- MEASURE ON smeagol, ALWAYS. Never gate visuals or performance on this box:
-  the software rasterizer degrades the image enough to change the objective
-  numbers and invent defects that do not exist on real hardware (measured:
-  edgeEnergy 6.2 software vs 11.81 on a Tesla P40; 4 findings vs 0).
-    node harness/serve.mjs --root . --port 8099 &
-    node harness/shotset.mjs --remote smeagol --url http://127.0.0.1:8099/<path> ...
-- Zero external assets beyond three.js. Every mesh, texture, material, animation
-  and sound generated in code. This is for COHERENCE, not purity — one material
-  and lighting vocabulary is what makes it read as a real engine.
-- Exception: you MAY author hard-surface meshes with bforge (studio-foundation,
-  ADR 0014) and export GLB into the build. Prefer that over blocky primitives.
-  Generate -> render.contact_sheet -> LOOK at the image -> check.critique -> fix
-  -> export.asset. Never a GUI-dependent Blender MCP.
-- First increment, before anything else: import runtime/gauntlet-hooks.js and
-  register seed, camera, stats and ready. Nothing downstream is measurable
-  without it.
+- TypeScript, strict. Preflight BUILDS (`npx tsc`), never `--noEmit` — the browser
+  loads the emitted .js, so a typecheck-only gate lets an edited .ts pass while
+  the capture measures the PREVIOUS compile.
+- Three.js on WebGL2. WebGPU works on smeagol if a system genuinely needs compute,
+  but then everything iterates through --remote.
+- First increment, before content: import tools/gauntlet/runtime/gauntlet-hooks.js
+  and register seed, camera, stats, probe, scene, ready. Nothing downstream is
+  measurable or reproducible without it.
 
-EVERY ROUND — one command does the deterministic part
-    node gauntlet/harness/round.mjs \
-      --url http://127.0.0.1:8099/<path> \
-      --shots shots.json \
-      --references gauntlet/references/<<<BAR NAME>>> \
-      --remote smeagol \
-      --note "<what you changed this round>"
+ASSETS — RUN THIS BEFORE HAND-WRITING ANY GEOMETRY
+    python tools/bforge/bforge/cli.py ops
+106 ops already exist: arch.colonnade, kit.set, build.greeble, env.scatter,
+env.terrain, prop.debris, prop.pillar, char.humanoid. I hand-wrote a worse column
+than `prop.pillar` produces in one line.
+- Surface with material.pbr (layered: edge wear from curvature, cavity dirt from
+  AO, micro-detail) then material.bake_pbr. NOT material.set + material.bake —
+  the flat preset bakes a uniform grey that arrives in-engine looking untextured.
+- Run check.critique and DO WHAT IT SAYS; it names the exact fixing op.
+- render.contact_sheet, then LOOK at the image. The checker panel shows UV
+  stretch; the wireframe panel shows wasted triangles.
+- Detail geometry needs resolution to exist in: 20 flutes at 32 radial segments
+  aliased into a smooth cylinder — 640 triangles that rendered as if absent.
 
-It prints one of four verdicts. Obey it:
+FILL THE FRAME — the actual gap, measured over nine rounds
+Detail must COVER the frame, not sit on one hero prop. Removing tiled ground
+wallpaper collapsed detail 35 -> 12, because a single authored asset cannot carry
+a frame that is 70% empty ground. The bar scores 28-30 because every surface in
+it is authored. Watch `dead-space` and `blockEdgeP10`: the bar never drops below
+2.47; an empty build bottoms out at 0.23.
+- Never tile one texture over everything. It satisfies edge-energy while the
+  frame gets visibly worse. That is reward hacking and it will fool you.
+- Vary per instance: yaw, scale, seed. Twelve copies of one mesh at one rotation
+  read as a stamp.
+- Panel/seam textures must never wrap a sphere.
+
+EVERY ROUND — one command
+    node tools/gauntlet/harness/round.mjs \
+      --url http://127.0.0.1:8099/<path> --shots shots.json \
+      --references tools/gauntlet/references/<name> \
+      --remote smeagol --note "<what changed>"
+
+Obey the verdict:
   VOID      software renderer — the round is meaningless, re-run on smeagol
   REGRESSED your last change made it worse; revert or rethink BEFORE continuing
   FIX       objective defects listed — fix them, do NOT spend a judge round
   JUDGE     mechanically clean, blind deck built
 
 On JUDGE: spawn a FRESH sub-agent and give it ONLY the deck directory and
-JUDGE_BRIEF.md. It must not see the build, the diff, this prompt, or which frame
-is ours. Collect its JSON, then:
-    node gauntlet/harness/judge.mjs reveal --dir <judgeDir> --answers verdict.json
-Then fix the single largest gap it named. One thing, properly.
+JUDGE_BRIEF.md — not the build, the diff, this prompt, or which frame is ours.
+Then `judge.mjs reveal`, and fix the single largest gap it named. One thing,
+properly.
 
-ALWAYS open the frames and LOOK at them. Every real defect found while building
-this framework was invisible in the numbers — a shot scored "no objective
-defects" and still read as a 2010 tech demo.
+ALWAYS OPEN THE FRAMES AND LOOK. Every real defect found while building this
+framework was invisible in the numbers: a shot scoring "no objective defects"
+that was a disco ball; a camera sitting inside a column reported as an ordinary
+weak frame; four defects invented by a software rasterizer that do not exist on
+real hardware.
 
-OWNERSHIP — this is where these runs usually fail
-- Lighting + sky + indirect + tonemap + post is ONE owner working SEQUENTIALLY.
-  It is one coupled system. Parallel agents each "fix" it and undo each other:
-  measured at +0.46 for three parallel rounds vs +1.00 for one sequential pass,
-  with defects 66 -> 26.
+BEFORE BELIEVING A REGRESSION, ask whether the BUILD changed or the RULER did.
+Two rounds were lost to a harness bug reported as a content defect, and one
+"regression" was only the gate being calibrated for the first time.
+
+OWNERSHIP — where these runs usually fail
+- Lighting + sky + indirect + tonemap + post is ONE owner, SEQUENTIAL. It is one
+  coupled system. Measured: three parallel rounds moved quality +0.46; one
+  sequential pass moved it +1.00 and cut defects 66 -> 26.
 - Player controller + camera + input feel is ONE owner, sequential.
-- Parallelise only genuinely independent surfaces: audio, HUD/menus, world
-  content, enemy behaviour, tooling.
+- Parallelise only genuinely independent surfaces: audio, HUD, world content,
+  enemy behaviour, tooling.
 
 INTEGRITY — absolute
 - You may not edit the judge brief, relax its criteria, or re-run it until it
-  agrees. If you want to, that is the signal the work is not there yet.
-- You may not mark this done because it "looks good". Show the score.
-- If any report prints SOFTWARE RENDERER DETECTED, that run is void — re-run it
-  with --remote smeagol. Do not publish a software fps as if it were real, and
-  do not act on visual findings from a software run.
-- If you cap coverage anywhere, say what you dropped. Silent truncation reads as
-  completeness.
+  agrees. Wanting to is the signal the work is not there yet.
+- You may not mark this done because it looks good. Show the score.
+- Any run printing SOFTWARE RENDERER DETECTED is void.
+- If you cap coverage anywhere, say what you dropped.
 
-EFFORT ORDER — highest visual leverage first
-1. Light transport: indirect bounce, contact shadows, AO, falloff.
-2. Material response: roughness VARIATION above all else.
-3. Surface detail at multiple scales (watch edgeEnergy — flat shading is the
-   loudest tell of procedural work).
-4. Tonemap and grade: highlight roll-off, black point, dither before quantising.
-5. Motion integrity: unstable-pixels, z-fighting, shadow acne.
+PLAYABILITY — a beautiful build with dead controls passes every visual gate
+    node tools/gauntlet/harness/playtest.mjs --url <url> --checks playtest.json
+Assert that input moves the player, events fire, and no transform went NaN.
 
 STOP CONDITION
-Stop when two consecutive rounds produce no new findings AND the judge win rate
-has not moved. Not after N rounds. Not when it looks good.
+Two consecutive rounds with no new findings AND a flat judge win rate. Not after
+N rounds. Not when it looks good.
 
-EVERY ROUND, append to PROGRESS.md: round number, what changed, who owned it,
-objective deltas, judge win rate, the largest gap named, and what is next. Terse.
-It is what I read in the morning.
+EVERY ROUND append to PROGRESS.md: round, what changed, who owned it, objective
+deltas, judge win rate, largest gap named, what is next and why. Terse. It is what
+I read in the morning.
 
-Work autonomously. I am asleep. Do not ask me questions — make the call, write
-down the assumption, and keep going.
+Work autonomously. I am asleep. Do not ask questions — make the call, write down
+the assumption, and keep going.
 ```
 
 ---
 
-## Choosing the bar
+## What one overnight run actually gets you
 
-Pick a bar you can actually beat on craft rather than on budget. Photoreal
-military realism is the worst possible target from a GPU-less box: it is pure
-pixel throughput, and it is what every one of these viral demos already loses at
-(5.05/10, zero blind wins).
+Being specific, because "AAA" is the word that makes this feel impossible.
 
-Strong choices instead — art direction beats horsepower:
+**Reachable in one run:** something that looks like the viral clips — coherent
+lighting, authored assets, 60 fps, a real game loop. That is what those demos
+are, and we have things they did not: a headless deterministic asset forge, a
+calibrated gate, GPU-truth measurement, and a sealed blind judge.
 
-| Target | Why it is winnable |
+**Not reachable, by anyone yet:** beating Call of Duty. The most-shared build in
+that wave scores 5.05/10 against it and has never won a blind comparison.
+
+Budget honestly: mikeluan123 posted **$632.65** for one game; Anshu ran 24 hours
+and stopped it manually. This is hours and real money, not minutes.
+
+## Choosing the target
+
+| target | why it is winnable |
 |---|---|
-| **Journey** / **Sable** | Flat-ish shading, huge silhouettes, colour grading does the work |
-| **Hyper Light Drifter** | Deliberate palette, no material realism needed |
-| **Return of the Obra Dinn** | 1-bit dither — literally cheaper the more stylised it gets |
-| **Tunic** / **Death's Door** | Clean shapes, strong light, tiny material budget |
-| **Outer Wilds** | Scale and mood, not surface fidelity |
+| **anything interior / enclosed** | every pixel lands on something — the biggest single lever |
+| Journey / Sable | flat-ish shading, huge silhouettes, the grade does the work |
+| Return of the Obra Dinn | 1-bit dither — cheaper the more stylised it gets |
+| Outer Wilds | scale and mood, not surface fidelity |
+| Hyper Light Drifter | deliberate palette, zero material realism required |
 
-You already have an art direction nobody else in that wave has: the Hellenic
-futurism of Riftline, and a headless deterministic asset forge (bforge) that is
-strictly better than the community Blender MCP the 24-hour run used. Building
-your own IP against a stylised bar plays every advantage you have; building a
-Call of Duty clone plays none of them.
+You have an art direction nobody in that wave has — the Hellenic futurism of
+Riftline — and bforge, which is strictly better than the community Blender MCP
+the 24-hour run used. Build your own thing against a stylised interior bar and
+every advantage you own applies.
