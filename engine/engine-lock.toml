@@ -89,6 +89,7 @@ series = [
   { file = "patches/0029-webgpu-unused-color-targets-are-absent.patch", sha256 = "6da7b9fecb477ac6ac288270e38e500159827b9e931a132a4908b57bbb2aab50" },
   { file = "patches/0030-webgpu-view-format-follows-the-texture.patch", sha256 = "c63417574fd85a672ca884b535f2d1ca7c29ac997959de94afe29809ed3df809" },
   { file = "patches/0031-webgpu-shared-view-physical-format-invariant.patch", sha256 = "faab98a67f18d0e74c6389af485e8c59e197224ec377ffc34f209b65045a35f0" },
+  { file = "patches/0032-godot-ssao-interleave-r8-backport.patch", sha256 = "0c662817a350eb423e14baee160bc0777c838591c797f49667574719a573e83a" },
 ]
 
 [artifacts.export_templates]

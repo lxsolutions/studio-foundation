@@ -50,7 +50,7 @@ const browser = await chromium.launch({
 const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
 
 await page.addInitScript(() => {
-  globalThis.__bind = { failures: [], seq: 0, counts: {} };
+  globalThis.__bind = { failures: [], seq: 0, counts: {}, encoderSeq: 0, submits: {} };
 
   const samplers = new WeakMap(); // GPUSampler -> descriptor
   const textures = new WeakMap(); // GPUTexture -> descriptor
@@ -159,6 +159,116 @@ await page.addInitScript(() => {
       return l;
     });
 
+  // --- encoder -> command buffer -> submit identity ------------------------
+  //
+  // An invalid bind group does not fail locally. It invalidates the encoder that
+  // binds it, finish() then returns an invalid command buffer, and submit()
+  // rejects the whole submission before anything reaches the GPU. Counting those
+  // rejections is what separates "a resource was invalid" from "the frame was
+  // actually thrown away".
+  //
+  // Carrying the recorded shader families along that chain answers the question
+  // the aggregate counts cannot: whether the rejected submissions were the ones
+  // containing the scene draws, or a separate compute submission whose missing
+  // output a later valid pass then consumed.
+  once(D, "createCommandEncoder", (orig) =>
+    function (d) {
+      const e = orig.call(this, d);
+      try {
+        e.__studioDevice = this;
+        e.__studioFamilies = new Set();
+        if (this.queue && !this.queue.__studioDevice) this.queue.__studioDevice = this;
+      } catch (err) {}
+      return e;
+    });
+
+  // A pass encoder cannot reach its parent, so it shares the family set by
+  // reference when the pass is begun.
+  for (const name of ["beginRenderPass", "beginComputePass"]) {
+    once(GPUCommandEncoder.prototype, name, (orig) =>
+      function (d) {
+        const pass = orig.call(this, d);
+        try {
+          pass.__studioFamilies = this.__studioFamilies;
+        } catch (e) {}
+        return pass;
+      });
+  }
+
+  for (const proto of [globalThis.GPURenderPassEncoder, globalThis.GPUComputePassEncoder]) {
+    if (!proto) continue;
+    once(proto.prototype, "setPipeline", (orig) =>
+      function (pl) {
+        try {
+          const fam = /:([A-Za-z]+ShaderRD)/.exec(pl?.label ?? "")?.[1];
+          if (fam && this.__studioFamilies) this.__studioFamilies.add(fam);
+        } catch (e) {}
+        return orig.call(this, pl);
+      });
+  }
+
+  once(GPUCommandEncoder.prototype, "finish", (orig) =>
+    function (d) {
+      const dev = this.__studioDevice ?? null;
+      const families = [...(this.__studioFamilies ?? [])];
+      if (dev) dev.pushErrorScope("validation");
+      const cb = orig.call(this, d);
+      try {
+        cb.__studioFamilies = families;
+      } catch (e) {}
+      if (dev) {
+        dev.popErrorScope()
+          .then((err) => {
+            const b = globalThis.__bind;
+            b.finish_total = (b.finish_total ?? 0) + 1;
+            if (err) {
+              b.finish_failed = (b.finish_failed ?? 0) + 1;
+              if ((b.finish_messages ??= []).length < 3) b.finish_messages.push(err.message);
+            }
+          })
+          .catch(() => {});
+      }
+      return cb;
+    });
+
+  if (globalThis.GPUQueue) {
+    once(GPUQueue.prototype, "submit", (orig) =>
+      function (list) {
+        const dev = this.__studioDevice ?? null;
+        // A submit is rejected as a whole if ANY buffer in it is invalid, so the
+        // families across the entire list are what a rejection took down.
+        const families = new Set();
+        for (const cb of list ?? []) for (const f of cb?.__studioFamilies ?? []) families.add(f);
+        const key = [...families].sort().join(",") || "(none)";
+        // Record the batch size too. Unioning families across a list proves
+        // SUBMISSION-level co-membership; it only proves the invalid bind group
+        // and the scene draws shared one COMMAND BUFFER when the batch holds
+        // exactly one. Without this the stronger claim would be unsupported.
+        const b0 = globalThis.__bind;
+        const sizes = (b0.submit_batch_sizes ??= {});
+        sizes[(list ?? []).length] = (sizes[(list ?? []).length] ?? 0) + 1;
+        if (dev) dev.pushErrorScope("validation");
+        const r = orig.call(this, list);
+        if (dev) {
+          dev.popErrorScope()
+            .then((err) => {
+              const b = globalThis.__bind;
+              b.submit_total = (b.submit_total ?? 0) + 1;
+              const bucket = (b.submits[key] ??= { accepted: 0, rejected: 0 });
+              if (err) {
+                b.submit_failed = (b.submit_failed ?? 0) + 1;
+                bucket.rejected += 1;
+                if ((b.submit_messages ??= []).length < 3) b.submit_messages.push(err.message);
+              } else {
+                bucket.accepted += 1;
+              }
+            })
+            .catch(() => {});
+        }
+        return r;
+      });
+  }
+
   // The heart of it: attribute a validation error to the exact createBindGroup
   // that produced it, rather than to whatever happened to be nearby in time.
   once(D, "createBindGroup", (orig) =>
@@ -213,6 +323,16 @@ const result = await page.evaluate(() => ({
   failures: globalThis.__bind?.failures ?? [],
   counts: globalThis.__bind?.counts ?? {},
   total: globalThis.__bind?.seq ?? 0,
+  command_buffers: {
+    finish_total: globalThis.__bind?.finish_total ?? 0,
+    finish_failed: globalThis.__bind?.finish_failed ?? 0,
+    finish_messages: globalThis.__bind?.finish_messages ?? [],
+    submit_total: globalThis.__bind?.submit_total ?? 0,
+    submit_failed: globalThis.__bind?.submit_failed ?? 0,
+    submit_messages: globalThis.__bind?.submit_messages ?? [],
+    by_shader_families: globalThis.__bind?.submits ?? {},
+    batch_sizes: globalThis.__bind?.submit_batch_sizes ?? {},
+  },
 }));
 await browser.close();
 
@@ -223,6 +343,13 @@ if (AS_JSON) {
   console.log(JSON.stringify({ ...result, failures }, null, 2));
 } else {
   console.log(`createBindGroup calls: ${result.total}`);
+  const cb = result.command_buffers;
+  console.log(`commandEncoder.finish : ${cb.finish_total} calls, ${cb.finish_failed} invalid`);
+  console.log(`queue.submit          : ${cb.submit_total} calls, ${cb.submit_failed} rejected`);
+  console.log(`submit batch sizes    : ${JSON.stringify(cb.batch_sizes ?? {})}`);
+  console.log("submissions, by the shader families the submitted buffers recorded:");
+  for (const [fams, n] of Object.entries(cb.by_shader_families ?? {}))
+    console.log(`   accepted ${String(n.accepted).padStart(6)}   rejected ${String(n.rejected).padStart(6)}   ${fams}`);
   console.log(`distinct failure messages: ${Object.keys(result.counts).length}`);
   for (const [msg, n] of Object.entries(result.counts)) console.log(`  x${n}  ${msg}`);
   console.log();
