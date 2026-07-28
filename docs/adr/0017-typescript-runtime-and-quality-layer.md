@@ -71,10 +71,15 @@ harness, with no code changes, produced full reports for:
 Capability and application backend are reported separately, because conflating
 them overstates the claim: every run above had a hardware WebGPU adapter
 *available*, while the Three.js template and the `web-webgl` export both render
-through `webgl2`. Probing the page's own canvas also produced the first evidence
-that ADR 0002's patch series genuinely renders through WebGPU — the
-`web-webgpu` export reports `Application rendered through: webgpu` at 60 fps p50
-on the same host.
+through `webgl2`.
+
+An earlier revision of this ADR claimed the `web-webgpu` export was the first
+evidence that ADR 0002's patch series renders through WebGPU on hardware. **That
+claim was wrong and is withdrawn.** It came from a destructive probe that created
+a WebGPU context on a canvas which had none, and then reported it. With passive
+detection the same export reports `no-context-requested` and renders a black
+screen — see `tools/gauntlet/VERIFICATION.md` §3. This does not affect the
+engine-neutrality argument, which rests on the `web-webgl` export.
 
 ## Consequences
 
@@ -84,9 +89,10 @@ on the same host.
   across runtimes for the first time.
 - ADR 0001's "primary engine" framing narrows to "primary *Godot* engine and
   editor of record for Godot projects"; it no longer implies the only runtime.
-- Godot's WebGPU patch series becomes verifiable on real hardware through
+- Godot's WebGPU patch series becomes *testable* on real hardware through
   `tools/gauntlet/harness/remote.mjs --gpu-profile webgpu`, which previously had
-  no hardware path on the development host.
+  no hardware path on the development host. The first such test found the
+  `web-webgpu` export rendering black on a Tint shader-translation failure.
 - Two runtimes mean two sets of template maintenance. This is accepted
   deliberately; the shared asset and quality layers absorb most of the
   duplication, and the alternative is worse (see below).

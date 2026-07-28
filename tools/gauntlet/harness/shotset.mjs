@@ -94,6 +94,21 @@ const INSTRUMENT = `
       }
     });
   };
+  // Record which context type the page ASKS for, passively.
+  //
+  // Probing with getContext() afterwards is destructive: on a canvas that has
+  // no context yet, getContext('webgpu') CREATES one rather than reporting one.
+  // That made a web-webgl export -- which had failed to boot, so its canvas was
+  // still bare -- report "rendered through webgpu". The tool manufactured the
+  // answer it then reported. Hooking the call is the only passive way to know.
+  const origGetContext = HTMLCanvasElement.prototype.getContext;
+  G.contexts = [];
+  HTMLCanvasElement.prototype.getContext = function (type, ...rest) {
+    const ctx = origGetContext.call(this, type, ...rest);
+    if (ctx && !G.contexts.includes(type)) G.contexts.push(type);
+    return ctx;
+  };
+
   try {
     new PerformanceObserver((l) => { G.longTasks += l.getEntries().length; })
       .observe({ entryTypes: ['longtask'] });

@@ -353,3 +353,51 @@ cannot settle it.
 with `--source`/`--build` set. If the splash and the black frame survive a fresh
 export they are real defects in a shipped game, found by the harness on its
 first outing against one.
+
+## R11 — Chariot re-export: a real game bug, and a retraction (owner: tooling)
+
+Re-exported Chariot fresh so the previous round's suspicions could be settled.
+The staleness guard went quiet, which is the correct behaviour.
+
+**RETRACTION.** The earlier claim that `web-webgpu` "renders through WebGPU at
+60 fps p50 — the first evidence ADR 0002's patch series works on hardware" was
+WRONG, and it reached the PR body, VERIFICATION.md and ADR 0017. Cause: the
+`applicationRenderer` probe called `getContext('webgpu')` on the page's canvas.
+On a canvas with no context that does not report a context, it CREATES one. The
+export had failed to initialise, its canvas was bare, and the probe manufactured
+the answer it then reported. Corrected in all three places.
+
+Detection is now passive: an init-script hook wraps
+`HTMLCanvasElement.prototype.getContext` and records what the page asks for.
+Caught because a control run produced an impossible result — a `web-webgl`
+export reporting `webgpu`.
+
+**REAL BUG in a shipped game**, both exports fresh, staleness clean:
+
+| export | applicationRenderer | boot | black% | console errors |
+|---|---|---|---|---|
+| web-webgl | `webgl2` | 2.3s | 0.07–0.25 | 0 |
+| web-webgpu | **`no-context-requested`** | 18.9s | **98.94–99.13** | **25** |
+
+The WebGPU export renders a black screen. It never obtains a context, because
+shader translation aborts:
+
+```
+Tint SPIR-V→WGSL failed: var: struct size (32) is smaller than the end of the
+last member (224) — %instances:ref<storage, InstanceDataBuffer_1_1_a64, ...>
+WebGPU: SPIR-V→WGSL conversion failed for stage 1.
+```
+
+Same family as the historical Tint/volumetric_fog failure: Tint rejects a
+shader, the stage never compiles, the screen goes black. Here it is an
+InstanceDataBuffer whose declared struct size (32) is smaller than its last
+member's end (224).
+
+**fps p50 was 60 on the broken build**, because it was drawing nothing. A
+performance gate alone would have passed this.
+
+**Next:** the Tint struct-size error is a concrete, actionable defect in the
+WebGPU patch series — an instancing storage buffer whose std430 layout is
+mis-declared. That is worth its own investigation and is the single highest-value
+thing found in this whole run, because it is a real bug in shipped code rather
+than a template exercise.

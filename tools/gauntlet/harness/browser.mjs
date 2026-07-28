@@ -120,19 +120,18 @@ export async function probeGpu(page) {
       canvases: 0,
     };
 
-    // Detect the page's real backend before creating any canvas of our own.
+    // Read what the page ASKED for, recorded by the init-script hook. Probing
+    // with getContext() here would create a context on a bare canvas and report
+    // it as the application's choice -- which is exactly the false positive
+    // that made a web-webgl export claim it rendered through WebGPU.
     try {
-      const found = new Set();
+      const rec = globalThis.__gauntletProbe?.contexts ?? [];
       const list = Array.from(document.querySelectorAll('canvas'));
       out.canvases = list.length;
-      for (const cv of list) {
-        for (const type of ['webgpu', 'webgl2', 'webgl', '2d']) {
-          let ctx = null;
-          try { ctx = cv.getContext(type); } catch { /* wrong type for this canvas */ }
-          if (ctx) { found.add(type); break; }
-        }
-      }
-      out.applicationRenderer = found.size ? Array.from(found).join('+') : (list.length ? 'unknown' : 'no-canvas');
+      const real = rec.filter((t) => t !== '2d' || rec.length === 1);
+      out.applicationRenderer = real.length
+        ? real.join('+')
+        : (list.length ? 'no-context-requested' : 'no-canvas');
     } catch (e) {
       out.applicationRenderer = `error: ${e.message}`;
     }

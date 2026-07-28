@@ -66,29 +66,38 @@ just NAME=gauntlet_column RECIPE=prop.pillar bforge-make
 
 ## 3. Does the Godot WebGPU patch series actually render through WebGPU?
 
-Capability and application backend are different claims. A healthy
-`WebGPU adapter: nvidia` line proves only that the *browser* could reach one; a
-build using `THREE.WebGLRenderer`, or a `web-webgl` export, reports exactly the
-same line while rendering every pixel through WebGL. The harness therefore
-detects the page's own canvas context and reports it separately.
+**No — and an earlier version of this document wrongly said yes. Retained as a
+worked example of the harness lying.**
 
-```bash
-node tools/gauntlet/harness/shotset.mjs --remote smeagol --serve-port 8098   --url http://127.0.0.1:8098/games/chariot/project/exports/web-webgpu/index.html   --out runs/godot-webgpu-probe --seconds 5 --boot-timeout 90000
+The first answer came from probing the page's canvases with `getContext()`. That
+probe is **destructive**: on a canvas with no context yet, `getContext('webgpu')`
+does not report a context, it CREATES one. The `web-webgpu` export had failed to
+initialise, so its canvas was bare, and the probe manufactured the very answer it
+then reported.
+
+Detection is now passive: an init-script hook wraps
+`HTMLCanvasElement.prototype.getContext` and records what the page *asks for*,
+before any measurement runs.
+
+Measured with passive detection, both exports fresh (`--source`/`--build` clean):
+
+| export | applicationRenderer | boot | black% | console errors |
+|---|---|---|---|---|
+| `web-webgl` | `webgl2` | 2.3 s | 0.07–0.25 | 0 |
+| `web-webgpu` | **`no-context-requested`** | 18.9 s | **98.94–99.13** | **25** |
+
+The WebGPU export renders a black screen. It never obtains a rendering context,
+because shader translation aborts:
+
+```
+ERROR: Tint SPIR-V→WGSL failed: var: struct size (32) is smaller than the
+end of the last member (224)
+  %instances:ref<storage, InstanceDataBuffer_1_1_a64, read_write>
+ERROR: WebGPU: SPIR-V→WGSL conversion failed for stage 1.
 ```
 
-Observed 2026-07-28:
-
-```
-Application rendered through: `webgpu` (1 canvas)
-Browser capability — WebGL adapter:  ANGLE (NVIDIA, ... Tesla P40 ...)
-Browser capability — WebGPU adapter: nvidia
-fps p50 60 / p99 20
-```
-
-**This is the first evidence that ADR 0002's patch series renders through WebGPU
-on real hardware.** The control is the `web-webgl` export and the Three.js
-template, both of which report `webgl2` on the same host in the same session —
-so the detector discriminates rather than always answering "webgpu".
+Note the trap: fps p50 was **60** on the broken build, because it was drawing
+nothing. Performance metrics alone cannot distinguish "fast" from "empty".
 
 ## 4. Engine neutrality — the evidence ADR 0017 rests on
 
