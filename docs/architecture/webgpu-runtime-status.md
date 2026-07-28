@@ -256,10 +256,18 @@ scene draws*, rather than a separate compute submission whose missing output a
 later valid pass consumes. WebGPU rejects a submission as a whole if any command
 buffer in it is invalid, so those draws never reach the queue timeline.
 
-Scene work also appears in 4490 *accepted* submissions, so it is a subset of
-scene submissions that dies — consistent with depth and shadow passes surviving
-while the pass that produces visible colour does not. Which subset is not yet
+Scene work also appears in accepted submissions, so it is a subset of scene
+submissions that dies — consistent with depth and shadow passes surviving while
+the pass that produces visible colour does not. Which subset is not yet
 established.
+
+**On the strength of that claim.** Unioning shader families across a submit list
+would only prove *submission-level* co-membership. The trace also records batch
+sizes, and every submission on this host carries exactly one command buffer
+(`{"1": 6734}`), so co-membership in a submission is co-membership in a command
+buffer: the invalid bind group and the scene draws are in the same buffer. On a
+runtime that batched several buffers per submit, only the weaker claim would
+hold.
 
 `tests/browser/binding-trace.mjs` settles which resource fails first. It wraps
 each `createBindGroup` in its own `pushErrorScope('validation')`, so a failure is
@@ -390,12 +398,30 @@ It has never been reachable before. Forward Mobile returns `false` from
 `_render_buffers_can_be_storage()`, so SSAO does not run at all under it — this
 code path executes for the first time under Forward+.
 
-Fixing it therefore means choosing how to reconcile an upstream mismatch, not
-correcting a driver defect, and the options differ in what they cost:
-rewrite the WGSL storage format to match the bound texture; allocate the AO
-buffer as RGBA8; or decline tier-1 preservation for storage textures whose
-shaders declare a wider format. That choice is deliberately left open rather than
-guessed at.
+**Resolved by patch 0032: backport upstream's own correction.** Current Godot
+master reads `layout(r8, ...)` on that line, changed by commit `d9ea5c261eb6`,
+*"Add error checks for texture type and storage format mismatches"* (2026-05-06)
+— upstream fixed this shader while adding checks for exactly this class of bug.
+
+That also corrects how the old state should be described. Not "Vulkan tolerates
+it": Vulkan requires the storage-image format declared in SPIR-V to match the
+view, and Godot's Vulkan path simply had not been rejecting it in the tested
+configurations.
+
+Three alternatives were rejected as worse answers to the same question:
+rewriting the generated WGSL (leaves GLSL/SPIR-V and WGSL disagreeing, and adds
+another brittle text mutation of the kind 0024 removed); allocating the AO target
+as RGBA8 (four times the memory and bandwidth for a scalar, to fit an erroneous
+declaration); and declining tier-1 preservation (penalises every valid R8/RG8
+storage resource globally for one stale shader line).
+
+  R8Unorm-vs-RGBA8Unorm bind-group failures   1 -> 0
+  distinct bind-group failure classes         2 -> 1
+
+Still black. The remaining class is a comparison sampler bound to a
+non-comparison slot, first in command order at `bgl:VolumetricFogProcessShaderRD`
+`entries[10]`, binding 22, whose layout entry carries `ShaderStage::None`
+visibility.
 
 **Portability, not just this P40.** 0027 requests `depth32float-stencil8` only
 when `adapter.features` exposes it, and 0028 makes the driver answer D32 support

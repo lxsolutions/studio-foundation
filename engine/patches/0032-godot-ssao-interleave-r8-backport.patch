@@ -1,0 +1,80 @@
+Subject: [PATCH] ssao: match the interleave storage image to the R8 AO target
+
+ssao_interleave.glsl declares its destination image as rgba8, while
+SSEffects::ssao_allocate_buffers() allocates RB_FINAL as R8_UNORM. WebGPU
+requires the storage-texture format in a bind-group layout to equal the bound
+texture's format exactly, so the disagreement invalidates the bind group:
+
+  createBindGroup #305   layout bgl:SsaoInterleaveShaderRD:1:set0
+    binding 0
+      supplied  textureView  r8unorm / r8unorm
+      expected  storageTexture format=rgba8unorm
+
+Two obvious readings of that are both wrong, and the trace ruled them out before
+anything was changed.
+
+It is NOT a missed promotion. The adapter reports texture-formats-tier1 enabled,
+and _promote_storage_format deliberately preserves r8unorm when tier 1 is
+available, because the format is then natively valid for storage and widening it
+would discard its blendable/filterable properties. The texture is correct.
+
+It is NOT the placeholder-format defect of 0021 and 0029. The captured runtime
+WGSL declares texture_storage_2d<rgba8unorm, write>, so the layout faithfully
+reflects the shader. Nothing was invented.
+
+The declaration itself is stale, and current upstream Godot has already corrected
+it. On master the same line reads layout(r8, ...), changed by commit
+d9ea5c261eb6 "Add error checks for texture type and storage format mismatches"
+(2026-05-06) -- upstream fixed this shader while adding checks for exactly this
+class of bug, which is also why "Vulkan tolerates it" is the wrong way to
+describe the old state. Vulkan requires the storage-image format declared in
+SPIR-V to match the view; Godot's Vulkan path simply had not been rejecting it in
+the configurations that were tested.
+
+The interleave shader computes one scalar AO value and stores vec4(ao). Writing a
+four-component vector to a single-channel storage texture is the defined
+interface -- the red channel is stored and the rest discarded -- so the
+calculation and both imageStore() calls are unchanged, exactly as upstream left
+them.
+
+Backported unconditionally rather than behind a WebGPU define, because the
+declaration was wrong on every backend, not only under WebGPU. This patch becomes
+removable the moment the engine pin moves to a Godot containing d9ea5c261eb6.
+
+Rejected because they are worse answers to the same question:
+  * rewriting the generated WGSL to r8unorm -- leaves GLSL and SPIR-V saying one
+    thing and WGSL another, and adds another brittle text mutation of the kind
+    0024 was written to remove
+  * allocating the AO target as RGBA8 -- four times the memory and bandwidth for
+    a scalar, to fit an erroneous declaration
+  * declining tier-1 preservation -- penalises every valid R8/RG8 storage
+    resource globally to accommodate one stale shader line
+
+Measured on a Tesla P40 through headed Chrome/WebGPU, Chariot on Forward+:
+
+  R8Unorm-vs-RGBA8Unorm bind-group failures   1 -> 0
+  distinct bind-group failure classes         2 -> 1
+
+Still black. The remaining class is a comparison sampler bound to a
+non-comparison slot, first in command order at bgl:VolumetricFogProcessShaderRD
+entries[10], binding 22, whose layout entry carries ShaderStage::None visibility.
+Scene-bearing submissions are still rejected, so this was not the last poison:
+
+  commandEncoder.finish   6708 calls, 514 invalid
+  queue.submit            6708 calls, 514 rejected
+  submit batch sizes      {"1": 6734}   -- every submission holds one buffer
+  rejected submissions carrying SceneForwardClusteredShaderRD   514
+  rejected submissions carrying Sky / Tonemap / Canvas / Blit     0
+
+diff --git a/servers/rendering/renderer_rd/shaders/effects/ssao_interleave.glsl b/servers/rendering/renderer_rd/shaders/effects/ssao_interleave.glsl
+--- a/servers/rendering/renderer_rd/shaders/effects/ssao_interleave.glsl
++++ b/servers/rendering/renderer_rd/shaders/effects/ssao_interleave.glsl
+@@ -24,7 +24,7 @@
+ 
+ layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+ 
+-layout(rgba8, set = 0, binding = 0) uniform restrict writeonly image2D dest_image;
++layout(r8, set = 0, binding = 0) uniform restrict writeonly image2D dest_image;
+ layout(set = 1, binding = 0) uniform sampler2DArray source_texture;
+ 
+ layout(push_constant, std430) uniform Params {

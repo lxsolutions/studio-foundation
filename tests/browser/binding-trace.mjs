@@ -240,6 +240,13 @@ await page.addInitScript(() => {
         const families = new Set();
         for (const cb of list ?? []) for (const f of cb?.__studioFamilies ?? []) families.add(f);
         const key = [...families].sort().join(",") || "(none)";
+        // Record the batch size too. Unioning families across a list proves
+        // SUBMISSION-level co-membership; it only proves the invalid bind group
+        // and the scene draws shared one COMMAND BUFFER when the batch holds
+        // exactly one. Without this the stronger claim would be unsupported.
+        const b0 = globalThis.__bind;
+        const sizes = (b0.submit_batch_sizes ??= {});
+        sizes[(list ?? []).length] = (sizes[(list ?? []).length] ?? 0) + 1;
         if (dev) dev.pushErrorScope("validation");
         const r = orig.call(this, list);
         if (dev) {
@@ -324,6 +331,7 @@ const result = await page.evaluate(() => ({
     submit_failed: globalThis.__bind?.submit_failed ?? 0,
     submit_messages: globalThis.__bind?.submit_messages ?? [],
     by_shader_families: globalThis.__bind?.submits ?? {},
+    batch_sizes: globalThis.__bind?.submit_batch_sizes ?? {},
   },
 }));
 await browser.close();
@@ -338,6 +346,7 @@ if (AS_JSON) {
   const cb = result.command_buffers;
   console.log(`commandEncoder.finish : ${cb.finish_total} calls, ${cb.finish_failed} invalid`);
   console.log(`queue.submit          : ${cb.submit_total} calls, ${cb.submit_failed} rejected`);
+  console.log(`submit batch sizes    : ${JSON.stringify(cb.batch_sizes ?? {})}`);
   console.log("submissions, by the shader families the submitted buffers recorded:");
   for (const [fams, n] of Object.entries(cb.by_shader_families ?? {}))
     console.log(`   accepted ${String(n.accepted).padStart(6)}   rejected ${String(n.rejected).padStart(6)}   ${fams}`);
