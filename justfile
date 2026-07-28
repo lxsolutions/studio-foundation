@@ -110,6 +110,8 @@ test-python:
     uv run --project tools python -m unittest discover -s tools/bforge/tests -p "test_schema.py" -v
     uv run --project tools python -m unittest discover -s tools/bforge/tests -p "test_mcp.py" -v
     uv run --project tools python -m unittest discover -s tools/asset-pipeline/tests -p "test_*.py" -v
+    uv run --project tools python -m unittest discover -s tools/provenance/tests -p "test_*.py" -v
+    uv run --project tools python -m unittest discover -s tools/verification/tests -p "test_*.py" -v
 
 # Cross-language protocol golden-fixture checks (Rust side runs in test-rust too)
 test-protocol:
@@ -306,6 +308,40 @@ engine-rebase *ARGS:
 # Classify patch-application conflicts for manual review
 engine-classify-conflicts *ARGS:
     {{PY}} engine/scripts/classify_conflicts.py {{ARGS}}
+
+# Regenerate the renderer-status table in the docs from render-probe results.
+# PROBE is a directory of tests/browser/render-probe.mjs JSON output.
+renderer-report PROBE OUT="docs/architecture/webgpu-runtime-status.md":
+    {{PY}} tools/verification/render_report.py --probe "{{PROBE}}" --out "{{OUT}}"
+
+# Fail if the published renderer status disagrees with the measurements
+renderer-report-check PROBE OUT="docs/architecture/webgpu-runtime-status.md":
+    {{PY}} tools/verification/render_report.py --probe "{{PROBE}}" --out "{{OUT}}" --check
+
+# ------------------------------------------------------------------ provenance
+
+# Print this repository's WebGPU patch-series id. Reproducible from any clone.
+provenance-id:
+    {{PY}} tools/provenance/provenance.py id
+
+# Write provenance.json beside built templates (or any DEST)
+provenance-stamp DEST="engine/artifacts/templates":
+    {{PY}} tools/provenance/provenance.py stamp --dest "{{DEST}}"
+
+# Identify the lineage of ANY Godot web build -- ours or a third party's.
+# Reports whether it descends from this patch series and, if so, prints the
+# MIT attribution that build is required to carry.
+provenance-verify PATH *ARGS:
+    {{PY}} tools/provenance/provenance.py verify "{{PATH}}" {{ARGS}}
+
+# Print the attribution text a downstream build must include
+provenance-attribution *ARGS:
+    {{PY}} tools/provenance/provenance.py attribution {{ARGS}}
+
+# Re-derive marker candidates from a real build vs stock Godot, and fail if any
+# shipped marker has drifted out of the engine. Run when the patch series grows.
+provenance-calibrate OURS CONTROL:
+    {{PY}} tools/provenance/provenance.py calibrate --ours "{{OURS}}" --control "{{CONTROL}}"
 
 # ADR 0002 gate: WebGPU export -> browser capture -> compare vs WebGL baseline.
 # Cross-renderer compare uses a renderer-variance band (0.03) for AA/font/layout

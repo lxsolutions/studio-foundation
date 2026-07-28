@@ -217,28 +217,40 @@ def cmd_fetch(lock: dict) -> int:
     return 0
 
 
-def _emsdk_bat(root: Path, expected: str) -> Path | None:
-    bat = root / "emsdk_env.bat"
+IS_WINDOWS = os.name == "nt"
+# emsdk ships one activation script per platform; the emcc entry point follows suit.
+EMSDK_ENV_SCRIPT = "emsdk_env.bat" if IS_WINDOWS else "emsdk_env.sh"
+EMCC_NAME = "emcc.bat" if IS_WINDOWS else "emcc"
+
+
+def _emsdk_root(root: Path, expected: str) -> Path | None:
+    """Return `root` if it is an emsdk activated at exactly `expected`, else None."""
+    env_script = root / EMSDK_ENV_SCRIPT
     version_file = root / "upstream" / "emscripten" / "emscripten-version.txt"
-    if not bat.is_file() or not version_file.is_file():
+    if not env_script.is_file() or not version_file.is_file():
         return None
     try:
         actual = version_file.read_text(encoding="utf-8").strip().strip('"')
     except OSError:
         return None
-    return bat if actual == expected else None
+    return root if actual == expected else None
 
 
-def _find_emsdk_env_bat(expected: str) -> Path | None:
+def _find_emsdk_root(expected: str) -> Path | None:
     """Locate the exact configured emsdk, preferring an explicit EMSDK root."""
     configured = os.environ.get("EMSDK")
     if configured:
-        return _emsdk_bat(Path(configured), expected)
+        return _emsdk_root(Path(configured), expected)
 
-    for root in (Path.home() / "emsdk", Path("C:/emsdk")):
-        bat = _emsdk_bat(root, expected)
-        if bat:
-            return bat
+    candidates = [Path.home() / "emsdk"]
+    if IS_WINDOWS:
+        candidates.append(Path("C:/emsdk"))
+    else:
+        candidates += [Path("/opt/emsdk"), Path("/usr/local/emsdk")]
+    for root in candidates:
+        found = _emsdk_root(root, expected)
+        if found:
+            return found
     return None
 
 
@@ -335,9 +347,9 @@ def cmd_build(lock: dict, source_dir: Path | None = None) -> int:
     em_version = lock["toolchain"]["emscripten"]
     build_env = os.environ.copy()
     configured_emsdk = os.environ.get("EMSDK")
-    bat = _find_emsdk_env_bat(em_version)
+    root = _find_emsdk_root(em_version)
     if configured_emsdk or not shutil.which("emcc"):
-        if not bat:
+        if not root:
             if configured_emsdk:
                 print(
                     f"error: EMSDK={configured_emsdk} is not activated at exact "
@@ -351,18 +363,18 @@ def cmd_build(lock: dict, source_dir: Path | None = None) -> int:
                     file=sys.stderr,
                 )
             return 2
-        # emsdk_env.bat ultimately puts <root> and <root>/upstream/emscripten on
-        # PATH; do that directly instead of shelling out (robust across hosts).
-        root = bat.parent
+        # emsdk_env.{bat,sh} ultimately puts <root> and <root>/upstream/emscripten
+        # on PATH; do that directly instead of shelling out (robust across hosts).
         em_dir = root / "upstream" / "emscripten"
-        if not (em_dir / "emcc.bat").is_file():
+        if not (em_dir / EMCC_NAME).is_file():
             print(
-                f"error: {em_dir} has no emcc.bat — activate emsdk {em_version} first",
+                f"error: {em_dir} has no {EMCC_NAME} — activate emsdk {em_version} first",
                 file=sys.stderr,
             )
             return 2
         print(f"[build] using emsdk at {root}")
-        build_env["PATH"] = f"{em_dir};{root};" + build_env.get("PATH", "")
+        sep = os.pathsep
+        build_env["PATH"] = f"{em_dir}{sep}{root}{sep}" + build_env.get("PATH", "")
         build_env["EMSDK"] = str(root)
         config = root / ".emscripten"
         if config.is_file():
@@ -418,7 +430,32 @@ def cmd_build(lock: dict, source_dir: Path | None = None) -> int:
             artifact_dir,
             threads_enabled="threads=yes" in targets["target_release"],
         )
+        _write_provenance(lock, artifact_dir)
     return rc
+
+
+def _write_provenance(lock: dict, artifact_dir: Path) -> None:
+    """Record what these templates were made of, next to the templates.
+
+    Stamping is part of building, not a step someone has to remember: a template
+    that ships without provenance is one nobody downstream can trace back, and
+    tracing it back is the whole point.
+    """
+    sys.path.insert(0, str(REPO_ROOT / "tools" / "pylib"))
+    try:
+        from studio_tools.provenance import ProvenanceError, build_stamp
+    except ImportError as exc:  # pragma: no cover - only if tools/ is absent
+        print(f"[build] warning: provenance unavailable ({exc})", file=sys.stderr)
+        return
+    try:
+        stamp = build_stamp(lock)
+    except ProvenanceError as exc:
+        print(f"[build] warning: could not stamp provenance: {exc}", file=sys.stderr)
+        return
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    out = artifact_dir / "provenance.json"
+    out.write_text(json.dumps(stamp, indent=2) + "\n", encoding="utf-8")
+    print(f"[build] provenance {stamp['series_id']} -> {out}")
 
 
 def _validate_webgpu_template(archive: Path) -> None:
@@ -443,25 +480,41 @@ def _validate_webgpu_template(archive: Path) -> None:
 def _install_templates(
     source: Path, dest: Path | None = None, *, threads_enabled: bool
 ) -> None:
-    """Install only the archive matching the lock's thread configuration."""
+    """Install the archives matching the lock's thread configuration, atomically.
+
+    Both templates are validated and staged first, and only then moved into place.
+    Copying them one at a time leaves a window -- in practice around a hundred
+    seconds, because debug links long after release -- in which the directory holds
+    a new release template beside the previous debug one. An export taken in that
+    window silently mixes two builds, and the measurement that follows describes
+    neither of them. That has already cost one wasted GPU verification round.
+    """
     dest = dest or ENGINE_DIR / "artifacts" / "templates"
     dest.mkdir(parents=True, exist_ok=True)
     suffix = ".wasm32.zip" if threads_enabled else ".wasm32.nothreads.zip"
-    installed = 0
+
+    staged: list[tuple[Path, Path, Path]] = []  # (source archive, staging, final)
     for profile in ("release", "debug"):
         archive = source / "bin" / f"godot.web.template_{profile}{suffix}"
         if not archive.is_file():
             raise RuntimeError(f"expected built WebGPU template missing: {archive}")
         target = dest / f"godot.web.template_{profile}.webgpu.zip"
+        staging = target.with_suffix(".zip.incoming")
         _validate_webgpu_template(archive)
-        shutil.copy2(archive, target)
-        print(
-            f"[install] {archive.name} -> {target.relative_to(REPO_ROOT) if target.is_relative_to(REPO_ROOT) else target}",
-            flush=True,
-        )
-        installed += 1
-    if installed != 2:
+        shutil.copy2(archive, staging)
+        staged.append((archive, staging, target))
+
+    if len(staged) != 2:
         raise RuntimeError("expected release and debug WebGPU templates")
+
+    try:
+        for archive, staging, target in staged:
+            os.replace(staging, target)
+            shown = target.relative_to(REPO_ROOT) if target.is_relative_to(REPO_ROOT) else target
+            print(f"[install] {archive.name} -> {shown}", flush=True)
+    finally:
+        for _, staging, _ in staged:
+            staging.unlink(missing_ok=True)
 
 
 def main() -> int:
