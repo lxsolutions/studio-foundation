@@ -492,3 +492,34 @@ end-of-loop action.
 
 Interim shipping option, unchanged: force Forward Mobile for the WebGPU web
 target. All four failing buffers are Forward+ shaders.
+
+## R14 — fix landed in the patch series; a reproducibility gap found on the way
+
+**The SPIR-V fix is in `engine/patches/0001-studio-webgpu-engine.patch`**, hunk
+re-counted 2674 -> 2699, verified to apply cleanly against pristine 4.7.1, lock
+checksum updated, and `spirv_preprocess.cpp` compiles with zero errors. Build
+still linking at time of writing; **the rendering result is NOT yet confirmed**.
+
+**The patch series does not build.** Regenerating the workspace purely from the
+three checksummed patches produces a tree that fails to compile
+(`MAIN_WINDOW_ID` undeclared in `display_server_web.cpp`). Diffing against the
+working cache shows **13 source files** present only in the cache — including
+`cluster_builder_rd.cpp/.h`, `cluster_render.glsl` and all four WebGPU drivers,
+i.e. the Forward+ bring-up work. `engine-lock.toml`'s checksums verify the
+patches are *unmodified*, not that they are *sufficient*: both checks passed
+while the build failed. Written up in
+`docs/architecture/engine-patch-series-reproducibility-gap.md`.
+
+Deleting `engine/.cache/studio-webgpu` — which the tooling calls "this
+disposable cache" — would destroy that work. It is not disposable today.
+
+**Near-miss:** `engine/patches/*` are UNTRACKED in the main checkout; a parallel
+session holds an in-progress rewrite of the whole series plus a new
+`patch_series.py`. I first copied the patched file across from there, caught it
+via a checksum mismatch against the branch baseline, reverted, and re-applied
+the 25 lines to the branch's own committed patch. The PR contains only my change.
+
+**Next:** finish the link, re-export Chariot, and run
+`shotset.mjs --source/--build` against `web-webgpu`. Success is
+`applicationRenderer: webgpu` with black% in low single digits and zero console
+errors, matching the `web-webgl` control. Until that runs, no claim.
