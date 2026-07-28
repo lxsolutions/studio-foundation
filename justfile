@@ -309,6 +309,14 @@ engine-rebase *ARGS:
 engine-classify-conflicts *ARGS:
     {{PY}} engine/scripts/classify_conflicts.py {{ARGS}}
 
+# Answer "does this build render?" end to end and write down the answer.
+# Exports, serves, probes, traces bind-group and command-buffer validity, and
+# emits ONE evidence file so a result from another machine is directly
+# comparable to the published one. Exit: 0 rendered, 1 not, 2 inconclusive,
+# 3 preconditions missing.
+verify-renderer *ARGS:
+    {{PY}} tools/verification/verify_renderer.py {{ARGS}}
+
 # Regenerate the renderer-status table in the docs from render-probe results.
 # PROBE is a directory of tests/browser/render-probe.mjs JSON output.
 renderer-report PROBE OUT="docs/architecture/webgpu-runtime-status.md":

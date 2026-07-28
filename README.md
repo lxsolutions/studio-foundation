@@ -106,6 +106,19 @@ that made the clustered renderer work. Point your `web` preset's
 cannot emit, and skipping it produces a build that fails to start. Both files are
 SHA-256 listed in the release notes and reproducible from source.
 
+Once the templates are in place, one command exports, serves, probes and traces
+the build, then writes a single evidence file:
+
+```sh
+just verify-renderer --renderer forward_plus
+```
+
+It exits 0 only when a non-fallback GPU adapter, varied composited pixels and
+non-zero engine draw counters all agree — and reports `inconclusive` rather than
+a pass when it cannot establish those. **If your result differs from the
+published one, please open an issue and attach the evidence file.** Independent
+confirmation on hardware we do not own is the most useful contribution right now.
+
 **What this download is not.** It is pinned at patch **0014**, while `main`
 carries **0022**. Those eight patches are what made Forward+ work on hardware
 (0015 and 0018–0022) — so the published templates render **Forward Mobile only**,
