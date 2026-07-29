@@ -751,3 +751,53 @@ every single-selector op (40+).
 
 **Next:** re-forge with the roof and deeper greeble actually landing, then judge.
 The objective gate has now said "at the bar" three times while the frame was not.
+
+## R20 — the geometry lands; corner clears the bar; blacks crush
+
+The re-forge finally took. Same recipe, one change from R19: the export path.
+
+**End-to-end proof of the spelling fix.** R19's recipe was rewritten with
+deliberately sloppy, inconsistent spellings -- `name` for every op, `path` for
+the export -- which is what an agent actually writes. All nine ops ran clean in
+one shot, where the same recipe previously cost four failed runs.
+
+**A third defect in the same family, found by the same recipe.** `export.gltf`
+resolves `out` relative to an implicit `assets-generated/bforge/` root, which
+nothing states, so an absolute-looking relative path silently DOUBLED:
+`assets-generated/bforge/assets-generated/bforge/gauntlet/hold_interior.glb`.
+The op reported `ok: true` and a valid 16 MB file, just not where asked, and the
+capture that followed measured the old asset. Filed to fix: an export whose
+`out` already begins with the asset root is unambiguously this mistake.
+
+**Measured, with the roof and 0.18 m greeble actually present:**
+
+| shot | edgeEnergy | earned | dyn range | black% |
+|---|---|---|---|---|
+| hero   | 22.83 | 56.6% | 108 | 23.8 |
+| corner | **34.59** | 53.5% | 199 | 22.2 |
+| low    | 21.35 | **68.0%** | 113 | 27.3 |
+| detail | 23.02 | 47.7% | 193 | 24.8 |
+| _bar_  | _8.19-30.38, median 28.38_ | — | _median 195_ | _max 5.29_ |
+
+corner is **past the reference band's maximum**, and it gets there with over
+half its detail modelled rather than printed -- the first time both have been
+true at once. Earned detail went 40-50% -> 48-68% purely from panel depth.
+The emissive practicals closed the dynamic-range gap: 76-84 -> 108-199.
+
+**The frame, looked at:** roof with structural beams, two visible light strips,
+warm/cool separation across the space, floor plating with recessed channels,
+real depth into a dark far corner. First frame this session that could plausibly
+sit beside the reference.
+
+**New defect, and it is real: 22-27% of every frame is crushed to black against
+the reference's 5.29% ceiling.** Enclosing the room removed the sky that was
+lifting the shadows, and nothing replaced it. Also still true: the walls carry
+much less relief than the ceiling, and the room is empty -- no crates, pipes or
+machinery, which is most of what the reference's frames actually contain.
+
+**The p99 question from R18 is closed.** New spike reporting: "12 spikes over
+100 ms, all in the first quarter -- load cost, not a runtime hitch; worst at
+frame 20 of 403". It was shader compilation, not a stutter.
+
+**Next:** lift the shadows without flattening the contrast, then judge. This is
+the first build worth spending a judge round on.

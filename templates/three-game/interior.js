@@ -53,8 +53,13 @@ let firstDraw = null;
 const ready = new Promise((r) => (firstDraw = r));
 const world = new THREE.Group();
 scene.add(world);
-// Populated once the GLB loads; the harness's --geometry-pass flips between them.
-const materialModes = {};
+// The harness's --geometry-pass flips between these. `beauty` is not a single
+// material: restoring one global material to every mesh would silently destroy
+// any mesh that had its own (the emissive practicals below), and the harness
+// keeps capturing after it restores. So remember each mesh's own material and
+// put exactly that back.
+const flatMaterial = new THREE.MeshStandardMaterial({ color: 0x9a9a9a, roughness: 1.0, metalness: 0.0 });
+const originalMaterial = new WeakMap();
 const loader = new GLTFLoader();
 try {
     const gltf = await loader.loadAsync('/assets-generated/bforge/gauntlet/hold_interior.glb');
@@ -87,16 +92,35 @@ try {
         }
     });
     world.add(gltf.scene);
-    // Geometry pass: swap in an unlit-ish neutral matte so the harness can measure
-    // how much of the frame's detail is MODELLED versus PRINTED. Same mesh, same
-    // camera, same simulation time -- only the shading changes.
-    const flat = new THREE.MeshStandardMaterial({ color: 0x9a9a9a, roughness: 1.0, metalness: 0.0 });
-    materialModes.beauty = mat;
-    materialModes.flat = flat;
 }
 catch (e) {
     console.warn('hold_interior.glb missing — forge it first:', e);
 }
+// Practical fixtures: the light sources themselves, visible in frame.
+//
+// Two shots warned `below-bar-dynamic-range` (76 and 84, against a reference
+// band of 44-195 with median 195). An enclosed room cannot borrow range from a
+// bright sky the way the outdoor plaza did, so the top of its histogram has to
+// come from emitters that are actually on screen. The reference does exactly
+// this -- its interiors are lit by strips and panels you can see.
+//
+// These live in `world` so the geometry pass mattes them along with everything
+// else: they are surface, and the point lights keep the room lit without them.
+const practicals = new THREE.Group();
+const stripGeo = new THREE.BoxGeometry(2.6, 0.09, 0.09);
+for (const [x, y, z, warm] of [
+    [4.0, 3.9, -4.0, 1], [12.5, 3.9, -11.5, 0], [8.0, 3.9, -15.6, 1], [0.4, 3.5, -8.0, 0],
+]) {
+    const colour = warm ? 0xffcf9a : 0x9ec8ff;
+    const strip = new THREE.Mesh(stripGeo, new THREE.MeshStandardMaterial({
+        color: colour, emissive: colour, emissiveIntensity: 6.0, roughness: 0.4, metalness: 0,
+    }));
+    strip.position.set(x, y, z);
+    if (Math.abs(x - 0.4) < 0.01)
+        strip.rotation.y = Math.PI / 2; // the wall-mounted one
+    practicals.add(strip);
+}
+world.add(practicals);
 function frame(t) {
     renderer.info.reset();
     key.intensity = 58 + Math.sin(t * 0.0012) * 4; // subtle flicker, not animation
@@ -118,13 +142,13 @@ gauntlet.register({
     camera: CAMERAS,
     seed: () => { },
     materials: (mode) => {
-        const m = materialModes[mode];
-        if (!m)
-            return;
         world.traverse((o) => {
             const mesh = o;
-            if (mesh.isMesh)
-                mesh.material = m;
+            if (!mesh.isMesh)
+                return;
+            if (!originalMaterial.has(mesh))
+                originalMaterial.set(mesh, mesh.material);
+            mesh.material = mode === 'flat' ? flatMaterial : originalMaterial.get(mesh);
         });
     },
     probe: () => ({ cameraPos: [camera.position.x, camera.position.y, camera.position.z] }),

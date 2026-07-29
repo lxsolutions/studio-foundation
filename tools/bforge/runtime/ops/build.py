@@ -377,15 +377,22 @@ def build_extrude(ctx, name, direction, distance, inset, threshold):
         "density": ("num", 0.35, "Fraction of faces that get a panel (0..1)"),
         "depth": ("num", 0.03, "Maximum panel depth in metres"),
         "cuts": ("int", 1, "Subdivision passes before panelling — more cuts, finer greeble"),
+        "panel_size": (
+            "num",
+            0.0,
+            "Target panel size in metres. Refines big faces and leaves small ones alone, "
+            "so one call suits a 16 m wall and a 0.4 m crate lid. Overrides `cuts`; 0 = use `cuts`.",
+        ),
     },
     tags=["build", "hardsurface"],
 )
-def build_greeble(ctx, name, seed, density, depth, cuts):
+def build_greeble(ctx, name, seed, density, depth, cuts, panel_size):
     obj = _get(name)
     rng = ctx.reseed(seed)
     bm = mesh_lib.obj_bmesh(obj)
     made = mesh_lib.greeble(
-        bm, bm.faces[:], rng, density=density, min_depth=depth * 0.3, max_depth=depth, cuts=cuts
+        bm, bm.faces[:], rng, density=density, min_depth=depth * 0.3, max_depth=depth,
+        cuts=cuts, panel_size=panel_size,
     )
     mesh_lib.write_bmesh(bm, obj)
     result = finish_lib.report(ctx, obj)

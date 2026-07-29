@@ -551,15 +551,46 @@ def bevel_edges(bm, edges=None, offset=0.02, segments=2, angle_min=0.35):
     )["faces"]
 
 
-def greeble(bm, faces, rng, density=0.4, min_depth=0.01, max_depth=0.05, inset=0.15, cuts=1):
+MAX_GREEBLE_REFINE = 6
+
+
+def greeble(bm, faces, rng, density=0.4, min_depth=0.01, max_depth=0.05, inset=0.15, cuts=1,
+            panel_size=0.0):
     """Panel-line detail: subdivide, then push/pull a random subset of faces.
 
     Deliberately biased toward shallow depths — greeble reads as surface
     variation under normal-mapped lighting, and deep greeble just eats
     silhouette budget and shadow-acnes on mobile.
+
+    `panel_size` (metres) refines adaptively to that panel scale and takes
+    precedence over `cuts`; leave it at 0 for the old uniform behaviour.
     """
     targets = [f for f in faces if f.is_valid]
-    if cuts > 0 and targets:
+    if panel_size and panel_size > 0 and targets:
+        # Adaptive refinement: keep splitting only the faces that are still
+        # bigger than the wanted panel, one cut at a time.
+        #
+        # Uniform `cuts` is the wrong control for a mixed-scale mesh. A room's
+        # 16 m wall and a crate's 0.4 m lid get the same treatment, so one cut
+        # leaves the wall in a handful of huge plates while over-splitting the
+        # crate -- and raising `cuts` to fix the wall multiplies EVERY face,
+        # which is how a two-cut pass on a 16 m room blew a 300 s budget.
+        # Measured: the reference this is chasing surfaces its hulls with many
+        # small pieces, not few deep ones.
+        for _ in range(MAX_GREEBLE_REFINE):
+            coarse = [f for f in targets if f.is_valid and f.calc_area() ** 0.5 > panel_size * 1.5]
+            if not coarse:
+                break
+            edges = list({e for f in coarse for e in f.edges})
+            refined = set(coarse)  # set, not list: this runs over thousands of faces
+            split = bmesh.ops.subdivide_edges(bm, edges=edges, cuts=1, use_grid_fill=True)
+            fresh = [g for g in split["geom_inner"] if isinstance(g, bmesh.types.BMFace)]
+            if not fresh:
+                break
+            keep = [f for f in targets if f.is_valid and f not in refined]
+            targets = keep + fresh
+        targets = targets or [f for f in faces if f.is_valid]
+    elif cuts > 0 and targets:
         edges = list({e for f in targets for e in f.edges})
         subdivided = bmesh.ops.subdivide_edges(
             bm, edges=edges, cuts=cuts, use_grid_fill=True
