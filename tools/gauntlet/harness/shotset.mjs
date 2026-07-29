@@ -439,6 +439,13 @@ async function main() {
       });
       if (swapped.ok) {
         const pngG = await safeScreenshot(page, cdp);
+        // A registered-but-inert hook is worse than no hook: identical frames
+        // would report ~100% of the detail as modelled, which is precisely the
+        // fabricated number this pass exists to avoid. A game whose asset
+        // failed to load registers `materials` and then swaps nothing.
+        if (pngG.equals(pngA)) {
+          geometry = { skipped: 'material swap produced an identical frame — hook registered but inert' };
+        } else {
         const fileG = path.join(framesDir, `${shot.name}.flat.png`);
         await writeFile(fileG, pngG);
         const gm = await analyzeFrame(analyzer, pngG);
@@ -452,6 +459,7 @@ async function main() {
             ? +((gm.edgeEnergy / metrics.edgeEnergy) * 100).toFixed(1)
             : null,
         };
+        }
         await page.evaluate(async () => {
           globalThis.__gauntlet.setMaterialMode('beauty');
           await globalThis.__gauntlet.step(1, 0);
@@ -619,7 +627,9 @@ function renderMarkdown(r) {
     );
     L.push(`- black ${m.blackPct}% · white ${m.whitePct}% · levels ${m.occupiedLevels} · chroma ${m.chromaMean}`);
     L.push(`- edge energy ${m.edgeEnergy} · smooth span ${m.smoothSpan} over ${m.smoothLevels} levels (${m.combGaps} gaps)`);
-    if (s.geometry && !s.geometry.skipped) {
+    if (s.geometry?.skipped) {
+      L.push(`- geometry pass: **skipped** — ${s.geometry.skipped}`);
+    } else if (s.geometry) {
       L.push(
         `- geometry pass (shading off): edge energy ${s.geometry.edgeEnergy} — ` +
           `**${s.geometry.earnedDetailPct}%** of the shaded frame's detail is modelled, not textured  ` +
