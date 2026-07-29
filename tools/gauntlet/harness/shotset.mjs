@@ -170,12 +170,32 @@ function summarizeTiming(dt, cb, longTasks) {
   const s = [...dt].sort((x, y) => x - y);
   const c = [...cb].sort((x, y) => x - y);
   const fps = (ms) => (ms && ms > 0 ? +(1000 / ms).toFixed(1) : null);
+
+  // WHERE the worst frame happened, as a fraction of the session.
+  //
+  // "worst frame 2149 ms" is two completely different bugs depending on when it
+  // lands. Early means load cost -- shader compilation, texture upload, the
+  // first shadow pass -- which players see once as a longer wait. Late means a
+  // genuine runtime hitch, which they feel every time it recurs. The report
+  // could not tell them apart, so every spike looked equally alarming.
+  let worst = -Infinity;
+  let worstAt = 0;
+  for (let i = 0; i < dt.length; i++) {
+    if (dt[i] > worst) { worst = dt[i]; worstAt = i; }
+  }
+  const spikes = dt.filter((x) => x > 100).length;
+  const lateSpikes = dt.filter((x, i) => x > 100 && i > dt.length * 0.25).length;
+
   return {
     frames: dt.length,
     frameMsP50: percentile(s, 50),
     frameMsP95: percentile(s, 95),
     frameMsP99: percentile(s, 99),
-    frameMsWorst: +Math.max(...dt).toFixed(2),
+    frameMsWorst: +worst.toFixed(2),
+    worstFrameIndex: worstAt,
+    worstFrameAtPct: +((worstAt / Math.max(1, dt.length - 1)) * 100).toFixed(1),
+    spikesOver100ms: spikes,
+    spikesAfterFirstQuarter: lateSpikes,
     fpsP50: fps(percentile(s, 50)),
     fpsP99: fps(percentile(s, 99)), // the number players actually feel
     scriptMsP50: percentile(c, 50),
@@ -579,6 +599,12 @@ function renderMarkdown(r) {
     L.push(`- ${t.note ?? 'no frames captured'}`);
   } else {
     L.push(`- fps p50 **${t.fpsP50}** / p99 **${t.fpsP99}**  (frame ms p50 ${t.frameMsP50}, p99 ${t.frameMsP99}, worst ${t.frameMsWorst})`);
+    if (t.spikesOver100ms) {
+      const verdict = t.spikesAfterFirstQuarter === 0
+        ? 'all in the first quarter — load cost, not a runtime hitch'
+        : `${t.spikesAfterFirstQuarter} after the first quarter — genuine runtime hitches`;
+      L.push(`- spikes over 100 ms: ${t.spikesOver100ms} (${verdict}); worst at frame ${t.worstFrameIndex} of ${t.frames} (${t.worstFrameAtPct}% in)`);
+    }
     L.push(`- page script per frame: p50 ${t.scriptMsP50} ms, p99 ${t.scriptMsP99} ms`);
     L.push(`- long tasks: ${t.longTasks}`);
   }
