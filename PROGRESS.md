@@ -1176,3 +1176,42 @@ Verified by reading the GLB binary rather than trusting the op:
 material response -- "one wet-metal roughness covers every surface" is the
 loudest thing the judge has said and the only structural gap left that does not
 need another session's file.
+
+## R29 — AO baked into Spike's assets; surface differentiation lands but barely reads
+
+**Spike camp assets re-forged with `gameready.vertex_ao`**, verified in COLOR_0:
+tent mean 0.939 / 36% occluded, headframe mean 0.910 / 52% occluded.
+
+**Surface differentiation shipped** (`differentiateSurfaces`): seven surface
+classes matched by material name, each given its own specular colour and power --
+water tight and bright, foliage almost matte, rock a broad dull sheen, metal a
+coloured highlight. Also switches on `useVertexColors` so baked AO is actually
+read at runtime rather than shipped and ignored.
+
+| | look pass | + surfaces |
+|---|---|---|
+| edge energy | 33.67 / 30.42 | 34.15 / 30.79 |
+| script ms/frame | 24.91 | 26.98 |
+
+**Honest verdict: +0.5 edge energy for +2 ms is a poor trade, and the frame looks
+the same.** Water reads better; nothing else visibly changed. Kept because the
+classification is correct and will matter once maps exist, but it is not the win.
+
+**Looking at the frame explains why, and it is the real finding: Spike has ZERO
+textures.** Every material is `StandardMaterial` with a flat `diffuseColor` and no
+albedo, normal or roughness map anywhere in the game. Specular constants cannot
+differentiate surfaces that have no surface detail to differentiate. This is the
+same lesson the interior work learned from the other direction -- there, a TILING
+material through box UVs took edge energy from 5 to 26 on identical geometry.
+
+**Also measured, and it reframes the performance story:** Spike's script cost was
+**23.38 ms/frame before any of my changes** -- already past the 16.67 ms budget
+for 60 fps. The game is CPU-bound in its own scene code, not by post-processing.
+The whole look pass plus surfaces adds 3.6 ms on top of that.
+
+**Next, and it is the highest-leverage thing left:** port the procedural texture
+generators from `templates/three-game/texgen.ts` into Spike and give each surface
+class a real albedo + normal + roughness map. Those generators are already written
+and already measured -- 507 px/m through box UVs, macro variation to break the
+tile, all of it. That is studio-foundation work paying off in a second engine,
+which is the point of the toolset.
