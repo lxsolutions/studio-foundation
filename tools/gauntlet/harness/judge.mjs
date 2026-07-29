@@ -106,13 +106,41 @@ async function cmdReveal(opts) {
 
   let wins = 0, losses = 0, unscored = 0;
   const rows = [];
+  const seen = new Set();
   for (const v of verdicts.verdicts ?? verdicts) {
     const id = String(v.pair).replace(/^pair/, '').padStart(3, '0');
     const k = byId.get(id);
     if (!k) { unscored++; continue; }
-    const won = v.better === k.ourSlot;
+
+    // Accept the spellings judges actually write. A verdict that carries a
+    // choice under a different key is a formatting difference, not a loss.
+    const picked = v.better ?? v.winner ?? v.choice ?? v.pick ?? v.preferred;
+    if (picked !== 'A' && picked !== 'B') {
+      throw new Error(
+        `pair${id}: no A/B choice found. Looked for better/winner/choice/pick/preferred, ` +
+          `got ${JSON.stringify(v)}. Refusing to score — a missing choice is not a loss.`,
+      );
+    }
+    seen.add(id);
+    const won = picked === k.ourSlot;
     if (won) wins++; else losses++;
-    rows.push({ pair: id, ourSlot: k.ourSlot, judgePicked: v.better, won, why: v.why ?? '' });
+    rows.push({ pair: id, ourSlot: k.ourSlot, judgePicked: picked, won, why: v.why ?? v.reason ?? '' });
+  }
+
+  // A pair the judge never ruled on must NOT read as a loss.
+  //
+  // This scored a real round at a confident 0% BELOW_REFERENCE because the
+  // verdicts carried the choice under `winner` instead of `better`: every pair
+  // silently fell through to the default and the tool reported the opposite of
+  // the truth (the same round was 50% once parsed correctly). A measurement
+  // instrument that invents a defensible-looking number when it cannot read its
+  // input is worse than one that fails.
+  const missing = key.pairs.map((p) => p.id).filter((id) => !seen.has(id));
+  if (missing.length) {
+    throw new Error(
+      `no verdict for pair(s) ${missing.map((m) => `pair${m}`).join(', ')}. ` +
+        `Refusing to score a partial deck — an unjudged pair is not a loss.`,
+    );
   }
 
   const total = wins + losses;

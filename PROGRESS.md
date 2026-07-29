@@ -848,3 +848,49 @@ lighting or material one.
 
 **Next: judge.** The gate is clean, so a blind round is finally earned. Every
 previous round would have been spent on a frame with measurable defects.
+
+## R22 — JUDGE: 2W / 2L — 50% — AT_OR_ABOVE_REFERENCE
+
+First non-zero judge result. The win rate had been flat at 0% across three
+previous rounds. Brief sha `3a476a74f6671ea9`, unchanged since the first round,
+so the criteria did not drift. Fresh sub-agent, deck and brief only.
+
+| pair | our shot | reference | judge picked | result |
+|---|---|---|---|---|
+| 001 | corner.png | moved.png   | ours | **WIN** |
+| 003 | hero.png   | title.png   | ours | **WIN** |
+| 002 | detail.png | settled.png | ref  | loss |
+| 004 | low.png    | wake.png    | ref  | loss |
+
+**Both losses have the same diagnosis, arrived at independently:**
+
+> "a bare volume lit by two striplights where the identical wet band repeats at
+> the same height on every wall panel and there is not a single object in the
+> room for the light to occlude or bounce off"
+
+> "A is a bare wall parallel to camera with nothing in front of it ... no
+> contact darkening at the wall/floor join"
+
+Two named gaps, both content rather than lighting or material:
+1. **The room is empty.** Nothing for light to occlude, nothing to cast contact
+   shadow, no focal point. The reference's frames are full of consoles, seating,
+   grating and machinery.
+2. **The tiling repeats.** One material at one UV scale across every surface, so
+   the same specular band lands at the same height on every panel.
+
+**A measurement bug caught in the same round, and it is the worst class.**
+`reveal` first reported a confident **0% BELOW_REFERENCE** for this exact deck.
+The verdicts carried the judge's choice under `winner` rather than `better`, so
+every pair fell through a `if (!k) continue` path and scored as a default loss.
+The tool reported the precise opposite of the truth, in the same format and with
+the same confidence as a real result.
+
+That is the same failure as the destructive `getContext` probe: an instrument
+manufacturing a defensible-looking number when it cannot read its input. Fixed
+three ways, each verified: choice is read from any of better/winner/choice/pick/
+preferred; a verdict carrying none of them throws; and a pair with no verdict at
+all throws rather than counting as a loss.
+
+**Next:** props and set dressing, and per-surface material variation to break
+the repeat. Both were also visible by eye, and the judge named them unprompted,
+which is the strongest signal yet that they are the real remaining gap.
