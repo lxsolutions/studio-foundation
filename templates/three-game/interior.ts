@@ -57,7 +57,7 @@ scene.add(key);
 // down. It was set to the darkest value in the scene, which is why raising the
 // hemisphere barely moved the blacks: the crushed pixels were almost all
 // ceiling. In a real room that surface is lit by bounce off a bright floor.
-scene.add(new THREE.HemisphereLight(0x42566f, 0x6b5a48, 1.15));
+scene.add(new THREE.HemisphereLight(0x42566f, 0x8d7a63, 1.25));
 scene.add(new THREE.AmbientLight(0x1c2430, 0.55));
 
 // Blender is Z-up; glTF converts (x,y,z) -> (x, z, -y). The room's Blender
