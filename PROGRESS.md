@@ -948,3 +948,45 @@ defect at all, which let a visible black hole in a prop ship past a clean gate.
 
 **Still open:** the greeble op itself should not produce these faces, and
 shadows are razor-hard with no penumbra. Both are named next.
+
+## R24 — greeble geometry fixed; strongest objective state so far
+
+| shot | edgeEnergy | earned | black% | vs R23 |
+|---|---|---|---|---|
+| hero   | 34.01 | 43.3% | 1.82 | 32.88 -> 34.01 |
+| corner | **38.79** | 41.5% | 1.44 | 34.72 -> 38.79 |
+| low    | 30.16 | 50.1% | 3.46 | 29.03 -> 30.16 |
+| detail | 34.23 | 32.6% | 0.33 | 31.74 -> 34.23 |
+| _bar_  | _8.19-30.38, median 28.38_ | — | _max 5.29_ | |
+
+All four shots are now at or above the reference band's MAXIMUM, and crushed
+black is below the reference's own worst frame on every shot. Gate clean.
+
+**The greeble fix, in three measured steps.** Original: 30 inverted faces on the
+probe box (1.48%), 2022 tris.
+1. Hand the offset to `inset_region` instead of extruding and translating by
+   hand -> 13 inverted, 890 tris. Fixes the inward-panel winding.
+2. Skip faces too narrow to hold their own inset border -> **0** inverted, but
+   490 tris. Isolated by measurement: same box and seed gave 0 inverted with no
+   bevel and 27 with a 0.03 m bevel, at both deep and shallow settings, which
+   rules depth out and names the chamfer.
+3. That single inset slopes the rim into the offset, making every panel a
+   truncated pyramid. Insetting flat and THEN offsetting at zero thickness ->
+   1098 tris with perpendicular walls, 2 inverted (0.18%).
+
+**A process failure worth recording.** Step 2 was measured together with a shadow
+change, and earned detail collapsed 48% -> 28%. That was nearly attributed to the
+shadows. Isolating -- same assets, shadows reverted -- gave matte edge energy
+10.5/10.1/11.6/10.0 versus 10.5/10.1/11.8/9.4, so the shadows were innocent and
+the geometry loss was real. **Changing two things in one round nearly cost the
+diagnosis**, in a session whose whole method is one owner, one lever, one
+measurement.
+
+**Honest note on the depth clamp:** bounding panel depth by the width of the face
+it sits on did not change any measured number, because no tested setting came
+near the limit. Kept as a guard for extreme parameters, not claimed as a win.
+
+**Still imperfect:** the room carries 792 inverted faces out of 86k triangles
+(0.9%) against 1 across all five props. `kit.room` JOINS its pieces, so they meet
+at coincident faces -- 2599 non-manifold edges -- and greebling across those
+seams is a different problem from the one fixed here. Recorded, not rushed.
