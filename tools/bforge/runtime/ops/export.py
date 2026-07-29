@@ -11,6 +11,8 @@ come along, whether unused animations get baked in.
 
 from __future__ import annotations
 
+import sys
+
 import json
 
 import bpy
@@ -90,6 +92,7 @@ def export_gltf(ctx, out, objects, engine, format, animations, draco, strict, re
     restore = _apply_renames(rename or {})
 
     try:
+        colour_opts = {"export_vertex_color": "ACTIVE", "export_all_vertex_colors": False}
         bpy.ops.export_scene.gltf(
             filepath=str(path),
             export_format="GLB" if format == "glb" else "GLTF_SEPARATE",
@@ -104,9 +107,45 @@ def export_gltf(ctx, out, objects, engine, format, animations, draco, strict, re
             export_image_format="AUTO",
             export_skins=True,
             export_morph=True,
+            # Ship exactly ONE colour attribute, the active one, as COLOR_0.
+            #
+            # The exporter's defaults emit a material-derived white COLOR_0 ahead
+            # of the mesh's real colour attribute, which lands in COLOR_1. Every
+            # engine reads COLOR_0, so a baked vertex-AO asset exported with the
+            # defaults ships its occlusion where nothing looks at it -- verified
+            # by reading the GLB binary, after the op itself had reported a
+            # correct bake. The op was right and the file was useless.
+            **colour_opts,
             **settings,
         )
-    except (RuntimeError, TypeError) as exc:
+    except TypeError as exc:
+        # These two kwargs were renamed across Blender versions. Retry without
+        # them rather than failing the export outright, but say so, because the
+        # COLOR_0 guarantee above is then not in force.
+        if "unexpected keyword" not in str(exc):
+            raise OpError(f"glTF export failed: {exc}") from exc
+        print(
+            f"[bforge] glTF exporter rejected the vertex-colour options ({exc}); "
+            f"exporting without them. COLOR_0 may not be the active colour layer.",
+            file=sys.stderr,
+        )
+        try:
+            bpy.ops.export_scene.gltf(
+                filepath=str(path),
+                export_format="GLB" if format == "glb" else "GLTF_SEPARATE",
+                use_selection=True,
+                export_animations=animations,
+                export_animation_mode="ACTIONS",
+                export_draco_mesh_compression_enable=draco,
+                export_materials="EXPORT",
+                export_image_format="AUTO",
+                export_skins=True,
+                export_morph=True,
+                **settings,
+            )
+        except (RuntimeError, TypeError) as exc2:
+            raise OpError(f"glTF export failed: {exc2}") from exc2
+    except RuntimeError as exc:
         raise OpError(f"glTF export failed: {exc}") from exc
     finally:
         for datablock, original in restore:

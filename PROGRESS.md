@@ -1125,3 +1125,54 @@ with 0 of 227 asset files) produced a blank frame and a `no-context-requested`
 reading that looked exactly like a code failure; the fix was checking the deploy,
 not the code. And Spike's bundle sets `base: "/spike/"`, so serving `dist` at the
 web root 404s every asset — worth knowing before blaming a renderer.
+
+## R28 — bforge gains baked vertex AO; the exporter was shipping it where nothing reads it
+
+Goal retargeted to Spike (Babylon.js) with a Diablo-IV-class bar.
+
+**Bar, stated honestly:** there are no Diablo IV reference frames and no lawful
+way to obtain them. Substituted, explicitly: the Long Silence calibration stays
+as the objective gate (a real, measured commercial browser demo, though it is a
+DARK INTERIOR bar being applied to a DAYLIT OUTDOOR game), and the blind judge
+runs **Spike before vs Spike after** rather than Spike vs Long Silence. Four
+earlier rounds showed the cross-style comparison produces art-direction noise;
+before/after answers the question that actually matters.
+
+**New op: `gameready.vertex_ao`.** Hemisphere-raycast ambient occlusion baked to
+vertex colours. Costs nothing at runtime -- no texture, no pass, no shadow map --
+and it is the cheapest possible answer to the note a blind judge raised in every
+single round: "meets the floor with no contact darkening at all". Deterministic by
+construction: a Fibonacci hemisphere, no RNG, same bytes for the same input.
+
+On a greebled crate: 536 vertices, 32 samples, mean 0.7376, darkest 0.25, 85.8%
+of vertices occluded.
+
+**And the reason this round took three attempts is the session's recurring enemy
+again.** The op reported a correct bake and shipped a USELESS asset:
+
+    attributes: [POSITION, NORMAL, TEXCOORD_0, COLOR_0, COLOR_1]
+    COLOR_0: min 1.000  mean 1.000  max 1.000     <- what engines read
+    COLOR_1: min 0.250  mean 0.737  max 1.000     <- where the AO went
+
+Two causes, both fixed:
+1. Blender carries an all-white colour attribute from mesh creation. The op now
+   drops colour layers that have no variation at all (they carry nothing) and
+   leaves layers that do vary alone.
+2. **The glTF exporter's defaults emit a material-derived white COLOR_0 ahead of
+   the mesh's real attribute.** `export.gltf` now passes
+   `export_vertex_color="ACTIVE"` and `export_all_vertex_colors=False`, with a
+   fallback that says so out loud if a Blender version rejects the kwargs.
+
+The op also now REFUSES to report success when nothing was occluded, and refuses
+when the AO did not land in COLOR_0 -- naming the competing layer. A bake that
+darkened nothing is a no-op wearing a success message.
+
+Verified by reading the GLB binary rather than trusting the op:
+
+    attributes: [POSITION, NORMAL, TEXCOORD_0, COLOR_0]
+    COLOR_0 SHIPPED: min 0.250  p10 0.362  mean 0.737  max 1.000
+
+**Next:** bake AO into the Spike camp assets, and give Spike more than one
+material response -- "one wet-metal roughness covers every surface" is the
+loudest thing the judge has said and the only structural gap left that does not
+need another session's file.
