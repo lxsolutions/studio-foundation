@@ -19,7 +19,11 @@ renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.0;
+// Lifting the last crushed blacks with exposure rather than more ambient.
+// Ambient raises the floor by flattening every form it touches, which would
+// spend the edge energy this scene just earned; exposure scales the whole
+// curve, so relative contrast survives.
+renderer.toneMappingExposure = 1.14;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.info.autoReset = false;
 document.body.appendChild(renderer.domElement);
@@ -30,13 +34,31 @@ const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.15, 1
 
 // Practical lights with real falloff -- the judge named "light has a source and
 // a falloff" as what separated the reference from a single-sun scene.
+//
+// Exactly one caster. Shadow maps are the expensive part of this frame and a
+// second one buys nothing here: the fixtures are close enough together that the
+// extra shadow reads as noise rather than as a separate direction.
 const key = new THREE.PointLight(0xffd9a8, 60, 26, 2);
-key.position.set(4, 3.4, -4); key.castShadow = true;
+key.position.set(4, 3.9, -4); key.castShadow = true;
 key.shadow.mapSize.set(1024, 1024); key.shadow.bias = -0.0015;
 scene.add(key);
-const fill = new THREE.PointLight(0x86b4ff, 26, 24, 2);
-fill.position.set(12.5, 3.0, -11.5); scene.add(fill);
-scene.add(new THREE.AmbientLight(0x2c3a4d, 0.5));
+// Shadow floor. Enclosing the room removed the sky that had been lifting the
+// shadows outdoors, and 22-27% of every frame crushed to pure black against the
+// reference's 5.29% ceiling -- detail that is modelled, textured and lit, and
+// then thrown away at the bottom of the histogram.
+//
+// A hemisphere light rather than more flat ambient: real bounce in a metal box
+// is directional, cool off the ceiling and warmer off the floor, so surfaces
+// still read as facing somewhere. Flat ambient of the same strength lifts the
+// blacks but flattens every form it touches, which would cost the edge energy
+// this scene just earned.
+// The ground colour is what lights the CEILING -- a hemisphere light gives
+// downward-facing surfaces its ground term, and the ceiling's inner face points
+// down. It was set to the darkest value in the scene, which is why raising the
+// hemisphere barely moved the blacks: the crushed pixels were almost all
+// ceiling. In a real room that surface is lit by bounce off a bright floor.
+scene.add(new THREE.HemisphereLight(0x42566f, 0x6b5a48, 1.15));
+scene.add(new THREE.AmbientLight(0x1c2430, 0.55));
 
 // Blender is Z-up; glTF converts (x,y,z) -> (x, z, -y). The room's Blender
 // footprint of 0..16 on Y therefore lands on NEGATIVE Z, -16.4..0.4. Placing
@@ -121,7 +143,25 @@ for (const [x, y, z, warm] of [
   strip.position.set(x, y, z);
   if (Math.abs(x - 0.4) < 0.01) strip.rotation.y = Math.PI / 2; // the wall-mounted one
   practicals.add(strip);
+
+  // An emissive material glows but emits nothing, so the fixtures were floating
+  // bright rectangles lighting no surface -- and the ceiling directly above each
+  // one stayed black. The key light already covers the first strip.
+  if (!(x === 4.0 && z === -4.0)) {
+    const lamp = new THREE.PointLight(colour, 20, 20, 2);
+    lamp.position.set(x, y, z);
+    practicals.add(lamp);
+  }
 }
+// The pitched roof apex sits at 6.6 m, well above the 3.9 m strips, so nothing
+// reached it -- and `low` is the one camera that looks up into it. A dim, wide,
+// non-casting lamp in the roof space; the alternative was another global
+// exposure bump, which would have paid for one camera's problem out of every
+// other camera's contrast.
+const roofGlow = new THREE.PointLight(0x8fa6c4, 9, 26, 2);
+roofGlow.position.set(8, 5.6, -8);
+world.add(roofGlow);
+
 world.add(practicals);
 
 function frame(t: number): void {

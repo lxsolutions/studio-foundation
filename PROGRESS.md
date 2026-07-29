@@ -801,3 +801,50 @@ frame 20 of 403". It was shader compilation, not a stutter.
 
 **Next:** lift the shadows without flattening the contrast, then judge. This is
 the first build worth spending a judge round on.
+
+## R21 — objective gate CLEAN; all four shots above the bar's median
+
+Owner: lighting, sequentially, one lever at a time. Four measurements.
+
+| change | hero | corner | low | detail | warns |
+|---|---|---|---|---|---|
+| R20 baseline | 22.83 | 34.59 | 21.35 | 23.02 | 4 |
+| hemisphere + ambient | 23.28 | 34.82 | 21.81 | 23.36 | 4 |
+| **strips emit light; ground colour** | 29.72 | 32.70 | 26.90 | 29.94 | 2 |
+| exposure 1.00 -> 1.14 | 32.41 | 35.86 | 29.56 | 32.85 | 1 |
+| roof-apex lamp | **33.53** | **35.67** | **29.78** | **32.74** | **0** |
+
+Bar: edgeEnergy 8.19-30.38, median 28.38. **All four shots are above the median
+and the objective gate is clean: 0 fatal, 0 warn, 0 page errors.** Earned detail
+holds at 39-54%, so the gain is not a texture trick.
+
+**Why the first lighting attempt did almost nothing.** Raising the hemisphere
+light moved crushed black 23.8% -> 20.9%: nearly nothing, because the crushed
+pixels were almost entirely CEILING. A hemisphere light gives downward-facing
+surfaces its GROUND term, and that was set to the darkest colour in the scene.
+Two real causes, both found by opening the frame rather than reading the number:
+
+1. The ground colour lights the ceiling. It was 0x3a2c20.
+2. **An emissive material in Three.js glows but emits nothing.** The four
+   practicals were bright floating rectangles lighting no surface, so the
+   ceiling directly above each fixture stayed black. Giving each strip an actual
+   PointLight took blacks 20.9% -> 9.3% on corner and raised edge energy at the
+   same time.
+
+**Exposure beat ambient for the last of it.** Ambient lifts the histogram floor
+by flattening every form it touches, which spends the edge energy the geometry
+just earned; exposure scales the whole curve, so relative contrast survives.
+1.00 -> 1.14 lifted blacks AND raised edge energy on all four shots.
+
+**The last warn got a targeted fix, not a global one.** `low` is the only camera
+that looks up into the 6.6 m pitched roof apex, which nothing reached. A dim
+lamp in the roof space cleared it; another exposure bump would have paid for one
+camera's problem out of every other camera's contrast.
+
+**Still true, and not measurable:** the walls carry much less relief than the
+ceiling, and the room is empty. The reference's frames are full of crates,
+pipes and machinery. That is the next gap, and it is a content gap, not a
+lighting or material one.
+
+**Next: judge.** The gate is clean, so a blind round is finally earned. Every
+previous round would have been spent on a frame with measurable defects.
