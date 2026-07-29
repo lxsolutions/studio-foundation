@@ -990,3 +990,47 @@ near the limit. Kept as a guard for extreme parameters, not claimed as a win.
 (0.9%) against 1 across all five props. `kit.room` JOINS its pieces, so they meet
 at coincident faces -- 2599 non-manifold edges -- and greebling across those
 seams is a different problem from the one fixed here. Recorded, not rushed.
+
+## R25 — JUDGE DROPPED to 25%; ambient occlusion was missing entirely
+
+Third blind round on the R24 build: **1W / 3L — 25% — BELOW_REFERENCE**, down
+from 50% twice. **The objective numbers went UP while the judge went DOWN** --
+all four shots were at or above the reference band's maximum, gate clean, and it
+lost a pair it had won twice. That divergence is the finding: the gate is
+necessary and is not sufficient, and the judge is the bar.
+
+**The note the judge repeated in every single round, in different words:**
+
+> "no AO where it meets the beam below"
+> "meets the floor with no contact darkening at all"
+> "pasted on rather than sitting in the room"
+
+**This scene had no ambient occlusion at all.** The outdoor template has a tuned
+SSAO pass; it was never carried across. Three rounds of verdicts named it and it
+was read as three separate complaints instead of one systematic gap.
+
+Adding it took earned detail from 43/41/50/33% to **52.5/51.8/57.2/34.8%** --
+contact darkening is geometric, so it survives the matte pass -- with the gate
+still clean and edge energy still at or above the band maximum.
+
+**Three self-inflicted diagnostics on the way, all worth recording:**
+
+1. The first SSAO build rendered four completely blank frames, luma 6.94 on
+   every shot -- exactly the page's CSS background, so the canvas drew nothing.
+   Cause: **`OutputPass` is not optional once a pass follows `RenderPass`.**
+   Without it the chain is never composited to screen. Bisecting cost three
+   rounds: composer with RenderPass alone rendered fine, and SSAO still broke it
+   with the shader injection removed and with VSM reverted, ruling out both.
+2. The first of those measurements was taken while a background re-forge was
+   rewriting the room GLB. The browser recorded `hold_interior.glb
+   net::ERR_ABORTED`. **Do not measure an asset while something is writing it.**
+3. The browser pane reported `canvas 0x0` and `frames: 0`, because a pane that
+   is not displayed does not composite and its rAF never runs. It cannot be used
+   to diagnose rendering.
+
+**The black slab is room geometry, not a prop.** Props verified clean -- 0 flipped
+faces across all five, by two independent implementations. The room carries 447
+inverted faces in 88k triangles. `kit.room` JOINS overlapping pieces; welding
+BEFORE greeble rather than after took non-manifold edges 2599 -> 767 and inverted
+faces 792 -> 447, but pieces that genuinely interpenetrate cannot be welded apart.
+That needs kit.room to union its solids, and is recorded rather than rushed.
