@@ -69,8 +69,19 @@ def get_object(name: str):
     obj = bpy.data.objects.get(name)
     if obj is None:
         available = sorted(o.name for o in bpy.context.scene.objects)[:25]
+        # Creation ops snake_case the names they are given, so a recipe that
+        # writes `tent_poleA` gets an object called `tent_polea` and then fails
+        # here several steps later with no hint that a rename happened. Say so.
+        # Found writing a real camp kit for Spike; it cost a whole round-trip.
+        hint = ""
+        snaked = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", name).lower().replace("-", "_")
+        if snaked != name and bpy.data.objects.get(snaked) is not None:
+            hint = (
+                f" Did you mean '{snaked}'? Creation ops coerce names to "
+                f"snake_case, so '{name}' was stored as '{snaked}'."
+            )
         raise ValueError(
-            f"no object named '{name}'. In the scene: {available or '(scene is empty)'}"
+            f"no object named '{name}'. In the scene: {available or '(scene is empty)'}.{hint}"
         )
     return obj
 

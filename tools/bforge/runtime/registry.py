@@ -118,8 +118,19 @@ class Op:
     # This normalises the spelling and, where it genuinely cannot, says exactly
     # what went wrong instead of failing three frames deep.
 
-    SELECTORS = ("object", "objects", "name", "target", "mesh")
+    SELECTORS = ("object", "objects", "names", "name", "target", "mesh")
     OUTPUTS = ("out", "path", "file", "filepath", "dest", "output")
+    # Transform verbs. Found the same way as the others -- by writing a real
+    # recipe and having it fail. `object.transform` wants location/rotation, and
+    # "translate"/"rotate" are what anyone actually types. `scale` is
+    # deliberately NOT aliased: too many ops mean unrelated things by `size`.
+    # Chamfer width. `build.box` takes `bevel`, `build.bevel` takes `width`,
+    # and "offset" is what Blender itself calls it. Fifth group; writing ONE
+    # 40-step recipe cost six failed runs on parameter naming alone, which is
+    # the whole argument for this mechanism existing.
+    WIDTHS = ("width", "offset", "bevel", "chamfer")
+    MOVES = ("location", "translate", "position", "pos", "move")
+    TURNS = ("rotation", "rotate", "rot", "euler")
 
     # Groups of parameter names that mean the same thing to a caller. Ops within
     # a group are interchangeable spellings; `strict` names the members that must
@@ -128,6 +139,9 @@ class Op:
     ALIAS_GROUPS = (
         {"names": SELECTORS, "primary": ("object", "objects", "target", "mesh"), "noun": "object"},
         {"names": OUTPUTS, "primary": ("out", "path"), "noun": "output path"},
+        {"names": WIDTHS, "primary": ("width",), "noun": "chamfer width"},
+        {"names": MOVES, "primary": ("location",), "noun": "translation"},
+        {"names": TURNS, "primary": ("rotation",), "noun": "rotation"},
     )
 
     def _resolve_selector(self, args: dict) -> tuple[dict, list[str]]:
@@ -153,10 +167,17 @@ class Op:
             target = free[0]
             value = args.pop(given)
             given_value = value
-            wants_list = self.params[target][0].endswith("[]")
+            spec = self.params[target][0]
+            wants_list = spec.endswith("[]")
+            # vec2/vec3/color are ALREADY sequences. Treating them as scalars
+            # made a 3-element rotation look like "scalar wanted, list given",
+            # so the alias refused and put the original key back -- which then
+            # tripped the ambiguity check below. Found on a real recipe passing
+            # rotate=[90,0,0] to object.transform.
+            takes_sequence = wants_list or spec in ("vec2", "vec3", "color", "colorref")
             if wants_list and not isinstance(value, (list, tuple)):
                 value = [value]
-            elif not wants_list and isinstance(value, (list, tuple)):
+            elif not takes_sequence and isinstance(value, (list, tuple)):
                 if len(value) != 1:
                     args[given] = value  # put it back; let the normal error fire
                     continue
@@ -169,7 +190,14 @@ class Op:
         #    spelling that THIS op reads as something else entirely.
         primary = next((s for s in group["primary"] if s in self.params), None)
         if primary and args.get(primary) in (None, "", []):
-            confusable = [k for k in names if k != primary and k in args and args[k]]
+            # `k in self.params` is load-bearing: a key that step 1 declined to
+            # alias is still in args but was never declared, and looking up its
+            # description crashed with a bare KeyError instead of reporting
+            # anything useful.
+            confusable = [
+                k for k in names
+                if k != primary and k in args and args[k] and k in self.params
+            ]
             if confusable:
                 k = confusable[0]
                 _, _, desc = self.params[k]

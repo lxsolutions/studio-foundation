@@ -1,0 +1,442 @@
+[
+ {
+  "op": "session.reset",
+  "args": {}
+ },
+ {
+  "op": "build.prism",
+  "args": {
+   "name": "tent",
+   "radius": 1.55,
+   "depth": 3.4,
+   "sides": 3
+  }
+ },
+ {
+  "op": "object.transform",
+  "args": {
+   "name": "tent",
+   "rotate": [
+    90,
+    0,
+    0
+   ]
+  }
+ },
+ {
+  "op": "build.cylinder",
+  "args": {
+   "name": "tent_ridge",
+   "radius": 0.06,
+   "depth": 3.9,
+   "segments": 6
+  }
+ },
+ {
+  "op": "object.transform",
+  "args": {
+   "name": "tent_ridge",
+   "rotate": [
+    90,
+    0,
+    0
+   ],
+   "translate": [
+    0,
+    1.42,
+    0
+   ]
+  }
+ },
+ {
+  "op": "build.cylinder",
+  "args": {
+   "name": "tent_pole_a",
+   "radius": 0.055,
+   "depth": 1.6,
+   "segments": 6
+  }
+ },
+ {
+  "op": "object.transform",
+  "args": {
+   "name": "tent_pole_a",
+   "translate": [
+    0,
+    0.8,
+    1.75
+   ]
+  }
+ },
+ {
+  "op": "build.cylinder",
+  "args": {
+   "name": "tent_pole_b",
+   "radius": 0.055,
+   "depth": 1.6,
+   "segments": 6
+  }
+ },
+ {
+  "op": "object.transform",
+  "args": {
+   "name": "tent_pole_b",
+   "translate": [
+    0,
+    0.8,
+    -1.75
+   ]
+  }
+ },
+ {
+  "op": "build.box",
+  "args": {
+   "name": "tent_flap",
+   "size": [
+    0.9,
+    0.06,
+    1.1
+   ],
+   "bevel": 0.02
+  }
+ },
+ {
+  "op": "object.transform",
+  "args": {
+   "name": "tent_flap",
+   "rotate": [
+    18,
+    0,
+    0
+   ],
+   "translate": [
+    0,
+    0.55,
+    1.72
+   ]
+  }
+ },
+ {
+  "op": "object.join",
+  "args": {
+   "names": [
+    "tent",
+    "tent_ridge",
+    "tent_pole_a",
+    "tent_pole_b",
+    "tent_flap"
+   ],
+   "into": "spike_tent"
+  }
+ },
+ {
+  "op": "build.bevel",
+  "args": {
+   "name": "spike_tent",
+   "segments": 1,
+   "width": 0.012
+  }
+ },
+ {
+  "op": "object.origin",
+  "args": {
+   "name": "spike_tent",
+   "mode": "bottom"
+  }
+ },
+ {
+  "op": "material.set",
+  "args": {
+   "object": "spike_tent",
+   "preset": "cloth",
+   "color": "#b8a887"
+  }
+ },
+ {
+  "op": "uv.unwrap",
+  "args": {
+   "object": "spike_tent",
+   "style": "smart",
+   "scale": 1.0
+  }
+ },
+ {
+  "op": "build.cylinder",
+  "args": {
+   "name": "hf_leg_a",
+   "radius": 0.11,
+   "depth": 4.6,
+   "segments": 6
+  }
+ },
+ {
+  "op": "object.transform",
+  "args": {
+   "name": "hf_leg_a",
+   "rotate": [
+    0,
+    0,
+    14
+   ],
+   "translate": [
+    -0.95,
+    2.3,
+    0.9
+   ]
+  }
+ },
+ {
+  "op": "build.cylinder",
+  "args": {
+   "name": "hf_leg_b",
+   "radius": 0.11,
+   "depth": 4.6,
+   "segments": 6
+  }
+ },
+ {
+  "op": "object.transform",
+  "args": {
+   "name": "hf_leg_b",
+   "rotate": [
+    0,
+    0,
+    -14
+   ],
+   "translate": [
+    0.95,
+    2.3,
+    0.9
+   ]
+  }
+ },
+ {
+  "op": "build.cylinder",
+  "args": {
+   "name": "hf_leg_c",
+   "radius": 0.11,
+   "depth": 4.6,
+   "segments": 6
+  }
+ },
+ {
+  "op": "object.transform",
+  "args": {
+   "name": "hf_leg_c",
+   "rotate": [
+    0,
+    0,
+    14
+   ],
+   "translate": [
+    -0.95,
+    2.3,
+    -0.9
+   ]
+  }
+ },
+ {
+  "op": "build.cylinder",
+  "args": {
+   "name": "hf_leg_d",
+   "radius": 0.11,
+   "depth": 4.6,
+   "segments": 6
+  }
+ },
+ {
+  "op": "object.transform",
+  "args": {
+   "name": "hf_leg_d",
+   "rotate": [
+    0,
+    0,
+    -14
+   ],
+   "translate": [
+    0.95,
+    2.3,
+    -0.9
+   ]
+  }
+ },
+ {
+  "op": "build.box",
+  "args": {
+   "name": "hf_cap",
+   "size": [
+    1.5,
+    0.22,
+    2.2
+   ],
+   "bevel": 0.03
+  }
+ },
+ {
+  "op": "object.transform",
+  "args": {
+   "name": "hf_cap",
+   "translate": [
+    0,
+    4.6,
+    0
+   ]
+  }
+ },
+ {
+  "op": "build.box",
+  "args": {
+   "name": "hf_brace_a",
+   "size": [
+    2.4,
+    0.14,
+    0.14
+   ],
+   "bevel": 0.02
+  }
+ },
+ {
+  "op": "object.transform",
+  "args": {
+   "name": "hf_brace_a",
+   "translate": [
+    0,
+    2.6,
+    0.9
+   ]
+  }
+ },
+ {
+  "op": "build.box",
+  "args": {
+   "name": "hf_brace_b",
+   "size": [
+    2.4,
+    0.14,
+    0.14
+   ],
+   "bevel": 0.02
+  }
+ },
+ {
+  "op": "object.transform",
+  "args": {
+   "name": "hf_brace_b",
+   "translate": [
+    0,
+    2.6,
+    -0.9
+   ]
+  }
+ },
+ {
+  "op": "build.torus",
+  "args": {
+   "name": "hf_wheel",
+   "major": 0.75,
+   "minor": 0.1,
+   "major_segments": 16,
+   "minor_segments": 6
+  }
+ },
+ {
+  "op": "object.transform",
+  "args": {
+   "name": "hf_wheel",
+   "rotate": [
+    0,
+    90,
+    0
+   ],
+   "translate": [
+    0,
+    4.95,
+    0
+   ]
+  }
+ },
+ {
+  "op": "build.cylinder",
+  "args": {
+   "name": "hf_axle",
+   "radius": 0.07,
+   "depth": 0.9,
+   "segments": 6
+  }
+ },
+ {
+  "op": "object.transform",
+  "args": {
+   "name": "hf_axle",
+   "rotate": [
+    90,
+    0,
+    0
+   ],
+   "translate": [
+    0,
+    4.95,
+    0
+   ]
+  }
+ },
+ {
+  "op": "object.join",
+  "args": {
+   "names": [
+    "hf_leg_a",
+    "hf_leg_b",
+    "hf_leg_c",
+    "hf_leg_d",
+    "hf_cap",
+    "hf_brace_a",
+    "hf_brace_b",
+    "hf_wheel",
+    "hf_axle"
+   ],
+   "into": "spike_headframe"
+  }
+ },
+ {
+  "op": "object.origin",
+  "args": {
+   "name": "spike_headframe",
+   "mode": "bottom"
+  }
+ },
+ {
+  "op": "material.set",
+  "args": {
+   "object": "spike_headframe",
+   "preset": "wood",
+   "color": "#4a3627"
+  }
+ },
+ {
+  "op": "uv.unwrap",
+  "args": {
+   "object": "spike_headframe",
+   "style": "smart",
+   "scale": 1.0
+  }
+ },
+ {
+  "op": "check.critique",
+  "args": {
+   "objects": [
+    "spike_tent",
+    "spike_headframe"
+   ]
+  }
+ },
+ {
+  "op": "export.gltf",
+  "args": {
+   "objects": [
+    "spike_tent",
+    "spike_headframe"
+   ],
+   "out": "spike/spike_camp.glb"
+  }
+ }
+]
