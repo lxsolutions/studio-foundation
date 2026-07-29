@@ -1034,3 +1034,50 @@ inverted faces in 88k triangles. `kit.room` JOINS overlapping pieces; welding
 BEFORE greeble rather than after took non-manifold edges 2599 -> 767 and inverted
 faces 792 -> 447, but pieces that genuinely interpenetrate cannot be welded apart.
 That needs kit.room to union its solids, and is recorded rather than rushed.
+
+## R26 — JUDGE 25% again. AO did not move it. The gap is now art direction.
+
+Fourth blind round, with SSAO in: **1W / 3L — 25%**. Unchanged.
+
+**Win-rate history, honestly:** 50%, 50%, **25%, 25%**. The peak was two rounds
+ago, on builds that had NO props. Everything since has raised every objective
+number and lowered the judge score.
+
+| round | build | gate | edgeEnergy | judge |
+|---|---|---|---|---|
+| R22 | roofed room, no props | clean | 33.5/35.7/29.8/32.7 | **50%** |
+| R23 | + props, macro variation | clean | 32.9/34.7/29.0/31.7 | **50%** |
+| R25 | + fixed greeble geometry | clean | 34.0/38.8/30.2/34.2 | **25%** |
+| R26 | + ambient occlusion | clean | 32.0/36.2/29.1/35.9 | **25%** |
+
+**A hypothesis the verdicts support: the props made it worse, not better.** They
+are five shapes repeated twelve times in one material, so they turned "an empty
+room with one material" into "a room full of identical boxes in that same
+material" -- and the judge's language changed accordingly, from "not a single
+object for the light to occlude" to "**reads as a modular-kit test level**" and
+"one wet-metal roughness currently covers every surface". Adding content in a
+single material made the single material the subject of the complaint.
+
+**What it names now, all new this round:**
+1. **No material differentiation.** Walls, crates, barrels, floor and ceiling all
+   share one wet-metal response. This is now the loudest complaint.
+2. **The tiling repeat survived macro variation.** "the identical streak decal
+   lands at the same height in every panel". The low-frequency term modulates
+   brightness but not the streak's POSITION, so the repeat is still legible.
+3. **Window and door openings are flat black cutouts with nothing behind them.**
+   Concrete and cheap to fix.
+4. **No subject.** "a symmetrical empty room", "two identical boxes in an empty
+   room is not framing". Composition, not surfacing.
+5. SSAO is present but not reading at contacts -- kernelRadius 0.45 m may be too
+   tight, or the raised hemisphere term is washing it out.
+
+**The honest conclusion for the toolset.** The objective gate is doing its job
+and is thoroughly saturated: every shot sits at or above the reference band's
+maximum, blacks are inside the reference's own range, earned detail is 35-57%.
+None of that is what is losing. What is losing is art direction -- material
+variety, composition, a subject, and openings that lead somewhere -- and the
+toolset now measures none of it, which is exactly what the blind judge is for.
+
+**The loop's stop condition is met on win rate but not on findings**: two
+consecutive rounds at 25%, but R26 produced five new named gaps. Those gaps are
+content work, not tool work.
