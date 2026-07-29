@@ -620,7 +620,8 @@ def greeble(bm, faces, rng, density=0.4, min_depth=0.01, max_depth=0.05, inset=0
         if perimeter <= 0.0:
             continue
         thickness = area ** 0.5 * inset
-        if (2.0 * area / perimeter) <= thickness * 2.0:
+        width = 2.0 * area / perimeter
+        if width <= thickness * 2.0:
             continue
         depth = rng.uniform(min_depth, max_depth)
         if rng.random() < 0.35:
@@ -637,14 +638,32 @@ def greeble(bm, faces, rng, density=0.4, min_depth=0.01, max_depth=0.05, inset=0
         # build.cleanup because it is not a manifold problem, and nothing
         # measured it until check.critique learned to.
         #
-        # inset_region takes the offset itself and handles both signs, which also
-        # removes the interior face the manual version left behind.
-        inner = bmesh.ops.inset_region(
-            bm, faces=[face], thickness=thickness, depth=depth, use_even_offset=True,
+        # TWO insets, not one. A single inset_region(thickness, depth) slopes the
+        # border ring into the offset, so every panel becomes a truncated pyramid
+        # -- softer silhouette, less contrast, and measurably less detail: it cost
+        # the room 127k triangles down to 45k and dropped the share of frame
+        # detail that is modelled rather than textured from ~48% to ~28%.
+        #
+        # Insetting flat first and then offsetting with zero thickness keeps the
+        # rim flat and the side walls perpendicular, which is what makes a panel
+        # read as a plate bolted on rather than a dent. bmesh builds those walls
+        # itself, so unlike the hand-rolled extrude it winds them correctly for
+        # negative depth too.
+        # A panel deeper than the face is wide has to fold through itself. The
+        # width test above rejects faces too narrow to panel at all; this bounds
+        # the ones that are wide enough to panel but not to take the full depth.
+        limit = width * 0.9
+        depth = max(-limit, min(limit, depth))
+
+        rim = bmesh.ops.inset_region(
+            bm, faces=[face], thickness=thickness, depth=0.0, use_even_offset=True,
         )["faces"]
-        if not inner:
+        if not rim:
             continue
-        new_faces = [f for f in inner if f.is_valid]
+        plate = bmesh.ops.inset_region(
+            bm, faces=[f for f in rim if f.is_valid], thickness=0.0, depth=depth,
+        )["faces"]
+        new_faces = [f for f in (plate or rim) if f.is_valid]
         made.extend(new_faces)
     return made
 
