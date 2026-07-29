@@ -83,6 +83,43 @@ and captures. Same shot definition, same pixels, every run.
 Without it the harness still works, but it says so in the report, and those
 shots are best-effort rather than reproducible.
 
+## `--geometry-pass`: is the detail modelled, or printed?
+
+`edgeEnergy` measures high-frequency contrast. It cannot tell detail you
+**modelled** from detail you **printed on a texture**, and it will happily
+report "at the reference bar" for a nearly flat room wearing a busy tiling map.
+That happened three rounds running before this existed.
+
+Add `--geometry-pass` and the harness re-renders each shot a second time with
+every material swapped for a neutral matte, stepping at `dt = 0` so the
+simulation state is byte-identical and *only* the shading differs:
+
+```bash
+node tools/gauntlet/harness/shotset.mjs --url ... --shots ... --geometry-pass --out runs/r002
+```
+
+The report then carries, per shot, the matte frame's edge energy and what
+fraction of the shaded frame's detail survives with the textures off. Measured
+on the greebled hold: 40–50%.
+
+Opt in by registering one more hook:
+
+```js
+gauntlet.register({
+  materials: (mode) => {            // 'beauty' | 'flat'
+    world.traverse((o) => { if (o.isMesh) o.material = materialModes[mode]; });
+  },
+});
+```
+
+Games that skip it get `skipped` in the report rather than an invented number.
+
+There is no threshold on this and it does not gate — texture is not cheating,
+and a good scene needs both. It is there because a low ratio is the single
+strongest signal that a still frame will lose a blind A/B despite passing every
+objective check. The matte frames are also worth *opening*: with the shine gone,
+they showed a missing ceiling and near-zero panel relief that no metric caught.
+
 ## Hardware: measure on smeagol, always
 
 `awesome-o` has **no GPU** — only *Microsoft Remote Display Adapter* and
