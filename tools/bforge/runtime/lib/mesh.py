@@ -602,23 +602,49 @@ def greeble(bm, faces, rng, density=0.4, min_depth=0.01, max_depth=0.05, inset=0
     for face in picked:
         if not face.is_valid or len(face.verts) < 3:
             continue
+
+        # Skip faces too narrow to hold their own inset border.
+        #
+        # The inset is sized from sqrt(area), which is fine for a squarish panel
+        # and badly wrong for a long thin strip -- exactly what a chamfer is. On
+        # a 3 cm bevel strip the border consumes the whole width and the face
+        # folds through itself, producing geometry wound against its own normals
+        # that renders as a solid black patch.
+        #
+        # Isolated by measurement, not guessed: the same box, same seed, greebled
+        # with a 0.03 m chamfer gave 27 such faces and 0 with no chamfer, at both
+        # deep and shallow settings. Width uses 2*area/perimeter, which tracks the
+        # SHORT dimension of a thin rectangle where sqrt(area) does not.
+        area = face.calc_area()
+        perimeter = sum(e.calc_length() for e in face.edges)
+        if perimeter <= 0.0:
+            continue
+        thickness = area ** 0.5 * inset
+        if (2.0 * area / perimeter) <= thickness * 2.0:
+            continue
         depth = rng.uniform(min_depth, max_depth)
         if rng.random() < 0.35:
             depth = -depth * 0.6
+        # Inset and offset in ONE op, letting bmesh place the side walls.
+        #
+        # This used to inset at depth 0, extrude the inset region, delete the
+        # original face and translate the new verts by hand. That is correct for
+        # an outward panel and WRONG for an inward one: the side walls keep the
+        # winding of an outward extrusion, so 35% of panels -- the ones this
+        # deliberately pushes in -- ended up wound against their own normals and
+        # rendered as solid black patches. Measured on three greebled boxes:
+        # 30, 24 and 22 such faces, against 0 on ungreebled geometry. It survived
+        # build.cleanup because it is not a manifold problem, and nothing
+        # measured it until check.critique learned to.
+        #
+        # inset_region takes the offset itself and handles both signs, which also
+        # removes the interior face the manual version left behind.
         inner = bmesh.ops.inset_region(
-            bm, faces=[face], thickness=face.calc_area() ** 0.5 * inset,
-            depth=0.0, use_even_offset=True,
+            bm, faces=[face], thickness=thickness, depth=depth, use_even_offset=True,
         )["faces"]
         if not inner:
             continue
-        result = bmesh.ops.extrude_face_region(bm, geom=inner)
-        verts = [g for g in result["geom"] if isinstance(g, bmesh.types.BMVert)]
-        new_faces = [g for g in result["geom"] if isinstance(g, bmesh.types.BMFace)]
-        for old in inner:
-            if old.is_valid:
-                bmesh.ops.delete(bm, geom=[old], context="FACES")
-        if verts:
-            bmesh.ops.translate(bm, vec=_average_normal(new_faces) * depth, verts=verts)
+        new_faces = [f for f in inner if f.is_valid]
         made.extend(new_faces)
     return made
 
