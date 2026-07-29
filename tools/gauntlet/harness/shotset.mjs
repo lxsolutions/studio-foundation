@@ -183,6 +183,23 @@ function summarizeTiming(dt, cb, longTasks) {
   for (let i = 0; i < dt.length; i++) {
     if (dt[i] > worst) { worst = dt[i]; worstAt = i; }
   }
+  // Throughput, not just percentiles.
+  //
+  // rAF delivers vsync-QUANTISED intervals: on a 60 Hz display a page that needs
+  // 24 ms of work per frame gets 16.67 or 33.33, never 24. So the MEDIAN sits on
+  // whichever mode happens to win, and a 6% change in real cost flips it between
+  // them -- which reported a Babylon game as "60 fps -> 30 fps" when its actual
+  // script time had moved 23.38 ms to 24.91 ms. Nearly took a cheap win for a
+  // 2x regression.
+  //
+  // Script ms per frame is the honest cost figure, and frames over elapsed wall
+  // time is the honest throughput figure. Both are immune to the quantisation.
+  const elapsedMs = dt.reduce((a, b) => a + b, 0);
+  const throughputFps = elapsedMs > 0 ? +((dt.length / elapsedMs) * 1000).toFixed(1) : null;
+  const bimodal =
+    dt.length > 30 &&
+    new Set(dt.map((x) => Math.round(x))).size <= Math.max(4, dt.length * 0.02);
+
   const spikes = dt.filter((x) => x > 100).length;
   const lateSpikes = dt.filter((x, i) => x > 100 && i > dt.length * 0.25).length;
 
@@ -194,6 +211,8 @@ function summarizeTiming(dt, cb, longTasks) {
     frameMsWorst: +worst.toFixed(2),
     worstFrameIndex: worstAt,
     worstFrameAtPct: +((worstAt / Math.max(1, dt.length - 1)) * 100).toFixed(1),
+    throughputFps,
+    vsyncQuantised: bimodal,
     spikesOver100ms: spikes,
     spikesAfterFirstQuarter: lateSpikes,
     fpsP50: fps(percentile(s, 50)),
@@ -613,7 +632,13 @@ function renderMarkdown(r) {
         : `${t.spikesAfterFirstQuarter} after the first quarter — genuine runtime hitches`;
       L.push(`- spikes over 100 ms: ${t.spikesOver100ms} (${verdict}); worst at frame ${t.worstFrameIndex} of ${t.frames} (${t.worstFrameAtPct}% in)`);
     }
-    L.push(`- page script per frame: p50 ${t.scriptMsP50} ms, p99 ${t.scriptMsP99} ms`);
+    L.push(
+      `- throughput **${t.throughputFps} fps** over ${t.frames} frames` +
+        (t.vsyncQuantised
+          ? ' — frame intervals are vsync-quantised, so trust THIS and the script figure below, not the fps percentiles above'
+          : ''),
+    );
+    L.push(`- page script per frame: p50 **${t.scriptMsP50} ms**, p99 ${t.scriptMsP99} ms  ← the real cost`);
     L.push(`- long tasks: ${t.longTasks}`);
   }
   L.push('');
