@@ -894,3 +894,57 @@ all throws rather than counting as a loss.
 **Next:** props and set dressing, and per-surface material variation to break
 the repeat. Both were also visible by eye, and the judge named them unprompted,
 which is the strongest signal yet that they are the real remaining gap.
+
+## R23 — judge holds at 50%; the toolset learns to see a defect it was shipping
+
+Second blind round on the props build: **2W / 2L — 50% — AT_OR_ABOVE_REFERENCE**,
+same two pairs won (corner, hero), same two lost (detail, low). Brief sha
+unchanged. The win rate did not move, but the round produced new findings, so
+the stop condition is not met.
+
+**What the judge saw that no metric did:**
+
+> "one prop on the right resolves as a **solid black slab with no surface at all**"
+> "plain **untextured** box props"
+> "cast shadows are **razor-hard with no penumbra growth** for a 3 m tube light"
+
+**The geometry pass separated the two prop complaints in one look.** In the matte
+frame the props are visibly, densely panelled — so "untextured" was not a
+modelling failure, it was texel scale: box UVs are world-derived at 2 m per tile,
+so a 1.2 m crate spans 0.6 of a tile and renders as a flat wash. **One material
+at one UV scale cannot serve both a 16 m room and a 1.2 m crate.** Props now get
+their own material at 4x/8x repeat.
+
+But the black slab was still black in the *matte* pass, under a uniform
+material — so it was geometry, not shading.
+
+**Measured, threshold-free.** Comparing each triangle's winding against its own
+stored normals, post-`build.cleanup`:
+
+| object | greebled | tris wound against their normals |
+|---|---|---|
+| cargo_a | yes | 30 (1.48%) |
+| cargo_b | yes | 24 (1.40%) |
+| locker  | yes | 22 (1.49%) |
+| drum    | yes, cylinder | 3 (0.17%) |
+| pipe    | **no** | **0** |
+
+Signed volume is positive on all five, so this is localised bad faces rather
+than a flipped mesh. `build.greeble` pushes 35% of its panels INWARD, and an
+inward extrusion keeps the side-wall winding of an outward one; `build.cleanup`
+does not fix it because it is not a manifold problem — non-manifold edges were
+already down to 0/3/3/0/0 when these were measured.
+
+**The fix that matters most is that the toolset can now SEE it.**
+`check.critique` gained an `inverted_normals` metric and an error-severity
+finding. It is threshold-free: each face is compared against itself, so there is
+nothing to tune. Verified against the same five assets, it reports 30/24/3/22/0
+— identical to an independent offline analysis that parsed the GLB binary
+directly. Two independent implementations, same numbers.
+
+This is the session's recurring lesson in its other form: the earlier three cases
+were instruments *inventing* numbers; this is an instrument *not measuring* a
+defect at all, which let a visible black hole in a prop ship past a clean gate.
+
+**Still open:** the greeble op itself should not produce these faces, and
+shadows are razor-hard with no penumbra. Both are named next.

@@ -218,6 +218,29 @@ def check_critique(ctx, objects, texture_size):
         loose = sum(1 for v in bm.verts if not v.link_edges)
         boundary = sum(1 for e in bm.edges if len(e.link_faces) == 1)
         areas = [f.calc_area() for f in bm.faces if f.calc_area() > 1e-12]
+
+        # Faces whose winding disagrees with their own shading normal.
+        #
+        # These render as solid black patches under any lighting -- the surface
+        # faces away from every light while sitting in plain view. Found the
+        # hard way: a blind judge described a greebled crate as "a solid black
+        # slab with no surface at all", and it survived `build.cleanup` because
+        # it is not a manifold problem. `build.greeble` pushes 35% of its panels
+        # INWARD, and an inward extrusion keeps the side-wall winding of an
+        # outward one, so a handful of faces end up inconsistent.
+        #
+        # Measured on real assets: 1.4-1.5% of triangles on greebled boxes,
+        # 0.17% on a greebled cylinder, 0% on ungreebled geometry. Threshold-free
+        # -- it compares each face against itself, so there is nothing to tune.
+        flipped = 0
+        for f in bm.faces:
+            if f.calc_area() < 1e-12 or not f.verts:
+                continue
+            sx = sy = sz = 0.0
+            for v in f.verts:
+                sx += v.normal.x; sy += v.normal.y; sz += v.normal.z
+            if f.normal.x * sx + f.normal.y * sy + f.normal.z * sz < 0.0:
+                flipped += 1
         bm.free()
 
         uv_stats = uv_lib.stats(obj, texture_size=texture_size)
@@ -233,6 +256,7 @@ def check_critique(ctx, objects, texture_size):
                 "ngons": ngons,
                 "degenerate_faces": degenerate,
                 "non_manifold_edges": non_manifold,
+                "inverted_normals": flipped,
                 "loose_vertices": loose,
                 "boundary_edges": boundary,
                 "texel_density": density,
@@ -248,6 +272,16 @@ def check_critique(ctx, objects, texture_size):
                     "object": obj.name, "severity": "error", "issue": "degenerate faces",
                     "detail": f"{degenerate} zero-area faces will render as artefacts",
                     "fix": f"gameready.optimize objects=['{obj.name}']",
+                }
+            )
+        if flipped:
+            findings.append(
+                {
+                    "object": obj.name, "severity": "error", "issue": "inverted normals",
+                    "detail": f"{flipped} faces are wound against their own shading normal — "
+                              "they render as solid black patches under any lighting",
+                    "fix": f"object.shade name='{obj.name}' recalculate=true, or lower "
+                           "build.greeble depth so inward panels stop self-intersecting",
                 }
             )
         if non_manifold:
