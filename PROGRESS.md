@@ -1081,3 +1081,47 @@ toolset now measures none of it, which is exactly what the blind judge is for.
 **The loop's stop condition is met on win rate but not on findings**: two
 consecutive rounds at 25%, but R26 produced five new named gaps. Those gaps are
 content work, not tool work.
+
+## R27 — the harness measures a Babylon.js game; WebGPU verified; shadows rejected
+
+Retargeted to **Spike** (`lxsolutions/Spike`, checked out at `source/babylon-games`):
+Babylon.js 9.18 + TypeScript + Vite. Two things proved out.
+
+**1. The harness is genuinely engine-agnostic.** It drives a URL and reads
+pixels, so it does not know Three.js from Babylon from a Godot export. Pointed at
+Spike's production bundle on the P40 it reported, with no Spike-specific code:
+
+    Application rendered through: webgpu
+    fps p50 60 / p99 60   (worst frame 33 ms)
+    edge energy 23.33 · dynamic range 195 · black 0%
+
+**2. WebGPU works in Babylon and is now what Spike uses.** It was constructing
+`new Engine(...)` — WebGL2 only. Now `WebGPUEngine` gated on `IsSupportedAsync`
+with a real WebGL2 fallback, verified on hardware by the line above. `p99 60` is
+worth noting against the Three.js interior's `p99 0.4`.
+
+**3. Cascaded shadows REJECTED on measurement.** Spike casts no shadows at all
+and 0% of its pixels are near black in a daylit wood, so shadows looked like the
+obvious win. They are not, at least not this way:
+
+| config | fps p50 | fps p99 | edgeEnergy | luma mean |
+|---|---|---|---|---|
+| no shadows | **60** | **60** | 23.33 | 129.4 |
+| CSM 4 cascades, autoCalcDepthBounds, all casters | 5.5 | 3.2 | 29.14 | 106.0 |
+| CSM 2 cascades, 45 m, casters filtered by size | 10 | 5.5 | 8.05 | 17.7 |
+
+The first config bought +5.8 edge energy for a **6-11x frame-time cost**, with
+104-155 spikes over 100 ms of which 84-116 landed AFTER the first quarter --
+genuine hitches, not load cost. The tuned config was worse on every axis at once:
+still 6x slower, and it made the scene darker and flatter than having no shadows.
+
+Reverted. **A prettier frame at 5 fps is a different bug, not an improvement**,
+and the new spike-position reporting is what made the distinction immediate --
+"84 after the first quarter" is a verdict, where "worst frame 783 ms" alone is
+not.
+
+**Two process notes.** A broken deploy (`cp` failing silently into a directory
+with 0 of 227 asset files) produced a blank frame and a `no-context-requested`
+reading that looked exactly like a code failure; the fix was checking the deploy,
+not the code. And Spike's bundle sets `base: "/spike/"`, so serving `dist` at the
+web root 404s every asset — worth knowing before blaming a renderer.
