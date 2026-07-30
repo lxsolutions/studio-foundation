@@ -714,6 +714,8 @@ class Characters(ForgeCase):
             build="realistic",
             detail=8,
         )
+        self.assertEqual(body["anatomy"], "shaped_adult")
+        self.assertEqual(body["facial_parts"], 5)
         outfit = self.forge.call(
             "char.outfit",
             name="delver",
@@ -725,6 +727,13 @@ class Characters(ForgeCase):
         self.assertGreaterEqual(outfit["armour_parts"], 20)
         self.assertGreaterEqual(len(outfit["materials"]), 5)
         self.assertAlmostEqual(outfit["bounds"]["min"][2], 0.0, places=3)
+        self.assertEqual(outfit["silhouette"], "open_faced_mining_commander")
+        self.assertEqual(
+            outfit["facial_readability"],
+            "open_crown_cheeks_eyes_trimmed_beard",
+        )
+        self.assertEqual(outfit["work_gear_parts"], 4)
+        self.assertLess(outfit["bounds"]["size"][1], outfit["bounds"]["size"][0] * 0.9)
 
         rig = self.forge.call("char.rig", name="delver", build="realistic")
         self.assertEqual(rig["weighted_vertices"], outfit["vertices"])
@@ -735,6 +744,10 @@ class Characters(ForgeCase):
             length=20,
         )
         self.assertGreater(animated["keyframes"], 0)
+        posed = self.forge.call("char.pose", rig=rig["armature"], preset="rest")
+        self.assertEqual(posed["cleared_active_action"], animated["action"])
+        self.assertIn(animated["action"], posed["available_actions"])
+        self.assertEqual(posed["posed_bones"], [])
 
     def test_rts_archer_and_heavy_guard_are_distinct_riggable_outfits(self):
         self.forge.call(

@@ -446,7 +446,7 @@ Freeze a posed rig into the mesh vertices and drop the skin. Turns a char.rig + 
 
 ### `char.humanoid`
 
-Proportioned humanoid blockout using classic figure-drawing head ratios (7.5 realistic, 8 heroic, 4 chibi). ~1400 tris. Pair with char.rig and char.animate for a complete animated character.
+Animation-ready anatomical humanoid using classic figure-drawing head ratios (7.5 realistic, 8 heroic, 4 chibi). Shaped chest/waist depth, jaw, nose, ears, hands and feet avoid the tube-limbed mannequin look. Pair with char.outfit, char.rig and char.animate.
 
 | parameter | type | default | description |
 | --- | --- | --- | --- |

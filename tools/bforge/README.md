@@ -110,6 +110,21 @@ cheap gameplay collider without coupling art to simulation.
 
 ![Spike Greek field-building review sheet](../../docs/bforge/img/spike_field_barracks.png)
 
+Spike's delver exposed a different pipeline failure: a nominally
+"realistic" humanoid could still be a tube-limbed mannequin, and the active
+Death action could make its automatic review sheet look collapsed. The
+character pipeline now shapes chest and waist depth, jaw, nose, ears, hands and
+feet; `greek_delver` adds an open-faced miner crown, trimmed beard, lamp,
+pauldron, satchel and stowed pickaxe; and `char.pose` clears only the active
+animation assignment while retaining every fake-user action for export.
+
+The accepted `spike_delver_v3` is one skinned mesh: 3,336 triangles, six
+materials, a 19-bone rig, and five verified glTF clips (`idle`, `walk`, `run`,
+`attack`, `death`) in a 282 KB GLB. `bforge audit --fail-on warning` reports
+zero errors and zero warnings.
+
+![Spike serious Greek delver review sheet](../../docs/bforge/img/spike_delver_v3.png)
+
 ---
 
 ## Why this exists
