@@ -204,6 +204,19 @@ Both halves matter. `check.critique` catches non-manifold edges and texel
 mismatch that no render shows; the contact sheet catches "the proportions are
 wrong" that no metric shows.
 
+For an ordered unlock family, audit every runtime asset together and request the
+set comparison:
+
+```sh
+bforge audit pilgrim.glb repeater.glb daedalus.glb aegis.glb \
+  --render-dir review --progression-report
+```
+
+The optional `progression` block compares triangle growth, authored scale, and
+material changes in argument order. With `--fail-on warning`, a flat complexity
+ladder or a greater-than-1.5x scale mismatch becomes CI-actionable. The default
+single-asset JSON stays unchanged when the flag is omitted.
+
 ---
 
 ## What it can make

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -28,7 +29,17 @@ class FakeForge:
         if op == "session.import":
             return {"objects": ["mesh"], "triangles": 12, "materials": ["stone"]}
         if op == "session.info":
-            return {"objects": [{"name": "mesh", "triangles": 12}]}
+            sequence = sum(name == "session.info" for name, _ in self.calls)
+            triangles = sequence * 12
+            return {
+                "objects": [{
+                    "name": "mesh",
+                    "triangles": triangles,
+                    "bounds": {"size": [1.0, 0.5, 1.0 + sequence * 0.05]},
+                }],
+                "total_triangles": triangles,
+                "materials": ["stone", *(["bronze"] if sequence > 1 else [])],
+            }
         if op == "check.critique":
             return {
                 "errors": self.errors,
@@ -93,3 +104,49 @@ def test_audit_rejects_missing_assets_without_starting_blender(tmp_path, monkeyp
     args = cli.build_parser().parse_args(["audit", str(tmp_path / "missing.glb")])
     assert args.func(args) == 1
     assert not fake.started
+
+
+def test_audit_progression_report_compares_ordered_asset_family(tmp_path, monkeypatch, capsys):
+    assets = []
+    for name in ("pilgrim.glb", "repeater.glb", "aegis.glb"):
+        path = tmp_path / name
+        path.write_bytes(b"glTF")
+        assets.append(path)
+    fake = FakeForge()
+    monkeypatch.setattr(cli, "_forge", lambda _args: fake)
+    args = cli.build_parser().parse_args([
+        "audit", *(str(path) for path in assets), "--progression-report",
+    ])
+
+    assert args.func(args) == 0
+    result = json.loads(capsys.readouterr().out)
+    report = result["progression"]
+    assert report["count"] == 3
+    assert report["strictly_increasing_triangles"] is True
+    assert [item["triangles"] for item in report["items"]] == [12, 24, 36]
+    assert report["items"][1]["materials"] == ["bronze", "stone"]
+    assert report["warnings"] == 0
+
+
+def test_progression_warning_can_fail_ci(tmp_path, monkeypatch):
+    first = tmp_path / "hero.glb"
+    second = tmp_path / "legend.glb"
+    first.write_bytes(b"glTF")
+    second.write_bytes(b"glTF")
+    fake = FakeForge()
+    original_call = fake.call
+
+    def flat_info(op: str, **kwargs):
+        value = original_call(op, **kwargs)
+        if op == "session.info":
+            value["total_triangles"] = 12
+            value["objects"][0]["triangles"] = 12
+        return value
+
+    fake.call = flat_info
+    monkeypatch.setattr(cli, "_forge", lambda _args: fake)
+    args = cli.build_parser().parse_args([
+        "audit", str(first), str(second),
+        "--progression-report", "--fail-on", "warning",
+    ])
+    assert args.func(args) == 1
