@@ -6631,6 +6631,11 @@
             "type": "number",
             "description": "Ambient dome strength. Higher fills shadows but piles white specular sheen onto every surface, which washes out saturated albedo",
             "default": 0.32
+          },
+          "transparent": {
+            "type": "boolean",
+            "description": "Render the world as transparent RGBA for UI cards, inventory icons and compositing",
+            "default": false
           }
         },
         "additionalProperties": false
@@ -7003,6 +7008,11 @@
             "type": "number",
             "description": "Ambient dome strength. Higher fills shadows but piles white specular sheen onto every surface, which washes out saturated albedo",
             "default": 0.32
+          },
+          "transparent": {
+            "type": "boolean",
+            "description": "Render the world as transparent RGBA for UI cards, inventory icons and compositing",
+            "default": false
           }
         },
         "additionalProperties": false

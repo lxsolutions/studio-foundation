@@ -721,6 +721,25 @@ class ExplicitCamera(ForgeCase):
         with self.assertRaises(ForgeError):
             self.forge.call("render.camera", out="x.png", position=[1, 1, 1], samples=1)
 
+    def test_view_can_render_a_transparent_rgba_ui_card(self):
+        self.forge.call("prop.crossbow", name="weapon", style="pilgrim", seed=17)
+        result = self.forge.call(
+            "render.view",
+            out="weapon-card.png",
+            objects=["weapon"],
+            view="hero",
+            resolution=128,
+            samples=2,
+            transparent=True,
+            _timeout=600,
+        )
+        png = Path(result["path"]).read_bytes()
+        self.assertEqual(png[:8], b"\x89PNG\r\n\x1a\n")
+        # PNG IHDR colour type 6 is truecolour with alpha. Merely naming the
+        # output .png is not enough: game UI cards need a real alpha channel.
+        self.assertEqual(png[25], 6)
+        self.assertTrue(result["transparent"])
+
 
 class UVs(ForgeCase):
     def test_unwrap_creates_usable_uvs(self):

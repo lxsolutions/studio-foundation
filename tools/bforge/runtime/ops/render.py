@@ -158,14 +158,14 @@ def _setup_camera(centre, radius, view, ortho=False, margin=1.28):
     return camera
 
 
-def _configure_engine(engine, samples, resolution):
+def _configure_engine(engine, samples, resolution, transparent=False):
     scene = bpy.context.scene
     scene.render.resolution_x = resolution
     scene.render.resolution_y = resolution
     scene.render.resolution_percentage = 100
-    scene.render.film_transparent = False
+    scene.render.film_transparent = transparent
     scene.render.image_settings.file_format = "PNG"
-    scene.render.image_settings.color_mode = "RGB"
+    scene.render.image_settings.color_mode = "RGBA" if transparent else "RGB"
 
     # Blender defaults to the AgX view transform, which is a filmic look that
     # deliberately desaturates and rolls off highlights. That is right for a
@@ -308,17 +308,33 @@ def _hide_others(keep):
             0.32,
             "Ambient dome strength. Higher fills shadows but piles white specular sheen onto every surface, which washes out saturated albedo",
         ),
+        "transparent": (
+            "bool",
+            False,
+            "Render the world as transparent RGBA for UI cards, inventory icons and compositing",
+        ),
     },
     tags=["render"],
 )
-def render_view(ctx, out, objects, view, resolution, samples, engine, ortho, world_light):
+def render_view(
+    ctx,
+    out,
+    objects,
+    view,
+    resolution,
+    samples,
+    engine,
+    ortho,
+    world_light,
+    transparent,
+):
     targets = _targets(objects)
     hidden = _hide_others(targets) if objects else []
     centre, radius = _bounding_sphere(targets)
     _setup_world(world_light)
     lights = _setup_lights(centre, radius)
     camera = _setup_camera(centre, radius, view, ortho)
-    used = _configure_engine(engine, samples, resolution)
+    used = _configure_engine(engine, samples, resolution, transparent)
     path = ctx.out_path(out, ".png")
     try:
         _render_to(path)
@@ -332,6 +348,7 @@ def render_view(ctx, out, objects, view, resolution, samples, engine, ortho, wor
         "view": view,
         "engine": used,
         "resolution": resolution,
+        "transparent": transparent,
         "subject_radius_m": round(radius, 4),
         "analysis": _analyse(ctx, path),
     }
@@ -355,6 +372,11 @@ def render_view(ctx, out, objects, view, resolution, samples, engine, ortho, wor
             0.32,
             "Ambient dome strength. Higher fills shadows but piles white specular sheen onto every surface, which washes out saturated albedo",
         ),
+        "transparent": (
+            "bool",
+            False,
+            "Render the world as transparent RGBA for UI cards, inventory icons and compositing",
+        ),
     },
     tags=["render"],
 )
@@ -370,6 +392,7 @@ def render_camera(
     engine,
     light_distance,
     world_light,
+    transparent,
 ):
     if not [o for o in bpy.context.scene.objects if o.type == "MESH"]:
         raise OpError("nothing to render — the scene has no mesh objects")
@@ -393,7 +416,7 @@ def render_camera(
     camera_data.clip_start = max(0.01, distance * 0.001)
     camera_data.clip_end = distance * 20.0
 
-    used = _configure_engine(engine, samples, resolution)
+    used = _configure_engine(engine, samples, resolution, transparent)
     scene = bpy.context.scene
     scene.render.resolution_x = resolution
     scene.render.resolution_y = max(1, int(resolution / max(0.1, aspect)))
@@ -412,6 +435,7 @@ def render_camera(
         "target": [round(v, 3) for v in centre],
         "lens_mm": lens,
         "resolution": [scene.render.resolution_x, scene.render.resolution_y],
+        "transparent": transparent,
         "analysis": _analyse(ctx, path),
     }
 

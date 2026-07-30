@@ -372,6 +372,21 @@ already the review artifact.
   critique, fix or extend assets a game already ships. This is how the Chariot
   audit above was done.
 
+`render.view` and `render.camera` accept `transparent=true` for real RGBA
+inventory icons, weapon cards and UI compositing. Lighting still uses the
+normal subject-scaled rig; only the world background becomes transparent:
+
+```python
+forge.call(
+    "render.view",
+    objects=["crossbow"],
+    view="hero",
+    out="crossbow-card.png",
+    resolution=512,
+    transparent=True,
+)
+```
+
 ---
 
 ## Design rules

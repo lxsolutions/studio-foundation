@@ -1,6 +1,6 @@
 # bforge op reference
 
-118 operations.
+119 operations.
 
 ## `arch.*`
 
@@ -1392,6 +1392,24 @@ Classical column: base, tapered shaft, capital, optional fluting. ~600 tris. Ins
 | `material` | string | 'stone' | Material preset |
 | `color` | string | '' | Override colour |
 
+### `prop.relic`
+
+Grounded game-loot relic as a Greek medallion, signet ring, or votive idol. Separate aged metal, trim, and inset materials remain readable at pickup scale. ~300-700 tris.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `name` | string | '' | Object name (defaults to the recipe name) |
+| `location` | array | [0.0, 0.0, 0.0] | World position in metres |
+| `seed` | integer | 0 | Random seed — same seed always gives the same asset |
+| `form` | medallion \| ring \| idol | 'medallion' | Loot silhouette: hanging seal, gemstone signet, or small temple votive |
+| `motif` | rosette \| lambda \| plain | 'rosette' | Raised face mark for medallions; ignored by ring and idol forms |
+| `size` | number | 0.42 | Overall height in metres |
+| `material` | string | 'bronze' | Primary aged-metal material preset |
+| `trim_material` | string | 'gold' | Raised rim and detail material preset |
+| `gem_material` | string | 'crystal' | Inset stone material preset |
+| `color` | string | '' | Override primary metal colour |
+| `gem_color` | string | 'crystal_violet' | Inset stone colour |
+
 ### `prop.rock`
 
 Grounded natural rock authored as a boulder, bedded slab, multi-stone outcrop or scree cluster. Layered displacement and optional strata avoid the inflated-potato silhouette.
@@ -1497,6 +1515,7 @@ Render from an explicit camera position and target. Auto-framing always fits the
 | `engine` | auto \| cycles \| eevee | 'auto' | Render engine |
 | `light_distance` | number | 0.0 | Light rig scale in metres; 0 fits it to the whole scene |
 | `world_light` | number | 0.32 | Ambient dome strength. Higher fills shadows but piles white specular sheen onto every surface, which washes out saturated albedo |
+| `transparent` | boolean | False | Render the world as transparent RGBA for UI cards, inventory icons and compositing |
 
 ### `render.cinematic`
 
@@ -1566,6 +1585,7 @@ Render one framed view of the scene or of specific objects. The camera and a thr
 | `engine` | auto \| cycles \| eevee | 'auto' | Render engine. 'auto' means Cycles/CPU, which is the only one that works without a GPU context; 'eevee' is faster but crashes headless on machines with no display server |
 | `ortho` | boolean | False | Orthographic projection (right for front/side/top reference) |
 | `world_light` | number | 0.32 | Ambient dome strength. Higher fills shadows but piles white specular sheen onto every surface, which washes out saturated albedo |
+| `transparent` | boolean | False | Render the world as transparent RGBA for UI cards, inventory icons and compositing |
 
 ## `rig.*`
 
