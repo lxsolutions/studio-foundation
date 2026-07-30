@@ -144,6 +144,7 @@ class Geometry(ForgeCase):
             )
             self.assertEqual(results[formation]["formation"], formation)
             self.assertAlmostEqual(results[formation]["bounds"]["min"][2], 0.0, places=3)
+            self.assertEqual(results[formation]["bedding_courses"], 6)
 
         self.assertEqual(results["boulder"]["piece_count"], 1)
         self.assertEqual(results["slab"]["piece_count"], 2)
@@ -153,6 +154,14 @@ class Geometry(ForgeCase):
             results["slab"]["bounds"]["size"][2], results["boulder"]["bounds"]["size"][2]
         )
         self.assertGreater(results["slab"]["bounds"]["size"][2], 0.3)
+        self.assertLess(
+            results["slab"]["bounds"]["size"][2],
+            results["slab"]["bounds"]["size"][0] * 0.42,
+        )
+        self.assertLess(
+            results["outcrop"]["bounds"]["size"][2],
+            results["outcrop"]["bounds"]["size"][0] * 0.62,
+        )
         self.assertGreater(results["outcrop"]["triangles"], results["boulder"]["triangles"])
         self.assertGreater(results["scree"]["triangles"], results["outcrop"]["triangles"])
         self.assertGreater(results["scree"]["bounds"]["size"][0], 1.2)

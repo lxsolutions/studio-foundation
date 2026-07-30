@@ -152,24 +152,27 @@ and zero warnings.
 rock to one displaced sphere. `formation` selects a grounded boulder, a
 two-piece bedded slab, a three-mass outcrop, or five-piece scree; `strata`
 controls visible sedimentary bedding without changing the deterministic seed.
-Spike uses the complete limestone family as lightweight art over its existing
-gameplay colliders.
+The second-generation geometry adds oblique fracture clipping, geological
+shear, flattened weathered caps and course-by-course lateral slip. Those
+broad planes survive an RTS camera where surface-sized noise disappears.
+Spike uses the complete Attic limestone family as lightweight art over its
+existing gameplay colliders.
 
 | formation | pieces | triangles | GLB |
 | --- | ---: | ---: | ---: |
-| boulder | 1 | 80 | 9 KB |
-| slab | 2 | 160 | 17 KB |
-| outcrop | 3 | 240 | 24 KB |
-| scree | 5 | 400 | 40 KB |
+| boulder | 1 | 320 | 31 KB |
+| slab | 2 | 640 | 61 KB |
+| outcrop | 3 | 956 | 92 KB |
+| scree | 5 | 1,598 | 147 KB |
 
 The live Blender regression verifies grounded bounds, distinct formation
-silhouettes, stable vertex order and byte-identical regeneration. Building the
-family also caught two reusable pipeline defects: a homogeneous transform that
-scaled away per-piece translation, and seeded deformation that could reselect
-vertices from an earlier piece. Multi-view contact sheets made both failures
-visible before the assets reached the game.
+silhouettes, stepped bedding courses, stable vertex order and byte-identical
+regeneration. The review also caught a subtler fidelity failure: technically
+distinct icosphere clusters were still round enough to read as inflated
+potatoes in the shipped Commander view. Multi-view contact sheets made the
+silhouette problem visible before the replacement assets reached the game.
 
-![Spike limestone formation review sheet](../../docs/bforge/img/spike_limestone_family_v1.png)
+![Spike stratified limestone outcrop review sheet](../../docs/bforge/img/spike_limestone_outcrop_v2.png)
 
 `prop.relic` turns rare game drops into authored equipment instead of emissive
 cubes. `form` selects a hanging medallion, gemstone signet, or stepped votive;

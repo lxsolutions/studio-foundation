@@ -698,25 +698,30 @@ def prop_rock(
 ):
     rng = ctx.reseed(seed)
     bm = mesh_lib.new_bmesh()
+    # These are geological MASSES, not a pile of same-sized spheres.  The first
+    # version varied only the scale of overlapping icospheres, which survived
+    # the unit tests but read as inflated potatoes in an RTS camera.  Limestone
+    # needs a low bed, a stepped course and a broken crown before surface noise
+    # can contribute anything useful.
     formation_specs = {
         "boulder": [
-            ((1.0, 1.0, 1.0), (0.0, 0.0, 0.0), 0.0),
+            ((1.0, 0.92, 0.82), (0.0, 0.0, 0.0), 0.0),
         ],
         "slab": [
-            ((1.08, 1.0, 0.62), (0.0, 0.0, 0.0), -4.0),
-            ((0.72, 0.78, 0.28), (-0.08, 0.03, 0.27), 7.0),
+            ((1.08, 1.0, 0.34), (0.0, 0.0, -0.16), -4.0),
+            ((0.76, 0.82, 0.25), (-0.08, 0.03, 0.1), 7.0),
         ],
         "outcrop": [
-            ((0.86, 0.82, 0.9), (-0.16, 0.0, 0.0), -8.0),
-            ((0.62, 0.58, 0.62), (0.28, 0.12, -0.05), 18.0),
-            ((0.54, 0.52, 0.48), (-0.34, -0.18, -0.08), -24.0),
+            ((1.0, 0.88, 0.36), (-0.02, 0.0, -0.18), -6.0),
+            ((0.7, 0.62, 0.36), (-0.16, 0.03, 0.1), 11.0),
+            ((0.44, 0.46, 0.38), (0.32, 0.12, 0.1), -19.0),
         ],
         "scree": [
-            ((0.52, 0.45, 0.38), (-0.32, -0.2, 0.0), -19.0),
-            ((0.45, 0.4, 0.34), (0.12, -0.24, -0.02), 27.0),
-            ((0.4, 0.36, 0.3), (0.34, 0.11, -0.04), -7.0),
-            ((0.34, 0.31, 0.27), (-0.05, 0.24, -0.06), 42.0),
-            ((0.28, 0.26, 0.22), (-0.42, 0.18, -0.07), 11.0),
+            ((0.5, 0.42, 0.3), (-0.38, -0.23, 0.0), -19.0),
+            ((0.43, 0.36, 0.28), (0.08, -0.28, -0.02), 27.0),
+            ((0.38, 0.33, 0.25), (0.4, 0.1, -0.04), -7.0),
+            ((0.32, 0.28, 0.23), (-0.03, 0.3, -0.06), 42.0),
+            ((0.26, 0.23, 0.19), (-0.48, 0.2, -0.07), 11.0),
         ],
     }
     pieces = formation_specs[formation]
@@ -741,23 +746,60 @@ def prop_rock(
         phase = seed * 0.71 + piece_index * 1.93
 
         # Work in unit-sphere space so a recipe's requested dimensions remain
-        # meaningful. Broad distortion breaks symmetry, fine chipping roughens
-        # the silhouette, and restrained z quantisation creates geological
-        # bedding without turning the asset into stacked boxes.
+        # meaningful. Broad distortion breaks symmetry, two oblique clipping
+        # planes create quarried/fractured faces, and course-dependent terraces
+        # make sedimentary bedding visible at gameplay distance.  The old 3.5%
+        # sinusoidal bulge disappeared under ordinary lighting and left a round
+        # silhouette even with `angular=True`.
+        courses = 3 + int(round(bedding * 5.0))
+        shear_x = math.sin(phase * 1.37) * roughness * 0.22
+        shear_y = math.cos(phase * 1.11) * roughness * 0.18
+        clip_angle = phase * 0.61
+        clip_nx, clip_ny = math.cos(clip_angle), math.sin(clip_angle)
+        clip_limit = 0.34 + math.sin(phase * 0.47) * 0.035
         for vert in verts:
             direction = vert.co.normalized() if vert.co.length > 1e-6 else Vector((0, 0, 1))
             broad = math.sin(vert.co.x * 4.2 + phase) * math.cos(vert.co.y * 3.4 - phase)
             fine = rng.uniform(-1.0, 1.0)
             displacement = broad * roughness * 0.16 + fine * roughness * 0.12
             vert.co += direction * displacement
+
+            # Geological shear keeps the crown from sitting directly over the
+            # footprint like a balloon.  Clamp against opposing diagonal planes
+            # to produce broad fracture faces without adding geometry.
+            vert.co.x += vert.co.z * shear_x
+            vert.co.y += vert.co.z * shear_y
+            plane = vert.co.x * clip_nx + vert.co.y * clip_ny
+            if plane > clip_limit:
+                excess = plane - clip_limit
+                vert.co.x -= clip_nx * excess
+                vert.co.y -= clip_ny * excess
+            opposite = -vert.co.x * clip_nx - vert.co.y * clip_ny
+            opposite_limit = clip_limit * (0.82 + piece_index * 0.025)
+            if opposite > opposite_limit:
+                excess = opposite - opposite_limit
+                vert.co.x += clip_nx * excess
+                vert.co.y += clip_ny * excess
+
             if bedding > 0:
-                courses = 3.0 + bedding * 4.0
+                course_index = math.floor((vert.co.z + 0.56) * courses)
                 course_z = round(vert.co.z * courses) / courses
-                vert.co.z = vert.co.z * (1.0 - bedding * 0.14) + course_z * bedding * 0.14
-                ledge = math.sin((vert.co.z + 0.5) * courses * math.pi + phase)
-                lateral = 1.0 + ledge * bedding * 0.035
+                vert.co.z = vert.co.z * (1.0 - bedding * 0.24) + course_z * bedding * 0.24
+                ledge = math.sin(course_index * 2.17 + phase)
+                lateral = 1.0 + ledge * bedding * 0.085
                 vert.co.x *= lateral
                 vert.co.y *= lateral
+                # Each bed slips a few centimetres in a stable direction.  This
+                # is the stepped limestone profile that remains legible in an
+                # RTS camera after the normal-map-sized details disappear.
+                vert.co.x += ledge * bedding * 0.025
+                vert.co.y += math.cos(course_index * 1.73 + phase) * bedding * 0.018
+
+            # Weathering removes the spherical cap.  Retaining a small bevel in
+            # height keeps it natural while giving sunlight a proper top plane.
+            cap = 0.28 + math.sin(phase * 0.83) * 0.025
+            if vert.co.z > cap:
+                vert.co.z = cap + (vert.co.z - cap) * (0.18 + (1.0 - bedding) * 0.2)
 
         if flatten_base:
             zs = [vert.co.z for vert in verts]
@@ -808,6 +850,7 @@ def prop_rock(
     result["formation"] = formation
     result["piece_count"] = len(pieces)
     result["strata"] = round(bedding, 3)
+    result["bedding_courses"] = 3 + int(round(bedding * 5.0))
     return result
 
 
