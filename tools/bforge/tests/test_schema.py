@@ -118,5 +118,15 @@ class Dialects(unittest.TestCase):
             self.assertIn(f"`{op['name']}`", text)
 
 
+class RuntimeInvariants(unittest.TestCase):
+    def test_contact_sheet_scratch_is_namespaced_per_output(self):
+        source = (Path(__file__).resolve().parents[1] / "runtime" / "ops" / "render.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("scene_lib.sanitize(Path(str(out)).stem)", source)
+        self.assertIn('path = scratch_dir / f"panel_{index}_{panel}.png"', source)
+        self.assertIn("data.size != expected", source)
+
+
 if __name__ == "__main__":
     unittest.main()

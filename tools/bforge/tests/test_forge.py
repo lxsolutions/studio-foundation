@@ -133,6 +133,7 @@ class Geometry(ForgeCase):
             name="olive",
             seed=17,
             canopy_style="olive",
+            age="ancient",
             height=5.2,
             canopy_radius=1.8,
             detail=2,
@@ -141,6 +142,11 @@ class Geometry(ForgeCase):
         self.assertLess(olive["triangles"], 4200)
         self.assertEqual(len(olive["materials"]), 2)
         self.assertAlmostEqual(olive["bounds"]["min"][2], 0.0, places=3)
+        self.assertEqual(olive["species"], "olive")
+        self.assertEqual(olive["age"], "ancient")
+        self.assertEqual(olive["silhouette"], "ancient_windswept_olive")
+        self.assertGreaterEqual(olive["branch_count"], 30)
+        self.assertGreaterEqual(olive["foliage_masses"], 60)
 
         self.forge.call("session.reset")
         repeated = self.forge.call(
@@ -148,6 +154,7 @@ class Geometry(ForgeCase):
             name="olive",
             seed=17,
             canopy_style="olive",
+            age="ancient",
             height=5.2,
             canopy_radius=1.8,
             detail=2,
@@ -161,6 +168,7 @@ class Geometry(ForgeCase):
             name="cypress",
             seed=23,
             canopy_style="cypress",
+            age="ancient",
             height=7.0,
             canopy_radius=1.05,
             detail=2,
@@ -169,6 +177,27 @@ class Geometry(ForgeCase):
         self.assertLess(cypress["triangles"], 4200)
         self.assertEqual(len(cypress["materials"]), 2)
         self.assertGreater(cypress["bounds"]["size"][2], cypress["bounds"]["size"][0] * 2.5)
+        self.assertEqual(cypress["species"], "cypress")
+        self.assertEqual(cypress["age"], "ancient")
+        self.assertEqual(cypress["silhouette"], "ancient_columnar_cypress")
+        self.assertGreaterEqual(cypress["branch_count"], 28)
+        self.assertGreaterEqual(cypress["foliage_masses"], 70)
+
+        self.forge.call("session.reset")
+        young = self.forge.call(
+            "prop.tree",
+            name="cypress",
+            seed=23,
+            canopy_style="cypress",
+            age="young",
+            height=7.0,
+            canopy_radius=1.05,
+            detail=2,
+        )
+        self.assertEqual(young["silhouette"], "young_columnar_cypress")
+        self.assertNotEqual(cypress["branch_count"], young["branch_count"])
+        self.assertNotEqual(cypress["foliage_masses"], young["foliage_masses"])
+        self.assertNotEqual(cypress["bounds"], young["bounds"])
 
     def test_origin_modes_place_the_pivot_correctly(self):
         result = self.forge.call("build.box", name="b", size=[1, 1, 2], origin="bottom")

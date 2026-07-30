@@ -1442,7 +1442,7 @@ Wall torch or standing brazier with an emissive flame. ~250 tris. Emissive props
 
 ### `prop.tree`
 
-Game-ready tree with stylised and natural Mediterranean forms. Olive and cypress styles add branch-readable medium-detail foliage while preserving the cheap legacy silhouettes.
+Game-ready tree with stylised and natural Mediterranean forms. Olive and cypress styles add age-authored roots, branch-readable crowns and negative space while preserving the cheap legacy silhouettes.
 
 | parameter | type | default | description |
 | --- | --- | --- | --- |
@@ -1452,6 +1452,7 @@ Game-ready tree with stylised and natural Mediterranean forms. Olive and cypress
 | `height` | number | 4.0 | Total height in metres |
 | `trunk_radius` | number | 0.18 | Trunk radius at the base |
 | `canopy_style` | cone \| blob \| layered \| palm \| olive \| cypress | 'layered' | Canopy shape or natural species |
+| `age` | young \| mature \| ancient | 'mature' | Natural species growth stage: changes roots, trunk forks, crown spread and gaps |
 | `canopy_layers` | integer | 3 | layered style: number of tiers |
 | `canopy_radius` | number | 1.4 | Canopy spread in metres |
 | `detail` | integer | 2 | Natural olive/cypress foliage density, 1-3; ignored by legacy styles |

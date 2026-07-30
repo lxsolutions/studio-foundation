@@ -6262,7 +6262,7 @@
     },
     {
       "name": "prop.tree",
-      "summary": "Game-ready tree with stylised and natural Mediterranean forms. Olive and cypress styles add branch-readable medium-detail foliage while preserving the cheap legacy silhouettes.",
+      "summary": "Game-ready tree with stylised and natural Mediterranean forms. Olive and cypress styles add age-authored roots, branch-readable crowns and negative space while preserving the cheap legacy silhouettes.",
       "tags": [
         "prop",
         "nature"
@@ -6318,6 +6318,16 @@
             ],
             "description": "Canopy shape or natural species",
             "default": "layered"
+          },
+          "age": {
+            "type": "string",
+            "enum": [
+              "young",
+              "mature",
+              "ancient"
+            ],
+            "description": "Natural species growth stage: changes roots, trunk forks, crown spread and gaps",
+            "default": "mature"
           },
           "canopy_layers": {
             "type": "integer",

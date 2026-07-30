@@ -16,6 +16,7 @@ speed where a GPU context exists, with an automatic fallback.
 from __future__ import annotations
 
 import math
+from pathlib import Path
 
 import bpy
 from lib import mesh as mesh_lib
@@ -24,13 +25,13 @@ from mathutils import Euler, Vector
 from registry import OpError, op
 
 VIEWS = {
-    "hero":  (math.radians(62), math.radians(0), math.radians(43)),
+    "hero": (math.radians(62), math.radians(0), math.radians(43)),
     "front": (math.radians(90), 0.0, 0.0),
-    "back":  (math.radians(90), 0.0, math.radians(180)),
-    "left":  (math.radians(90), 0.0, math.radians(-90)),
+    "back": (math.radians(90), 0.0, math.radians(180)),
+    "left": (math.radians(90), 0.0, math.radians(-90)),
     "right": (math.radians(90), 0.0, math.radians(90)),
-    "top":   (0.0, 0.0, 0.0),
-    "low":   (math.radians(102), 0.0, math.radians(30)),
+    "top": (0.0, 0.0, 0.0),
+    "low": (math.radians(102), 0.0, math.radians(30)),
 }
 
 
@@ -114,7 +115,7 @@ def _setup_lights(centre, radius):
         # dark albedo render as pale stone — and cost several rounds of "fixing"
         # a material that was correct all along. Re-run the calibration after
         # touching anything here.
-        data.energy = power_scale * 105.0 * (radius ** 2) + 6.0
+        data.energy = power_scale * 105.0 * (radius**2) + 6.0
         light = bpy.data.objects.new(f"_bforge_{name}", data)
         bpy.context.scene.collection.objects.link(light)
         offset = Vector(direction).normalized() * distance
@@ -231,7 +232,7 @@ def _camera_is_buried(eye, target):
     it faces the SAME way we are looking, we are seeing a backface, which means
     we started inside the mesh.
     """
-    direction = (Vector(target) - Vector(eye))
+    direction = Vector(target) - Vector(eye)
     if direction.length < 1e-6:
         return None
     direction.normalize()
@@ -255,8 +256,7 @@ def _analyse(ctx, path):
     from .check import check_image
 
     try:
-        report = check_image(ctx, path=str(path), colors=4,
-                             background=[0.05, 0.055, 0.065, 1.0])
+        report = check_image(ctx, path=str(path), colors=4, background=[0.05, 0.055, 0.065, 1.0])
     except Exception as exc:  # noqa: BLE001 — diagnostics must never fail a render
         return {"error": str(exc)}
     return {
@@ -297,9 +297,17 @@ def _hide_others(keep):
         "view": ("enum:hero|front|back|left|right|top|low", "hero", "Camera angle"),
         "resolution": ("int", 512, "Square render resolution in pixels"),
         "samples": ("int", 24, "Render samples — 24 is enough to judge form"),
-        "engine": ("enum:auto|cycles|eevee", "auto", "Render engine. 'auto' means Cycles/CPU, which is the only one that works without a GPU context; 'eevee' is faster but crashes headless on machines with no display server"),
+        "engine": (
+            "enum:auto|cycles|eevee",
+            "auto",
+            "Render engine. 'auto' means Cycles/CPU, which is the only one that works without a GPU context; 'eevee' is faster but crashes headless on machines with no display server",
+        ),
         "ortho": ("bool", False, "Orthographic projection (right for front/side/top reference)"),
-        "world_light": ("num", 0.32, "Ambient dome strength. Higher fills shadows but piles white specular sheen onto every surface, which washes out saturated albedo"),
+        "world_light": (
+            "num",
+            0.32,
+            "Ambient dome strength. Higher fills shadows but piles white specular sheen onto every surface, which washes out saturated albedo",
+        ),
     },
     tags=["render"],
 )
@@ -319,8 +327,12 @@ def render_view(ctx, out, objects, view, resolution, samples, engine, ortho, wor
         for obj in hidden:
             obj.hide_render = False
     return {
-        "path": str(path), "rel": ctx.rel(path), "view": view, "engine": used,
-        "resolution": resolution, "subject_radius_m": round(radius, 4),
+        "path": str(path),
+        "rel": ctx.rel(path),
+        "view": view,
+        "engine": used,
+        "resolution": resolution,
+        "subject_radius_m": round(radius, 4),
         "analysis": _analyse(ctx, path),
     }
 
@@ -338,12 +350,27 @@ def render_view(ctx, out, objects, view, resolution, samples, engine, ortho, wor
         "samples": ("int", 32, "Render samples"),
         "engine": ("enum:auto|cycles|eevee", "auto", "Render engine"),
         "light_distance": ("num", 0.0, "Light rig scale in metres; 0 fits it to the whole scene"),
-        "world_light": ("num", 0.32, "Ambient dome strength. Higher fills shadows but piles white specular sheen onto every surface, which washes out saturated albedo"),
+        "world_light": (
+            "num",
+            0.32,
+            "Ambient dome strength. Higher fills shadows but piles white specular sheen onto every surface, which washes out saturated albedo",
+        ),
     },
     tags=["render"],
 )
-def render_camera(ctx, out, position, target, lens, resolution, aspect, samples, engine,
-                  light_distance, world_light):
+def render_camera(
+    ctx,
+    out,
+    position,
+    target,
+    lens,
+    resolution,
+    aspect,
+    samples,
+    engine,
+    light_distance,
+    world_light,
+):
     if not [o for o in bpy.context.scene.objects if o.type == "MESH"]:
         raise OpError("nothing to render — the scene has no mesh objects")
     centre = Vector(target)
@@ -378,9 +405,13 @@ def render_camera(ctx, out, position, target, lens, resolution, aspect, samples,
     finally:
         _cleanup_rig(lights + [camera])
     return {
-        "path": str(path), "rel": ctx.rel(path), "engine": used,
-        "position": [round(v, 3) for v in eye], "target": [round(v, 3) for v in centre],
-        "lens_mm": lens, "resolution": [scene.render.resolution_x, scene.render.resolution_y],
+        "path": str(path),
+        "rel": ctx.rel(path),
+        "engine": used,
+        "position": [round(v, 3) for v in eye],
+        "target": [round(v, 3) for v in centre],
+        "lens_mm": lens,
+        "resolution": [scene.render.resolution_x, scene.render.resolution_y],
         "analysis": _analyse(ctx, path),
     }
 
@@ -397,23 +428,54 @@ def render_camera(ctx, out, position, target, lens, resolution, aspect, samples,
         "aspect": ("num", 2.39, "Width / height. 2.39 is anamorphic, 1.78 is 16:9"),
         "samples": ("int", 96, "Path-tracing samples. This is a beauty render; it costs time"),
         "sun_energy": ("num", 4.0, "Sun strength in W/m2. 3-6 reads as hard daylight"),
-        "sun_angle": ("vec2", [52.0, 35.0], "Sun elevation and azimuth in degrees. Low sun = long shadows"),
+        "sun_angle": (
+            "vec2",
+            [52.0, 35.0],
+            "Sun elevation and azimuth in degrees. Low sun = long shadows",
+        ),
         "sun_color": ("colorref", "#fff2dc", "Sunlight colour; warmer at low elevation"),
         "sky_color": ("colorref", "#6fa3dc", "Zenith sky colour, which is also the fill light"),
         "horizon_color": ("colorref", "#e8dcc0", "Horizon haze colour"),
         "sky_strength": ("num", 1.1, "Sky/ambient strength"),
-        "haze": ("num", 0.0, "Volumetric atmosphere density. 0.0005-0.004 separates distant forms; costs render time"),
+        "haze": (
+            "num",
+            0.0,
+            "Volumetric atmosphere density. 0.0005-0.004 separates distant forms; costs render time",
+        ),
         "focus": ("num", 0.0, "Depth of field focus distance; 0 measures it to the target"),
         "aperture": ("num", 0.0, "f-stop. 0 disables depth of field. 2.8 is shallow, 8 is deep"),
         "bounces": ("int", 6, "Light bounces. GI is most of what makes a render look expensive"),
         "exposure": ("num", 0.0, "Exposure compensation in stops"),
-        "look": ("enum:filmic|agx|standard|contrast", "agx", "View transform. Filmic/AgX roll off highlights like film; standard clips them"),
+        "look": (
+            "enum:filmic|agx|standard|contrast",
+            "agx",
+            "View transform. Filmic/AgX roll off highlights like film; standard clips them",
+        ),
     },
     tags=["render"],
 )
-def render_cinematic(ctx, out, position, target, lens, resolution, aspect, samples, sun_energy,
-                     sun_angle, sun_color, sky_color, horizon_color, sky_strength, haze, focus,
-                     aperture, bounces, exposure, look):
+def render_cinematic(
+    ctx,
+    out,
+    position,
+    target,
+    lens,
+    resolution,
+    aspect,
+    samples,
+    sun_energy,
+    sun_angle,
+    sun_color,
+    sky_color,
+    horizon_color,
+    sky_strength,
+    haze,
+    focus,
+    aperture,
+    bounces,
+    exposure,
+    look,
+):
     from lib import mat as mat_lib
 
     if not [o for o in bpy.context.scene.objects if o.type == "MESH"]:
@@ -462,11 +524,13 @@ def render_cinematic(ctx, out, position, target, lens, resolution, aspect, sampl
     scene.collection.objects.link(sun)
     elevation = math.radians(max(2.0, min(88.0, sun_angle[0])))
     azimuth = math.radians(sun_angle[1])
-    direction = Vector((
-        math.cos(elevation) * math.cos(azimuth),
-        math.cos(elevation) * math.sin(azimuth),
-        math.sin(elevation),
-    ))
+    direction = Vector(
+        (
+            math.cos(elevation) * math.cos(azimuth),
+            math.cos(elevation) * math.sin(azimuth),
+            math.sin(elevation),
+        )
+    )
     sun.rotation_euler = (-direction).to_track_quat("-Z", "Y").to_euler()
 
     # --- atmosphere -------------------------------------------------------
@@ -474,8 +538,9 @@ def render_cinematic(ctx, out, position, target, lens, resolution, aspect, sampl
     if haze > 0.0:
         extent = max(200.0, (eye - centre).length * 8.0)
         haze_bm = mesh_lib.new_bmesh()
-        mesh_lib.add_box(haze_bm, size=(extent, extent, extent * 0.5),
-                         center=(centre.x, centre.y, centre.z))
+        mesh_lib.add_box(
+            haze_bm, size=(extent, extent, extent * 0.5), center=(centre.x, centre.y, centre.z)
+        )
         haze_volume = mesh_lib.to_object(haze_bm, "_bforge_haze")
         material = bpy.data.materials.new("_bforge_haze")
         material.use_nodes = True
@@ -522,8 +587,9 @@ def render_cinematic(ctx, out, position, target, lens, resolution, aspect, sampl
     scene.render.image_settings.color_mode = "RGB"
 
     view = scene.view_settings
-    transform = {"filmic": "Filmic", "agx": "AgX", "standard": "Standard",
-                 "contrast": "Standard"}[look]
+    transform = {"filmic": "Filmic", "agx": "AgX", "standard": "Standard", "contrast": "Standard"}[
+        look
+    ]
     for candidate in (transform, "AgX", "Filmic", "Standard"):
         try:
             view.view_transform = candidate
@@ -531,8 +597,10 @@ def render_cinematic(ctx, out, position, target, lens, resolution, aspect, sampl
         except TypeError:
             continue
     try:
-        view.look = "AgX - Punchy" if look == "agx" else (
-            "Medium High Contrast" if look == "contrast" else "None"
+        view.look = (
+            "AgX - Punchy"
+            if look == "agx"
+            else ("Medium High Contrast" if look == "contrast" else "None")
         )
     except TypeError:
         pass
@@ -555,10 +623,14 @@ def render_cinematic(ctx, out, position, target, lens, resolution, aspect, sampl
         _cleanup_rig([sun, camera] + ([haze_volume] if haze_volume else []))
 
     return {
-        "path": str(path), "rel": ctx.rel(path),
+        "path": str(path),
+        "rel": ctx.rel(path),
         "resolution": [scene.render.resolution_x, scene.render.resolution_y],
-        "samples": samples, "bounces": bounces, "look": view.view_transform,
-        "haze": haze, "depth_of_field": aperture > 0.0,
+        "samples": samples,
+        "bounces": bounces,
+        "look": view.view_transform,
+        "haze": haze,
+        "depth_of_field": aperture > 0.0,
         "analysis": _analyse(ctx, path),
     }
 
@@ -572,7 +644,11 @@ def render_cinematic(ctx, out, position, target, lens, resolution, aspect, sampl
         "tile": ("int", 400, "Pixel size of each tile"),
         "samples": ("int", 20, "Render samples per tile"),
         "engine": ("enum:auto|cycles|eevee", "auto", "Render engine"),
-        "panels": ("str[]", ["hero", "front", "left", "top", "wireframe", "checker"], "Which panels to include"),
+        "panels": (
+            "str[]",
+            ["hero", "front", "left", "top", "wireframe", "checker"],
+            "Which panels to include",
+        ),
         "columns": ("int", 3, "Tiles per row"),
     },
     tags=["render", "inspect"],
@@ -581,7 +657,9 @@ def render_contact_sheet(ctx, out, objects, tile, samples, engine, panels, colum
     try:
         import numpy
     except ImportError as exc:  # pragma: no cover - Blender bundles numpy
-        raise OpError("numpy is unavailable in this Blender build; use render.view instead") from exc
+        raise OpError(
+            "numpy is unavailable in this Blender build; use render.view instead"
+        ) from exc
 
     targets = _targets(objects)
     hidden = _hide_others(targets) if objects else []
@@ -601,6 +679,10 @@ def render_contact_sheet(ctx, out, objects, tile, samples, engine, panels, colum
 
     rendered = []
     used = "cycles"
+    # Multiple bforge daemons may legitimately render different assets into
+    # one output root in parallel. A shared `_sheet/panel_0_hero.png` lets one
+    # daemon replace or delete another's panel between render and load.
+    scratch_dir = ctx.out_dir / "_sheet" / scene_lib.sanitize(Path(str(out)).stem)
     for index, panel in enumerate(panels):
         _setup_world(0.6)
         lights = _setup_lights(centre, radius)
@@ -615,7 +697,7 @@ def render_contact_sheet(ctx, out, objects, tile, samples, engine, panels, colum
             swapped = _swap_materials(targets, _checker_material())
         used = _configure_engine(engine, samples, tile)
 
-        path = ctx.out_dir / "_sheet" / f"panel_{index}_{panel}.png"
+        path = scratch_dir / f"panel_{index}_{panel}.png"
         path.parent.mkdir(parents=True, exist_ok=True)
         try:
             _render_to(path)
@@ -665,6 +747,12 @@ def _load_pixels(numpy, path, tile):
     try:
         width, height = loaded.size
         data = numpy.array(loaded.pixels[:], dtype=numpy.float32)
+        expected = width * height * 4
+        if width < 1 or height < 1 or data.size != expected:
+            raise OpError(
+                f"rendered panel '{path}' is empty or incomplete "
+                f"({width}x{height}, {data.size}/{expected} values)"
+            )
         data = data.reshape((height, width, 4))
         data = numpy.flipud(data)
         if (height, width) != (tile, tile):
@@ -722,8 +810,8 @@ def _wireframe_material():
     mix = tree.nodes.new("ShaderNodeMix")
     mix.data_type = "RGBA"
     mix.location = (-320, 0)
-    mix.inputs["A"].default_value = (0.30, 0.32, 0.36, 1.0)   # surface
-    mix.inputs["B"].default_value = (0.02, 0.85, 0.65, 1.0)   # wire
+    mix.inputs["A"].default_value = (0.30, 0.32, 0.36, 1.0)  # surface
+    mix.inputs["B"].default_value = (0.02, 0.85, 0.65, 1.0)  # wire
     tree.links.new(wire.outputs["Fac"], mix.inputs["Factor"])
     tree.links.new(mix.outputs["Result"], bsdf.inputs["Base Color"])
     # Emission carries the wire so it stays legible in unlit areas.
@@ -795,13 +883,16 @@ def render_turntable(ctx, out_dir, objects, frames, resolution, samples, elevati
         for index in range(frames):
             azimuth = math.tau * index / frames
             tilt = math.radians(elevation)
-            offset = Vector(
-                (
-                    math.cos(azimuth) * math.cos(tilt),
-                    math.sin(azimuth) * math.cos(tilt),
-                    math.sin(tilt),
+            offset = (
+                Vector(
+                    (
+                        math.cos(azimuth) * math.cos(tilt),
+                        math.sin(azimuth) * math.cos(tilt),
+                        math.sin(tilt),
+                    )
                 )
-            ) * distance
+                * distance
+            )
             camera.location = centre + offset
             camera.rotation_euler = (-offset).to_track_quat("-Z", "Y").to_euler()
             path = base / f"frame_{index:03d}.png"
@@ -813,6 +904,9 @@ def render_turntable(ctx, out_dir, objects, frames, resolution, samples, elevati
             obj.hide_render = False
 
     return {
-        "directory": str(base), "rel": ctx.rel(base), "frames": len(paths),
-        "files": paths, "engine": used,
+        "directory": str(base),
+        "rel": ctx.rel(base),
+        "frames": len(paths),
+        "files": paths,
+        "engine": used,
     }

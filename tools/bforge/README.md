@@ -125,6 +125,27 @@ zero errors and zero warnings.
 
 ![Spike serious Greek delver review sheet](../../docs/bforge/img/spike_delver_v3.png)
 
+`prop.tree` now authors Mediterranean growth by species and age instead of
+making runtime clones do all of the visual work. Olive trees gain rooted,
+multi-stem, storm-broken silhouettes as they age; cypresses progress from a
+young narrow column to mature mass and an ancient crown with authored gaps.
+Spike uses six generated young, mature/windswept and ancient olive/cypress
+assets, then applies only bounded nonuniform growth in-engine.
+
+| tree | triangles | GLB |
+| --- | ---: | ---: |
+| ancient olive | 2,748 | 151 KB |
+| windswept olive | 2,760 | 152 KB |
+| young olive | 1,560 | 85 KB |
+| ancient cypress | 2,488 | 144 KB |
+| mature cypress | 3,912 | 225 KB |
+| young cypress | 2,472 | 142 KB |
+
+The complete family passes `bforge audit --fail-on warning` with zero errors
+and zero warnings.
+
+![Spike Mediterranean tree review sheet](../../docs/bforge/img/spike_tree_family_v4.png)
+
 ---
 
 ## Why this exists
@@ -343,6 +364,9 @@ already the review artifact.
   and opt-in where a GPU context exists.
 - Contact sheets cost a few seconds. Use `tile=300, samples=16` while
   iterating.
+- Contact-sheet scratch panels are namespaced by output stem, so independent
+  Blender daemons can safely forge different assets into the same output
+  directory in parallel.
 - Scene state lives in the daemon. If it dies, state is lost — rebuild from
   `session.reset`. The client detects the death, reports Blender's stderr tail,
   and restarts on the next call.
