@@ -107,12 +107,12 @@ A browser-budget classical Greek defense tower with one disciplined material set
 
 ### `arch.field_building`
 
-A browser-budget Greek settlement family for the structures surrounding a civic hall: a furrowed farmstead, strategos campaign tent, hoplite barracks, modular ashlar wall, or weathered road stele. Variants share restrained limestone, timber, cloth, terracotta, bronze and crop materials while keeping silhouettes readable from an RTS camera.
+A browser-budget Greek settlement family for the structures surrounding a civic hall: a furrowed farmstead, strategos campaign tent, hoplite barracks, modular ashlar wall, weathered road stele, courtyard house, stoa-fronted emporium, or mining survey lattice. Variants share restrained limestone, timber, cloth, terracotta, bronze and crop materials while keeping silhouettes readable from an RTS camera.
 
 | parameter | type | default | description |
 | --- | --- | --- | --- |
 | `name` | string | 'field_building' | Object name |
-| `style` | farm \| camp \| barracks \| wall \| waymarker | 'farm' | Settlement structure silhouette |
+| `style` | farm \| camp \| barracks \| wall \| waymarker \| house \| emporium \| lattice | 'farm' | Settlement structure silhouette |
 | `width` | number | 3.4 | Overall footprint width in metres |
 | `depth` | number | 3.4 | Overall footprint depth in metres |
 | `height` | number | 2.2 | Authored visual height in metres |

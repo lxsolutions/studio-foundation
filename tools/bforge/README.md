@@ -95,11 +95,12 @@ The three replaced runtime GLBs occupied 6.4 MB; the generated family occupies
 ![Spike Greek ballista review sheet](../../docs/bforge/img/spike_ballista.png)
 
 `arch.field_building` applies that same family discipline to the structures
-between the towers. Farm, campaign-tent, barracks, wall and road-stele variants
-share one restrained limestone/terracotta/oxblood-cloth/timber/bronze palette
-while preserving distinct economy, expedition, military, fortification and
-navigation silhouettes. Every model is ground-origin authored, stays below
-3,000 triangles, and can ride on an engine's cheap gameplay collider without
+between the towers. Farm, campaign-tent, barracks, wall, road-stele, courtyard
+house, stoa-fronted emporium and mining-lattice variants share one restrained
+limestone/terracotta/oxblood-cloth/timber/bronze palette while preserving
+distinct economy, expedition, military, fortification, navigation and civic
+silhouettes. Every model is ground-origin authored, stays below 3,000
+triangles, and can ride on an engine's cheap gameplay collider without
 coupling art to simulation.
 
 | variant | triangles | GLB | tallest extent |
@@ -111,6 +112,20 @@ coupling art to simulation.
 | road stele | 632 | 57 KB | 2.06 m |
 
 ![Spike Greek field-building review sheet](../../docs/bforge/img/spike_field_barracks.png)
+
+Spike's Mining Settlement uses the three civic programmes as visible Age
+progression instead of changing only numbers in a menu. Timber Age raises a
+low Delver House, Engine Age adds a working stoa shop, and Forge Age crowns the
+claim with a tall braced survey lattice. All three are strict browser assets
+with six shared material contracts and zero audit warnings.
+
+| civic programme | triangles | GLB | bounds |
+| --- | ---: | ---: | ---: |
+| Delver House | 1,656 | 134 KB | 3.91 × 3.39 × 3.46 m |
+| Doros' Emporium | 1,872 | 146 KB | 4.71 × 3.46 × 3.10 m |
+| Prospector Lattice | 1,350 | 103 KB | 2.50 × 2.50 × 5.39 m |
+
+![Spike Greek civic-annex review sheet](../../docs/bforge/img/spike_civic_annex_v1.png)
 
 `arch.hellenic_ruin` adds a reusable landmark tier above road stelae. Shrine,
 colonnade and hero-tomb programmes share one weathered limestone/foundation/

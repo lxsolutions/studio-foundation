@@ -495,6 +495,9 @@ class Architecture(ForgeCase):
             "barracks": ("hoplite_training_hall", 3.2, 2.6, 2.8),
             "wall": ("ashlar_parapet_segment", 2.4, 0.6, 2.2),
             "waymarker": ("weathered_road_stele", 1.25, 1.1, 2.4),
+            "house": ("courtyard_delver_house", 3.8, 3.2, 3.2),
+            "emporium": ("stoa_fronted_emporium", 4.4, 3.2, 3.3),
+            "lattice": ("mining_survey_lattice", 2.5, 2.5, 5.8),
         }
         family = {}
         for style, (silhouette, width, depth, height) in expected.items():
@@ -538,6 +541,13 @@ class Architecture(ForgeCase):
         self.assertGreater(family["barracks"]["bounds"]["size"][2], 2.4)
         self.assertLess(family["wall"]["bounds"]["size"][1], 0.8)
         self.assertGreater(family["waymarker"]["bounds"]["size"][2], 2.0)
+        self.assertGreater(family["house"]["bounds"]["size"][0], 3.7)
+        self.assertGreater(family["emporium"]["bounds"]["size"][0], 4.4)
+        self.assertGreater(family["lattice"]["bounds"]["size"][2], 5.2)
+        self.assertGreater(
+            family["lattice"]["bounds"]["size"][2],
+            family["house"]["bounds"]["size"][2],
+        )
 
         self.forge.call("session.reset")
         repeated = self.forge.call(

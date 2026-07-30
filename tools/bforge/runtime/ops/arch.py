@@ -1392,14 +1392,15 @@ def arch_defense_tower(
     summary=(
         "A browser-budget Greek settlement family for the structures surrounding a civic "
         "hall: a furrowed farmstead, strategos campaign tent, hoplite barracks, modular "
-        "ashlar wall, or weathered road stele. Variants share restrained limestone, "
-        "timber, cloth, terracotta, bronze and crop materials while keeping silhouettes "
-        "readable from an RTS camera."
+        "ashlar wall, weathered road stele, courtyard house, stoa-fronted emporium, or "
+        "mining survey lattice. Variants share restrained limestone, timber, cloth, "
+        "terracotta, bronze and crop materials while keeping silhouettes readable from "
+        "an RTS camera."
     ),
     params={
         "name": ("str", "field_building", "Object name"),
         "style": (
-            "enum:farm|camp|barracks|wall|waymarker",
+            "enum:farm|camp|barracks|wall|waymarker|house|emporium|lattice",
             "farm",
             "Settlement structure silhouette",
         ),
@@ -1893,6 +1894,320 @@ def arch_field_building(
                 6,
             )
         silhouette = "hoplite_training_hall"
+
+    elif style == "house":
+        # A compact miner household around a paved forecourt. The offset roof,
+        # chimney, porch and storage jars stop it reading as a generic RTS box.
+        podium_h = height * 0.07
+        body_h = height * 0.56
+        wall_t = min(width, depth) * 0.055
+        court_d = depth * 0.31
+        body_d = depth - court_d
+        body_y = court_d * 0.5
+        box(
+            (width * 1.03, depth * 1.03, podium_h),
+            (0.0, 0.0, podium_h * 0.5),
+            FOUNDATION,
+            0.035,
+        )
+        wall_z = podium_h + body_h * 0.5
+        # Rear and side masonry define a real cella rather than a solid block.
+        box((width, wall_t, body_h), (0.0, depth * 0.5 - wall_t * 0.5, wall_z), STONE, 0.025)
+        for sx in (-1.0, 1.0):
+            box(
+                (wall_t, body_d, body_h),
+                (sx * (width * 0.5 - wall_t * 0.5), body_y, wall_z),
+                STONE,
+                0.025,
+            )
+        door_w = width * 0.25
+        front_y = -depth * 0.5 + court_d
+        side_w = (width - door_w) * 0.5
+        for sx in (-1.0, 1.0):
+            box(
+                (side_w, wall_t, body_h),
+                (sx * (door_w * 0.5 + side_w * 0.5), front_y, wall_z),
+                STONE,
+                0.025,
+            )
+        box(
+            (door_w * 0.82, wall_t * 0.55, body_h * 0.78),
+            (0.0, front_y - wall_t * 0.18, podium_h + body_h * 0.39),
+            TIMBER,
+            0.012,
+        )
+        # Small porch and bench make the front readable from the Hero camera.
+        porch_y = -depth * 0.42
+        porch_h = body_h * 0.72
+        for sx in (-0.30, 0.30):
+            cylinder(
+                width * 0.034,
+                porch_h,
+                (sx * width, porch_y, podium_h + porch_h * 0.5),
+                TIMBER,
+                7,
+            )
+        box(
+            (width * 0.78, depth * 0.22, height * 0.045),
+            (0.0, porch_y, podium_h + porch_h + height * 0.025),
+            ROOF,
+            0.014,
+            (math.radians(8.0), 0.0, 0.0),
+        )
+        box(
+            (width * 0.32, depth * 0.11, height * 0.09),
+            (-width * 0.24, -depth * 0.42, podium_h + height * 0.045),
+            TIMBER,
+            0.012,
+        )
+        # Asymmetric terracotta roof with a dark hearth chimney.
+        roof_z = podium_h + body_h
+        roof_pitch = math.radians(24.0)
+        for sx in (-1.0, 1.0):
+            box(
+                (width * 0.57, body_d * 1.08, height * 0.052),
+                (sx * width * 0.245, body_y, roof_z + height * 0.12),
+                ROOF,
+                0.016,
+                (0.0, sx * roof_pitch, 0.0),
+            )
+        box(
+            (width * 0.13, depth * 0.13, height * 0.40),
+            (width * 0.28, depth * 0.30, roof_z + height * 0.25),
+            FOUNDATION,
+            0.015,
+        )
+        # Two amphorae are small vertical accents, not oversized toy props.
+        for index, sx in enumerate((0.32, 0.41)):
+            cylinder(
+                width * (0.055 if index == 0 else 0.047),
+                height * (0.24 if index == 0 else 0.20),
+                (sx * width, -depth * 0.35, podium_h + height * (0.12 if index == 0 else 0.10)),
+                ROOF,
+                10,
+                radius_top=width * 0.032,
+            )
+        silhouette = "courtyard_delver_house"
+
+    elif style == "emporium":
+        # A merchant stoa: deep shop cell, four-post limestone frontage,
+        # oxblood awning, counter and restrained bronze trade goods.
+        podium_h = height * 0.08
+        body_h = height * 0.57
+        shop_d = depth * 0.64
+        rear_y = depth * 0.18
+        wall_t = min(width, depth) * 0.06
+        box(
+            (width * 1.07, depth * 1.08, podium_h),
+            (0.0, 0.0, podium_h * 0.5),
+            FOUNDATION,
+            0.04,
+        )
+        wall_z = podium_h + body_h * 0.5
+        box((width, wall_t, body_h), (0.0, depth * 0.5 - wall_t * 0.5, wall_z), STONE, 0.025)
+        for sx in (-1.0, 1.0):
+            box(
+                (wall_t, shop_d, body_h),
+                (sx * (width * 0.5 - wall_t * 0.5), rear_y, wall_z),
+                STONE,
+                0.025,
+            )
+        # The recess is intentionally dark timber so the open frontage reads.
+        box(
+            (width * 0.82, wall_t * 0.55, body_h * 0.82),
+            (0.0, -depth * 0.14, podium_h + body_h * 0.41),
+            TIMBER,
+            0.010,
+        )
+        counter_y = -depth * 0.27
+        box(
+            (width * 0.72, depth * 0.18, height * 0.24),
+            (0.0, counter_y, podium_h + height * 0.12),
+            TIMBER,
+            0.018,
+        )
+        portico_y = -depth * 0.46
+        column_h = height * 0.56
+        for sx in (-0.43, -0.14, 0.14, 0.43):
+            cylinder(
+                width * 0.030,
+                column_h,
+                (sx * width, portico_y, podium_h + column_h * 0.5),
+                STONE,
+                10,
+                radius_top=width * 0.026,
+            )
+        box(
+            (width * 1.0, depth * 0.13, height * 0.08),
+            (0.0, portico_y, podium_h + column_h + height * 0.04),
+            FOUNDATION,
+            0.018,
+        )
+        awning_z = podium_h + column_h * 0.75
+        box(
+            (width * 0.88, depth * 0.36, height * 0.035),
+            (0.0, -depth * 0.36, awning_z),
+            ROOF,
+            0.012,
+            (math.radians(14.0), 0.0, 0.0),
+        )
+        roof_z = podium_h + body_h
+        for sx in (-1.0, 1.0):
+            box(
+                (width * 0.57, shop_d * 1.12, height * 0.052),
+                (sx * width * 0.245, rear_y, roof_z + height * 0.12),
+                ROOF,
+                0.016,
+                (0.0, sx * math.radians(23.0), 0.0),
+            )
+        # Scales and three small amphorae establish commerce at RTS distance.
+        beam(
+            (0.0, counter_y - depth * 0.11, podium_h + height * 0.24),
+            (0.0, counter_y - depth * 0.11, podium_h + height * 0.52),
+            width * 0.010,
+            METAL,
+            7,
+        )
+        beam(
+            (-width * 0.13, counter_y - depth * 0.11, podium_h + height * 0.48),
+            (width * 0.13, counter_y - depth * 0.11, podium_h + height * 0.48),
+            width * 0.009,
+            METAL,
+            7,
+        )
+        for index, sx in enumerate((-0.33, 0.28, 0.38)):
+            cylinder(
+                width * (0.045 + index * 0.004),
+                height * (0.16 + index * 0.025),
+                (sx * width, counter_y - depth * 0.12, podium_h + height * (0.08 + index * 0.012)),
+                METAL if index == 1 else ROOF,
+                9,
+                radius_top=width * 0.027,
+            )
+        silhouette = "stoa_fronted_emporium"
+
+    elif style == "lattice":
+        # A tall mining survey/hoist lattice: four raked timber standards,
+        # X-bracing, limestone footings, bronze crown wheel and plumb line.
+        base_h = height * 0.055
+        base_w = width * 0.86
+        base_d = depth * 0.86
+        box((width, depth, base_h), (0.0, 0.0, base_h * 0.5), FOUNDATION, 0.035)
+        leg_bottom_x = base_w * 0.42
+        leg_bottom_y = base_d * 0.42
+        leg_top_x = base_w * 0.24
+        leg_top_y = base_d * 0.24
+        leg_top_z = height * 0.78
+        for sx in (-1.0, 1.0):
+            for sy in (-1.0, 1.0):
+                box(
+                    (width * 0.17, depth * 0.17, base_h * 1.3),
+                    (sx * leg_bottom_x, sy * leg_bottom_y, base_h * 0.65),
+                    STONE,
+                    0.02,
+                )
+                beam(
+                    (sx * leg_bottom_x, sy * leg_bottom_y, base_h),
+                    (sx * leg_top_x, sy * leg_top_y, leg_top_z),
+                    width * 0.030,
+                    TIMBER,
+                    8,
+                )
+        # Bracing on all four faces produces the lattice silhouette.
+        brace_low = height * 0.23
+        brace_high = height * 0.58
+        for sy in (-1.0, 1.0):
+            beam(
+                (-leg_bottom_x * 0.92, sy * leg_bottom_y, brace_low),
+                (leg_top_x, sy * leg_top_y, brace_high),
+                width * 0.014,
+                TIMBER,
+                7,
+            )
+            beam(
+                (leg_bottom_x * 0.92, sy * leg_bottom_y, brace_low),
+                (-leg_top_x, sy * leg_top_y, brace_high),
+                width * 0.014,
+                TIMBER,
+                7,
+            )
+        for sx in (-1.0, 1.0):
+            beam(
+                (sx * leg_bottom_x, -leg_bottom_y * 0.92, brace_low),
+                (sx * leg_top_x, leg_top_y, brace_high),
+                width * 0.014,
+                TIMBER,
+                7,
+            )
+            beam(
+                (sx * leg_bottom_x, leg_bottom_y * 0.92, brace_low),
+                (sx * leg_top_x, -leg_top_y, brace_high),
+                width * 0.014,
+                TIMBER,
+                7,
+            )
+        deck_z = leg_top_z
+        box(
+            (base_w * 0.72, base_d * 0.72, height * 0.045),
+            (0.0, 0.0, deck_z),
+            TIMBER,
+            0.018,
+        )
+        for sx in (-1.0, 1.0):
+            beam(
+                (sx * base_w * 0.28, 0.0, deck_z),
+                (sx * base_w * 0.28, 0.0, height * 0.92),
+                width * 0.022,
+                TIMBER,
+                7,
+            )
+        beam(
+            (-base_w * 0.34, 0.0, height * 0.92),
+            (base_w * 0.34, 0.0, height * 0.92),
+            width * 0.020,
+            TIMBER,
+            7,
+        )
+        cylinder(
+            width * 0.16,
+            depth * 0.055,
+            (0.0, -depth * 0.03, height * 0.86),
+            METAL,
+            18,
+            axis="y",
+        )
+        for angle in (0.0, math.pi * 0.5):
+            beam(
+                (
+                    -math.cos(angle) * width * 0.15,
+                    -depth * 0.06,
+                    height * 0.86 - math.sin(angle) * width * 0.15,
+                ),
+                (
+                    math.cos(angle) * width * 0.15,
+                    -depth * 0.06,
+                    height * 0.86 + math.sin(angle) * width * 0.15,
+                ),
+                width * 0.009,
+                METAL,
+                6,
+            )
+        beam(
+            (0.0, 0.0, height * 0.86),
+            (0.0, 0.0, base_h + height * 0.08),
+            width * 0.006,
+            METAL,
+            5,
+        )
+        cylinder(
+            width * 0.07,
+            height * 0.12,
+            (0.0, 0.0, base_h + height * 0.06),
+            METAL,
+            10,
+            radius_top=0.0,
+        )
+        silhouette = "mining_survey_lattice"
 
     elif style == "wall":
         # Individually blocked courses and end pilasters give a modular wall
