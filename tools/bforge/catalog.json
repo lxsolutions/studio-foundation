@@ -5477,7 +5477,7 @@
     },
     {
       "name": "prop.tree",
-      "summary": "Stylised low-poly tree: tapered trunk plus layered canopy. ~450 tris. Canopy is a separate material slot so it can take a foliage/alpha shader.",
+      "summary": "Game-ready tree with stylised and natural Mediterranean forms. Olive and cypress styles add branch-readable medium-detail foliage while preserving the cheap legacy silhouettes.",
       "tags": [
         "prop",
         "nature"
@@ -5527,9 +5527,11 @@
               "cone",
               "blob",
               "layered",
-              "palm"
+              "palm",
+              "olive",
+              "cypress"
             ],
-            "description": "Canopy shape",
+            "description": "Canopy shape or natural species",
             "default": "layered"
           },
           "canopy_layers": {
@@ -5541,6 +5543,11 @@
             "type": "number",
             "description": "Canopy spread in metres",
             "default": 1.4
+          },
+          "detail": {
+            "type": "integer",
+            "description": "Natural olive/cypress foliage density, 1-3; ignored by legacy styles",
+            "default": 2
           },
           "lean": {
             "type": "number",

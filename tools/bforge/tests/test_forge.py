@@ -127,6 +127,49 @@ class Geometry(ForgeCase):
         second = self.forge.call("prop.rock", name="r", seed=2)
         self.assertNotEqual(first["bounds"], second["bounds"])
 
+    def test_natural_tree_styles_are_deterministic_branch_readable_assets(self):
+        olive = self.forge.call(
+            "prop.tree",
+            name="olive",
+            seed=17,
+            canopy_style="olive",
+            height=5.2,
+            canopy_radius=1.8,
+            detail=2,
+        )
+        self.assertGreater(olive["triangles"], 1200)
+        self.assertLess(olive["triangles"], 4200)
+        self.assertEqual(len(olive["materials"]), 2)
+        self.assertAlmostEqual(olive["bounds"]["min"][2], 0.0, places=3)
+
+        self.forge.call("session.reset")
+        repeated = self.forge.call(
+            "prop.tree",
+            name="olive",
+            seed=17,
+            canopy_style="olive",
+            height=5.2,
+            canopy_radius=1.8,
+            detail=2,
+        )
+        self.assertEqual(olive["triangles"], repeated["triangles"])
+        self.assertEqual(olive["bounds"], repeated["bounds"])
+
+        self.forge.call("session.reset")
+        cypress = self.forge.call(
+            "prop.tree",
+            name="cypress",
+            seed=23,
+            canopy_style="cypress",
+            height=7.0,
+            canopy_radius=1.05,
+            detail=2,
+        )
+        self.assertGreater(cypress["triangles"], 1200)
+        self.assertLess(cypress["triangles"], 4200)
+        self.assertEqual(len(cypress["materials"]), 2)
+        self.assertGreater(cypress["bounds"]["size"][2], cypress["bounds"]["size"][0] * 2.5)
+
     def test_origin_modes_place_the_pivot_correctly(self):
         result = self.forge.call("build.box", name="b", size=[1, 1, 2], origin="bottom")
         self.assertAlmostEqual(result["bounds"]["min"][2], 0.0, places=4)

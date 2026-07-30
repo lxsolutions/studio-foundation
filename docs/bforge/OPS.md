@@ -1273,7 +1273,7 @@ Wall torch or standing brazier with an emissive flame. ~250 tris. Emissive props
 
 ### `prop.tree`
 
-Stylised low-poly tree: tapered trunk plus layered canopy. ~450 tris. Canopy is a separate material slot so it can take a foliage/alpha shader.
+Game-ready tree with stylised and natural Mediterranean forms. Olive and cypress styles add branch-readable medium-detail foliage while preserving the cheap legacy silhouettes.
 
 | parameter | type | default | description |
 | --- | --- | --- | --- |
@@ -1282,9 +1282,10 @@ Stylised low-poly tree: tapered trunk plus layered canopy. ~450 tris. Canopy is 
 | `seed` | integer | 0 | Random seed — same seed always gives the same asset |
 | `height` | number | 4.0 | Total height in metres |
 | `trunk_radius` | number | 0.18 | Trunk radius at the base |
-| `canopy_style` | cone \| blob \| layered \| palm | 'layered' | Canopy shape |
+| `canopy_style` | cone \| blob \| layered \| palm \| olive \| cypress | 'layered' | Canopy shape or natural species |
 | `canopy_layers` | integer | 3 | layered style: number of tiers |
 | `canopy_radius` | number | 1.4 | Canopy spread in metres |
+| `detail` | integer | 2 | Natural olive/cypress foliage density, 1-3; ignored by legacy styles |
 | `lean` | number | 4.0 | Trunk lean in degrees — a perfectly vertical tree looks fake |
 | `trunk_material` | string | 'wood' | Trunk material preset |
 | `leaf_material` | string | 'leaf' | Canopy material preset |

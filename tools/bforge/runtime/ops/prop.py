@@ -425,15 +425,54 @@ def prop_crystal(ctx, name, location, seed, count, height, radius, sides, spread
     return result
 
 
+def _tree_branch(bm, start: Vector, end: Vector, radius: float, segments: int = 8) -> None:
+    """Append one tapered branch aligned between two local-space points."""
+    axis = end - start
+    if axis.length < 1e-5:
+        return
+    faces = mesh_lib.add_cylinder(
+        bm,
+        radius=max(radius, 0.008),
+        radius_top=max(radius * 0.42, 0.004),
+        depth=axis.length,
+        segments=segments,
+    )
+    verts = list({vert for face in faces for vert in face.verts})
+    orient = axis.normalized().to_track_quat("Z", "Y").to_matrix().to_4x4()
+    matrix = Matrix.Translation((start + end) * 0.5) @ orient
+    bmesh.ops.transform(bm, matrix=matrix, verts=verts)
+
+
+def _tree_ellipsoid(
+    bm,
+    centre: Vector,
+    radius: float,
+    scale: tuple[float, float, float],
+    yaw: float,
+) -> None:
+    """Append a small rotated foliage mass without making a new object."""
+    faces = mesh_lib.add_icosphere(bm, radius=1.0, subdivisions=1)
+    verts = list({vert for face in faces for vert in face.verts})
+    size = Matrix.Diagonal(Vector((
+        radius * scale[0],
+        radius * scale[1],
+        radius * scale[2],
+        1.0,
+    )))
+    matrix = Matrix.Translation(centre) @ Matrix.Rotation(yaw, 4, "Z") @ size
+    bmesh.ops.transform(bm, matrix=matrix, verts=verts)
+
+
 @op(
     "prop.tree",
-    summary="Stylised low-poly tree: tapered trunk plus layered canopy. ~450 tris. Canopy is a separate material slot so it can take a foliage/alpha shader.",
+    summary="Game-ready tree with stylised and natural Mediterranean forms. Olive and cypress styles add branch-readable medium-detail foliage while preserving the cheap legacy silhouettes.",
     params=_params(
         height=("num", 4.0, "Total height in metres"),
         trunk_radius=("num", 0.18, "Trunk radius at the base"),
-        canopy_style=("enum:cone|blob|layered|palm", "layered", "Canopy shape"),
+        canopy_style=("enum:cone|blob|layered|palm|olive|cypress", "layered", "Canopy shape or natural species"),
         canopy_layers=("int", 3, "layered style: number of tiers"),
         canopy_radius=("num", 1.4, "Canopy spread in metres"),
+        detail=("int", 2, "Natural olive/cypress foliage density, 1-3; ignored by legacy styles"),
         lean=("num", 4.0, "Trunk lean in degrees — a perfectly vertical tree looks fake"),
         trunk_material=("str", "wood", "Trunk material preset"),
         leaf_material=("str", "leaf", "Canopy material preset"),
@@ -442,10 +481,17 @@ def prop_crystal(ctx, name, location, seed, count, height, radius, sides, spread
     tags=["prop", "nature"],
 )
 def prop_tree(ctx, name, location, seed, height, trunk_radius, canopy_style, canopy_layers,
-              canopy_radius, lean, trunk_material, leaf_material, leaf_color):
+              canopy_radius, detail, lean, trunk_material, leaf_material, leaf_color):
     rng = ctx.reseed(seed)
     base_name = _named(name, "tree")
-    trunk_h = height * (0.45 if canopy_style != "palm" else 0.82)
+    natural = canopy_style in {"olive", "cypress"}
+    natural_detail = max(1, min(3, detail))
+    trunk_h = height * (
+        0.82 if canopy_style == "palm"
+        else 0.52 if canopy_style == "olive"
+        else 0.96 if canopy_style == "cypress"
+        else 0.45
+    )
 
     profile = [
         (0.0, 0.0), (trunk_radius * 1.5, 0.0), (trunk_radius, trunk_h * 0.12),
@@ -453,7 +499,7 @@ def prop_tree(ctx, name, location, seed, height, trunk_radius, canopy_style, can
         (0.0, trunk_h),
     ]
     bm = mesh_lib.new_bmesh()
-    mesh_lib.lathe(bm, profile, segments=8)
+    mesh_lib.lathe(bm, profile, segments=12 if natural else 8)
     lean_rad = math.radians(lean)
     for vert in bm.verts:
         t = vert.co.z / max(trunk_h, 1e-6)
@@ -465,7 +511,142 @@ def prop_tree(ctx, name, location, seed, height, trunk_radius, canopy_style, can
 
     tip_x = math.sin(lean_rad) * trunk_h * 0.5
     canopy_bm = mesh_lib.new_bmesh()
-    if canopy_style == "cone":
+    branch = None
+    if canopy_style == "olive":
+        branch_bm = mesh_lib.new_bmesh()
+        limb_tips: list[Vector] = []
+        limb_count = 6 + natural_detail * 2
+        crown_span = max(height - trunk_h, height * 0.3)
+        for index in range(limb_count):
+            angle = math.tau * index / limb_count + rng.uniform(-0.18, 0.18)
+            start = Vector((
+                tip_x * 0.45,
+                0.0,
+                trunk_h * rng.uniform(0.52, 0.82),
+            ))
+            spread = canopy_radius * rng.uniform(0.56, 0.9)
+            end = Vector((
+                tip_x + math.cos(angle) * spread,
+                math.sin(angle) * spread,
+                trunk_h + crown_span * rng.uniform(0.3, 0.82),
+            ))
+            _tree_branch(
+                branch_bm,
+                start,
+                end,
+                trunk_radius * rng.uniform(0.38, 0.58),
+                segments=8,
+            )
+            limb_tips.append(end)
+
+            # A fork makes the crown read as grown wood rather than rods
+            # holding foliage balls. Keep it short so the silhouette stays open.
+            fork_start = start.lerp(end, 0.62)
+            tangent = Vector((-math.sin(angle), math.cos(angle), rng.uniform(0.12, 0.3)))
+            fork_end = end + tangent * canopy_radius * rng.uniform(0.18, 0.32)
+            _tree_branch(
+                branch_bm,
+                fork_start,
+                fork_end,
+                trunk_radius * rng.uniform(0.18, 0.3),
+                segments=7,
+            )
+            limb_tips.append(fork_end)
+
+        mesh_lib.cleanup(branch_bm)
+        branch = mesh_lib.to_object(branch_bm, f"{base_name}_branches")
+        branch.location = location
+        finish_lib.finish(
+            ctx,
+            branch,
+            material=trunk_material,
+            uv="smart_packed",
+            origin=None,
+            smooth=True,
+            smooth_angle=48.0,
+        )
+
+        # Many small, flattened masses keep negative space between branches.
+        # At gameplay distance they merge into an olive crown; in FPS they still
+        # read as twigs and leaves rather than six inflated rocks.
+        leaf_count = 30 + natural_detail * 22
+        for index in range(leaf_count):
+            tip = limb_tips[index % len(limb_tips)]
+            centre = tip + Vector((
+                rng.uniform(-1.0, 1.0) * canopy_radius * 0.32,
+                rng.uniform(-1.0, 1.0) * canopy_radius * 0.32,
+                rng.uniform(-0.35, 0.42) * canopy_radius,
+            ))
+            _tree_ellipsoid(
+                canopy_bm,
+                centre,
+                canopy_radius * rng.uniform(0.085, 0.14),
+                (
+                    rng.uniform(1.5, 2.25),
+                    rng.uniform(0.72, 1.08),
+                    rng.uniform(0.38, 0.62),
+                ),
+                rng.uniform(0.0, math.tau),
+            )
+    elif canopy_style == "cypress":
+        branch_bm = mesh_lib.new_bmesh()
+        branch_count = 10 + natural_detail * 5
+        for index in range(branch_count):
+            t = index / max(1, branch_count - 1)
+            angle = index * 2.399963 + rng.uniform(-0.2, 0.2)
+            z = height * (0.14 + t * 0.76)
+            reach = canopy_radius * (1.0 - t * 0.62) * rng.uniform(0.5, 0.82)
+            start = Vector((tip_x * t * 0.7, 0.0, z))
+            end = Vector((
+                tip_x * t + math.cos(angle) * reach,
+                math.sin(angle) * reach,
+                z + height * rng.uniform(0.015, 0.055),
+            ))
+            _tree_branch(
+                branch_bm,
+                start,
+                end,
+                trunk_radius * (0.34 - t * 0.17),
+                segments=7,
+            )
+
+        mesh_lib.cleanup(branch_bm)
+        branch = mesh_lib.to_object(branch_bm, f"{base_name}_branches")
+        branch.location = location
+        finish_lib.finish(
+            ctx,
+            branch,
+            material=trunk_material,
+            uv="smart_packed",
+            origin=None,
+            smooth=True,
+            smooth_angle=48.0,
+        )
+
+        tuft_count = 60 + natural_detail * 32
+        for _ in range(tuft_count):
+            t = rng.uniform(0.06, 0.98)
+            z = height * (0.1 + t * 0.88)
+            radius_here = canopy_radius * (1.0 - t * 0.58)
+            angle = rng.uniform(0.0, math.tau)
+            radial = radius_here * math.sqrt(rng.random()) * 0.72
+            centre = Vector((
+                tip_x * t + math.cos(angle) * radial,
+                math.sin(angle) * radial,
+                z,
+            ))
+            _tree_ellipsoid(
+                canopy_bm,
+                centre,
+                canopy_radius * rng.uniform(0.1, 0.16),
+                (
+                    rng.uniform(0.82, 1.18),
+                    rng.uniform(0.82, 1.18),
+                    rng.uniform(1.5, 2.45),
+                ),
+                rng.uniform(0.0, math.tau),
+            )
+    elif canopy_style == "cone":
         mesh_lib.add_cylinder(
             canopy_bm, radius=canopy_radius, radius_top=0.0, depth=height - trunk_h,
             segments=8, center=(tip_x, 0.0, trunk_h + (height - trunk_h) * 0.5),
@@ -523,11 +704,11 @@ def prop_tree(ctx, name, location, seed, height, trunk_radius, canopy_style, can
     uv_lib.smart_project(canopy, margin=0.02)
     mesh_lib.shade_auto_smooth(canopy, 60.0)
 
-    merged = scene_lib.join([trunk, canopy], base_name)
+    merged = scene_lib.join([trunk, *([branch] if branch else []), canopy], base_name)
     scene_lib.set_origin(merged, "bottom")
     scene_lib.apply_transforms(merged)
     result = finish_lib.report(ctx, merged)
-    finish_lib.budget_note(ctx, merged, 1200)
+    finish_lib.budget_note(ctx, merged, 4200 if natural else 1200)
     return result
 
 
