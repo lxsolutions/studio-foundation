@@ -503,3 +503,179 @@ def _get(name):
         return scene_lib.get_object(name)
     except ValueError as exc:
         raise OpError(str(exc)) from exc
+
+
+@op(
+    "gameready.vertex_ao",
+    summary=(
+        "Bake ambient occlusion into VERTEX COLOURS. Costs nothing at runtime — no texture, "
+        "no extra pass, no shadow map — and it is what makes an object read as sitting on the "
+        "ground rather than pasted in front of it. The cheapest contact-shadow cue there is, and "
+        "the right one for low-poly assets where vertices are already dense relative to detail. "
+        "Exports as COLOR_0 in glTF; enable vertex colours on the material in-engine "
+        "(Babylon useVertexColors, three vertexColors, Godot vertex_color_use_as_albedo)."
+    ),
+    params={
+        "name": ("str", None, "Object to bake into"),
+        "samples": ("int", 32, "Hemisphere rays per vertex. 32 is clean; 64 for hero assets"),
+        "distance": ("num", 0.6, "Occlusion search radius in metres. Roughly the scale of the crevices you want to darken"),
+        "strength": ("num", 0.8, "How dark full occlusion goes, 0..1"),
+        "floor": ("num", 0.25, "Darkest value a vertex may reach. Stops creases going to pure black"),
+        "self_only": ("bool", True, "Occlude against this object only. False also tests every other mesh in the scene"),
+    },
+    tags=["gameready", "material"],
+)
+def gameready_vertex_ao(ctx, name, samples, distance, strength, floor, self_only):
+    from mathutils.bvhtree import BVHTree
+
+    obj = scene_lib.get_object(name)
+    mesh = obj.data
+    if not mesh.vertices:
+        raise OpError(f"gameready.vertex_ao: '{name}' has no geometry")
+
+    samples = max(4, min(256, int(samples)))
+
+    # Everything the rays can hit, in this object's local space. Building one
+    # tree per source and transforming ray origins is cheaper than merging.
+    trees = []
+    bm_self = bmesh.new()
+    bm_self.from_mesh(mesh)
+    bmesh.ops.triangulate(bm_self, faces=bm_self.faces[:])
+    trees.append((BVHTree.FromBMesh(bm_self), obj.matrix_world.copy()))
+    others = []
+    if not self_only:
+        for other in scene_lib.mesh_objects():
+            if other is obj or not other.data.vertices:
+                continue
+            bm_o = bmesh.new()
+            bm_o.from_mesh(other.data)
+            bmesh.ops.triangulate(bm_o, faces=bm_o.faces[:])
+            trees.append((BVHTree.FromBMesh(bm_o), other.matrix_world.copy()))
+            others.append(bm_o)
+
+    # Deterministic hemisphere sampling. A Fibonacci spiral gives near-uniform
+    # coverage with no RNG at all, which matters because every bforge op has to
+    # produce the same bytes for the same input, forever.
+    golden = math.pi * (3.0 - math.sqrt(5.0))
+    directions = []
+    for i in range(samples):
+        z = (i + 0.5) / samples          # 0..1 → upper hemisphere only
+        r = math.sqrt(max(0.0, 1.0 - z * z))
+        theta = golden * i
+        directions.append(Vector((math.cos(theta) * r, math.sin(theta) * r, z)))
+
+    world = obj.matrix_world
+    # Nudge each ray origin off the surface, or every ray instantly hits the
+    # face it started on and the whole mesh bakes black.
+    epsilon = max(1e-5, distance * 0.005)
+
+    values = []
+    for vert in mesh.vertices:
+        origin_local = vert.co
+        normal = vert.normal
+        if normal.length_squared < 1e-12:
+            values.append(1.0)
+            continue
+        normal = normal.normalized()
+        # Basis with `normal` as up, so the hemisphere points out of the surface.
+        helper = Vector((0.0, 0.0, 1.0)) if abs(normal.z) < 0.9 else Vector((1.0, 0.0, 0.0))
+        tangent = normal.cross(helper).normalized()
+        bitangent = normal.cross(tangent)
+
+        origin_world = world @ origin_local
+        hits = 0
+        for d in directions:
+            ray = (tangent * d.x) + (bitangent * d.y) + (normal * d.z)
+            start = origin_world + ray * epsilon
+            for tree, tree_world in trees:
+                inv = tree_world.inverted_safe()
+                local_start = inv @ start
+                local_dir = (inv.to_3x3() @ ray).normalized()
+                loc, _nrm, _idx, dist = tree.ray_cast(local_start, local_dir, distance)
+                if loc is not None and dist is not None and dist <= distance:
+                    hits += 1
+                    break
+        occlusion = hits / float(samples)
+        values.append(max(floor, 1.0 - strength * occlusion))
+
+    bm_self.free()
+    for bm_o in others:
+        bm_o.free()
+
+    # Clear out informationless colour layers first, or AO does not reach the
+    # engine.
+    #
+    # Measured, not assumed: the first working bake produced correct values and
+    # shipped a USELESS glTF. Blender already carried an all-white colour
+    # attribute from mesh creation, so the export wrote that as COLOR_0 and put
+    # the AO in COLOR_1 -- and every engine reads COLOR_0. The op reported
+    # mean 0.74 while the asset on disk was uniformly white.
+    #
+    # A colour layer with no variation carries nothing, so dropping it is safe.
+    # A layer that DOES vary is somebody's data and is left alone, with the AO
+    # slot reported so the caller can see where it actually landed.
+    for existing in list(mesh.color_attributes):
+        if existing.name == "AO":
+            continue
+        try:
+            channels = [tuple(px.color)[:3] for px in existing.data]
+        except (AttributeError, TypeError):
+            continue
+        if channels and all(
+            abs(c - channels[0][i]) < 1e-4 for px in channels for i, c in enumerate(px)
+        ):
+            mesh.color_attributes.remove(existing)
+
+    layer = mesh.color_attributes.get("AO")
+    if layer is None:
+        layer = mesh.color_attributes.new(name="AO", type="FLOAT_COLOR", domain="POINT")
+    for i, v in enumerate(values):
+        layer.data[i].color = (v, v, v, 1.0)
+    # Index-based, not name-based: `default_color` is not settable and the
+    # name-based accessors moved between Blender versions. Both indices matter --
+    # active is what the viewport shows, render is what the glTF exporter picks
+    # up as COLOR_0, and setting only the first exports nothing.
+    try:
+        idx = list(mesh.color_attributes).index(layer)
+        mesh.color_attributes.active_color_index = idx
+        mesh.color_attributes.render_color_index = idx
+    except (ValueError, AttributeError) as exc:
+        raise OpError(
+            f"gameready.vertex_ao: baked {len(values)} vertices but could not mark the "
+            f"colour layer for export ({exc}). The data is on the mesh; the glTF would "
+            f"ship without COLOR_0."
+        ) from exc
+    mesh.update()
+
+    result = finish_lib.report(ctx, obj)
+    darkest = min(values) if values else 1.0
+    mean = sum(values) / len(values) if values else 1.0
+    occluded = sum(1 for v in values if v < 0.995) / max(1, len(values))
+    slot = list(mesh.color_attributes).index(layer)
+    result["ao"] = {
+        "vertices": len(values),
+        "samples": samples,
+        "mean": round(mean, 4),
+        "darkest": round(darkest, 4),
+        "occluded_fraction": round(occluded, 4),
+        # Which glTF COLOR_n this becomes. Engines read COLOR_0; anything else
+        # is data the runtime will not look at, so say the number rather than
+        # letting the caller assume.
+        "gltf_slot": f"COLOR_{slot}",
+        "colour_layers": [a.name for a in mesh.color_attributes],
+    }
+    # A bake that darkened nothing is a no-op wearing a success message.
+    if occluded < 0.01:
+        raise OpError(
+            f"gameready.vertex_ao: baked '{name}' but nothing was occluded "
+            f"(mean {mean:.3f}). Raise `distance` above {distance} -- it is smaller than "
+            f"the gaps in this mesh -- or check the object is not a single flat plane."
+        )
+    if slot != 0:
+        raise OpError(
+            f"gameready.vertex_ao: AO landed in COLOR_{slot}, not COLOR_0, because "
+            f"{[a.name for a in mesh.color_attributes]} share the mesh. Engines read "
+            f"COLOR_0, so this asset would ship its AO where nothing reads it. Remove the "
+            f"competing colour layer first."
+        )
+    return result

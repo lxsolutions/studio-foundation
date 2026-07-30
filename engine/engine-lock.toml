@@ -58,7 +58,7 @@ target = ["target=editor", "dev_build=no"]
 # Complete Studio Foundation WebGPU integration, applied in order to official Godot.
 # Third-party license files are included inside their corresponding source patches.
 series = [
-  { file = "patches/0001-studio-webgpu-engine.patch", sha256 = "b521c25cf3f12c137e81fd2c79a2cbb6cfb0bd5c9fbf4c214a9b648597e7bb1f" },
+  { file = "patches/0001-studio-webgpu-engine.patch", sha256 = "9fc95735044ff1ae72bbb9781003422e5759e5f9d3e3cc048585af4558fba6d1" },
   { file = "patches/0002-studio-webgpu-spirv.patch", sha256 = "34430a24647d5c90a66647067f11cb80057ee368da5afc4bed37e01945eac888" },
   { file = "patches/0003-studio-webgpu-tint.patch", sha256 = "cd299a648de80465b131834581cf6f53a3208c4100acf1257e4fe031198e370e" },
   { file = "patches/0004-godot-4.7.1-webgpu-interfaces.patch", sha256 = "635e1318287b22202d7c0f840279756abd0887bfe63eddffa3a8ffcc908dd6cb" },

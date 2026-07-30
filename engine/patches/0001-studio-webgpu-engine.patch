@@ -1972,7 +1972,7 @@ new file mode 100644
 index 0000000000000000000000000000000000000000..722a25559c210487494691555e247177c884ec8b
 --- /dev/null
 +++ b/drivers/webgpu/rendering_device_driver_webgpu.cpp
-@@ -0,0 +1,8856 @@
+@@ -0,0 +1,8869 @@
 +/**************************************************************************/
 +/*  rendering_device_driver_webgpu.cpp                                    */
 +/**************************************************************************/
@@ -6239,7 +6239,15 @@ index 0000000000000000000000000000000000000000..722a25559c210487494691555e247177
 +					  tex_entry.texture.multisampled = is_ms;
 +					  // MSAA texture bindings with UnfilterableFloat require a NonFiltering sampler —
 +					  // override the sampler for this combined binding.
-+					  if (is_ms && !is_depth) {
++					  // MSAA needs NonFiltering; so does Depth. WebGPU rejects a
++					  // TextureSampleType::Depth binding used with a Filtering sampler,
++					  // where Vulkan permits it. Comparison samplers are already legal
++					  // for depth, so only downgrade the non-comparison case.
++					  if (is_depth) {
++						  if (samp_entry.sampler.type != WGPUSamplerBindingType_Comparison) {
++							  samp_entry.sampler.type = WGPUSamplerBindingType_NonFiltering;
++						  }
++					  } else if (is_ms) {
 +						  samp_entry.sampler.type = WGPUSamplerBindingType_NonFiltering;
 +					  }
 +					}
@@ -6539,7 +6547,12 @@ index 0000000000000000000000000000000000000000..722a25559c210487494691555e247177
 +							  : (is_ms ? WGPUTextureSampleType_UnfilterableFloat : WGPUTextureSampleType_Float);
 +						  te.texture.viewDimension = wgsl_tex_dims.has(k) ? wgsl_tex_dims[k] : WGPUTextureViewDimension_2D;
 +						  te.texture.multisampled = is_ms;
-+						  if (is_ms && !is_depth) {
++						  // Same rule: Depth cannot pair with a Filtering sampler.
++						  if (is_depth) {
++							  if (se.sampler.type != WGPUSamplerBindingType_Comparison) {
++								  se.sampler.type = WGPUSamplerBindingType_NonFiltering;
++							  }
++						  } else if (is_ms) {
 +							  se.sampler.type = WGPUSamplerBindingType_NonFiltering;
 +						  }
 +						}
@@ -11711,7 +11724,7 @@ new file mode 100644
 index 0000000000000000000000000000000000000000..f50e8b751331d7325ed6ed44446c0c5a62348232
 --- /dev/null
 +++ b/drivers/webgpu/spirv_preprocess.cpp
-@@ -0,0 +1,2674 @@
+@@ -0,0 +1,2699 @@
 +/**************************************************************************/
 +/*  spirv_preprocess.cpp                                                  */
 +/**************************************************************************/
@@ -11757,6 +11770,7 @@ index 0000000000000000000000000000000000000000..f50e8b751331d7325ed6ed44446c0c5a
 +// ---- SPIR-V opcode constants ----
 +
 +static constexpr uint16_t OP_NAME = 5;
++static constexpr uint16_t OP_MEMBER_NAME = 6;
 +static constexpr uint16_t OP_TYPE_BOOL = 20;
 +static constexpr uint16_t OP_TYPE_FUNCTION = 33;
 +static constexpr uint16_t OP_TYPE_INT = 21;
@@ -14072,6 +14086,30 @@ index 0000000000000000000000000000000000000000..f50e8b751331d7325ed6ed44446c0c5a
 +			literal_start = 3;
 +		} else if (op == 251 /* OpSwitch */) {
 +			switch_alternating = true;
++		} else if (op == OP_DECORATE) {
++			// OpDecorate <target-id> <decoration> <literal...>
++			// Only word 1 is an ID. Words 2+ are the decoration enum and its
++			// LITERAL operands -- ArrayStride, Offset, Binding, DescriptorSet.
++			// Substituting those corrupts the std430 layout: a stride literal
++			// that happens to equal a flattened array type ID becomes that
++			// array's element type ID, and Tint then rejects the buffer with
++			// "struct size (N) is smaller than the end of the last member (M)".
++			// Seen on four unrelated storage buffers at once, all reporting the
++			// same impossible size -- the signature of a literal being
++			// substituted rather than a layout being miscomputed.
++			has_literals = true;
++			literal_start = 2;
++		} else if (op == OP_MEMBER_DECORATE) {
++			// OpMemberDecorate <struct-id> <member-index> <decoration> <literal...>
++			// Word 1 is the struct type ID; everything after is a literal,
++			// including the member index and the Offset value.
++			has_literals = true;
++			literal_start = 2;
++		} else if (op == OP_NAME || op == OP_MEMBER_NAME) {
++			// Word 1 is the target ID; the remainder is a packed UTF-8 string
++			// whose words can coincidentally equal a type ID.
++			has_literals = true;
++			literal_start = 2;
 +		}
 +
 +		// Check if this instruction has any word that needs replacement.

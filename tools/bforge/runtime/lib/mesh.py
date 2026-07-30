@@ -551,15 +551,46 @@ def bevel_edges(bm, edges=None, offset=0.02, segments=2, angle_min=0.35):
     )["faces"]
 
 
-def greeble(bm, faces, rng, density=0.4, min_depth=0.01, max_depth=0.05, inset=0.15, cuts=1):
+MAX_GREEBLE_REFINE = 6
+
+
+def greeble(bm, faces, rng, density=0.4, min_depth=0.01, max_depth=0.05, inset=0.15, cuts=1,
+            panel_size=0.0):
     """Panel-line detail: subdivide, then push/pull a random subset of faces.
 
     Deliberately biased toward shallow depths — greeble reads as surface
     variation under normal-mapped lighting, and deep greeble just eats
     silhouette budget and shadow-acnes on mobile.
+
+    `panel_size` (metres) refines adaptively to that panel scale and takes
+    precedence over `cuts`; leave it at 0 for the old uniform behaviour.
     """
     targets = [f for f in faces if f.is_valid]
-    if cuts > 0 and targets:
+    if panel_size and panel_size > 0 and targets:
+        # Adaptive refinement: keep splitting only the faces that are still
+        # bigger than the wanted panel, one cut at a time.
+        #
+        # Uniform `cuts` is the wrong control for a mixed-scale mesh. A room's
+        # 16 m wall and a crate's 0.4 m lid get the same treatment, so one cut
+        # leaves the wall in a handful of huge plates while over-splitting the
+        # crate -- and raising `cuts` to fix the wall multiplies EVERY face,
+        # which is how a two-cut pass on a 16 m room blew a 300 s budget.
+        # Measured: the reference this is chasing surfaces its hulls with many
+        # small pieces, not few deep ones.
+        for _ in range(MAX_GREEBLE_REFINE):
+            coarse = [f for f in targets if f.is_valid and f.calc_area() ** 0.5 > panel_size * 1.5]
+            if not coarse:
+                break
+            edges = list({e for f in coarse for e in f.edges})
+            refined = set(coarse)  # set, not list: this runs over thousands of faces
+            split = bmesh.ops.subdivide_edges(bm, edges=edges, cuts=1, use_grid_fill=True)
+            fresh = [g for g in split["geom_inner"] if isinstance(g, bmesh.types.BMFace)]
+            if not fresh:
+                break
+            keep = [f for f in targets if f.is_valid and f not in refined]
+            targets = keep + fresh
+        targets = targets or [f for f in faces if f.is_valid]
+    elif cuts > 0 and targets:
         edges = list({e for f in targets for e in f.edges})
         subdivided = bmesh.ops.subdivide_edges(
             bm, edges=edges, cuts=cuts, use_grid_fill=True
@@ -571,23 +602,68 @@ def greeble(bm, faces, rng, density=0.4, min_depth=0.01, max_depth=0.05, inset=0
     for face in picked:
         if not face.is_valid or len(face.verts) < 3:
             continue
+
+        # Skip faces too narrow to hold their own inset border.
+        #
+        # The inset is sized from sqrt(area), which is fine for a squarish panel
+        # and badly wrong for a long thin strip -- exactly what a chamfer is. On
+        # a 3 cm bevel strip the border consumes the whole width and the face
+        # folds through itself, producing geometry wound against its own normals
+        # that renders as a solid black patch.
+        #
+        # Isolated by measurement, not guessed: the same box, same seed, greebled
+        # with a 0.03 m chamfer gave 27 such faces and 0 with no chamfer, at both
+        # deep and shallow settings. Width uses 2*area/perimeter, which tracks the
+        # SHORT dimension of a thin rectangle where sqrt(area) does not.
+        area = face.calc_area()
+        perimeter = sum(e.calc_length() for e in face.edges)
+        if perimeter <= 0.0:
+            continue
+        thickness = area ** 0.5 * inset
+        width = 2.0 * area / perimeter
+        if width <= thickness * 2.0:
+            continue
         depth = rng.uniform(min_depth, max_depth)
         if rng.random() < 0.35:
             depth = -depth * 0.6
-        inner = bmesh.ops.inset_region(
-            bm, faces=[face], thickness=face.calc_area() ** 0.5 * inset,
-            depth=0.0, use_even_offset=True,
+        # Inset and offset in ONE op, letting bmesh place the side walls.
+        #
+        # This used to inset at depth 0, extrude the inset region, delete the
+        # original face and translate the new verts by hand. That is correct for
+        # an outward panel and WRONG for an inward one: the side walls keep the
+        # winding of an outward extrusion, so 35% of panels -- the ones this
+        # deliberately pushes in -- ended up wound against their own normals and
+        # rendered as solid black patches. Measured on three greebled boxes:
+        # 30, 24 and 22 such faces, against 0 on ungreebled geometry. It survived
+        # build.cleanup because it is not a manifold problem, and nothing
+        # measured it until check.critique learned to.
+        #
+        # TWO insets, not one. A single inset_region(thickness, depth) slopes the
+        # border ring into the offset, so every panel becomes a truncated pyramid
+        # -- softer silhouette, less contrast, and measurably less detail: it cost
+        # the room 127k triangles down to 45k and dropped the share of frame
+        # detail that is modelled rather than textured from ~48% to ~28%.
+        #
+        # Insetting flat first and then offsetting with zero thickness keeps the
+        # rim flat and the side walls perpendicular, which is what makes a panel
+        # read as a plate bolted on rather than a dent. bmesh builds those walls
+        # itself, so unlike the hand-rolled extrude it winds them correctly for
+        # negative depth too.
+        # A panel deeper than the face is wide has to fold through itself. The
+        # width test above rejects faces too narrow to panel at all; this bounds
+        # the ones that are wide enough to panel but not to take the full depth.
+        limit = width * 0.9
+        depth = max(-limit, min(limit, depth))
+
+        rim = bmesh.ops.inset_region(
+            bm, faces=[face], thickness=thickness, depth=0.0, use_even_offset=True,
         )["faces"]
-        if not inner:
+        if not rim:
             continue
-        result = bmesh.ops.extrude_face_region(bm, geom=inner)
-        verts = [g for g in result["geom"] if isinstance(g, bmesh.types.BMVert)]
-        new_faces = [g for g in result["geom"] if isinstance(g, bmesh.types.BMFace)]
-        for old in inner:
-            if old.is_valid:
-                bmesh.ops.delete(bm, geom=[old], context="FACES")
-        if verts:
-            bmesh.ops.translate(bm, vec=_average_normal(new_faces) * depth, verts=verts)
+        plate = bmesh.ops.inset_region(
+            bm, faces=[f for f in rim if f.is_valid], thickness=0.0, depth=depth,
+        )["faces"]
+        new_faces = [f for f in (plate or rim) if f.is_valid]
         made.extend(new_faces)
     return made
 

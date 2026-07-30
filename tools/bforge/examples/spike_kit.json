@@ -1,0 +1,589 @@
+[
+ {
+  "op": "session.reset",
+  "args": {}
+ },
+ {
+  "op": "build.box",
+  "args": {
+   "name": "xb_stock",
+   "size": [
+    0.075,
+    0.085,
+    0.78
+   ],
+   "bevel": 0.012
+  }
+ },
+ {
+  "op": "build.deform",
+  "args": {
+   "name": "xb_stock",
+   "mode": "taper",
+   "amount": 0.55
+  }
+ },
+ {
+  "op": "build.box",
+  "args": {
+   "name": "xb_cheek",
+   "size": [
+    0.062,
+    0.045,
+    0.24
+   ],
+   "bevel": 0.01
+  }
+ },
+ {
+  "op": "object.transform",
+  "args": {
+   "name": "xb_cheek",
+   "location": [
+    0,
+    0.058,
+    -0.2
+   ]
+  }
+ },
+ {
+  "op": "build.box",
+  "args": {
+   "name": "xb_grip",
+   "size": [
+    0.055,
+    0.155,
+    0.075
+   ],
+   "bevel": 0.012
+  }
+ },
+ {
+  "op": "object.transform",
+  "args": {
+   "name": "xb_grip",
+   "rotation": [
+    -16,
+    0,
+    0
+   ],
+   "location": [
+    0,
+    -0.1,
+    -0.045
+   ]
+  }
+ },
+ {
+  "op": "build.box",
+  "args": {
+   "name": "xb_rail",
+   "size": [
+    0.04,
+    0.022,
+    0.6
+   ],
+   "bevel": 0.006
+  }
+ },
+ {
+  "op": "object.transform",
+  "args": {
+   "name": "xb_rail",
+   "location": [
+    0,
+    0.055,
+    0.1
+   ]
+  }
+ },
+ {
+  "op": "object.join",
+  "args": {
+   "names": [
+    "xb_stock",
+    "xb_cheek",
+    "xb_grip",
+    "xb_rail"
+   ],
+   "into": "xb_wood"
+  }
+ },
+ {
+  "op": "build.bevel",
+  "args": {
+   "name": "xb_wood",
+   "width": 0.004,
+   "segments": 2
+  }
+ },
+ {
+  "op": "material.set",
+  "args": {
+   "object": "xb_wood",
+   "preset": "wood",
+   "color": "#6b4a2e"
+  }
+ },
+ {
+  "op": "build.box",
+  "args": {
+   "name": "xb_riser",
+   "size": [
+    0.62,
+    0.03,
+    0.055
+   ],
+   "bevel": 0.008
+  }
+ },
+ {
+  "op": "object.transform",
+  "args": {
+   "name": "xb_riser",
+   "location": [
+    0,
+    0.03,
+    0.4
+   ]
+  }
+ },
+ {
+  "op": "build.deform",
+  "args": {
+   "name": "xb_riser",
+   "mode": "taper",
+   "amount": 0.42
+  }
+ },
+ {
+  "op": "build.cylinder",
+  "args": {
+   "name": "xb_stirrup",
+   "radius": 0.075,
+   "depth": 0.026,
+   "segments": 14,
+   "cap": false
+  }
+ },
+ {
+  "op": "object.transform",
+  "args": {
+   "name": "xb_stirrup",
+   "rotation": [
+    90,
+    0,
+    0
+   ],
+   "location": [
+    0,
+    -0.045,
+    0.5
+   ]
+  }
+ },
+ {
+  "op": "build.box",
+  "args": {
+   "name": "xb_lug",
+   "size": [
+    0.03,
+    0.07,
+    0.03
+   ],
+   "bevel": 0.006
+  }
+ },
+ {
+  "op": "object.transform",
+  "args": {
+   "name": "xb_lug",
+   "location": [
+    0,
+    0.01,
+    0.5
+   ]
+  }
+ },
+ {
+  "op": "build.cylinder",
+  "args": {
+   "name": "xb_trigger",
+   "radius": 0.01,
+   "depth": 0.07,
+   "segments": 8
+  }
+ },
+ {
+  "op": "object.transform",
+  "args": {
+   "name": "xb_trigger",
+   "rotation": [
+    24,
+    0,
+    0
+   ],
+   "location": [
+    0,
+    -0.048,
+    -0.03
+   ]
+  }
+ },
+ {
+  "op": "object.join",
+  "args": {
+   "names": [
+    "xb_riser",
+    "xb_stirrup",
+    "xb_lug",
+    "xb_trigger"
+   ],
+   "into": "xb_iron"
+  }
+ },
+ {
+  "op": "build.bevel",
+  "args": {
+   "name": "xb_iron",
+   "width": 0.003,
+   "segments": 2
+  }
+ },
+ {
+  "op": "material.set",
+  "args": {
+   "object": "xb_iron",
+   "preset": "iron",
+   "color": "#4a4d52"
+  }
+ },
+ {
+  "op": "build.cylinder",
+  "args": {
+   "name": "xb_string_l",
+   "radius": 0.0055,
+   "depth": 0.345,
+   "segments": 6
+  }
+ },
+ {
+  "op": "object.transform",
+  "args": {
+   "name": "xb_string_l",
+   "rotation": [
+    0,
+    0,
+    74
+   ],
+   "location": [
+    -0.155,
+    0.032,
+    0.255
+   ]
+  }
+ },
+ {
+  "op": "build.cylinder",
+  "args": {
+   "name": "xb_string_r",
+   "radius": 0.0055,
+   "depth": 0.345,
+   "segments": 6
+  }
+ },
+ {
+  "op": "object.transform",
+  "args": {
+   "name": "xb_string_r",
+   "rotation": [
+    0,
+    0,
+    -74
+   ],
+   "location": [
+    0.155,
+    0.032,
+    0.255
+   ]
+  }
+ },
+ {
+  "op": "object.join",
+  "args": {
+   "names": [
+    "xb_string_l",
+    "xb_string_r"
+   ],
+   "into": "xb_cord"
+  }
+ },
+ {
+  "op": "material.set",
+  "args": {
+   "object": "xb_cord",
+   "preset": "cloth",
+   "color": "#c9bda4"
+  }
+ },
+ {
+  "op": "object.join",
+  "args": {
+   "names": [
+    "xb_wood",
+    "xb_iron",
+    "xb_cord"
+   ],
+   "into": "spike_crossbow"
+  }
+ },
+ {
+  "op": "object.origin",
+  "args": {
+   "name": "spike_crossbow",
+   "mode": "center"
+  }
+ },
+ {
+  "op": "object.transform",
+  "args": {
+   "name": "spike_crossbow",
+   "rotation": [
+    -90,
+    0,
+    0
+   ]
+  }
+ },
+ {
+  "op": "uv.unwrap",
+  "args": {
+   "object": "spike_crossbow",
+   "style": "smart",
+   "scale": 1.0
+  }
+ },
+ {
+  "op": "gameready.vertex_ao",
+  "args": {
+   "name": "spike_crossbow",
+   "samples": 48,
+   "distance": 0.1,
+   "strength": 0.75,
+   "floor": 0.32
+  }
+ },
+ {
+  "op": "build.cylinder",
+  "args": {
+   "name": "tr_trunk",
+   "radius": 0.3,
+   "radius_top": 0.14,
+   "depth": 4.4,
+   "segments": 9
+  }
+ },
+ {
+  "op": "build.deform",
+  "args": {
+   "name": "tr_trunk",
+   "mode": "noise",
+   "amount": 0.05
+  }
+ },
+ {
+  "op": "build.cylinder",
+  "args": {
+   "name": "tr_flare",
+   "radius": 0.52,
+   "radius_top": 0.3,
+   "depth": 0.55,
+   "segments": 9
+  }
+ },
+ {
+  "op": "object.transform",
+  "args": {
+   "name": "tr_flare",
+   "location": [
+    0,
+    0,
+    -1.93
+   ]
+  }
+ },
+ {
+  "op": "build.sphere",
+  "args": {
+   "name": "tr_can_a",
+   "radius": 1.55,
+   "subdivisions": 2,
+   "kind": "ico"
+  }
+ },
+ {
+  "op": "object.transform",
+  "args": {
+   "name": "tr_can_a",
+   "location": [
+    0.1,
+    0.06,
+    2.3
+   ],
+   "scale": [
+    1.0,
+    1.0,
+    0.52
+   ]
+  }
+ },
+ {
+  "op": "build.sphere",
+  "args": {
+   "name": "tr_can_b",
+   "radius": 1.15,
+   "subdivisions": 2,
+   "kind": "ico"
+  }
+ },
+ {
+  "op": "object.transform",
+  "args": {
+   "name": "tr_can_b",
+   "location": [
+    -0.42,
+    0.28,
+    2.92
+   ],
+   "scale": [
+    1.0,
+    1.0,
+    0.55
+   ]
+  }
+ },
+ {
+  "op": "build.sphere",
+  "args": {
+   "name": "tr_can_c",
+   "radius": 0.86,
+   "subdivisions": 2,
+   "kind": "ico"
+  }
+ },
+ {
+  "op": "object.transform",
+  "args": {
+   "name": "tr_can_c",
+   "location": [
+    0.46,
+    -0.3,
+    3.28
+   ],
+   "scale": [
+    1.0,
+    1.0,
+    0.58
+   ]
+  }
+ },
+ {
+  "op": "object.join",
+  "args": {
+   "names": [
+    "tr_can_a",
+    "tr_can_b",
+    "tr_can_c"
+   ],
+   "into": "tree_canopy"
+  }
+ },
+ {
+  "op": "build.deform",
+  "args": {
+   "name": "tree_canopy",
+   "mode": "noise",
+   "amount": 0.1
+  }
+ },
+ {
+  "op": "material.set",
+  "args": {
+   "object": "tree_canopy",
+   "preset": "leaf",
+   "color": "#4e6b33"
+  }
+ },
+ {
+  "op": "object.join",
+  "args": {
+   "names": [
+    "tr_trunk",
+    "tr_flare"
+   ],
+   "into": "tree_bark"
+  }
+ },
+ {
+  "op": "material.set",
+  "args": {
+   "object": "tree_bark",
+   "preset": "wood",
+   "color": "#4b3728"
+  }
+ },
+ {
+  "op": "object.join",
+  "args": {
+   "names": [
+    "tree_bark",
+    "tree_canopy"
+   ],
+   "into": "spike_tree"
+  }
+ },
+ {
+  "op": "object.origin",
+  "args": {
+   "name": "spike_tree",
+   "mode": "bottom"
+  }
+ },
+ {
+  "op": "uv.unwrap",
+  "args": {
+   "object": "spike_tree",
+   "style": "smart",
+   "scale": 1.0
+  }
+ },
+ {
+  "op": "gameready.vertex_ao",
+  "args": {
+   "name": "spike_tree",
+   "samples": 32,
+   "distance": 0.9,
+   "strength": 0.7,
+   "floor": 0.35
+  }
+ },
+ {
+  "op": "check.critique",
+  "args": {
+   "objects": [
+    "spike_crossbow",
+    "spike_tree"
+   ]
+  }
+ },
+ {
+  "op": "export.gltf",
+  "args": {
+   "objects": [
+    "spike_crossbow",
+    "spike_tree"
+   ],
+   "out": "spike/spike_kit.glb"
+  }
+ }
+]

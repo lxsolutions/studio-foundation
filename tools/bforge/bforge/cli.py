@@ -321,6 +321,13 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--timeout", type=float, default=600)
     run.set_defaults(func=cmd_run)
 
+    lint = sub.add_parser(
+        "lint",
+        help="Check a recipe's ops and parameters against the catalog WITHOUT running Blender",
+    )
+    lint.add_argument("path", help="Recipe JSON file")
+    lint.set_defaults(func=cmd_lint)
+
     script = sub.add_parser("script", help="Run a JSON list of ops")
     script.add_argument("file")
     script.add_argument("--keep-going", action="store_true")
@@ -365,6 +372,83 @@ def build_parser() -> argparse.ArgumentParser:
     mcp.set_defaults(func=cmd_mcp)
 
     return parser
+
+
+def cmd_lint(args) -> int:
+    """Validate a whole recipe offline, in one pass.
+
+    WHY THIS EXISTS: a recipe fails on the FIRST bad parameter, and a Blender
+    round-trip costs minutes. Writing one 40-step asset recipe cost six
+    consecutive failed runs, every one a parameter-name mismatch and nothing to do
+    with geometry -- six boots of Blender to learn six facts that were sitting in
+    a committed JSON catalog the whole time.
+
+    The catalog is host-side, so every one of those checks can happen instantly
+    and ALL of them can be reported at once. For an agent composing recipes this
+    is the difference between one iteration and N.
+    """
+    catalog = {entry["name"]: entry for entry in schema_mod.load_catalog()}
+    try:
+        recipe = json.loads(Path(args.path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f"cannot read recipe: {exc}", file=sys.stderr)
+        return 2
+    if not isinstance(recipe, list):
+        print("a recipe must be a JSON list of {op, args} objects", file=sys.stderr)
+        return 2
+
+    problems: list[str] = []
+    for i, step in enumerate(recipe):
+        if not isinstance(step, dict) or "op" not in step:
+            problems.append(f"step {i}: not an object with an 'op' key")
+            continue
+        name = step["op"]
+        entry = catalog.get(name)
+        if entry is None:
+            family = name.split(".")[0] + "."
+            near = sorted(n for n in catalog if n.startswith(family))
+            hint = f" Ops in '{family[:-1]}': {near}" if near else ""
+            problems.append(f"step {i}: unknown op '{name}'.{hint}")
+            continue
+        props = (entry.get("inputSchema") or {}).get("properties", {})
+        given = step.get("args") or {}
+        if not isinstance(given, dict):
+            problems.append(f"step {i} {name}: 'args' must be an object")
+            continue
+        # Mirror the runtime's alias groups, so lint accepts exactly what the
+        # daemon accepts and does not report false problems.
+        groups = [
+            ("object", "objects", "names", "name", "target", "mesh"),
+            ("out", "path", "file", "filepath", "dest", "output"),
+            ("width", "offset", "bevel", "chamfer"),
+            ("location", "translate", "position", "pos", "move"),
+            ("rotation", "rotate", "rot", "euler"),
+        ]
+        for key in given:
+            if key in props:
+                continue
+            aliased = any(
+                key in g and any(member in props for member in g) for g in groups
+            )
+            if aliased:
+                continue
+            problems.append(
+                f"step {i} {name}: unknown parameter '{key}'. Valid: {sorted(props)}"
+            )
+        for key, spec in props.items():
+            if spec.get("default") is None and "default" not in spec and key not in given:
+                # Required-looking parameter with no default declared.
+                required = (entry.get("inputSchema") or {}).get("required") or []
+                if key in required:
+                    problems.append(f"step {i} {name}: missing required parameter '{key}'")
+
+    if problems:
+        for p in problems:
+            print(p, file=sys.stderr)
+        print(f"{len(problems)} problem(s) in {len(recipe)} step(s)", file=sys.stderr)
+        return 1
+    print(f"ok: {len(recipe)} steps, all ops and parameters valid")
+    return 0
 
 
 def main(argv=None) -> int:

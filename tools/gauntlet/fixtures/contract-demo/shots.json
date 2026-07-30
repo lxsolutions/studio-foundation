@@ -1,0 +1,8 @@
+{
+  "viewport": [1280, 720],
+  "shots": [
+    { "name": "hero", "camera": "hero", "seed": 7, "steps": 30, "static": true },
+    { "name": "wide", "camera": "wide", "seed": 7, "steps": 30, "static": true },
+    { "name": "reseeded", "camera": "hero", "seed": 99, "steps": 30, "static": true }
+  ]
+}

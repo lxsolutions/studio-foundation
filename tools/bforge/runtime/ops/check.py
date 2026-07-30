@@ -218,6 +218,29 @@ def check_critique(ctx, objects, texture_size):
         loose = sum(1 for v in bm.verts if not v.link_edges)
         boundary = sum(1 for e in bm.edges if len(e.link_faces) == 1)
         areas = [f.calc_area() for f in bm.faces if f.calc_area() > 1e-12]
+
+        # Faces whose winding disagrees with their own shading normal.
+        #
+        # These render as solid black patches under any lighting -- the surface
+        # faces away from every light while sitting in plain view. Found the
+        # hard way: a blind judge described a greebled crate as "a solid black
+        # slab with no surface at all", and it survived `build.cleanup` because
+        # it is not a manifold problem. `build.greeble` pushes 35% of its panels
+        # INWARD, and an inward extrusion keeps the side-wall winding of an
+        # outward one, so a handful of faces end up inconsistent.
+        #
+        # Measured on real assets: 1.4-1.5% of triangles on greebled boxes,
+        # 0.17% on a greebled cylinder, 0% on ungreebled geometry. Threshold-free
+        # -- it compares each face against itself, so there is nothing to tune.
+        flipped = 0
+        for f in bm.faces:
+            if f.calc_area() < 1e-12 or not f.verts:
+                continue
+            sx = sy = sz = 0.0
+            for v in f.verts:
+                sx += v.normal.x; sy += v.normal.y; sz += v.normal.z
+            if f.normal.x * sx + f.normal.y * sy + f.normal.z * sz < 0.0:
+                flipped += 1
         bm.free()
 
         uv_stats = uv_lib.stats(obj, texture_size=texture_size)
@@ -233,9 +256,24 @@ def check_critique(ctx, objects, texture_size):
                 "ngons": ngons,
                 "degenerate_faces": degenerate,
                 "non_manifold_edges": non_manifold,
+                "inverted_normals": flipped,
                 "loose_vertices": loose,
                 "boundary_edges": boundary,
                 "texel_density": density,
+                # Dimensions as the CONSUMER will see them, not as Blender holds
+                # them. glTF is Y-up and Blender is Z-up, so the exporter maps
+                # (x, y, z) -> (x, z, -y): the axis an author builds "forward"
+                # along in Blender arrives as UP in every engine. That cost two
+                # rounds on one asset here -- a crossbow authored along +Z loaded
+                # into the game standing on end -- and the trap was already
+                # written down. Reporting both frames means the author sees the
+                # answer instead of having to remember the rule.
+                "size_blender_xyz": [round(v, 4) for v in bounds["size"]],
+                "size_gltf_xyz": [
+                    round(bounds["size"][0], 4),
+                    round(bounds["size"][2], 4),
+                    round(bounds["size"][1], 4),
+                ],
                 "uv_overlap": uv_lib.overlap_estimate(obj) if uv_stats.get("has_uvs") else None,
                 "material_slots": len(mesh.materials),
                 "empty_material_slots": sum(1 for m in mesh.materials if m is None),
@@ -248,6 +286,35 @@ def check_critique(ctx, objects, texture_size):
                     "object": obj.name, "severity": "error", "issue": "degenerate faces",
                     "detail": f"{degenerate} zero-area faces will render as artefacts",
                     "fix": f"gameready.optimize objects=['{obj.name}']",
+                }
+            )
+        # Orientation sanity, reported as info rather than guessed at as an error.
+        # Plenty of props are legitimately tallest (a post, a tree, a tower), so
+        # this cannot be a failure -- but an object that is dramatically taller
+        # than it is deep or wide, IN GLTF SPACE, is worth a second look before it
+        # ships, because that is exactly what a mis-axised prop looks like.
+        gx, gy, gz = bounds["size"][0], bounds["size"][2], bounds["size"][1]
+        longest = max(gx, gy, gz)
+        if longest > 1e-6 and gy == longest and gy > 2.0 * max(gx, gz):
+            findings.append(
+                {
+                    "object": obj.name, "severity": "info", "issue": "tallest axis in glTF is UP",
+                    "detail": f"in glTF space this is {gx:.3f} wide, {gy:.3f} TALL, {gz:.3f} deep. "
+                              "Blender is Z-up and glTF is Y-up, so anything built 'forward' "
+                              "along Blender +Z arrives standing upright",
+                    "fix": f"if that is not intended, object.transform name='{obj.name}' "
+                           "rotation=[-90,0,0] before export makes Blender +Z read as glTF forward",
+                }
+            )
+
+        if flipped:
+            findings.append(
+                {
+                    "object": obj.name, "severity": "error", "issue": "inverted normals",
+                    "detail": f"{flipped} faces are wound against their own shading normal — "
+                              "they render as solid black patches under any lighting",
+                    "fix": f"object.shade name='{obj.name}' recalculate=true, or lower "
+                           "build.greeble depth so inward panels stop self-intersecting",
                 }
             )
         if non_manifold:
