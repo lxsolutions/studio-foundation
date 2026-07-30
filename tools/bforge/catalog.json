@@ -1797,7 +1797,7 @@
     },
     {
       "name": "char.outfit",
-      "summary": "Add a production-readable rigid outfit to an unrigged humanoid, then join it into the body so char.rig skins every shell. Greek delver, hoplite and peltast armour include cuirass, straps, pteruges, helmets, bracers and greaves; stalker and oracle add role-readable undead hoods, masks and robes.",
+      "summary": "Add a production-readable rigid outfit to an unrigged humanoid, then join it into the body so char.rig skins every shell. Greek delver, hoplite and peltast armour include cuirass, straps, pteruges, helmets, bracers and greaves; strategos and warlock add boss-readable officer and ritual silhouettes; stalker and oracle add undead hoods, masks and robes.",
       "tags": [
         "char",
         "armour",
@@ -1818,8 +1818,10 @@
               "greek_delver",
               "hoplite",
               "peltast",
+              "strategos",
               "stalker",
-              "oracle"
+              "oracle",
+              "warlock"
             ],
             "description": "Outfit silhouette",
             "default": "greek_delver"

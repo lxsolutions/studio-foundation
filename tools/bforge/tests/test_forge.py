@@ -563,6 +563,58 @@ class Characters(ForgeCase):
             self.forge.call("char.outfit", name="hero")
         self.assertIn("before char.rig", str(ctx.exception))
 
+    def test_boss_outfits_have_distinct_riggable_serious_silhouettes(self):
+        self.forge.call(
+            "char.skeleton",
+            name="strategos",
+            height=2.2,
+            build="heroic",
+            detail=8,
+        )
+        commander = self.forge.call(
+            "char.outfit",
+            name="strategos",
+            style="strategos",
+            detail=10,
+        )
+        self.assertEqual(commander["style"], "strategos")
+        self.assertGreaterEqual(commander["armour_parts"], 35)
+        self.assertIn("m_outfit_accent", commander["materials"])
+        self.assertNotIn("m_outfit_glow", commander["materials"])
+        commander_rig = self.forge.call(
+            "char.rig",
+            name="strategos",
+            height=2.2,
+            build="heroic",
+        )
+        self.assertEqual(commander_rig["weighted_vertices"], commander["vertices"])
+
+        self.forge.call("session.reset")
+        self.forge.call(
+            "char.humanoid",
+            name="warlock",
+            height=2.05,
+            build="lithe",
+            detail=8,
+        )
+        ritualist = self.forge.call(
+            "char.outfit",
+            name="warlock",
+            style="warlock",
+            detail=10,
+        )
+        self.assertEqual(ritualist["style"], "warlock")
+        self.assertGreaterEqual(ritualist["armour_parts"], 30)
+        self.assertIn("m_outfit_accent", ritualist["materials"])
+        self.assertIn("m_outfit_glow", ritualist["materials"])
+        ritualist_rig = self.forge.call(
+            "char.rig",
+            name="warlock",
+            height=2.05,
+            build="lithe",
+        )
+        self.assertEqual(ritualist_rig["weighted_vertices"], ritualist["vertices"])
+
     def test_skeleton_body_outfits_rigs_and_animates(self):
         bones = self.forge.call(
             "char.skeleton",

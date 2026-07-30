@@ -442,12 +442,13 @@ def char_skeleton(ctx, name, height, build, detail, location, bone, socket, seed
         "Add a production-readable rigid outfit to an unrigged humanoid, then join it "
         "into the body so char.rig skins every shell. Greek delver, hoplite and "
         "peltast armour include cuirass, straps, pteruges, helmets, bracers and "
-        "greaves; stalker and oracle add role-readable undead hoods, masks and robes."
+        "greaves; strategos and warlock add boss-readable officer and ritual "
+        "silhouettes; stalker and oracle add undead hoods, masks and robes."
     ),
     params={
         "name": ("str", None, "Unrigged humanoid mesh from char.humanoid"),
         "style": (
-            "enum:greek_delver|hoplite|peltast|stalker|oracle",
+            "enum:greek_delver|hoplite|peltast|strategos|stalker|oracle|warlock",
             "greek_delver",
             "Outfit silhouette",
         ),
@@ -487,9 +488,12 @@ def char_outfit(ctx, name, style, cloth, leather, metal, accent, detail):
     dark_metal_mat = mat_lib.principled(
         "m_outfit_dark_metal", color="#17191a", roughness=0.54, metallic=0.72
     )
-    accent_mat = mat_lib.principled(
-        "m_outfit_lamp", color=accent, roughness=0.4, metallic=0.15,
-        emission=0.7, emission_color=accent,
+    accent_cloth_mat = mat_lib.principled(
+        "m_outfit_accent", color=accent, roughness=0.88, metallic=0.0
+    )
+    glow_mat = mat_lib.principled(
+        "m_outfit_glow", color=accent, roughness=0.42, metallic=0.08,
+        emission=0.48, emission_color=accent,
     )
 
     def finish_part(bm, label, material, *, smooth=False):
@@ -548,19 +552,54 @@ def char_outfit(ctx, name, style, cloth, leather, metal, accent, detail):
         bmesh_transform(bm, matrix)
         return finish_part(bm, label, material)
 
-    # Layered linen beneath the metal keeps the silhouette practical. Oracle
-    # robes are longer and narrower; a hoplite is the only fully armoured torso.
-    torso_depth = height * (0.38 if style == "oracle" else 0.31)
-    torso_center = height * (0.63 if style == "oracle" else 0.665)
-    cylinder(
-        "cuirass",
-        height * 0.128,
-        torso_depth,
-        (0.0, 0.0, torso_center),
-        metal_mat if style == "hoplite" else cloth_mat,
-        scale=(0.96 if style == "oracle" else 1.02, 0.62, 1.0),
-        radius_top=height * (0.14 if style == "oracle" else 0.152),
-    )
+    # Boss styles use shaped volumes instead of the generic torso cylinder.
+    # That keeps a commander from reading as a barrel and a living ritualist
+    # from sharing the Bone Oracle's funerary column silhouette.
+    ritual_style = style in {"oracle", "warlock"}
+    armoured_style = style in {"hoplite", "strategos"}
+    if style == "strategos":
+        ellipsoid(
+            "muscle_cuirass",
+            height * 0.13,
+            (0.0, 0.0, height * 0.675),
+            (1.23, 0.72, 1.42),
+            metal_mat,
+        )
+        for index, z in enumerate((0.59, 0.635, 0.68)):
+            box(
+                f"cuirass_lame_{index}",
+                (height * (0.205 - index * 0.012), height * 0.024, height * 0.055),
+                (0.0, -height * 0.105, height * z),
+                metal_mat,
+                bevel=height * 0.006,
+            )
+    elif style == "warlock":
+        ellipsoid(
+            "robe_core",
+            height * 0.125,
+            (0.0, 0.0, height * 0.66),
+            (1.0, 0.63, 1.48),
+            cloth_mat,
+        )
+        box(
+            "ritual_stole",
+            (height * 0.105, height * 0.018, height * 0.36),
+            (0.0, -height * 0.086, height * 0.64),
+            accent_cloth_mat,
+            bevel=height * 0.006,
+        )
+    else:
+        torso_depth = height * (0.38 if style == "oracle" else 0.31)
+        torso_center = height * (0.63 if style == "oracle" else 0.665)
+        cylinder(
+            "cuirass",
+            height * 0.128,
+            torso_depth,
+            (0.0, 0.0, torso_center),
+            metal_mat if style == "hoplite" else cloth_mat,
+            scale=(0.96 if style == "oracle" else 1.02, 0.62, 1.0),
+            radius_top=height * (0.14 if style == "oracle" else 0.152),
+        )
     cylinder(
         "belt",
         height * 0.163,
@@ -587,7 +626,7 @@ def char_outfit(ctx, name, style, cloth, leather, metal, accent, detail):
             rotation=(0.0, angle, 0.0),
             bevel=height * 0.004,
         )
-    if style != "oracle":
+    if not ritual_style:
         box(
             "buckle",
             (height * 0.09, height * 0.025, height * 0.07),
@@ -598,8 +637,8 @@ def char_outfit(ctx, name, style, cloth, leather, metal, accent, detail):
     else:
         cylinder(
             "ritual_collar",
-            height * 0.155,
-            height * 0.055,
+            height * (0.165 if style == "warlock" else 0.155),
+            height * (0.045 if style == "warlock" else 0.055),
             (0.0, 0.0, height * 0.79),
             metal_mat,
             scale=(1.0, 0.64, 1.0),
@@ -612,16 +651,23 @@ def char_outfit(ctx, name, style, cloth, leather, metal, accent, detail):
         "hoplite": 12,
         "greek_delver": 10,
         "peltast": 8,
+        "strategos": 14,
         "stalker": 10,
         "oracle": 16,
+        "warlock": 10,
     }[style]
-    plate_length = height * (0.36 if style == "oracle" else 0.205)
-    plate_z = height * (0.315 if style == "oracle" else 0.405)
-    plate_radius_x = height * (0.13 if style == "oracle" else 0.142)
-    plate_radius_y = height * (0.075 if style == "oracle" else 0.082)
+    plate_length = height * (
+        0.39 if style == "warlock"
+        else 0.36 if style == "oracle"
+        else 0.23 if style == "strategos"
+        else 0.205
+    )
+    plate_z = height * (0.30 if ritual_style else 0.395 if style == "strategos" else 0.405)
+    plate_radius_x = height * (0.135 if ritual_style else 0.15 if style == "strategos" else 0.142)
+    plate_radius_y = height * (0.075 if ritual_style else 0.086 if style == "strategos" else 0.082)
     plate_material = (
-        metal_mat if style == "hoplite"
-        else cloth_mat if style in {"stalker", "oracle"}
+        metal_mat if armoured_style
+        else cloth_mat if style in {"stalker", "oracle", "warlock"}
         else leather_mat
     )
     for index in range(plate_count):
@@ -639,10 +685,45 @@ def char_outfit(ctx, name, style, cloth, leather, metal, accent, detail):
             bevel=height * 0.003,
         )
 
+    if style == "strategos":
+        # Three overlapping panels read as a heavy officer cloak without
+        # welding the arms into one broad slab.
+        for index, x in enumerate((-0.105, 0.0, 0.105)):
+            box(
+                f"officer_cloak_{index}",
+                (height * 0.135, height * 0.022, height * (0.49 - abs(index - 1) * 0.04)),
+                (height * x, height * 0.105, height * 0.51),
+                accent_cloth_mat if index == 1 else cloth_mat,
+                rotation=(4.0, 0.0, (index - 1) * 3.0),
+                bevel=height * 0.009,
+            )
+    elif style == "warlock":
+        # Layered front/back curtains preserve leg slits for animation while
+        # replacing the oracle-style broom of sixteen narrow strips.
+        for side, sign in (("l", 1.0), ("r", -1.0)):
+            box(
+                f"robe_front_{side}",
+                (height * 0.125, height * 0.022, height * 0.46),
+                (sign * height * 0.068, -height * 0.088, height * 0.275),
+                cloth_mat,
+                rotation=(2.0, 0.0, sign * 2.5),
+                bevel=height * 0.008,
+            )
+        box(
+            "robe_back",
+            (height * 0.27, height * 0.022, height * 0.48),
+            (0.0, height * 0.09, height * 0.285),
+            accent_cloth_mat,
+            rotation=(-2.0, 0.0, 0.0),
+            bevel=height * 0.009,
+        )
+
     # Asymmetry distinguishes a worker or light peltast from a line soldier.
     shoulders = {
         "hoplite": ("l", "r"),
         "oracle": ("l", "r"),
+        "strategos": ("l", "r"),
+        "warlock": ("l", "r"),
         "greek_delver": ("l",),
         "peltast": ("l",),
         "stalker": (),
@@ -651,10 +732,10 @@ def char_outfit(ctx, name, style, cloth, leather, metal, accent, detail):
         sign = 1.0 if side == "l" else -1.0
         ellipsoid(
             f"pauldron_{side}",
-            height * (0.055 if style == "oracle" else 0.062),
+            height * (0.052 if ritual_style else 0.073 if style == "strategos" else 0.062),
             (sign * height * 0.142, 0.0, height * 0.785),
-            (1.45, 0.88, 0.58),
-            metal_mat,
+            (1.62 if style == "strategos" else 1.45, 0.88, 0.58),
+            cloth_mat if style == "warlock" else metal_mat,
         )
 
     for side, sign in (("l", 1.0), ("r", -1.0)):
@@ -663,11 +744,11 @@ def char_outfit(ctx, name, style, cloth, leather, metal, accent, detail):
             height * 0.034,
             height * 0.17,
             (sign * height * 0.123, 0.0, height * 0.575),
-            leather_mat if style in {"stalker", "oracle"} else metal_mat,
+            leather_mat if style in {"stalker", "oracle", "warlock"} else metal_mat,
             scale=(1.0, 0.78, 1.0),
             radius_top=height * 0.029,
         )
-        if style != "oracle":
+        if not ritual_style:
             cylinder(
                 f"greave_{side}",
                 height * 0.052,
@@ -685,7 +766,7 @@ def char_outfit(ctx, name, style, cloth, leather, metal, accent, detail):
             bevel=height * 0.009,
         )
 
-    if style in {"greek_delver", "hoplite", "peltast"}:
+    if style in {"greek_delver", "hoplite", "peltast", "strategos"}:
         cylinder(
             "helmet",
             height * 0.117,
@@ -704,7 +785,7 @@ def char_outfit(ctx, name, style, cloth, leather, metal, accent, detail):
         )
         box(
             "helmet_spine",
-            (height * 0.022, height * 0.18, height * 0.05),
+            (height * 0.022, height * (0.21 if style == "strategos" else 0.18), height * 0.05),
             (0.0, 0.0, height * 0.965),
             dark_metal_mat,
             bevel=height * 0.004,
@@ -721,8 +802,33 @@ def char_outfit(ctx, name, style, cloth, leather, metal, accent, detail):
                 "lamp",
                 (height * 0.038, height * 0.02, height * 0.045),
                 (0.0, -height * 0.132, height * 0.925),
-                accent_mat,
+                glow_mat,
                 bevel=height * 0.003,
+            )
+        elif style == "strategos":
+            box(
+                "helmet_face_guard",
+                (height * 0.16, height * 0.03, height * 0.19),
+                (0.0, -height * 0.108, height * 0.88),
+                metal_mat,
+                bevel=height * 0.008,
+            )
+            for side, sign in (("l", 1.0), ("r", -1.0)):
+                box(
+                    f"helmet_cheek_{side}",
+                    (height * 0.045, height * 0.035, height * 0.14),
+                    (sign * height * 0.075, -height * 0.098, height * 0.84),
+                    metal_mat,
+                    rotation=(0.0, 0.0, sign * 5.0),
+                    bevel=height * 0.006,
+                )
+            # A transverse officer crest gives a broad RTS-readable crown.
+            box(
+                "helmet_transverse_crest",
+                (height * 0.31, height * 0.06, height * 0.14),
+                (0.0, height * 0.008, height * 1.03),
+                accent_cloth_mat,
+                bevel=height * 0.012,
             )
         else:
             crest_height = height * (0.19 if style == "hoplite" else 0.11)
@@ -730,7 +836,7 @@ def char_outfit(ctx, name, style, cloth, leather, metal, accent, detail):
                 "helmet_crest",
                 (height * 0.035, height * 0.18, crest_height),
                 (0.0, height * 0.015, height * (1.015 if style == "hoplite" else 0.985)),
-                accent_mat,
+                accent_cloth_mat,
                 bevel=height * 0.006,
             )
     elif style == "stalker":
@@ -758,7 +864,7 @@ def char_outfit(ctx, name, style, cloth, leather, metal, accent, detail):
             rotation=(12.0, 0.0, 0.0),
             bevel=height * 0.012,
         )
-    else:  # oracle
+    elif style == "oracle":
         box(
             "funerary_mask",
             (height * 0.17, height * 0.07, height * 0.23),
@@ -788,7 +894,55 @@ def char_outfit(ctx, name, style, cloth, leather, metal, accent, detail):
             "oracle_glow",
             (height * 0.105, height * 0.018, height * 0.025),
             (0.0, -height * 0.118, height * 0.93),
-            accent_mat,
+            glow_mat,
+            bevel=height * 0.003,
+        )
+    else:  # warlock
+        cylinder(
+            "warlock_headwrap",
+            height * 0.108,
+            height * 0.16,
+            (0.0, 0.0, height * 0.965),
+            cloth_mat,
+            scale=(0.94, 0.88, 1.0),
+            radius_top=height * 0.09,
+        )
+        box(
+            "warlock_half_mask",
+            (height * 0.17, height * 0.055, height * 0.135),
+            (0.0, -height * 0.09, height * 0.94),
+            metal_mat,
+            bevel=height * 0.011,
+        )
+        box(
+            "warlock_brow",
+            (height * 0.195, height * 0.025, height * 0.035),
+            (0.0, -height * 0.114, height * 0.98),
+            metal_mat,
+            bevel=height * 0.005,
+        )
+        for side, sign in (("l", 1.0), ("r", -1.0)):
+            box(
+                f"warlock_cheek_{side}",
+                (height * 0.045, height * 0.03, height * 0.115),
+                (sign * height * 0.067, -height * 0.105, height * 0.905),
+                metal_mat,
+                rotation=(0.0, 0.0, sign * 6.0),
+                bevel=height * 0.005,
+            )
+            box(
+                f"warlock_veil_{side}",
+                (height * 0.082, height * 0.025, height * 0.34),
+                (sign * height * 0.105, height * 0.045, height * 0.76),
+                accent_cloth_mat,
+                rotation=(5.0, 0.0, sign * 5.0),
+                bevel=height * 0.008,
+            )
+        box(
+            "warlock_eye_rune",
+            (height * 0.085, height * 0.015, height * 0.018),
+            (0.0, -height * 0.123, height * 0.955),
+            glow_mat,
             bevel=height * 0.003,
         )
 

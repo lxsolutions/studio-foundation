@@ -395,12 +395,12 @@ Proportioned humanoid blockout using classic figure-drawing head ratios (7.5 rea
 
 ### `char.outfit`
 
-Add a production-readable rigid outfit to an unrigged humanoid, then join it into the body so char.rig skins every shell. Greek delver, hoplite and peltast armour include cuirass, straps, pteruges, helmets, bracers and greaves; stalker and oracle add role-readable undead hoods, masks and robes.
+Add a production-readable rigid outfit to an unrigged humanoid, then join it into the body so char.rig skins every shell. Greek delver, hoplite and peltast armour include cuirass, straps, pteruges, helmets, bracers and greaves; strategos and warlock add boss-readable officer and ritual silhouettes; stalker and oracle add undead hoods, masks and robes.
 
 | parameter | type | default | description |
 | --- | --- | --- | --- |
 | `name` | string | None | Unrigged humanoid mesh from char.humanoid |
-| `style` | greek_delver \| hoplite \| peltast \| stalker \| oracle | 'greek_delver' | Outfit silhouette |
+| `style` | greek_delver \| hoplite \| peltast \| strategos \| stalker \| oracle \| warlock | 'greek_delver' | Outfit silhouette |
 | `cloth` | string | '#262522' | Coarse tunic/linen colour |
 | `leather` | string | '#38261c' | Straps, belt and boot-wrap colour |
 | `metal` | string | '#71502d' | Aged bronze armour colour |
