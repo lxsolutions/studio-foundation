@@ -384,6 +384,103 @@
       }
     },
     {
+      "name": "arch.defense_tower",
+      "summary": "A browser-budget classical Greek defense tower with one disciplined material set and three gameplay-readable silhouettes: an elevated arrow crown, a horizontal torsion ballista, or a vertical bronze storm conductor. All variants share stepped weathered masonry, battered buttresses, string courses and oxblood faction cloth.",
+      "tags": [
+        "build",
+        "architecture",
+        "rts",
+        "tower-defense"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name",
+            "default": "defense_tower"
+          },
+          "style": {
+            "type": "string",
+            "enum": [
+              "arrow",
+              "ballista",
+              "storm"
+            ],
+            "description": "Weapon and crown silhouette",
+            "default": "arrow"
+          },
+          "width": {
+            "type": "number",
+            "description": "Overall masonry footprint width in metres",
+            "default": 3.0
+          },
+          "height": {
+            "type": "number",
+            "description": "Overall structure height before the weapon crown",
+            "default": 5.2
+          },
+          "stone_color": {
+            "type": "string",
+            "description": "Primary weathered limestone",
+            "default": "#777064"
+          },
+          "foundation_color": {
+            "type": "string",
+            "description": "Podium, buttress and course stone",
+            "default": "#403e3a"
+          },
+          "timber_color": {
+            "type": "string",
+            "description": "Weapon frame, canopy and rails",
+            "default": "#2a1c14"
+          },
+          "metal_color": {
+            "type": "string",
+            "description": "Bronze and dark iron fittings",
+            "default": "#72502a"
+          },
+          "cloth_color": {
+            "type": "string",
+            "description": "Oxblood faction cloth",
+            "default": "#491c20"
+          },
+          "energy_color": {
+            "type": "string",
+            "description": "Restrained storm conductor emission",
+            "default": "#7e9ca3"
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World position",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "rotation": {
+            "type": "number",
+            "description": "Yaw in degrees",
+            "default": 0.0
+          },
+          "uv_scale": {
+            "type": "number",
+            "description": "Metres per UV tile",
+            "default": 0.9
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "arch.gateway",
       "summary": "A monumental arched gate \u2014 the triumphal entrance every Roman venue frames its far end with. One big central arch, optional flanking arches, an attic storey above.",
       "tags": [

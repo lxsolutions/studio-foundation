@@ -59,9 +59,10 @@ def _preconditions(renderer: str) -> list[str]:
         )
     if not shutil.which("node"):
         problems.append("node is not on PATH (needed for the browser probe)")
-    if not (BROWSER_DIR / "node_modules" / "playwright").is_dir() and not (
-        BROWSER_DIR / "node_modules" / "playwright-core"
-    ).is_dir():
+    if (
+        not (BROWSER_DIR / "node_modules" / "playwright").is_dir()
+        and not (BROWSER_DIR / "node_modules" / "playwright-core").is_dir()
+    ):
         problems.append(f"playwright is not installed — run `npm ci` in {BROWSER_DIR}")
     if not senv.find_godot():
         problems.append("Godot editor binary not found (set GODOT_BIN, or run `just doctor`)")
@@ -77,11 +78,17 @@ def _preconditions(renderer: str) -> list[str]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("--game", default="games/chariot")
     parser.add_argument("--renderer", default="forward_plus", choices=["forward_plus", "mobile"])
-    parser.add_argument("--seconds", type=int, default=45, help="observation window; cold start alone can take ~20s")
-    parser.add_argument("--out", default="verification/renderer", help="directory for the evidence file")
+    parser.add_argument(
+        "--seconds", type=int, default=45, help="observation window; cold start alone can take ~20s"
+    )
+    parser.add_argument(
+        "--out", default="verification/renderer", help="directory for the evidence file"
+    )
     parser.add_argument("--skip-export", action="store_true", help="reuse an existing export")
     args = parser.parse_args()
 
@@ -107,7 +114,9 @@ def main() -> int:
         evidence["verdict"] = "inconclusive"
         evidence["verdict_reason"] = "preconditions not met"
         evidence["preconditions_missing"] = problems
-        (out_dir / f"{label}.json").write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
+        (out_dir / f"{label}.json").write_text(
+            json.dumps(evidence, indent=2) + "\n", encoding="utf-8"
+        )
         print("cannot verify — preconditions not met:")
         for p in problems:
             print(f"  - {p}")
@@ -116,8 +125,9 @@ def main() -> int:
     # Which patch series produced the templates being tested. Without this a
     # result cannot be attributed to a build.
     try:
-        from studio_tools.provenance import series_from_lock, series_id  # noqa: PLC0415
         import tomllib  # noqa: PLC0415
+
+        from studio_tools.provenance import series_from_lock, series_id  # noqa: PLC0415
 
         with (REPO / "engine" / "engine-lock.toml").open("rb") as fh:
             evidence["series_id"] = series_id(*series_from_lock(tomllib.load(fh)))
@@ -131,21 +141,33 @@ def main() -> int:
     if not args.skip_export:
         print(f"[verify] exporting {args.game} with --rendering-method {args.renderer}")
         rc = subprocess.call(
-            [sys.executable, str(REPO / "tools" / "godot" / "export_game.py"),
-             "--game", args.game, "--preset", "web-webgpu", "--rendering-method", args.renderer],
+            [
+                sys.executable,
+                str(REPO / "tools" / "godot" / "export_game.py"),
+                "--game",
+                args.game,
+                "--preset",
+                "web-webgpu",
+                "--rendering-method",
+                args.renderer,
+            ],
             cwd=REPO,
         )
         if rc != 0:
             evidence["verdict"] = "inconclusive"
             evidence["verdict_reason"] = f"export failed (exit {rc})"
-            (out_dir / f"{label}.json").write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
+            (out_dir / f"{label}.json").write_text(
+                json.dumps(evidence, indent=2) + "\n", encoding="utf-8"
+            )
             print("[verify] export failed — nothing to measure")
             return 3
 
     if not (export_dir / "index.html").is_file():
         evidence["verdict"] = "inconclusive"
         evidence["verdict_reason"] = f"no export at {export_dir}"
-        (out_dir / f"{label}.json").write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
+        (out_dir / f"{label}.json").write_text(
+            json.dumps(evidence, indent=2) + "\n", encoding="utf-8"
+        )
         return 3
 
     port = _free_port()
@@ -153,14 +175,25 @@ def main() -> int:
     print(f"[verify] serving {export_dir} on {url}")
     server = subprocess.Popen(
         [sys.executable, "-m", "http.server", str(port), "--bind", "127.0.0.1"],
-        cwd=export_dir, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        cwd=export_dir,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
     )
     try:
         time.sleep(1.5)
         probe_out = out_dir / "probe"
-        probe_cmd = ["node", str(BROWSER_DIR / "render-probe.mjs"),
-                     "--url", url, "--out", str(probe_out), "--label", label,
-                     "--seconds", str(args.seconds)]
+        probe_cmd = [
+            "node",
+            str(BROWSER_DIR / "render-probe.mjs"),
+            "--url",
+            url,
+            "--out",
+            str(probe_out),
+            "--label",
+            label,
+            "--seconds",
+            str(args.seconds),
+        ]
         # A virtual display where one exists; the probe rejects software adapters
         # itself, so a wrong choice here degrades to "inconclusive", never a pass.
         if shutil.which("xvfb-run"):
@@ -177,14 +210,23 @@ def main() -> int:
         # The binding trace is what distinguishes "renders" from "renders and is
         # actually valid", so a clean frame with rejected command buffers cannot
         # be reported as clean.
-        trace_cmd = ["node", str(BROWSER_DIR / "binding-trace.mjs"),
-                     "--url", url, "--seconds", str(min(args.seconds, 35)), "--max", "3", "--json"]
+        trace_cmd = [
+            "node",
+            str(BROWSER_DIR / "binding-trace.mjs"),
+            "--url",
+            url,
+            "--seconds",
+            str(min(args.seconds, 35)),
+            "--max",
+            "3",
+            "--json",
+        ]
         if shutil.which("xvfb-run"):
             trace_cmd = ["xvfb-run", "-a", *trace_cmd]
         print("[verify] tracing bind groups and command-buffer validity")
         trace = subprocess.run(trace_cmd, cwd=BROWSER_DIR, capture_output=True, text=True)
         try:
-            evidence["bindings"] = json.loads(trace.stdout[trace.stdout.index("{"):])
+            evidence["bindings"] = json.loads(trace.stdout[trace.stdout.index("{") :])
         except (ValueError, json.JSONDecodeError):
             evidence["bindings"] = None
             evidence["notes"].append("NOTE binding trace produced no parsable output")
@@ -195,7 +237,7 @@ def main() -> int:
     evidence["verdict"] = probe.get("verdict", "inconclusive")
     evidence["verdict_reason"] = probe.get("verdict_reason", "probe produced no report")
 
-    cb = ((evidence.get("bindings") or {}).get("command_buffers") or {})
+    cb = (evidence.get("bindings") or {}).get("command_buffers") or {}
     evidence["summary"] = {
         "verdict": evidence["verdict"],
         "renderer_reported": (probe.get("engine_counters") or {}).get("renderer"),
@@ -205,7 +247,7 @@ def main() -> int:
         "adapter_is_fallback": (probe.get("adapter") or {}).get("isFallbackAdapter"),
         "canvas_dominant_colour_fraction": (probe.get("canvas") or {}).get("dominantColorFraction"),
         "gpu_validation_errors": probe.get("gpu_validation_errors"),
-        "bind_group_failure_classes": len(((evidence.get("bindings") or {}).get("counts") or {})),
+        "bind_group_failure_classes": len((evidence.get("bindings") or {}).get("counts") or {}),
         "command_buffers_invalid": cb.get("finish_failed"),
         "submissions_rejected": cb.get("submit_failed"),
     }

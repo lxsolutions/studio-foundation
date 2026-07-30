@@ -41,18 +41,25 @@ RUNNER = "res://addons/studio_core/tools/qa_capture.gd"
 
 def godot_args(project: Path, method: str, renderer: str, user_args: list[str]) -> list[str]:
     return [
-        "--path", str(project),
-        "--rendering-method", method,
-        "--rendering-driver", renderer,
-        "--script", RUNNER,
-        "--", *user_args,
+        "--path",
+        str(project),
+        "--rendering-method",
+        method,
+        "--rendering-driver",
+        renderer,
+        "--script",
+        RUNNER,
+        "--",
+        *user_args,
     ]
 
 
 def list_shots(project: Path, method: str, renderer: str, driver: str, timeout: int) -> list[str]:
     code, output = rg.run_godot(
         godot_args(project, method, renderer, [f"--driver={driver}", "--list"]),
-        project, timeout, isolate_user_data=True,
+        project,
+        timeout,
+        isolate_user_data=True,
     )
     if code != 0:
         print(output, file=sys.stderr)
@@ -68,21 +75,28 @@ def list_shots(project: Path, method: str, renderer: str, driver: str, timeout: 
 def out_dir_of(project: Path, out_arg: str) -> Path:
     if not out_arg.startswith("res://"):
         raise SystemExit("--out must be a res:// path (it is resolved inside the project)")
-    return project / out_arg[len("res://"):]
+    return project / out_arg[len("res://") :]
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--game", default="templates/godot-game")
-    parser.add_argument("--driver", default="res://tests/qa_shots.gd",
-                        help="game-side shot declaration script")
+    parser.add_argument(
+        "--driver", default="res://tests/qa_shots.gd", help="game-side shot declaration script"
+    )
     parser.add_argument("--out", default="res://build/qa")
     parser.add_argument("--shots", default="", help="comma-separated subset of shot names")
     parser.add_argument("--devices", default="", help="comma-separated subset of device presets")
-    parser.add_argument("--method", default="gl_compatibility",
-                        help="rendering method (gl_compatibility works without a GPU)")
-    parser.add_argument("--renderer", default="",
-                        help="rendering driver (default: opengl3_angle on Windows, opengl3 elsewhere)")
+    parser.add_argument(
+        "--method",
+        default="gl_compatibility",
+        help="rendering method (gl_compatibility works without a GPU)",
+    )
+    parser.add_argument(
+        "--renderer",
+        default="",
+        help="rendering driver (default: opengl3_angle on Windows, opengl3 elsewhere)",
+    )
     parser.add_argument("--list", action="store_true", help="list the game's shots and exit")
     parser.add_argument("--json", action="store_true", help="print the merged report as JSON")
     parser.add_argument("--warn-only", action="store_true")
@@ -134,7 +148,9 @@ def main() -> int:
         try:
             code, output = rg.run_godot(
                 godot_args(project, args.method, renderer, user_args),
-                project, args.timeout, isolate_user_data=True,
+                project,
+                args.timeout,
+                isolate_user_data=True,
             )
         except SystemExit as exc:
             # run_godot raises on a hard timeout. One wedged shot may not
@@ -146,8 +162,10 @@ def main() -> int:
             continue
         print(output)
         if "[qa] runner alive" not in output:
-            print(f"[{name}] runner marker missing — parse error in an addon or the driver?",
-                  file=sys.stderr)
+            print(
+                f"[{name}] runner marker missing — parse error in an addon or the driver?",
+                file=sys.stderr,
+            )
             return 2
         if "nothing to run" in output:
             # Device filter excluded every job of this shot; not a failure.
@@ -155,8 +173,10 @@ def main() -> int:
         if not report_path.exists():
             # The runner writes the report even when findings fail the run, so
             # a missing report means the process died mid-shot.
-            print(f"[{name}] godot exited {code} without a report — counting as a crash",
-                  file=sys.stderr)
+            print(
+                f"[{name}] godot exited {code} without a report — counting as a crash",
+                file=sys.stderr,
+            )
             merged["crashed"].append({"shot": name, "exit_code": code})
             merged["tool_failures"] += 1
             worst = max(worst, 2)
@@ -179,8 +199,10 @@ def main() -> int:
     if args.json:
         print(json.dumps(merged, indent=2))
     stills = len(merged["results"])
-    print(f"[qa] sweep: {stills} still(s), {merged['findings']} finding(s), "
-          f"{merged['tool_failures']} tool failure(s) -> {report_path}")
+    print(
+        f"[qa] sweep: {stills} still(s), {merged['findings']} finding(s), "
+        f"{merged['tool_failures']} tool failure(s) -> {report_path}"
+    )
     return worst
 
 

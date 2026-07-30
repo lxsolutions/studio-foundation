@@ -833,3 +833,420 @@ def arch_civic_hall(
     })
     finish_lib.budget_note(ctx, obj, 18_000)
     return result
+
+
+@op(
+    "arch.defense_tower",
+    summary=(
+        "A browser-budget classical Greek defense tower with one disciplined material set "
+        "and three gameplay-readable silhouettes: an elevated arrow crown, a horizontal "
+        "torsion ballista, or a vertical bronze storm conductor. All variants share stepped "
+        "weathered masonry, battered buttresses, string courses and oxblood faction cloth."
+    ),
+    params={
+        "name": ("str", "defense_tower", "Object name"),
+        "style": ("enum:arrow|ballista|storm", "arrow", "Weapon and crown silhouette"),
+        "width": ("num", 3.0, "Overall masonry footprint width in metres"),
+        "height": ("num", 5.2, "Overall structure height before the weapon crown"),
+        "stone_color": ("str", "#777064", "Primary weathered limestone"),
+        "foundation_color": ("str", "#403e3a", "Podium, buttress and course stone"),
+        "timber_color": ("str", "#2a1c14", "Weapon frame, canopy and rails"),
+        "metal_color": ("str", "#72502a", "Bronze and dark iron fittings"),
+        "cloth_color": ("str", "#491c20", "Oxblood faction cloth"),
+        "energy_color": ("str", "#7e9ca3", "Restrained storm conductor emission"),
+        "location": ("vec3", [0.0, 0.0, 0.0], "World position"),
+        "rotation": ("num", 0.0, "Yaw in degrees"),
+        "uv_scale": ("num", 0.9, "Metres per UV tile"),
+    },
+    tags=["build", "architecture", "rts", "tower-defense"],
+)
+def arch_defense_tower(
+    ctx,
+    name,
+    style,
+    width,
+    height,
+    stone_color,
+    foundation_color,
+    timber_color,
+    metal_color,
+    cloth_color,
+    energy_color,
+    location,
+    rotation,
+    uv_scale,
+):
+    """Forge a serious, low-draw-call tower family for Spike and other RTS games."""
+    width = max(2.2, min(5.0, float(width)))
+    height = max(3.6, min(8.0, float(height)))
+    materials = [
+        mat_lib.principled("m_defense_stone", stone_color, roughness=0.9),
+        mat_lib.principled("m_defense_foundation", foundation_color, roughness=0.96),
+        mat_lib.principled("m_defense_timber", timber_color, roughness=0.84),
+        mat_lib.principled("m_defense_metal", metal_color, roughness=0.42, metallic=0.76),
+        mat_lib.principled("m_defense_cloth", cloth_color, roughness=0.98),
+        mat_lib.principled(
+            "m_defense_energy",
+            energy_color,
+            roughness=0.28,
+            metallic=0.18,
+            emission=0.75,
+            emission_color=energy_color,
+        ),
+    ]
+    STONE, FOUNDATION, TIMBER, METAL, CLOTH, ENERGY = range(len(materials))
+    bm = mesh_lib.new_bmesh()
+    parts = 0
+
+    def mark(faces, slot):
+        nonlocal parts
+        for face in faces:
+            face.material_index = slot
+        parts += 1
+        return faces
+
+    def box(size, center, slot, bevel=0.025, rotation_xyz=(0.0, 0.0, 0.0)):
+        faces = mesh_lib.add_box(
+            bm,
+            size=size,
+            center=(0.0, 0.0, 0.0),
+            bevel=bevel,
+        )
+        verts = list({vert for face in faces for vert in face.verts})
+        rx, ry, rz = rotation_xyz
+        matrix = Matrix.Translation(Vector(center))
+        if rz:
+            matrix = matrix @ Matrix.Rotation(rz, 4, "Z")
+        if ry:
+            matrix = matrix @ Matrix.Rotation(ry, 4, "Y")
+        if rx:
+            matrix = matrix @ Matrix.Rotation(rx, 4, "X")
+        bmesh.ops.transform(bm, matrix=matrix, verts=verts)
+        return mark(faces, slot)
+
+    def cylinder(radius, depth_value, center, slot, segments=12, axis="z", radius_top=None):
+        faces = mesh_lib.add_cylinder(
+            bm,
+            radius=radius,
+            radius_top=radius_top,
+            depth=depth_value,
+            segments=segments,
+            center=(0.0, 0.0, 0.0),
+            bevel=min(radius * 0.12, 0.025),
+        )
+        verts = list({vert for face in faces for vert in face.verts})
+        matrix = Matrix.Translation(Vector(center))
+        if axis == "x":
+            matrix = matrix @ Matrix.Rotation(math.pi * 0.5, 4, "Y")
+        elif axis == "y":
+            matrix = matrix @ Matrix.Rotation(math.pi * 0.5, 4, "X")
+        bmesh.ops.transform(bm, matrix=matrix, verts=verts)
+        return mark(faces, slot)
+
+    def beam(start, end, radius, slot, segments=8):
+        start_vec, end_vec = Vector(start), Vector(end)
+        direction = end_vec - start_vec
+        if direction.length <= 1e-5:
+            return []
+        faces = mesh_lib.add_cylinder(
+            bm,
+            radius=radius,
+            depth=direction.length,
+            segments=segments,
+            center=(0.0, 0.0, 0.0),
+        )
+        verts = list({vert for face in faces for vert in face.verts})
+        orientation = direction.to_track_quat("Z", "Y").to_matrix().to_4x4()
+        bmesh.ops.transform(
+            bm,
+            matrix=Matrix.Translation((start_vec + end_vec) * 0.5) @ orientation,
+            verts=verts,
+        )
+        return mark(faces, slot)
+
+    def torus(major, minor, center, slot, axis="z"):
+        faces = mesh_lib.add_torus(
+            bm,
+            major=major,
+            minor=minor,
+            major_segments=20,
+            minor_segments=6,
+            center=(0.0, 0.0, 0.0),
+        )
+        verts = list({vert for face in faces for vert in face.verts})
+        matrix = Matrix.Translation(Vector(center))
+        if axis == "x":
+            matrix = matrix @ Matrix.Rotation(math.pi * 0.5, 4, "Y")
+        elif axis == "y":
+            matrix = matrix @ Matrix.Rotation(math.pi * 0.5, 4, "X")
+        bmesh.ops.transform(bm, matrix=matrix, verts=verts)
+        return mark(faces, slot)
+
+    # Shared military architecture: wide base, subtly tapered shaft, battered
+    # buttresses and dark stone courses. It reads as Greek field engineering
+    # instead of a toy castle at either tactical or first-person distance.
+    base_h = height * 0.09
+    box((width * 1.08, width * 1.08, base_h), (0.0, 0.0, base_h * 0.5), FOUNDATION, 0.07)
+    box(
+        (width * 0.94, width * 0.94, base_h * 0.42),
+        (0.0, 0.0, base_h * 1.21),
+        STONE,
+        0.035,
+    )
+    shaft_base = base_h * 1.42
+    shaft_h = height * (
+        0.45 if style == "ballista"
+        else 0.30 if style == "storm"
+        else 0.46
+    )
+    shaft_w = width * (0.74 if style == "storm" else 0.79)
+    box(
+        (shaft_w, shaft_w, shaft_h),
+        (0.0, 0.0, shaft_base + shaft_h * 0.5),
+        STONE,
+        0.055,
+    )
+    buttress_w = width * 0.14
+    buttress_h = shaft_h * 0.83
+    for sx in (-1.0, 1.0):
+        for sy in (-1.0, 1.0):
+            box(
+                (buttress_w, buttress_w, buttress_h),
+                (
+                    sx * shaft_w * 0.49,
+                    sy * shaft_w * 0.49,
+                    shaft_base + buttress_h * 0.5,
+                ),
+                FOUNDATION,
+                0.035,
+                (0.0, math.radians(-sx * sy * 2.5), 0.0),
+            )
+    for fraction in (0.31, 0.67):
+        box(
+            (shaft_w * 1.07, shaft_w * 1.07, height * 0.028),
+            (0.0, 0.0, shaft_base + shaft_h * fraction),
+            FOUNDATION,
+            0.018,
+        )
+
+    # Recessed arrow slits and a front access door use deep bronze/cloth insets;
+    # they articulate the silhouette without adding another transparent material.
+    front_y = -shaft_w * 0.505
+    for z_fraction in (0.36, 0.62):
+        box(
+            (width * 0.055, 0.035, height * 0.115),
+            (0.0, front_y - 0.018, shaft_base + shaft_h * z_fraction),
+            METAL,
+            0.006,
+        )
+    box(
+        (width * 0.22, 0.045, height * 0.23),
+        (0.0, front_y - 0.024, shaft_base + height * 0.115),
+        TIMBER,
+        0.012,
+    )
+    crown_z = shaft_base + shaft_h
+
+    if style == "arrow":
+        platform_w = width * 1.04
+        box((platform_w, platform_w, height * 0.065), (0.0, 0.0, crown_z), FOUNDATION, 0.045)
+        parapet_z = crown_z + height * 0.08
+        # Alternating merlons create the elevated archer crown at RTS scale.
+        for side in (-1.0, 1.0):
+            for offset in (-0.31, 0.0, 0.31):
+                box(
+                    (width * 0.22, width * 0.16, height * 0.22),
+                    (offset * width, side * platform_w * 0.45, parapet_z),
+                    STONE,
+                    0.025,
+                )
+                box(
+                    (width * 0.16, width * 0.22, height * 0.22),
+                    (side * platform_w * 0.45, offset * width, parapet_z),
+                    STONE,
+                    0.025,
+                )
+        canopy_z = crown_z + height * 0.28
+        post_span = width * 0.27
+        for sx in (-1.0, 1.0):
+            for sy in (-1.0, 1.0):
+                beam(
+                    (sx * post_span, sy * post_span, crown_z + height * 0.04),
+                    (sx * post_span, sy * post_span, canopy_z),
+                    width * 0.025,
+                    TIMBER,
+                )
+        # Dark pitched field roof and iron arrow finial.
+        roof_pitch = math.radians(26.0)
+        for sx in (-1.0, 1.0):
+            box(
+                (width * 0.52, width * 0.78, height * 0.055),
+                (sx * width * 0.13, 0.0, canopy_z + height * 0.035),
+                TIMBER,
+                0.018,
+                (0.0, sx * roof_pitch, 0.0),
+            )
+        beam(
+            (0.0, 0.0, canopy_z + height * 0.03),
+            (0.0, 0.0, canopy_z + height * 0.13),
+            width * 0.018,
+            METAL,
+        )
+        box(
+            (width * 0.20, 0.035, height * 0.28),
+            (0.0, -post_span - 0.06, crown_z + height * 0.16),
+            CLOTH,
+            0.006,
+        )
+        weapon_height = canopy_z + height * 0.13
+        silhouette = "elevated_archer_crown"
+
+    elif style == "ballista":
+        platform_w = width * 1.18
+        box((platform_w, platform_w, height * 0.085), (0.0, 0.0, crown_z), FOUNDATION, 0.055)
+        # Low stone breastwork leaves the torsion engine unmistakable.
+        rail_z = crown_z + height * 0.09
+        for side in (-1.0, 1.0):
+            box(
+                (platform_w, width * 0.12, height * 0.12),
+                (0.0, side * platform_w * 0.45, rail_z),
+                STONE,
+                0.025,
+            )
+        engine_z = crown_z + height * 0.21
+        box(
+            (width * 0.18, width * 1.10, height * 0.10),
+            (0.0, -width * 0.08, engine_z),
+            TIMBER,
+            0.025,
+        )
+        for sx in (-1.0, 1.0):
+            cylinder(
+                width * 0.10,
+                height * 0.22,
+                (sx * width * 0.31, 0.0, engine_z),
+                METAL,
+                12,
+            )
+            beam(
+                (sx * width * 0.28, 0.02, engine_z + height * 0.04),
+                (sx * width * 0.63, -width * 0.15, engine_z + height * 0.16),
+                width * 0.035,
+                TIMBER,
+            )
+            beam(
+                (sx * width * 0.63, -width * 0.15, engine_z + height * 0.16),
+                (0.0, -width * 0.68, engine_z + height * 0.06),
+                width * 0.012,
+                METAL,
+                6,
+            )
+        # Heavy bolt and bronze point along the visual front (-Y).
+        beam(
+            (0.0, width * 0.42, engine_z + height * 0.06),
+            (0.0, -width * 0.76, engine_z + height * 0.06),
+            width * 0.018,
+            METAL,
+            8,
+        )
+        cylinder(
+            width * 0.055,
+            width * 0.20,
+            (0.0, -width * 0.83, engine_z + height * 0.06),
+            METAL,
+            8,
+            axis="y",
+            radius_top=0.0,
+        )
+        box(
+            (width * 0.22, 0.035, height * 0.24),
+            (platform_w * 0.42, -platform_w * 0.30, crown_z + height * 0.16),
+            CLOTH,
+            0.006,
+        )
+        weapon_height = engine_z + height * 0.18
+        silhouette = "horizontal_torsion_engine"
+
+    else:
+        # A tapered four-sided stone pylon turns the ward into a vertical
+        # lightning rod, not a fantasy glowing mushroom.
+        pedestal_z = crown_z + height * 0.04
+        box(
+            (width * 0.90, width * 0.90, height * 0.08),
+            (0.0, 0.0, pedestal_z),
+            FOUNDATION,
+            0.035,
+        )
+        pylon_h = height * 0.23
+        pylon_faces = mesh_lib.add_cylinder(
+            bm,
+            radius=width * 0.28,
+            radius_top=width * 0.12,
+            depth=pylon_h,
+            segments=4,
+            center=(0.0, 0.0, crown_z + height * 0.08 + pylon_h * 0.5),
+        )
+        mark(pylon_faces, STONE)
+        for fraction in (0.23, 0.55, 0.83):
+            torus(
+                width * (0.29 - fraction * 0.10),
+                width * 0.025,
+                (0.0, 0.0, crown_z + height * 0.08 + pylon_h * fraction),
+                METAL,
+            )
+        conductor_z = crown_z + height * 0.08 + pylon_h
+        cylinder(width * 0.045, height * 0.22, (0.0, 0.0, conductor_z + height * 0.10), METAL, 10)
+        core_faces = mesh_lib.add_icosphere(
+            bm,
+            radius=width * 0.12,
+            subdivisions=2,
+            center=(0.0, 0.0, conductor_z + height * 0.12),
+        )
+        mark(core_faces, ENERGY)
+        for angle in (0.0, math.pi * 0.5, math.pi, math.pi * 1.5):
+            start = (
+                math.cos(angle) * width * 0.07,
+                math.sin(angle) * width * 0.07,
+                conductor_z + height * 0.17,
+            )
+            end = (
+                math.cos(angle) * width * 0.27,
+                math.sin(angle) * width * 0.27,
+                conductor_z + height * 0.28,
+            )
+            beam(start, end, width * 0.024, METAL, 8)
+        box(
+            (width * 0.19, 0.035, height * 0.26),
+            (0.0, -shaft_w * 0.54, crown_z - height * 0.10),
+            CLOTH,
+            0.006,
+        )
+        weapon_height = conductor_z + height * 0.28
+        silhouette = "vertical_bronze_conductor"
+
+    mesh_lib.cleanup(bm, merge_dist=1e-4)
+    obj = mesh_lib.to_object(bm, scene_lib.unique_name(name))
+    for material in materials:
+        obj.data.materials.append(material)
+    obj.location = location
+    obj.rotation_euler = (0.0, 0.0, math.radians(rotation))
+    obj["bforge_architecture"] = "greek_defense"
+    obj["bforge_tower_style"] = style
+    obj["bforge_parts"] = parts
+    result = finish_lib.finish(
+        ctx,
+        obj,
+        material="",
+        uv="box",
+        uv_scale=max(0.1, uv_scale),
+        origin="world",
+        smooth=False,
+    )
+    result.update({
+        "style": style,
+        "silhouette": silhouette,
+        "parts": parts,
+        "weapon_height": round(weapon_height, 3),
+    })
+    finish_lib.budget_note(ctx, obj, 9_000)
+    return result

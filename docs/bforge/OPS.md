@@ -1,6 +1,6 @@
 # bforge op reference
 
-116 operations.
+117 operations.
 
 ## `arch.*`
 
@@ -84,6 +84,26 @@ A ring or run of free-standing columns with an entablature — temple fronts, st
 | `entablature` | number | 0.9 | Depth of the beam carried across the tops; 0 for none |
 | `flutes` | boolean | False | Fluted shafts (costs triangles, only reads up close) |
 | `statues` | boolean | False | Blocky statue silhouettes above every fourth column |
+
+### `arch.defense_tower`
+
+A browser-budget classical Greek defense tower with one disciplined material set and three gameplay-readable silhouettes: an elevated arrow crown, a horizontal torsion ballista, or a vertical bronze storm conductor. All variants share stepped weathered masonry, battered buttresses, string courses and oxblood faction cloth.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `name` | string | 'defense_tower' | Object name |
+| `style` | arrow \| ballista \| storm | 'arrow' | Weapon and crown silhouette |
+| `width` | number | 3.0 | Overall masonry footprint width in metres |
+| `height` | number | 5.2 | Overall structure height before the weapon crown |
+| `stone_color` | string | '#777064' | Primary weathered limestone |
+| `foundation_color` | string | '#403e3a' | Podium, buttress and course stone |
+| `timber_color` | string | '#2a1c14' | Weapon frame, canopy and rails |
+| `metal_color` | string | '#72502a' | Bronze and dark iron fittings |
+| `cloth_color` | string | '#491c20' | Oxblood faction cloth |
+| `energy_color` | string | '#7e9ca3' | Restrained storm conductor emission |
+| `location` | array | [0.0, 0.0, 0.0] | World position |
+| `rotation` | number | 0.0 | Yaw in degrees |
+| `uv_scale` | number | 0.9 | Metres per UV tile |
 
 ### `arch.gateway`
 

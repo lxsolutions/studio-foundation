@@ -76,6 +76,24 @@ The ore seam is painted onto a band of the rock's own faces with
 `material.face_assign` — zero extra triangles, impossible to bury inside the
 rock, and it reads as "valuable" at 20 px tall.
 
+**Spike** uses `arch.defense_tower` as one reproducible Greek-defense family
+instead of maintaining three unrelated Blender files. Arrow, ballista and storm
+variants share serious weathered masonry and a six-material palette, but the
+weapon crowns stay readable from an RTS camera: elevated archer canopy,
+horizontal torsion engine and vertical bronze conductor. The same models hold
+up in first person, and Spike supplies its own simple gameplay colliders.
+
+| variant | triangles | GLB | tallest extent |
+| --- | ---: | ---: | ---: |
+| arrow | 3,164 | 264 KB | 5.19 m |
+| ballista | 2,286 | 187 KB | 4.56 m |
+| storm | 2,552 | 197 KB | 4.93 m |
+
+The three replaced runtime GLBs occupied 6.4 MB; the generated family occupies
+646 KB and passes `bforge audit` with zero warnings.
+
+![Spike Greek ballista review sheet](../../docs/bforge/img/spike_ballista.png)
+
 ---
 
 ## Why this exists
@@ -130,7 +148,7 @@ tools/bforge/
     daemon.py          JSON-line RPC loop
     registry.py        @op decorator: types, coercion, schema generation
     lib/               mesh, uvs, materials, scene-graph, finishing pass
-    ops/               the ~89 operations, grouped by namespace
+    ops/               the 117 operations, grouped by namespace
   catalog.json       committed op snapshot (so tools/list needs no Blender)
   tests/             unit + live-integration + visual gallery
 ```
@@ -165,7 +183,7 @@ in this repo's `.mcp.json`:
 ```
 
 Five tools by default — `bforge_ops`, `bforge_describe`, `bforge_run`,
-`bforge_run_batch`, `bforge_session` — because 89 individual MCP tools swamps
+`bforge_run_batch`, `bforge_session` — because 117 individual MCP tools swamps
 most clients' tool lists. `bforge_run_batch` builds a whole asset in one round
 trip. Pass `--tools full` to expose every op as its own MCP tool instead.
 
@@ -234,7 +252,7 @@ already the review artifact.
 
 ## What it can make
 
-89 ops across 13 namespaces. Full reference: [`docs/bforge/OPS.md`](../../docs/bforge/OPS.md).
+117 ops across 13 namespaces. Full reference: [`docs/bforge/OPS.md`](../../docs/bforge/OPS.md).
 
 - **`prop.*`** — crate, barrel, chest, sack, rock, crystal, tree, pillar, torch,
   fence, furniture, weapon, banner, debris

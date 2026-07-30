@@ -247,52 +247,64 @@ def _progression_report(rows: list[dict]) -> dict:
             for axis in obj.get("bounds", {}).get("size", [])
             if isinstance(axis, (int, float))
         ]
-        items.append({
-            "asset": Path(row["asset"]).name,
-            "triangles": int(info.get(
-                "total_triangles",
-                sum(int(obj.get("triangles", 0)) for obj in objects),
-            )),
-            "max_extent_m": round(max(sizes), 5) if sizes else None,
-            "materials": sorted(str(value) for value in info.get("materials", [])),
-        })
+        items.append(
+            {
+                "asset": Path(row["asset"]).name,
+                "triangles": int(
+                    info.get(
+                        "total_triangles",
+                        sum(int(obj.get("triangles", 0)) for obj in objects),
+                    )
+                ),
+                "max_extent_m": round(max(sizes), 5) if sizes else None,
+                "materials": sorted(str(value) for value in info.get("materials", [])),
+            }
+        )
 
     triangles = [item["triangles"] for item in items]
     extents = [item["max_extent_m"] for item in items if item["max_extent_m"]]
     increasing = len(triangles) > 1 and all(
-        current > previous for previous, current in zip(triangles, triangles[1:])
+        current > previous for previous, current in zip(triangles, triangles[1:], strict=False)
     )
     scale_ratio = round(max(extents) / min(extents), 4) if extents else None
     findings = []
     if len(items) < 2:
-        findings.append({
-            "severity": "warning",
-            "issue": "progression set has fewer than two assets",
-            "detail": "set comparison needs an ordered family, not a single asset",
-            "fix": "pass every unlock tier to bforge audit in progression order",
-        })
+        findings.append(
+            {
+                "severity": "warning",
+                "issue": "progression set has fewer than two assets",
+                "detail": "set comparison needs an ordered family, not a single asset",
+                "fix": "pass every unlock tier to bforge audit in progression order",
+            }
+        )
     elif not increasing:
-        findings.append({
-            "severity": "warning",
-            "issue": "mesh complexity does not rise through the progression set",
-            "detail": f"ordered triangle counts are {triangles}",
-            "fix": "inspect the contact sheets and confirm later tiers add readable silhouette detail",
-        })
+        findings.append(
+            {
+                "severity": "warning",
+                "issue": "mesh complexity does not rise through the progression set",
+                "detail": f"ordered triangle counts are {triangles}",
+                "fix": "inspect the contact sheets and confirm later tiers add readable silhouette detail",
+            }
+        )
     if scale_ratio is not None and scale_ratio > 1.5:
-        findings.append({
-            "severity": "warning",
-            "issue": "progression set has inconsistent authored scale",
-            "detail": f"largest max extent is {scale_ratio:.2f}x the smallest",
-            "fix": "normalize scale before export or document an intentional size-class change",
-        })
+        findings.append(
+            {
+                "severity": "warning",
+                "issue": "progression set has inconsistent authored scale",
+                "detail": f"largest max extent is {scale_ratio:.2f}x the smallest",
+                "fix": "normalize scale before export or document an intentional size-class change",
+            }
+        )
     if not findings:
         scale_detail = f"{scale_ratio:.2f}x" if scale_ratio is not None else "unavailable"
-        findings.append({
-            "severity": "info",
-            "issue": "ordered progression is structurally readable",
-            "detail": f"triangle counts rise {triangles}; max-extent ratio is {scale_detail}",
-            "fix": "confirm silhouette and material changes in the contact sheets",
-        })
+        findings.append(
+            {
+                "severity": "info",
+                "issue": "ordered progression is structurally readable",
+                "detail": f"triangle counts rise {triangles}; max-extent ratio is {scale_detail}",
+                "fix": "confirm silhouette and material changes in the contact sheets",
+            }
+        )
     return {
         "count": len(items),
         "items": items,
@@ -380,9 +392,7 @@ def cmd_audit(args) -> int:
     result = {"assets": rows}
     if args.progression_report:
         result["progression"] = _progression_report(rows)
-        failed = failed or (
-            args.fail_on == "warning" and result["progression"]["warnings"] > 0
-        )
+        failed = failed or (args.fail_on == "warning" and result["progression"]["warnings"] > 0)
     _emit(result, True)
     return 1 if failed and args.fail_on != "never" else 0
 

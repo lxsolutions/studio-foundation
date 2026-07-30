@@ -258,6 +258,63 @@ class Architecture(ForgeCase):
         self.assertEqual(polis["portal_width"], 0.0)
         self.assertLess(polis["parts"], 110)
 
+    def test_defense_tower_family_has_distinct_deterministic_silhouettes(self):
+        expected = {
+            "arrow": "elevated_archer_crown",
+            "ballista": "horizontal_torsion_engine",
+            "storm": "vertical_bronze_conductor",
+        }
+        family = {}
+        for style, silhouette in expected.items():
+            self.forge.call("session.reset")
+            tower = self.forge.call(
+                "arch.defense_tower",
+                name=f"{style}_tower",
+                style=style,
+                width=3.0,
+                height=5.2,
+            )
+            family[style] = tower
+            self.assertEqual(tower["style"], style)
+            self.assertEqual(tower["silhouette"], silhouette)
+            self.assertGreaterEqual(tower["parts"], 20)
+            self.assertGreater(tower["triangles"], 500)
+            self.assertLess(tower["triangles"], 9_000)
+            self.assertAlmostEqual(tower["bounds"]["min"][2], 0.0, places=3)
+            self.assertGreater(tower["bounds"]["size"][0], 2.7)
+            self.assertGreater(tower["bounds"]["size"][1], 2.7)
+            self.assertEqual(
+                tower["materials"],
+                [
+                    "m_defense_stone",
+                    "m_defense_foundation",
+                    "m_defense_timber",
+                    "m_defense_metal",
+                    "m_defense_cloth",
+                    "m_defense_energy",
+                ],
+            )
+
+        self.assertGreater(
+            family["storm"]["bounds"]["size"][2],
+            family["ballista"]["bounds"]["size"][2],
+        )
+        self.assertGreater(
+            family["ballista"]["bounds"]["size"][0],
+            family["storm"]["bounds"]["size"][0],
+        )
+
+        self.forge.call("session.reset")
+        repeated = self.forge.call(
+            "arch.defense_tower",
+            name="arrow_tower",
+            style="arrow",
+            width=3.0,
+            height=5.2,
+        )
+        self.assertEqual(family["arrow"]["triangles"], repeated["triangles"])
+        self.assertEqual(family["arrow"]["bounds"], repeated["bounds"])
+
 
 class Transforms(ForgeCase):
     def test_apply_clears_rotation_and_scale(self):
@@ -879,16 +936,11 @@ class Export(ForgeCase):
             keep_transform=True,
         )
         report = self.forge.call("check.asset", triangle_budget=5000)
-        transform = next(
-            check for check in report["checks"] if check["id"] == "transforms:spear"
-        )
+        transform = next(check for check in report["checks"] if check["id"] == "transforms:spear")
         self.assertEqual(transform["level"], "ok")
         exported = self.forge.call("export.gltf", out="attached.glb", strict=True)
         self.assertFalse(
-            any(
-                "spear" in warning and "rotation" in warning
-                for warning in exported["warnings"]
-            )
+            any("spear" in warning and "rotation" in warning for warning in exported["warnings"])
         )
 
     def test_strict_export_blocks_unbaked_procedural_materials(self):
