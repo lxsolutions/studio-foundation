@@ -363,11 +363,35 @@ def check_critique(ctx, objects, texture_size):
         "path": ("path", None, "PNG, JPEG or WebP to analyse — a render, sprite sheet, contact sheet, or baked texture"),
         "colors": ("int", 6, "How many dominant colours to report"),
         "background": ("color", [0.05, 0.055, 0.065, 1.0], "Backdrop colour, excluded from subject stats"),
+        "require_alpha": ("bool", False, "Fail when the image has no meaningful transparent pixels"),
+        "require_clear_corners": ("bool", False, "Fail when the four corners are not transparent; useful for UI icons and cutouts"),
+        "require_square": ("bool", False, "Fail when width and height differ"),
+        "minimum_size": ("int", 0, "Fail when either image dimension is below this many pixels (0 disables)"),
+        "minimum_coverage": ("num", 0.04, "Minimum fraction of the frame occupied by the visible subject"),
+        "maximum_coverage": ("num", 1.0, "Maximum fraction of the frame occupied by the visible subject"),
     },
     tags=["check", "inspect"],
     mutates=False,
 )
-def check_image(ctx, path, colors, background):
+def check_image(
+    ctx,
+    path,
+    colors,
+    background,
+    require_alpha,
+    require_clear_corners,
+    require_square,
+    minimum_size,
+    minimum_coverage,
+    maximum_coverage,
+):
+    if minimum_size < 0:
+        raise OpError("minimum_size must be zero or greater")
+    if not 0 <= minimum_coverage <= maximum_coverage <= 1:
+        raise OpError(
+            "coverage bounds must satisfy 0 <= minimum_coverage <= "
+            "maximum_coverage <= 1"
+        )
     try:
         import numpy
     except ImportError as exc:  # pragma: no cover - Blender bundles numpy
@@ -387,28 +411,77 @@ def check_image(ctx, path, colors, background):
         bpy.data.images.remove(image)
 
     rgb = data[:, :, :3]
+    alpha = data[:, :, 3]
     # Rec. 709 luma: matches how an eye weights the channels, so "too bright"
     # here means what it means visually.
     luma = rgb @ numpy.array([0.2126, 0.7152, 0.0722], dtype=numpy.float32)
 
-    # Sample the actual corners rather than trusting a nominal backdrop colour:
-    # the world is lit and tone-mapped like everything else, so the rendered
-    # background never matches the value that was set on it.
     corner = min(8, width // 8, height // 8) or 1
-    corners = numpy.concatenate([
-        rgb[:corner, :corner].reshape(-1, 3), rgb[:corner, -corner:].reshape(-1, 3),
-        rgb[-corner:, :corner].reshape(-1, 3), rgb[-corner:, -corner:].reshape(-1, 3),
+    corner_alpha = numpy.concatenate([
+        alpha[:corner, :corner].reshape(-1), alpha[:corner, -corner:].reshape(-1),
+        alpha[-corner:, :corner].reshape(-1), alpha[-corner:, -corner:].reshape(-1),
     ])
-    backdrop = numpy.median(corners, axis=0)
-    if float(numpy.std(corners)) > 0.05:
-        backdrop = numpy.array(background[:3], dtype=numpy.float32)
-    distance = numpy.linalg.norm(rgb - backdrop, axis=2)
-    subject = distance > 0.06
+    transparent_fraction = float((alpha <= 0.01).mean())
+    partial_fraction = float(((alpha > 0.01) & (alpha < 0.99)).mean())
+    has_transparency = transparent_fraction > 1e-4 or partial_fraction > 1e-4
+    corners_clear = float((corner_alpha <= 0.01).mean()) >= 0.99
+
+    # Alpha is the authoritative subject mask for a cutout. Previously a
+    # transparent green-screen removal was measured as though invisible RGB
+    # fringe were visible background, giving a false coverage number and no way
+    # to prove that a UI icon actually had useful transparency.
+    if has_transparency:
+        subject = alpha > 0.01
+    else:
+        # Sample the actual corners rather than trusting a nominal backdrop
+        # colour: the world is lit and tone-mapped like everything else, so the
+        # rendered background rarely matches the value originally assigned.
+        corners = numpy.concatenate([
+            rgb[:corner, :corner].reshape(-1, 3), rgb[:corner, -corner:].reshape(-1, 3),
+            rgb[-corner:, :corner].reshape(-1, 3), rgb[-corner:, -corner:].reshape(-1, 3),
+        ])
+        backdrop = numpy.median(corners, axis=0)
+        if float(numpy.std(corners)) > 0.05:
+            backdrop = numpy.array(background[:3], dtype=numpy.float32)
+        distance = numpy.linalg.norm(rgb - backdrop, axis=2)
+        subject = distance > 0.06
+
     coverage = float(subject.mean())
     if coverage < 1e-4:
         raise OpError(
-            f"{target.name} is essentially empty — nothing but backdrop. The camera "
-            "is probably pointed away from the subject, or the scene is unlit."
+            f"{target.name} is essentially empty — nothing but backdrop or transparent "
+            "pixels. The camera is probably pointed away from the subject, or the alpha "
+            "matte removed it."
+        )
+
+    validation_findings = []
+    if require_alpha and not has_transparency:
+        validation_findings.append(
+            "alpha is required, but the image is fully opaque — export RGBA or remove "
+            "the chroma-key background before shipping."
+        )
+    if require_clear_corners and not corners_clear:
+        validation_findings.append(
+            "the corners are not transparent — trim the backdrop or add padding around "
+            "the cutout before using it as a UI icon."
+        )
+    if require_square and width != height:
+        validation_findings.append(
+            f"image is {width}x{height}, not square — crop to a square icon canvas."
+        )
+    if minimum_size > 0 and min(width, height) < minimum_size:
+        validation_findings.append(
+            f"short edge is {min(width, height)}px, below the {minimum_size}px minimum."
+        )
+    if coverage < minimum_coverage:
+        validation_findings.append(
+            f"the subject fills only {coverage:.1%} of frame, below the "
+            f"{minimum_coverage:.1%} minimum — crop closer."
+        )
+    if coverage > maximum_coverage:
+        validation_findings.append(
+            f"the subject fills {coverage:.1%} of frame, above the "
+            f"{maximum_coverage:.1%} maximum — add safe padding."
         )
 
     subject_luma = luma[subject]
@@ -443,7 +516,7 @@ def check_image(ctx, path, colors, background):
             "_bucket": [round(b, 3) for b in bucket],
         })
 
-    findings = []
+    findings = list(validation_findings)
     if blown > 0.08:
         findings.append(
             f"{blown:.0%} of the subject is blown to white — the LIGHTING is too hot, "
@@ -461,15 +534,16 @@ def check_image(ctx, path, colors, background):
             f"near-monochrome (mean saturation {saturation:.2f}) — if colour was expected, "
             "the material is probably not reaching the shader."
         )
-    if coverage < 0.04:
-        findings.append(
-            f"the subject fills only {coverage:.1%} of frame — move the camera closer."
-        )
-
     return {
         "path": str(target),
         "size": [width, height],
         "subject_coverage": round(coverage, 4),
+        "alpha": {
+            "has_transparency": has_transparency,
+            "transparent_fraction": round(transparent_fraction, 4),
+            "partial_fraction": round(partial_fraction, 4),
+            "corners_clear": corners_clear,
+        },
         "luma": {
             "mean": round(float(subject_luma.mean()), 4),
             "p1": round(floor, 4),

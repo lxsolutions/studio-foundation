@@ -739,6 +739,20 @@ class ExplicitCamera(ForgeCase):
         # output .png is not enough: game UI cards need a real alpha channel.
         self.assertEqual(png[25], 6)
         self.assertTrue(result["transparent"])
+        analysis = self.forge.call(
+            "check.image",
+            path=result["path"],
+            require_alpha=True,
+            require_clear_corners=True,
+            require_square=True,
+            minimum_size=128,
+            minimum_coverage=0.01,
+            maximum_coverage=0.98,
+        )
+        self.assertTrue(analysis["ok"], analysis["findings"])
+        self.assertTrue(analysis["alpha"]["has_transparency"])
+        self.assertTrue(analysis["alpha"]["corners_clear"])
+        self.assertGreater(analysis["alpha"]["transparent_fraction"], 0.01)
 
 
 class UVs(ForgeCase):

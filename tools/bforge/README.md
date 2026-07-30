@@ -387,6 +387,24 @@ forge.call(
 )
 ```
 
+Validate those cutouts with the same tool instead of trusting a filename or a
+checkerboard preview. `check.image` now uses alpha as the authoritative subject
+mask and can enforce square dimensions, transparent corners, safe coverage and
+a minimum shipping size:
+
+```python
+forge.call(
+    "check.image",
+    path="guardian-art.png",
+    require_alpha=True,
+    require_clear_corners=True,
+    require_square=True,
+    minimum_size=256,
+    minimum_coverage=0.20,
+    maximum_coverage=0.92,
+)
+```
+
 ---
 
 ## Design rules

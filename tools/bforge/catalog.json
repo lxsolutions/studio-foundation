@@ -2432,6 +2432,36 @@
               0.065,
               1.0
             ]
+          },
+          "require_alpha": {
+            "type": "boolean",
+            "description": "Fail when the image has no meaningful transparent pixels",
+            "default": false
+          },
+          "require_clear_corners": {
+            "type": "boolean",
+            "description": "Fail when the four corners are not transparent; useful for UI icons and cutouts",
+            "default": false
+          },
+          "require_square": {
+            "type": "boolean",
+            "description": "Fail when width and height differ",
+            "default": false
+          },
+          "minimum_size": {
+            "type": "integer",
+            "description": "Fail when either image dimension is below this many pixels (0 disables)",
+            "default": 0
+          },
+          "minimum_coverage": {
+            "type": "number",
+            "description": "Minimum fraction of the frame occupied by the visible subject",
+            "default": 0.04
+          },
+          "maximum_coverage": {
+            "type": "number",
+            "description": "Maximum fraction of the frame occupied by the visible subject",
+            "default": 1.0
           }
         },
         "additionalProperties": false

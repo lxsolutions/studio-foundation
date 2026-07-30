@@ -541,6 +541,12 @@ Measure an image instead of eyeballing it: luminance range, blown highlights, cr
 | `path` | string | None | PNG, JPEG or WebP to analyse — a render, sprite sheet, contact sheet, or baked texture |
 | `colors` | integer | 6 | How many dominant colours to report |
 | `background` | array | [0.05, 0.055, 0.065, 1.0] | Backdrop colour, excluded from subject stats |
+| `require_alpha` | boolean | False | Fail when the image has no meaningful transparent pixels |
+| `require_clear_corners` | boolean | False | Fail when the four corners are not transparent; useful for UI icons and cutouts |
+| `require_square` | boolean | False | Fail when width and height differ |
+| `minimum_size` | integer | 0 | Fail when either image dimension is below this many pixels (0 disables) |
+| `minimum_coverage` | number | 0.04 | Minimum fraction of the frame occupied by the visible subject |
+| `maximum_coverage` | number | 1.0 | Maximum fraction of the frame occupied by the visible subject |
 
 ### `check.silhouette`
 
