@@ -65,6 +65,12 @@ def srgb_to_linear(channel: float) -> float:
     return channel / 12.92 if channel <= 0.04045 else ((channel + 0.055) / 1.055) ** 2.4
 
 
+def linear_to_srgb(channel: float) -> float:
+    """Convert a physical linear channel back to the artist-facing display value."""
+    channel = max(0.0, min(1.0, float(channel)))
+    return channel * 12.92 if channel <= 0.0031308 else 1.055 * channel ** (1.0 / 2.4) - 0.055
+
+
 def resolve_color(value) -> tuple:
     if isinstance(value, str):
         if value in PALETTE:

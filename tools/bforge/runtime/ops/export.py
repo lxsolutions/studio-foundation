@@ -241,6 +241,47 @@ def export_blend(ctx, out, compress, pack_textures):
     }
 
 
+def _material_contract(material):
+    """Describe the exact engine-facing PBR constants and their display colour.
+
+    Blender and glTF store base colour in linear space. Engine palette APIs
+    commonly accept sRGB hex values instead. Recording both makes that boundary
+    explicit and prevents a runtime from feeding a display value directly into
+    PBR albedo, which washes dark materials out dramatically.
+    """
+    contract = {
+        "name": material.name,
+        "preset": str(material.get("bforge_preset", material.name)),
+    }
+    if not material.use_nodes:
+        return contract
+    bsdf = next(
+        (node for node in material.node_tree.nodes if node.type == "BSDF_PRINCIPLED"),
+        None,
+    )
+    if bsdf is None:
+        return contract
+
+    base = bsdf.inputs.get("Base Color")
+    if base is not None and not base.is_linked:
+        rgba = [float(value) for value in base.default_value[:4]]
+        display = [
+            max(0, min(255, round(mat_lib.linear_to_srgb(value) * 255)))
+            for value in rgba[:3]
+        ]
+        contract["base_color"] = {
+            "linear": [round(value, 6) for value in rgba],
+            "srgb_hex": "#" + "".join(f"{value:02x}" for value in display),
+        }
+    roughness = bsdf.inputs.get("Roughness")
+    if roughness is not None and not roughness.is_linked:
+        contract["roughness"] = round(float(roughness.default_value), 4)
+    metallic = bsdf.inputs.get("Metallic")
+    if metallic is not None and not metallic.is_linked:
+        contract["metallic"] = round(float(metallic.default_value), 4)
+    return contract
+
+
 @op(
     "export.meta",
     summary="Write the .meta.json sidecar the studio asset pipeline requires — id, licence, provenance including AI-generation disclosure, budgets and policies. Without this, `just asset-validate` rejects the asset.",
@@ -266,6 +307,12 @@ def export_meta(ctx, out, asset_id, category, license, creator, source, ai_tool,
     identifier = scene_lib.sanitize(asset_id)
     meshes = [o for o in scene_lib.mesh_objects()]
     measured = sum(mesh_lib.tri_count(o) for o in meshes)
+    measured_materials = {
+        material.name: material
+        for obj in meshes
+        for material in obj.data.materials
+        if material
+    }
     payload = {
         "asset_id": identifier,
         "category": category,
@@ -292,9 +339,11 @@ def export_meta(ctx, out, asset_id, category, license, creator, source, ai_tool,
         "measured": {
             "triangles": measured,
             "objects": len(meshes),
-            "materials": sorted(
-                {m.name for o in meshes for m in o.data.materials if m}
-            ),
+            "materials": sorted(measured_materials),
+            "material_contracts": [
+                _material_contract(measured_materials[name])
+                for name in sorted(measured_materials)
+            ],
         },
     }
     path = ctx.out_path(out, ".json")

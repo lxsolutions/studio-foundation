@@ -277,7 +277,7 @@ in this repo's `.mcp.json`:
 ```
 
 Five tools by default — `bforge_ops`, `bforge_describe`, `bforge_run`,
-`bforge_run_batch`, `bforge_session` — because 117 individual MCP tools swamps
+`bforge_run_batch`, `bforge_session` — because 119 individual MCP tools swamps
 most clients' tool lists. `bforge_run_batch` builds a whole asset in one round
 trip. Pass `--tools full` to expose every op as its own MCP tool instead.
 
@@ -315,6 +315,13 @@ Generation alone is not the hard part. This is:
 Both halves matter. `check.critique` catches non-manifold edges and texel
 mismatch that no render shows; the contact sheet catches "the proportions are
 wrong" that no metric shows.
+
+The generated `.meta.json` also carries a `measured.material_contracts` entry
+for every material: its linear PBR base colour, artist-facing sRGB hex,
+roughness, metallic value and stable material name. Engines can recolour an
+asset without guessing which colour space their shader property expects; this
+is especially important for dark foliage and cloth, where assigning the hex
+channels directly to a linear albedo produces a visibly washed-out result.
 
 For an ordered unlock family, audit every runtime asset together and request the
 set comparison:

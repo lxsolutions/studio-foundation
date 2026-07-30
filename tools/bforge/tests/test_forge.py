@@ -1179,6 +1179,29 @@ class Export(ForgeCase):
         self.assertEqual(meta["provenance"]["method"], "ai_generated")
         self.assertEqual(meta["provenance"]["ai"]["prompt"], "a wooden crate")
 
+    def test_meta_sidecar_records_linear_and_display_material_contracts(self):
+        self.forge.call(
+            "build.box",
+            name="olive_leaf",
+            material="leaf",
+            color="#4e6145",
+        )
+        result = self.forge.call(
+            "export.meta",
+            out="olive_leaf.meta.json",
+            asset_id="olive_leaf",
+        )
+        meta = json.loads(Path(result["path"]).read_text(encoding="utf-8"))
+        self.assertEqual(meta["measured"]["materials"], ["m_leaf"])
+        contracts = meta["measured"]["material_contracts"]
+        self.assertEqual(len(contracts), 1)
+        self.assertEqual(contracts[0]["name"], "m_leaf")
+        self.assertEqual(contracts[0]["base_color"]["srgb_hex"], "#4e6145")
+        self.assertEqual(len(contracts[0]["base_color"]["linear"]), 4)
+        self.assertLess(contracts[0]["base_color"]["linear"][0], 0.1)
+        self.assertAlmostEqual(contracts[0]["roughness"], 0.75, places=3)
+        self.assertEqual(contracts[0]["metallic"], 0.0)
+
     def test_crossbow_styles_add_real_construction_with_one_joined_mesh(self):
         previous_tris = 0
         for style in ("pilgrim", "repeater", "daedalus", "aegis"):
