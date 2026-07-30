@@ -1463,3 +1463,54 @@ requiring each one to compensate. 56 steps, lint clean, forge clean.
 
 Committed the corrected recipe back to `examples/`, so the fixture now encodes the
 convention as well as the geometry.
+
+## R37 — Cold Plains grade lands; the crossbow mystery was never mine
+
+**Bar re-specified by the owner, and it is a far better one: Diablo II Act I --
+Rogue Encampment, Cold Plains.** No reference frames obtainable lawfully, but
+unlike "Diablo IV" this target is mostly a PALETTE, and palette is measurable:
+overcast rather than sunlit, heavily desaturated, cold ambient with warmth only
+where there is fire, haze closing the distance.
+
+**`coldplains` grade, measured:**
+
+| | aegean | coldplains |
+|---|---|---|
+| chroma | 0.52 | **0.37** |
+| luma mean | 88 | **62** |
+| black% | 1.3 | **10.3** |
+| edge energy | 30.1 | 23.3 |
+| script ms | 20.3 | **16.07** |
+
+Global saturation -34, shadows and midtones pulled to hue ~200, warmth surviving
+only in highlights so a brazier becomes the one warm thing in frame, fog roughly
+tripled with an overcast grey horizon instead of sky-blue, exposure down to 1.06,
+contrast up to 1.42. Script time is back UNDER the 16.67 ms budget, though that is
+not confidently attributable to this change alone.
+
+**Looked at:** genuinely colder and moodier -- desaturated olive ground, slate sky.
+Three things still fight the reference, and none are grading problems: the trees
+are round green canopies where Act I has bare gnarled silhouettes, the lake is
+still bright cyan and now sticks out badly against a muted palette, and it reads
+more DUSK than OVERCAST because the sky is dark blue rather than grey.
+
+**Cold Plains dressing kit forged** (48 steps, lint clean, 0 inverted normals,
+AO in COLOR_0, all orientations correct): `cp_dead_tree` 136 tris at 4.79 m,
+`cp_cairn` 80 tris, `cp_fence` 540 tris at 3.48 m wide. Not yet wired.
+
+**The crossbow jumble was never my swap.** A script shot interrogating the live
+scene settled in one run what two rounds of pixel-reading could not:
+
+    bowRig = [vmStock:OFF ... spike_crossbow:OFF, spike_crossbow_pilgrim:on,
+              spike_crossbow_repeater:on, spike_crossbow_daedalus:on,
+              spike_crossbow_aegis:on]
+
+My primitives are correctly off and my base crossbow is off. A parallel session has
+forged FOUR crossbow tiers and all four are enabled simultaneously, overlapping in
+the player's hands. Left alone deliberately -- it is their work in flight.
+
+**Harness gap that cost those two rounds: it captured console.error and not
+console.warn.** The deliberately "loud" fallback in the game used `warn`, so the
+loudest signal the code could emit was invisible to the instrument watching it.
+Warnings are now captured and printed under a heading that says to read them
+before inferring from pixels.

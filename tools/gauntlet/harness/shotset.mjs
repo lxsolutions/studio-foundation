@@ -290,9 +290,20 @@ async function main() {
   if (args.remote) await page.setViewportSize(viewport);
 
   const consoleErrors = [];
+  // Warnings, not just errors.
+  //
+  // A deliberately "loud" fallback in the game under test used console.warn to
+  // announce that a forged asset had failed to load and a placeholder was
+  // standing in. The harness collected errors only, so the loudest signal the
+  // game could produce was invisible to the instrument watching it, and several
+  // rounds were spent inferring from pixels what one captured line would have
+  // said outright. A warn is how well-behaved code reports a degraded path;
+  // ignoring it means only crashes are observable.
+  const consoleWarnings = [];
   const pageErrors = [];
   page.on('console', (m) => {
     if (m.type() === 'error') consoleErrors.push(m.text().slice(0, 8000));
+    else if (m.type() === 'warning') consoleWarnings.push(m.text().slice(0, 8000));
   });
   page.on('pageerror', (e) => pageErrors.push(String(e).slice(0, 8000)));
 
@@ -546,6 +557,7 @@ async function main() {
     bootMs,
     timing: summarizeTiming(timing.dt, timing.cb, timing.longTasks),
     consoleErrors: consoleErrors.slice(0, 25),
+    consoleWarnings: consoleWarnings.slice(0, 25),
     pageErrors: pageErrors.slice(0, 25),
     shots: results,
   };
@@ -557,6 +569,7 @@ async function main() {
     warn: all.filter((f) => f.severity === 'warn').length,
     info: all.filter((f) => f.severity === 'info').length,
     consoleErrors: consoleErrors.length,
+    consoleWarnings: consoleWarnings.length,
     pageErrors: pageErrors.length,
     softwareRenderer: gpu.software === true,
     staleBuild: staleness?.stale === true,
@@ -675,6 +688,12 @@ function renderMarkdown(r) {
     L.push('## Uncaught page errors');
     for (const e of r.pageErrors) L.push(`- ${e}`);
     L.push('');
+  }
+  if (r.consoleWarnings?.length) {
+    L.push('');
+    L.push('## Console warnings');
+    L.push('_A degraded path a game reports on purpose. Read these before inferring from pixels._');
+    for (const w of r.consoleWarnings) L.push(`- ${w}`);
   }
   if (r.consoleErrors.length) {
     L.push('## Console errors');
