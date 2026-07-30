@@ -19,7 +19,7 @@ from lib import mat as mat_lib
 from lib import mesh as mesh_lib
 from lib import scene as scene_lib
 from mathutils import Matrix, Vector
-from registry import OpError, op
+from registry import op
 
 BASE = {
     "name": ("str", "", "Object name (defaults to the recipe name)"),
@@ -49,9 +49,7 @@ def _recess_faces(bm, faces, inset, depth):
         )["faces"]
         for panel in inner:
             if panel.is_valid:
-                bmesh.ops.translate(
-                    bm, vec=panel.normal * -depth, verts=list(panel.verts)
-                )
+                bmesh.ops.translate(bm, vec=panel.normal * -depth, verts=list(panel.verts))
                 made.append(panel)
     return made
 
@@ -76,8 +74,20 @@ def _recess_faces(bm, faces, inset, depth):
     ),
     tags=["prop"],
 )
-def prop_crate(ctx, name, location, seed, size, frame_width, panel_depth, planks, bevel, material,
-               color, uv_scale):
+def prop_crate(
+    ctx,
+    name,
+    location,
+    seed,
+    size,
+    frame_width,
+    panel_depth,
+    planks,
+    bevel,
+    material,
+    color,
+    uv_scale,
+):
     ctx.reseed(seed)
     bm = mesh_lib.new_bmesh()
     faces = mesh_lib.add_box(bm, size=size, bevel=bevel, segments=2)
@@ -89,8 +99,14 @@ def prop_crate(ctx, name, location, seed, size, frame_width, panel_depth, planks
     obj = mesh_lib.to_object(bm, _named(name, "crate"))
     obj.location = location
     result = finish_lib.finish(
-        ctx, obj, material=material, color=color or None, uv="box", uv_scale=uv_scale,
-        origin="bottom", smooth=False,
+        ctx,
+        obj,
+        material=material,
+        color=color or None,
+        uv="box",
+        uv_scale=uv_scale,
+        origin="bottom",
+        smooth=False,
     )
     finish_lib.budget_note(ctx, obj, 600)
     return result
@@ -112,14 +128,31 @@ def prop_crate(ctx, name, location, seed, size, frame_width, panel_depth, planks
     ),
     tags=["prop"],
 )
-def prop_barrel(ctx, name, location, seed, height, radius, belly, segments, bands, band_material,
-                material, color, open_top):
+def prop_barrel(
+    ctx,
+    name,
+    location,
+    seed,
+    height,
+    radius,
+    belly,
+    segments,
+    bands,
+    band_material,
+    material,
+    color,
+    open_top,
+):
     ctx.reseed(seed)
     waist = radius * (1.0 - belly)
     profile = [
-        (0.0, 0.0), (waist, 0.0), (waist * 1.02, height * 0.06),
-        (radius, height * 0.32), (radius, height * 0.68),
-        (waist * 1.02, height * 0.94), (waist, height),
+        (0.0, 0.0),
+        (waist, 0.0),
+        (waist * 1.02, height * 0.06),
+        (radius, height * 0.32),
+        (radius, height * 0.68),
+        (waist * 1.02, height * 0.94),
+        (waist, height),
     ]
     if open_top:
         profile.append((waist * 0.88, height * 0.97))
@@ -131,8 +164,14 @@ def prop_barrel(ctx, name, location, seed, height, radius, belly, segments, band
     body = mesh_lib.to_object(bm, _named(name, "barrel"))
     body.location = location
     finish_lib.finish(
-        ctx, body, material=material, color=color or None, uv="cylinder",
-        origin="bottom", smooth=True, smooth_angle=45.0,
+        ctx,
+        body,
+        material=material,
+        color=color or None,
+        uv="cylinder",
+        origin="bottom",
+        smooth=True,
+        smooth_angle=45.0,
     )
 
     parts = [body]
@@ -144,8 +183,12 @@ def prop_barrel(ctx, name, location, seed, height, radius, belly, segments, band
         # Capped, not an open tube: an open tube shows the barrel's smooth-shaded
         # surface through its own rim and reads as a serrated edge.
         mesh_lib.add_cylinder(
-            band_bm, radius=band_radius, depth=height * 0.075, segments=segments,
-            center=(0.0, 0.0, z), cap=True,
+            band_bm,
+            radius=band_radius,
+            depth=height * 0.075,
+            segments=segments,
+            center=(0.0, 0.0, z),
+            cap=True,
         )
         band = mesh_lib.to_object(band_bm, f"{body.name}_band{index}")
         band.location = location
@@ -167,7 +210,7 @@ def prop_barrel(ctx, name, location, seed, height, radius, belly, segments, band
 def _profile_radius(profile, height):
     """Interpolate a lathe profile's radius at a given height."""
     best = profile[0][0]
-    for (r0, h0), (r1, h1) in zip(profile, profile[1:]):
+    for (r0, h0), (r1, h1) in zip(profile, profile[1:], strict=False):
         if h0 <= height <= h1 and abs(h1 - h0) > 1e-9:
             t = (height - h0) / (h1 - h0)
             return r0 + (r1 - r0) * t
@@ -189,8 +232,19 @@ def _profile_radius(profile, height):
     ),
     tags=["prop"],
 )
-def prop_chest(ctx, name, location, seed, size, lid_height, lid_segments, separate_lid, material,
-               trim_material, color):
+def prop_chest(
+    ctx,
+    name,
+    location,
+    seed,
+    size,
+    lid_height,
+    lid_segments,
+    separate_lid,
+    material,
+    trim_material,
+    color,
+):
     ctx.reseed(seed)
     base_name = _named(name, "chest")
     sx, sy, sz = size
@@ -201,8 +255,9 @@ def prop_chest(ctx, name, location, seed, size, lid_height, lid_segments, separa
     _recess_faces(bm, sides, 0.055, 0.02)
     body = mesh_lib.to_object(bm, base_name)
     body.location = location
-    finish_lib.finish(ctx, body, material=material, color=color or None, uv="box",
-                      origin="bottom", smooth=False)
+    finish_lib.finish(
+        ctx, body, material=material, color=color or None, uv="box", origin="bottom", smooth=False
+    )
 
     # Half-cylinder lid, laid on its side along X.
     lid_bm = mesh_lib.new_bmesh()
@@ -227,8 +282,16 @@ def prop_chest(ctx, name, location, seed, size, lid_height, lid_segments, separa
     mesh_lib.cleanup(lid_bm)
     lid = mesh_lib.to_object(lid_bm, f"{base_name}_lid")
     lid.location = (location[0], location[1], location[2] + sz)
-    finish_lib.finish(ctx, lid, material=material, color=color or None, uv="box",
-                      origin="center_xy", smooth=True, smooth_angle=50.0)
+    finish_lib.finish(
+        ctx,
+        lid,
+        material=material,
+        color=color or None,
+        uv="box",
+        origin="center_xy",
+        smooth=True,
+        smooth_angle=50.0,
+    )
 
     # Iron banding + lock plate.
     trim = []
@@ -287,10 +350,15 @@ def prop_chest(ctx, name, location, seed, size, lid_height, lid_segments, separa
 def prop_sack(ctx, name, location, seed, height, radius, segments, slump, material, color):
     rng = ctx.reseed(seed)
     profile = [
-        (0.0, 0.0), (radius * (1.0 + slump), 0.02), (radius * (1.0 + slump * 0.7), height * 0.22),
-        (radius, height * 0.5), (radius * 0.82, height * 0.72),
-        (radius * 0.3, height * 0.88), (radius * 0.36, height * 0.95),
-        (radius * 0.22, height), (0.0, height),
+        (0.0, 0.0),
+        (radius * (1.0 + slump), 0.02),
+        (radius * (1.0 + slump * 0.7), height * 0.22),
+        (radius, height * 0.5),
+        (radius * 0.82, height * 0.72),
+        (radius * 0.3, height * 0.88),
+        (radius * 0.36, height * 0.95),
+        (radius * 0.22, height),
+        (0.0, height),
     ]
     bm = mesh_lib.new_bmesh()
     mesh_lib.lathe(bm, profile, segments=segments)
@@ -298,10 +366,289 @@ def prop_sack(ctx, name, location, seed, height, radius, segments, slump, materi
     obj = mesh_lib.to_object(bm, _named(name, "sack"))
     obj.location = location
     result = finish_lib.finish(
-        ctx, obj, material=material, color=color or None, uv="cylinder",
-        origin="bottom", smooth=True, smooth_angle=60.0,
+        ctx,
+        obj,
+        material=material,
+        color=color or None,
+        uv="cylinder",
+        origin="bottom",
+        smooth=True,
+        smooth_angle=60.0,
     )
     finish_lib.budget_note(ctx, obj, 700)
+    return result
+
+
+# ---------------------------------------------------------------------------
+# valuables and equipment
+# ---------------------------------------------------------------------------
+
+
+@op(
+    "prop.relic",
+    summary="Grounded game-loot relic as a Greek medallion, signet ring, or votive idol. Separate aged metal, trim, and inset materials remain readable at pickup scale. ~300-700 tris.",
+    params=_params(
+        form=(
+            "enum:medallion|ring|idol",
+            "medallion",
+            "Loot silhouette: hanging seal, gemstone signet, or small temple votive",
+        ),
+        motif=(
+            "enum:rosette|lambda|plain",
+            "rosette",
+            "Raised face mark for medallions; ignored by ring and idol forms",
+        ),
+        size=("num", 0.42, "Overall height in metres"),
+        material=("str", "bronze", "Primary aged-metal material preset"),
+        trim_material=("str", "gold", "Raised rim and detail material preset"),
+        gem_material=("str", "crystal", "Inset stone material preset"),
+        color=("str", "", "Override primary metal colour"),
+        gem_color=("str", "crystal_violet", "Inset stone colour"),
+    ),
+    tags=["prop", "loot", "equipment"],
+)
+def prop_relic(
+    ctx,
+    name,
+    location,
+    seed,
+    form,
+    motif,
+    size,
+    material,
+    trim_material,
+    gem_material,
+    color,
+    gem_color,
+):
+    """Build small valuables with a silhouette strong enough for ground loot."""
+
+    rng = ctx.reseed(seed)
+    base_name = _named(name, "relic")
+    size = max(0.12, size)
+    parts = []
+
+    def vertical_cylinder(label, radius, depth, segments, centre_z, preset, tint=None):
+        bm = mesh_lib.new_bmesh()
+        mesh_lib.add_cylinder(
+            bm,
+            radius=radius,
+            depth=depth,
+            segments=segments,
+            center=(0.0, 0.0, 0.0),
+            cap=True,
+        )
+        bmesh.ops.transform(
+            bm,
+            matrix=Matrix.Rotation(math.pi * 0.5, 4, "X"),
+            verts=list(bm.verts),
+        )
+        bmesh.ops.translate(bm, vec=Vector((0.0, 0.0, centre_z)), verts=list(bm.verts))
+        obj = mesh_lib.to_object(bm, f"{base_name}_{label}")
+        finish_lib.finish(
+            ctx,
+            obj,
+            material=preset,
+            color=tint or None,
+            uv="cylinder",
+            # Geometry is already authored around its assembly position. A
+            # per-part centre origin would recenter every piece at (0,0,0)
+            # before the join, collapsing bails and face relief into the coin.
+            origin=None,
+            smooth=True,
+            smooth_angle=42.0,
+        )
+        parts.append(obj)
+        return obj
+
+    def vertical_torus(label, major, minor, segments, centre_z, preset, tint=None):
+        bm = mesh_lib.new_bmesh()
+        mesh_lib.add_torus(
+            bm,
+            major=major,
+            minor=minor,
+            major_segments=segments,
+            minor_segments=6,
+        )
+        bmesh.ops.transform(
+            bm,
+            matrix=Matrix.Rotation(math.pi * 0.5, 4, "X"),
+            verts=list(bm.verts),
+        )
+        bmesh.ops.translate(bm, vec=Vector((0.0, 0.0, centre_z)), verts=list(bm.verts))
+        obj = mesh_lib.to_object(bm, f"{base_name}_{label}")
+        finish_lib.finish(
+            ctx,
+            obj,
+            material=preset,
+            color=tint or None,
+            uv="smart_packed",
+            origin=None,
+            smooth=True,
+            smooth_angle=48.0,
+        )
+        parts.append(obj)
+        return obj
+
+    def front_bar(label, length, width, angle, offset, centre_z, preset):
+        bm = mesh_lib.new_bmesh()
+        mesh_lib.add_box(
+            bm,
+            size=(length, size * 0.025, width),
+            center=(offset, 0.0, 0.0),
+            bevel=size * 0.006,
+            segments=1,
+        )
+        bmesh.ops.transform(
+            bm,
+            matrix=Matrix.Rotation(angle, 4, "Y"),
+            verts=list(bm.verts),
+        )
+        # The contact-sheet front camera sits on -Y. Put relief on that
+        # authored face explicitly instead of depending on two-sided overlap.
+        bmesh.ops.translate(
+            bm,
+            vec=Vector((0.0, -size * 0.061, centre_z)),
+            verts=list(bm.verts),
+        )
+        obj = mesh_lib.to_object(bm, f"{base_name}_{label}")
+        finish_lib.finish(
+            ctx,
+            obj,
+            material=preset,
+            uv="box",
+            origin=None,
+            smooth=False,
+        )
+        parts.append(obj)
+        return obj
+
+    if form == "medallion":
+        radius = size * 0.40
+        centre_z = radius + size * 0.025
+        vertical_cylinder(
+            "seal", radius, size * 0.095, 24, centre_z, material, color
+        )
+        vertical_torus(
+            "rim", radius * 0.96, size * 0.04, 24, centre_z, trim_material
+        )
+        if motif == "rosette":
+            for ray in range(8):
+                front_bar(
+                    f"ray{ray}",
+                    radius * 0.24,
+                    radius * 0.065,
+                    ray * math.tau / 8,
+                    radius * 0.55,
+                    centre_z,
+                    trim_material,
+                )
+        elif motif == "lambda":
+            front_bar(
+                "lambda_left",
+                radius * 0.72,
+                radius * 0.085,
+                math.radians(57),
+                radius * 0.05,
+                centre_z - radius * 0.03,
+                trim_material,
+            )
+            front_bar(
+                "lambda_right",
+                radius * 0.72,
+                radius * 0.085,
+                math.radians(123),
+                radius * 0.05,
+                centre_z - radius * 0.03,
+                trim_material,
+            )
+        vertical_cylinder(
+            "stone",
+            radius * (0.24 + rng.uniform(-0.025, 0.025)),
+            size * 0.125,
+            6,
+            centre_z,
+            gem_material,
+            gem_color,
+        )
+        vertical_torus(
+            "bail", size * 0.105, size * 0.024, 12, centre_z + radius * 1.18, trim_material
+        )
+    elif form == "ring":
+        ring_centre = size * 0.34
+        vertical_torus(
+            "band", size * 0.27, size * 0.055, 20, ring_centre, material, color
+        )
+        vertical_cylinder(
+            "bezel", size * 0.14, size * 0.12, 8, size * 0.63, trim_material
+        )
+        vertical_cylinder(
+            "stone", size * 0.095, size * 0.145, 6, size * 0.63, gem_material, gem_color
+        )
+    else:
+        # A votive is deliberately architectural rather than humanoid: at
+        # pickup scale a tiny statue becomes visual noise, while a stepped
+        # temple token still reads from the tactical camera.
+        base_bm = mesh_lib.new_bmesh()
+        mesh_lib.add_box(
+            base_bm,
+            size=(size * 0.52, size * 0.28, size * 0.12),
+            center=(0.0, 0.0, size * 0.06),
+            bevel=size * 0.018,
+            segments=2,
+        )
+        mesh_lib.add_cylinder(
+            base_bm,
+            radius=size * 0.18,
+            radius_top=size * 0.12,
+            depth=size * 0.58,
+            segments=8,
+            center=(0.0, 0.0, size * 0.39),
+            cap=True,
+        )
+        body = mesh_lib.to_object(base_bm, f"{base_name}_votive")
+        finish_lib.finish(
+            ctx,
+            body,
+            material=material,
+            color=color or None,
+            uv="smart_packed",
+            origin=None,
+            smooth=False,
+        )
+        parts.append(body)
+        crown_bm = mesh_lib.new_bmesh()
+        mesh_lib.add_box(
+            crown_bm,
+            size=(size * 0.40, size * 0.25, size * 0.10),
+            center=(0.0, 0.0, size * 0.73),
+            bevel=size * 0.015,
+            segments=2,
+        )
+        crown = mesh_lib.to_object(crown_bm, f"{base_name}_crown")
+        finish_lib.finish(
+            ctx,
+            crown,
+            material=trim_material,
+            uv="box",
+            origin=None,
+            smooth=False,
+        )
+        parts.append(crown)
+        vertical_cylinder(
+            "stone", size * 0.09, size * 0.15, 6, size * 0.46, gem_material, gem_color
+        )
+
+    relic = scene_lib.join(parts, base_name)
+    scene_lib.set_origin(relic, "bottom")
+    relic.location = location
+    scene_lib.apply_transforms(relic)
+    result = finish_lib.report(ctx, relic)
+    finish_lib.budget_note(ctx, relic, 1200)
+    result["form"] = form
+    result["motif"] = motif if form == "medallion" else "none"
+    result["part_count"] = len(parts)
+    result["pickup_scale"] = round(size, 3)
     return result
 
 
@@ -312,11 +659,21 @@ def prop_sack(ctx, name, location, seed, height, radius, segments, slump, materi
 
 @op(
     "prop.rock",
-    summary="Irregular rock with a flat base so it sits on the ground instead of floating. ~200 tris at detail 2. The single most reused environment prop in any game.",
+    summary="Grounded natural rock authored as a boulder, bedded slab, multi-stone outcrop or scree cluster. Layered displacement and optional strata avoid the inflated-potato silhouette.",
     params=_params(
         size=("vec3", [1.0, 0.85, 0.7], "Bounding dimensions in metres"),
         detail=("int", 2, "Icosphere subdivisions: 1=80 tris, 2=320, 3=1280"),
         roughness=("num", 0.28, "Surface irregularity (0 = smooth boulder, 0.5 = jagged)"),
+        formation=(
+            "enum:boulder|slab|outcrop|scree",
+            "boulder",
+            "Geological silhouette: one mass, bedded shelf, exposed cluster or broken field stone",
+        ),
+        strata=(
+            "num",
+            0.35,
+            "Horizontal bedding strength from 0 (none) to 1 (strong limestone courses)",
+        ),
         flatten_base=("bool", True, "Cut a flat bottom so it beds into terrain"),
         angular=("bool", False, "Faceted/low-poly look instead of smooth"),
         material=("str", "rock", "Material preset"),
@@ -324,36 +681,176 @@ def prop_sack(ctx, name, location, seed, height, radius, segments, slump, materi
     ),
     tags=["prop", "nature"],
 )
-def prop_rock(ctx, name, location, seed, size, detail, roughness, flatten_base, angular, material,
-              color):
+def prop_rock(
+    ctx,
+    name,
+    location,
+    seed,
+    size,
+    detail,
+    roughness,
+    formation,
+    strata,
+    flatten_base,
+    angular,
+    material,
+    color,
+):
     rng = ctx.reseed(seed)
     bm = mesh_lib.new_bmesh()
-    mesh_lib.add_icosphere(bm, radius=0.5, subdivisions=max(1, min(4, detail)))
-    bmesh.ops.transform(bm, matrix=Matrix.Diagonal(Vector(size)).to_4x4(), verts=bm.verts[:])
+    # These are geological MASSES, not a pile of same-sized spheres.  The first
+    # version varied only the scale of overlapping icospheres, which survived
+    # the unit tests but read as inflated potatoes in an RTS camera.  Limestone
+    # needs a low bed, a stepped course and a broken crown before surface noise
+    # can contribute anything useful.
+    formation_specs = {
+        "boulder": [
+            ((1.0, 0.92, 0.82), (0.0, 0.0, 0.0), 0.0),
+        ],
+        "slab": [
+            ((1.08, 1.0, 0.34), (0.0, 0.0, -0.16), -4.0),
+            ((0.76, 0.82, 0.25), (-0.08, 0.03, 0.1), 7.0),
+        ],
+        "outcrop": [
+            ((1.0, 0.88, 0.36), (-0.02, 0.0, -0.18), -6.0),
+            ((0.7, 0.62, 0.36), (-0.16, 0.03, 0.1), 11.0),
+            ((0.44, 0.46, 0.38), (0.32, 0.12, 0.1), -19.0),
+        ],
+        "scree": [
+            ((0.5, 0.42, 0.3), (-0.38, -0.23, 0.0), -19.0),
+            ((0.43, 0.36, 0.28), (0.08, -0.28, -0.02), 27.0),
+            ((0.38, 0.33, 0.25), (0.4, 0.1, -0.04), -7.0),
+            ((0.32, 0.28, 0.23), (-0.03, 0.3, -0.06), 42.0),
+            ((0.26, 0.23, 0.19), (-0.48, 0.2, -0.07), 11.0),
+        ],
+    }
+    pieces = formation_specs[formation]
+    base_size = Vector(size)
+    subdivisions = max(1, min(4, detail))
+    bedding = max(0.0, min(1.0, strata))
 
-    # Layered displacement: broad lumps first, then fine chipping. One octave
-    # alone reads as a potato; two reads as stone.
-    for vert in bm.verts:
-        direction = vert.co.normalized() if vert.co.length > 1e-6 else Vector((0, 0, 1))
-        broad = math.sin(vert.co.x * 2.1 + seed) * math.cos(vert.co.y * 1.7 - seed)
-        fine = rng.uniform(-1.0, 1.0)
-        vert.co += direction * (broad * roughness * 0.35 + fine * roughness * 0.22) * min(size)
+    for piece_index, (scale_factors, offset_factors, rotation_deg) in enumerate(pieces):
+        faces = mesh_lib.add_icosphere(bm, radius=0.5, subdivisions=subdivisions)
+        # BMesh's vertex lookup table is lazily rebuilt. Diffing bm.verts
+        # before/after creation can therefore reselect older pieces and
+        # transform the whole formation repeatedly. Faces are the authoritative
+        # ownership boundary for the newly added icosphere.
+        verts = sorted(
+            {vert for face in faces for vert in face.verts},
+            key=lambda vert: (
+                round(vert.co.x, 7),
+                round(vert.co.y, 7),
+                round(vert.co.z, 7),
+            ),
+        )
+        phase = seed * 0.71 + piece_index * 1.93
 
-    if flatten_base:
-        zs = [v.co.z for v in bm.verts]
-        cut = min(zs) + (max(zs) - min(zs)) * 0.16
-        for vert in bm.verts:
-            if vert.co.z < cut:
-                vert.co.z = cut
+        # Work in unit-sphere space so a recipe's requested dimensions remain
+        # meaningful. Broad distortion breaks symmetry, two oblique clipping
+        # planes create quarried/fractured faces, and course-dependent terraces
+        # make sedimentary bedding visible at gameplay distance.  The old 3.5%
+        # sinusoidal bulge disappeared under ordinary lighting and left a round
+        # silhouette even with `angular=True`.
+        courses = 3 + int(round(bedding * 5.0))
+        shear_x = math.sin(phase * 1.37) * roughness * 0.22
+        shear_y = math.cos(phase * 1.11) * roughness * 0.18
+        clip_angle = phase * 0.61
+        clip_nx, clip_ny = math.cos(clip_angle), math.sin(clip_angle)
+        clip_limit = 0.34 + math.sin(phase * 0.47) * 0.035
+        for vert in verts:
+            direction = vert.co.normalized() if vert.co.length > 1e-6 else Vector((0, 0, 1))
+            broad = math.sin(vert.co.x * 4.2 + phase) * math.cos(vert.co.y * 3.4 - phase)
+            fine = rng.uniform(-1.0, 1.0)
+            displacement = broad * roughness * 0.16 + fine * roughness * 0.12
+            vert.co += direction * displacement
+
+            # Geological shear keeps the crown from sitting directly over the
+            # footprint like a balloon.  Clamp against opposing diagonal planes
+            # to produce broad fracture faces without adding geometry.
+            vert.co.x += vert.co.z * shear_x
+            vert.co.y += vert.co.z * shear_y
+            plane = vert.co.x * clip_nx + vert.co.y * clip_ny
+            if plane > clip_limit:
+                excess = plane - clip_limit
+                vert.co.x -= clip_nx * excess
+                vert.co.y -= clip_ny * excess
+            opposite = -vert.co.x * clip_nx - vert.co.y * clip_ny
+            opposite_limit = clip_limit * (0.82 + piece_index * 0.025)
+            if opposite > opposite_limit:
+                excess = opposite - opposite_limit
+                vert.co.x += clip_nx * excess
+                vert.co.y += clip_ny * excess
+
+            if bedding > 0:
+                course_index = math.floor((vert.co.z + 0.56) * courses)
+                course_z = round(vert.co.z * courses) / courses
+                vert.co.z = vert.co.z * (1.0 - bedding * 0.24) + course_z * bedding * 0.24
+                ledge = math.sin(course_index * 2.17 + phase)
+                lateral = 1.0 + ledge * bedding * 0.085
+                vert.co.x *= lateral
+                vert.co.y *= lateral
+                # Each bed slips a few centimetres in a stable direction.  This
+                # is the stepped limestone profile that remains legible in an
+                # RTS camera after the normal-map-sized details disappear.
+                vert.co.x += ledge * bedding * 0.025
+                vert.co.y += math.cos(course_index * 1.73 + phase) * bedding * 0.018
+
+            # Weathering removes the spherical cap.  Retaining a small bevel in
+            # height keeps it natural while giving sunlight a proper top plane.
+            cap = 0.28 + math.sin(phase * 0.83) * 0.025
+            if vert.co.z > cap:
+                vert.co.z = cap + (vert.co.z - cap) * (0.18 + (1.0 - bedding) * 0.2)
+
+        if flatten_base:
+            zs = [vert.co.z for vert in verts]
+            cut = min(zs) + (max(zs) - min(zs)) * (0.17 if formation != "scree" else 0.23)
+            for vert in verts:
+                if vert.co.z < cut:
+                    vert.co.z = cut
+
+        piece_size = Vector(
+            (
+                base_size.x * scale_factors[0],
+                base_size.y * scale_factors[1],
+                base_size.z * scale_factors[2],
+            )
+        )
+        offset = Vector(
+            (
+                base_size.x * offset_factors[0],
+                base_size.y * offset_factors[1],
+                base_size.z * offset_factors[2],
+            )
+        )
+        matrix = (
+            Matrix.Translation(offset)
+            @ Matrix.Rotation(math.radians(rotation_deg + rng.uniform(-4.0, 4.0)), 4, "Z")
+            # A 3-component diagonal converted to 4x4 retains a zero
+            # homogeneous term in mathutils. Premultiplying translation then
+            # silently moves every piece back to the origin. Explicit w=1
+            # keeps multi-stone formations spatially authored.
+            @ Matrix.Diagonal(Vector((piece_size.x, piece_size.y, piece_size.z, 1.0)))
+        )
+        bmesh.ops.transform(bm, matrix=matrix, verts=verts)
 
     mesh_lib.cleanup(bm, merge_dist=min(size) * 0.01)
     obj = mesh_lib.to_object(bm, _named(name, "rock"))
     obj.location = location
     result = finish_lib.finish(
-        ctx, obj, material=material, color=color or None, uv="smart_packed",
-        origin="bottom", smooth=not angular, smooth_angle=40.0,
+        ctx,
+        obj,
+        material=material,
+        color=color or None,
+        uv="smart_packed",
+        origin="bottom",
+        smooth=not angular,
+        smooth_angle=40.0,
     )
     finish_lib.budget_note(ctx, obj, 800)
+    result["formation"] = formation
+    result["piece_count"] = len(pieces)
+    result["strata"] = round(bedding, 3)
+    result["bedding_courses"] = 3 + int(round(bedding * 5.0))
     return result
 
 
@@ -372,8 +869,9 @@ def prop_rock(ctx, name, location, seed, size, detail, roughness, flatten_base, 
     ),
     tags=["prop", "nature"],
 )
-def prop_crystal(ctx, name, location, seed, count, height, radius, sides, spread, material, color,
-                 emission):
+def prop_crystal(
+    ctx, name, location, seed, count, height, radius, sides, spread, material, color, emission
+):
     rng = ctx.reseed(seed)
     bm = mesh_lib.new_bmesh()
     for index in range(max(1, count)):
@@ -386,8 +884,12 @@ def prop_crystal(ctx, name, location, seed, count, height, radius, sides, spread
 
         shard = mesh_lib.new_bmesh()
         mesh_lib.add_cylinder(
-            shard, radius=shard_r, radius_top=shard_r * 0.12, depth=shard_h,
-            segments=sides, center=(0.0, 0.0, shard_h * 0.5),
+            shard,
+            radius=shard_r,
+            radius_top=shard_r * 0.12,
+            depth=shard_h,
+            segments=sides,
+            center=(0.0, 0.0, shard_h * 0.5),
         )
         # Point the tip.
         top = max(v.co.z for v in shard.verts)
@@ -415,25 +917,85 @@ def prop_crystal(ctx, name, location, seed, count, height, radius, sides, spread
     crystal_mat = mat_lib.principled(
         f"m_crystal_{obj.name}",
         color=color or mat_lib.PRESETS["crystal"]["color"],
-        roughness=0.08, metallic=0.0, emission=emission, alpha=1.0,
+        roughness=0.08,
+        metallic=0.0,
+        emission=emission,
+        alpha=1.0,
     )
     result = finish_lib.finish(
-        ctx, obj, material=crystal_mat, uv="smart_packed", origin="bottom",
-        smooth=True, smooth_angle=25.0,
+        ctx,
+        obj,
+        material=crystal_mat,
+        uv="smart_packed",
+        origin="bottom",
+        smooth=True,
+        smooth_angle=25.0,
     )
     finish_lib.budget_note(ctx, obj, 600)
     return result
 
 
+def _tree_branch(bm, start: Vector, end: Vector, radius: float, segments: int = 8) -> None:
+    """Append one tapered branch aligned between two local-space points."""
+    axis = end - start
+    if axis.length < 1e-5:
+        return
+    faces = mesh_lib.add_cylinder(
+        bm,
+        radius=max(radius, 0.008),
+        radius_top=max(radius * 0.42, 0.004),
+        depth=axis.length,
+        segments=segments,
+    )
+    verts = list({vert for face in faces for vert in face.verts})
+    orient = axis.normalized().to_track_quat("Z", "Y").to_matrix().to_4x4()
+    matrix = Matrix.Translation((start + end) * 0.5) @ orient
+    bmesh.ops.transform(bm, matrix=matrix, verts=verts)
+
+
+def _tree_ellipsoid(
+    bm,
+    centre: Vector,
+    radius: float,
+    scale: tuple[float, float, float],
+    yaw: float,
+) -> None:
+    """Append a small rotated foliage mass without making a new object."""
+    faces = mesh_lib.add_icosphere(bm, radius=1.0, subdivisions=1)
+    verts = list({vert for face in faces for vert in face.verts})
+    size = Matrix.Diagonal(
+        Vector(
+            (
+                radius * scale[0],
+                radius * scale[1],
+                radius * scale[2],
+                1.0,
+            )
+        )
+    )
+    matrix = Matrix.Translation(centre) @ Matrix.Rotation(yaw, 4, "Z") @ size
+    bmesh.ops.transform(bm, matrix=matrix, verts=verts)
+
+
 @op(
     "prop.tree",
-    summary="Stylised low-poly tree: tapered trunk plus layered canopy. ~450 tris. Canopy is a separate material slot so it can take a foliage/alpha shader.",
+    summary="Game-ready tree with stylised and natural Mediterranean forms. Olive and cypress styles add age-authored roots, branch-readable crowns and negative space while preserving the cheap legacy silhouettes.",
     params=_params(
         height=("num", 4.0, "Total height in metres"),
         trunk_radius=("num", 0.18, "Trunk radius at the base"),
-        canopy_style=("enum:cone|blob|layered|palm", "layered", "Canopy shape"),
+        canopy_style=(
+            "enum:cone|blob|layered|palm|olive|cypress",
+            "layered",
+            "Canopy shape or natural species",
+        ),
+        age=(
+            "enum:young|mature|ancient",
+            "mature",
+            "Natural species growth stage: changes roots, trunk forks, crown spread and gaps",
+        ),
         canopy_layers=("int", 3, "layered style: number of tiers"),
         canopy_radius=("num", 1.4, "Canopy spread in metres"),
+        detail=("int", 2, "Natural olive/cypress foliage density, 1-3; ignored by legacy styles"),
         lean=("num", 4.0, "Trunk lean in degrees — a perfectly vertical tree looks fake"),
         trunk_material=("str", "wood", "Trunk material preset"),
         leaf_material=("str", "leaf", "Canopy material preset"),
@@ -441,44 +1003,355 @@ def prop_crystal(ctx, name, location, seed, count, height, radius, sides, spread
     ),
     tags=["prop", "nature"],
 )
-def prop_tree(ctx, name, location, seed, height, trunk_radius, canopy_style, canopy_layers,
-              canopy_radius, lean, trunk_material, leaf_material, leaf_color):
+def prop_tree(
+    ctx,
+    name,
+    location,
+    seed,
+    height,
+    trunk_radius,
+    canopy_style,
+    age,
+    canopy_layers,
+    canopy_radius,
+    detail,
+    lean,
+    trunk_material,
+    leaf_material,
+    leaf_color,
+):
     rng = ctx.reseed(seed)
     base_name = _named(name, "tree")
-    trunk_h = height * (0.45 if canopy_style != "palm" else 0.82)
+    natural = canopy_style in {"olive", "cypress"}
+    natural_detail = max(1, min(3, detail))
+    age_scale = {"young": 0.82, "mature": 1.0, "ancient": 1.18}[age]
+    if natural:
+        trunk_radius *= age_scale
+        lean *= {"young": 0.72, "mature": 1.0, "ancient": 1.22}[age]
+    trunk_h = height * (
+        0.82
+        if canopy_style == "palm"
+        else (0.58 if age == "young" else 0.52 if age == "mature" else 0.46)
+        if canopy_style == "olive"
+        else (0.98 if age == "young" else 0.96 if age == "mature" else 0.92)
+        if canopy_style == "cypress"
+        else 0.45
+    )
 
     profile = [
-        (0.0, 0.0), (trunk_radius * 1.5, 0.0), (trunk_radius, trunk_h * 0.12),
-        (trunk_radius * 0.78, trunk_h * 0.5), (trunk_radius * 0.55, trunk_h),
+        (0.0, 0.0),
+        (trunk_radius * 1.5, 0.0),
+        (trunk_radius, trunk_h * 0.12),
+        (trunk_radius * 0.78, trunk_h * 0.5),
+        (trunk_radius * 0.55, trunk_h),
         (0.0, trunk_h),
     ]
     bm = mesh_lib.new_bmesh()
-    mesh_lib.lathe(bm, profile, segments=8)
+    mesh_lib.lathe(bm, profile, segments=12 if natural else 8)
     lean_rad = math.radians(lean)
     for vert in bm.verts:
         t = vert.co.z / max(trunk_h, 1e-6)
         vert.co.x += math.sin(lean_rad) * t * t * trunk_h * 0.5
     trunk = mesh_lib.to_object(bm, base_name)
     trunk.location = location
-    finish_lib.finish(ctx, trunk, material=trunk_material, uv="cylinder", origin="bottom",
-                      smooth=True, smooth_angle=50.0)
+    finish_lib.finish(
+        ctx,
+        trunk,
+        material=trunk_material,
+        uv="cylinder",
+        origin="bottom",
+        smooth=True,
+        smooth_angle=50.0,
+    )
 
     tip_x = math.sin(lean_rad) * trunk_h * 0.5
     canopy_bm = mesh_lib.new_bmesh()
-    if canopy_style == "cone":
+    branch = None
+    branch_count = 0
+    foliage_count = 0
+    if canopy_style == "olive":
+        branch_bm = mesh_lib.new_bmesh()
+        root_count = {"young": 3, "mature": 5, "ancient": 7}[age]
+        for index in range(root_count):
+            angle = math.tau * index / root_count + rng.uniform(-0.16, 0.16)
+            _tree_branch(
+                branch_bm,
+                Vector((tip_x * 0.03, 0.0, trunk_h * 0.09)),
+                Vector(
+                    (
+                        math.cos(angle) * trunk_radius * rng.uniform(2.1, 3.1),
+                        math.sin(angle) * trunk_radius * rng.uniform(2.1, 3.1),
+                        height * 0.012,
+                    )
+                ),
+                trunk_radius * rng.uniform(0.22, 0.34),
+                segments=7,
+            )
+            branch_count += 1
+
+        # Ancient olives are commonly multi-stemmed. These two structural
+        # trunks make age readable from an RTS camera without merely scaling up
+        # the same radial crown.
+        if age == "ancient":
+            for sign in (-1.0, 1.0):
+                _tree_branch(
+                    branch_bm,
+                    Vector((0.0, 0.0, trunk_h * 0.12)),
+                    Vector(
+                        (
+                            tip_x + sign * canopy_radius * rng.uniform(0.22, 0.34),
+                            sign * canopy_radius * rng.uniform(-0.16, 0.12),
+                            trunk_h * rng.uniform(0.78, 0.9),
+                        )
+                    ),
+                    trunk_radius * rng.uniform(0.48, 0.62),
+                    segments=9,
+                )
+                branch_count += 1
+
+        limb_tips: list[Vector] = []
+        limb_count = (
+            4 + natural_detail
+            if age == "young"
+            else 6 + natural_detail * 2
+            if age == "mature"
+            else 7 + natural_detail * 2
+        )
+        crown_span = max(height - trunk_h, height * 0.3)
+        for index in range(limb_count):
+            angle = math.tau * index / limb_count + rng.uniform(-0.18, 0.18)
+            start = Vector(
+                (
+                    tip_x * 0.45,
+                    0.0,
+                    trunk_h * rng.uniform(0.52, 0.82),
+                )
+            )
+            spread_range = (
+                (0.42, 0.72) if age == "young" else (0.56, 0.9) if age == "mature" else (0.68, 1.02)
+            )
+            crown_height = (
+                (0.36, 0.9) if age == "young" else (0.3, 0.82) if age == "mature" else (0.2, 0.68)
+            )
+            spread = canopy_radius * rng.uniform(*spread_range)
+            end = Vector(
+                (
+                    tip_x + math.cos(angle) * spread,
+                    math.sin(angle) * spread,
+                    trunk_h + crown_span * rng.uniform(*crown_height),
+                )
+            )
+            _tree_branch(
+                branch_bm,
+                start,
+                end,
+                trunk_radius * rng.uniform(0.38, 0.58),
+                segments=8,
+            )
+            branch_count += 1
+            limb_tips.append(end)
+
+            # A fork makes the crown read as grown wood rather than rods
+            # holding foliage balls. Keep it short so the silhouette stays open.
+            fork_start = start.lerp(end, 0.62)
+            tangent = Vector((-math.sin(angle), math.cos(angle), rng.uniform(0.12, 0.3)))
+            fork_end = end + tangent * canopy_radius * rng.uniform(0.18, 0.32)
+            _tree_branch(
+                branch_bm,
+                fork_start,
+                fork_end,
+                trunk_radius * rng.uniform(0.18, 0.3),
+                segments=7,
+            )
+            branch_count += 1
+            limb_tips.append(fork_end)
+
+        if age == "ancient":
+            # One bare, storm-broken limb stops the crown reading as a perfect
+            # bouquet and provides a species/age landmark in first person.
+            dead_angle = rng.uniform(0.0, math.tau)
+            _tree_branch(
+                branch_bm,
+                Vector((tip_x * 0.5, 0.0, trunk_h * 0.58)),
+                Vector(
+                    (
+                        tip_x + math.cos(dead_angle) * canopy_radius * 0.72,
+                        math.sin(dead_angle) * canopy_radius * 0.72,
+                        trunk_h + crown_span * 0.42,
+                    )
+                ),
+                trunk_radius * 0.24,
+                segments=7,
+            )
+            branch_count += 1
+
+        mesh_lib.cleanup(branch_bm)
+        branch = mesh_lib.to_object(branch_bm, f"{base_name}_branches")
+        branch.location = location
+        finish_lib.finish(
+            ctx,
+            branch,
+            material=trunk_material,
+            uv="smart_packed",
+            origin=None,
+            smooth=True,
+            smooth_angle=48.0,
+        )
+
+        # Many small, flattened masses keep negative space between branches.
+        # At gameplay distance they merge into an olive crown; in FPS they still
+        # read as twigs and leaves rather than six inflated rocks.
+        leaf_count = (
+            22 + natural_detail * 16
+            if age == "young"
+            else 30 + natural_detail * 22
+            if age == "mature"
+            else 26 + natural_detail * 20
+        )
+        for index in range(leaf_count):
+            tip = limb_tips[index % len(limb_tips)]
+            centre = tip + Vector(
+                (
+                    rng.uniform(-1.0, 1.0) * canopy_radius * 0.32,
+                    rng.uniform(-1.0, 1.0) * canopy_radius * 0.32,
+                    rng.uniform(-0.35, 0.42) * canopy_radius,
+                )
+            )
+            _tree_ellipsoid(
+                canopy_bm,
+                centre,
+                canopy_radius * rng.uniform(0.085, 0.14),
+                (
+                    rng.uniform(1.5, 2.25),
+                    rng.uniform(0.72, 1.08),
+                    rng.uniform(0.38, 0.62),
+                ),
+                rng.uniform(0.0, math.tau),
+            )
+            foliage_count += 1
+    elif canopy_style == "cypress":
+        branch_bm = mesh_lib.new_bmesh()
+        root_count = {"young": 3, "mature": 4, "ancient": 6}[age]
+        for index in range(root_count):
+            angle = math.tau * index / root_count + rng.uniform(-0.12, 0.12)
+            _tree_branch(
+                branch_bm,
+                Vector((0.0, 0.0, height * 0.07)),
+                Vector(
+                    (
+                        math.cos(angle) * trunk_radius * rng.uniform(1.8, 2.6),
+                        math.sin(angle) * trunk_radius * rng.uniform(1.8, 2.6),
+                        height * 0.01,
+                    )
+                ),
+                trunk_radius * rng.uniform(0.18, 0.28),
+                segments=7,
+            )
+            branch_count += 1
+
+        crown_branch_count = (
+            8 + natural_detail * 4
+            if age == "young"
+            else 10 + natural_detail * 5
+            if age == "mature"
+            else 12 + natural_detail * 5
+        )
+        for index in range(crown_branch_count):
+            t = index / max(1, crown_branch_count - 1)
+            angle = index * 2.399963 + rng.uniform(-0.2, 0.2)
+            z = height * (0.14 + t * 0.76)
+            age_width = {"young": 0.82, "mature": 1.0, "ancient": 1.12}[age]
+            reach = canopy_radius * age_width * (1.0 - t * 0.62) * rng.uniform(0.5, 0.82)
+            start = Vector((tip_x * t * 0.7, 0.0, z))
+            end = Vector(
+                (
+                    tip_x * t + math.cos(angle) * reach,
+                    math.sin(angle) * reach,
+                    z + height * rng.uniform(0.015, 0.055),
+                )
+            )
+            _tree_branch(
+                branch_bm,
+                start,
+                end,
+                trunk_radius * (0.34 - t * 0.17),
+                segments=7,
+            )
+            branch_count += 1
+
+        mesh_lib.cleanup(branch_bm)
+        branch = mesh_lib.to_object(branch_bm, f"{base_name}_branches")
+        branch.location = location
+        finish_lib.finish(
+            ctx,
+            branch,
+            material=trunk_material,
+            uv="smart_packed",
+            origin=None,
+            smooth=True,
+            smooth_angle=48.0,
+        )
+
+        tuft_count = (
+            44 + natural_detail * 26
+            if age == "young"
+            else 60 + natural_detail * 32
+            if age == "mature"
+            else 48 + natural_detail * 27
+        )
+        for _ in range(tuft_count):
+            t = rng.uniform(0.06, 0.98)
+            if age == "ancient" and (0.28 < t < 0.37 or 0.61 < t < 0.69) and rng.random() < 0.72:
+                continue
+            z = height * (0.1 + t * 0.88)
+            radius_here = (
+                canopy_radius
+                * {"young": 0.82, "mature": 1.0, "ancient": 1.1}[age]
+                * (1.0 - t * 0.58)
+            )
+            angle = rng.uniform(0.0, math.tau)
+            radial = radius_here * math.sqrt(rng.random()) * 0.72
+            centre = Vector(
+                (
+                    tip_x * t + math.cos(angle) * radial,
+                    math.sin(angle) * radial,
+                    z,
+                )
+            )
+            _tree_ellipsoid(
+                canopy_bm,
+                centre,
+                canopy_radius * rng.uniform(0.1, 0.16),
+                (
+                    rng.uniform(0.82, 1.18),
+                    rng.uniform(0.82, 1.18),
+                    rng.uniform(1.5, 2.45),
+                ),
+                rng.uniform(0.0, math.tau),
+            )
+            foliage_count += 1
+    elif canopy_style == "cone":
         mesh_lib.add_cylinder(
-            canopy_bm, radius=canopy_radius, radius_top=0.0, depth=height - trunk_h,
-            segments=8, center=(tip_x, 0.0, trunk_h + (height - trunk_h) * 0.5),
+            canopy_bm,
+            radius=canopy_radius,
+            radius_top=0.0,
+            depth=height - trunk_h,
+            segments=8,
+            center=(tip_x, 0.0, trunk_h + (height - trunk_h) * 0.5),
         )
     elif canopy_style == "blob":
         mesh_lib.add_icosphere(
-            canopy_bm, radius=canopy_radius, subdivisions=2,
+            canopy_bm,
+            radius=canopy_radius,
+            subdivisions=2,
             center=(tip_x, 0.0, trunk_h + canopy_radius * 0.7),
         )
         for vert in canopy_bm.verts:
-            vert.co += Vector(
-                (rng.uniform(-1, 1), rng.uniform(-1, 1), rng.uniform(-1, 1))
-            ) * canopy_radius * 0.14
+            vert.co += (
+                Vector((rng.uniform(-1, 1), rng.uniform(-1, 1), rng.uniform(-1, 1)))
+                * canopy_radius
+                * 0.14
+            )
     elif canopy_style == "palm":
         for i in range(7):
             angle = math.tau * i / 7
@@ -508,8 +1381,11 @@ def prop_tree(ctx, name, location, seed, height, trunk_radius, canopy_style, can
             radius = canopy_radius * (1.0 - t * 0.55)
             z = trunk_h + span * (0.12 + t * 0.72)
             mesh_lib.add_cylinder(
-                canopy_bm, radius=radius, radius_top=radius * 0.25,
-                depth=span * 0.42, segments=8,
+                canopy_bm,
+                radius=radius,
+                radius_top=radius * 0.25,
+                depth=span * 0.42,
+                segments=8,
                 center=(tip_x + rng.uniform(-0.08, 0.08), rng.uniform(-0.08, 0.08), z),
             )
 
@@ -523,11 +1399,22 @@ def prop_tree(ctx, name, location, seed, height, trunk_radius, canopy_style, can
     uv_lib.smart_project(canopy, margin=0.02)
     mesh_lib.shade_auto_smooth(canopy, 60.0)
 
-    merged = scene_lib.join([trunk, canopy], base_name)
+    merged = scene_lib.join([trunk, *([branch] if branch else []), canopy], base_name)
     scene_lib.set_origin(merged, "bottom")
     scene_lib.apply_transforms(merged)
     result = finish_lib.report(ctx, merged)
-    finish_lib.budget_note(ctx, merged, 1200)
+    result["species"] = canopy_style if natural else "generic"
+    result["age"] = age if natural else "not_applicable"
+    result["branch_count"] = branch_count
+    result["foliage_masses"] = foliage_count
+    result["silhouette"] = (
+        f"{age}_windswept_olive"
+        if canopy_style == "olive"
+        else f"{age}_columnar_cypress"
+        if canopy_style == "cypress"
+        else canopy_style
+    )
+    finish_lib.budget_note(ctx, merged, 4200 if natural else 1200)
     return result
 
 
@@ -550,8 +1437,9 @@ def prop_tree(ctx, name, location, seed, height, trunk_radius, canopy_style, can
     ),
     tags=["prop", "architecture"],
 )
-def prop_pillar(ctx, name, location, seed, height, radius, style, flutes, segments, material,
-                color):
+def prop_pillar(
+    ctx, name, location, seed, height, radius, style, flutes, segments, material, color
+):
     rng = ctx.reseed(seed)
     base_h = height * 0.08
     cap_h = height * 0.09
@@ -559,28 +1447,43 @@ def prop_pillar(ctx, name, location, seed, height, radius, style, flutes, segmen
 
     if style == "square":
         bm = mesh_lib.new_bmesh()
-        mesh_lib.add_box(bm, size=(radius * 2.4, radius * 2.4, base_h),
-                         center=(0, 0, base_h * 0.5), bevel=0.02)
-        mesh_lib.add_box(bm, size=(radius * 1.8, radius * 1.8, shaft_top - base_h),
-                         center=(0, 0, (base_h + shaft_top) * 0.5), bevel=0.015)
-        mesh_lib.add_box(bm, size=(radius * 2.5, radius * 2.5, cap_h),
-                         center=(0, 0, height - cap_h * 0.5), bevel=0.02)
+        mesh_lib.add_box(
+            bm, size=(radius * 2.4, radius * 2.4, base_h), center=(0, 0, base_h * 0.5), bevel=0.02
+        )
+        mesh_lib.add_box(
+            bm,
+            size=(radius * 1.8, radius * 1.8, shaft_top - base_h),
+            center=(0, 0, (base_h + shaft_top) * 0.5),
+            bevel=0.015,
+        )
+        mesh_lib.add_box(
+            bm,
+            size=(radius * 2.5, radius * 2.5, cap_h),
+            center=(0, 0, height - cap_h * 0.5),
+            bevel=0.02,
+        )
         smooth = False
     else:
         taper = 0.86 if style in ("doric", "broken") else 0.94
         top_height = shaft_top if style != "broken" else shaft_top * rng.uniform(0.45, 0.7)
         profile = [
-            (0.0, 0.0), (radius * 1.42, 0.0), (radius * 1.42, base_h * 0.7),
-            (radius * 1.1, base_h), (radius, base_h * 1.15),
+            (0.0, 0.0),
+            (radius * 1.42, 0.0),
+            (radius * 1.42, base_h * 0.7),
+            (radius * 1.1, base_h),
+            (radius, base_h * 1.15),
             (radius * taper, top_height * 0.92),
         ]
         if style == "broken":
             profile += [(radius * taper * 0.94, top_height), (0.0, top_height)]
         else:
             profile += [
-                (radius * taper, shaft_top), (radius * 1.34, shaft_top),
+                (radius * taper, shaft_top),
+                (radius * 1.34, shaft_top),
                 (radius * 1.34, height - cap_h * 0.25),
-                (radius * 1.5, height - cap_h * 0.25), (radius * 1.5, height), (0.0, height),
+                (radius * 1.5, height - cap_h * 0.25),
+                (radius * 1.5, height),
+                (0.0, height),
             ]
         bm = mesh_lib.new_bmesh()
         mesh_lib.lathe(bm, profile, segments=segments)
@@ -607,8 +1510,14 @@ def prop_pillar(ctx, name, location, seed, height, radius, style, flutes, segmen
     obj = mesh_lib.to_object(bm, _named(name, "pillar"))
     obj.location = location
     result = finish_lib.finish(
-        ctx, obj, material=material, color=color or None, uv="cylinder",
-        origin="bottom", smooth=smooth, smooth_angle=40.0,
+        ctx,
+        obj,
+        material=material,
+        color=color or None,
+        uv="cylinder",
+        origin="bottom",
+        smooth=smooth,
+        smooth_angle=40.0,
     )
     finish_lib.budget_note(ctx, obj, 1200)
     return result
@@ -634,51 +1543,69 @@ def prop_torch(ctx, name, location, seed, style, height, flame_color, emission, 
     if style == "wall":
         mesh_lib.add_box(bm, size=(0.09, 0.09, 0.16), center=(0, 0, 0), bevel=0.008)
         handle = mesh_lib.new_bmesh()
-        mesh_lib.add_cylinder(handle, radius=0.028, depth=height, segments=8,
-                              center=(0, 0, height * 0.5))
+        mesh_lib.add_cylinder(
+            handle, radius=0.028, depth=height, segments=8, center=(0, 0, height * 0.5)
+        )
         bmesh.ops.transform(
             handle, matrix=Matrix.Rotation(math.radians(35), 4, "Y"), verts=handle.verts[:]
         )
         _absorb(bm, handle)
         cup_z = math.cos(math.radians(35)) * height
         cup_x = math.sin(math.radians(35)) * height
-        mesh_lib.add_cylinder(bm, radius=0.075, radius_top=0.105, depth=0.13, segments=10,
-                              center=(cup_x, 0, cup_z))
+        mesh_lib.add_cylinder(
+            bm, radius=0.075, radius_top=0.105, depth=0.13, segments=10, center=(cup_x, 0, cup_z)
+        )
         flame_at = (cup_x, 0.0, cup_z + 0.12)
     elif style == "brazier":
         mesh_lib.lathe(
             bm,
-            [(0.0, 0.0), (0.22, 0.0), (0.10, 0.06), (0.09, height * 0.55),
-             (0.30, height * 0.85), (0.34, height), (0.26, height * 0.96), (0.0, height * 0.9)],
+            [
+                (0.0, 0.0),
+                (0.22, 0.0),
+                (0.10, 0.06),
+                (0.09, height * 0.55),
+                (0.30, height * 0.85),
+                (0.34, height),
+                (0.26, height * 0.96),
+                (0.0, height * 0.9),
+            ],
             segments=12,
         )
         flame_at = (0.0, 0.0, height + 0.08)
     else:  # standing
         mesh_lib.add_cylinder(bm, radius=0.16, depth=0.06, segments=10, center=(0, 0, 0.03))
-        mesh_lib.add_cylinder(bm, radius=0.04, depth=height, segments=8,
-                              center=(0, 0, height * 0.5))
-        mesh_lib.add_cylinder(bm, radius=0.09, radius_top=0.13, depth=0.14, segments=10,
-                              center=(0, 0, height))
+        mesh_lib.add_cylinder(
+            bm, radius=0.04, depth=height, segments=8, center=(0, 0, height * 0.5)
+        )
+        mesh_lib.add_cylinder(
+            bm, radius=0.09, radius_top=0.13, depth=0.14, segments=10, center=(0, 0, height)
+        )
         flame_at = (0.0, 0.0, height + 0.12)
 
     mesh_lib.cleanup(bm)
     body = mesh_lib.to_object(bm, base_name)
     body.location = location
-    finish_lib.finish(ctx, body, material=material, uv="box", origin="center_xy", smooth=True,
-                      smooth_angle=45.0)
+    finish_lib.finish(
+        ctx, body, material=material, uv="box", origin="center_xy", smooth=True, smooth_angle=45.0
+    )
 
     flame_bm = mesh_lib.new_bmesh()
     mesh_lib.add_icosphere(flame_bm, radius=0.11, subdivisions=1, center=flame_at)
     for vert in flame_bm.verts:
         local = vert.co - Vector(flame_at)
-        vert.co = Vector(flame_at) + Vector(
-            (local.x * 0.75, local.y * 0.75, local.z * 1.9 + 0.05)
-        ) + Vector((rng.uniform(-0.01, 0.01),) * 3)
+        vert.co = (
+            Vector(flame_at)
+            + Vector((local.x * 0.75, local.y * 0.75, local.z * 1.9 + 0.05))
+            + Vector((rng.uniform(-0.01, 0.01),) * 3)
+        )
     flame = mesh_lib.to_object(flame_bm, f"{base_name}_flame")
     flame.location = location
     flame_mat = mat_lib.principled(
-        f"m_flame_{base_name}", color=flame_color, roughness=1.0,
-        emission=emission, emission_color=flame_color,
+        f"m_flame_{base_name}",
+        color=flame_color,
+        roughness=1.0,
+        emission=emission,
+        emission_color=flame_color,
     )
     mat_lib.assign(flame, flame_mat)
     mesh_lib.shade_auto_smooth(flame, 60.0)
@@ -731,43 +1658,60 @@ def prop_fence(ctx, name, location, seed, length, height, style, post_spacing, m
         x = -length * 0.5 + index * step
         wobble = rng.uniform(-0.015, 0.015)
         if style == "iron":
-            mesh_lib.add_cylinder(bm, radius=0.035, depth=height, segments=6,
-                                  center=(x, wobble, height * 0.5))
+            mesh_lib.add_cylinder(
+                bm, radius=0.035, depth=height, segments=6, center=(x, wobble, height * 0.5)
+            )
         else:
-            mesh_lib.add_box(bm, size=(0.09, 0.09, height), center=(x, wobble, height * 0.5),
-                             bevel=0.008)
+            mesh_lib.add_box(
+                bm, size=(0.09, 0.09, height), center=(x, wobble, height * 0.5), bevel=0.008
+            )
 
     if style in ("rail", "iron"):
         for fraction in (0.35, 0.78):
             thickness = 0.05 if style == "rail" else 0.03
             mesh_lib.add_box(
-                bm, size=(length, thickness, thickness * 1.4),
-                center=(0.0, 0.0, height * fraction), bevel=0.006,
+                bm,
+                size=(length, thickness, thickness * 1.4),
+                center=(0.0, 0.0, height * fraction),
+                bevel=0.006,
             )
     if style == "picket":
         picket_count = max(2, int(length / 0.16))
         for index in range(picket_count):
             x = -length * 0.5 + (index + 0.5) * (length / picket_count)
             picket_h = height * rng.uniform(0.86, 0.95)
-            mesh_lib.add_box(bm, size=(0.055, 0.022, picket_h),
-                             center=(x, 0.0, picket_h * 0.5), bevel=0.004)
+            mesh_lib.add_box(
+                bm, size=(0.055, 0.022, picket_h), center=(x, 0.0, picket_h * 0.5), bevel=0.004
+            )
         for fraction in (0.35, 0.8):
-            mesh_lib.add_box(bm, size=(length, 0.045, 0.05),
-                             center=(0.0, 0.0, height * fraction), bevel=0.005)
+            mesh_lib.add_box(
+                bm, size=(length, 0.045, 0.05), center=(0.0, 0.0, height * fraction), bevel=0.005
+            )
     if style == "palisade":
         stake_count = max(2, int(length / 0.13))
         for index in range(stake_count):
             x = -length * 0.5 + (index + 0.5) * (length / stake_count)
             stake_h = height * rng.uniform(0.9, 1.0)
-            mesh_lib.add_cylinder(bm, radius=0.062, radius_top=0.012, depth=stake_h, segments=6,
-                                  center=(x, rng.uniform(-0.01, 0.01), stake_h * 0.5))
+            mesh_lib.add_cylinder(
+                bm,
+                radius=0.062,
+                radius_top=0.012,
+                depth=stake_h,
+                segments=6,
+                center=(x, rng.uniform(-0.01, 0.01), stake_h * 0.5),
+            )
 
     mesh_lib.cleanup(bm)
     obj = mesh_lib.to_object(bm, _named(name, "fence"))
     obj.location = location
     result = finish_lib.finish(
-        ctx, obj, material=material, color=color or None, uv="box",
-        origin="center_xy", smooth=False,
+        ctx,
+        obj,
+        material=material,
+        color=color or None,
+        uv="box",
+        origin="center_xy",
+        smooth=False,
     )
     finish_lib.budget_note(ctx, obj, int(length * 120))
     return result
@@ -794,11 +1738,16 @@ def prop_furniture(ctx, name, location, seed, kind, size, leg_radius, round_legs
 
     def leg(x, y, height):
         if round_legs:
-            mesh_lib.add_cylinder(bm, radius=leg_radius, depth=height, segments=8,
-                                  center=(x, y, height * 0.5))
+            mesh_lib.add_cylinder(
+                bm, radius=leg_radius, depth=height, segments=8, center=(x, y, height * 0.5)
+            )
         else:
-            mesh_lib.add_box(bm, size=(leg_radius * 2, leg_radius * 2, height),
-                             center=(x, y, height * 0.5), bevel=0.006)
+            mesh_lib.add_box(
+                bm,
+                size=(leg_radius * 2, leg_radius * 2, height),
+                center=(x, y, height * 0.5),
+                bevel=0.006,
+            )
 
     inset = leg_radius * 2.2
     if kind in ("table", "bench", "bed"):
@@ -806,35 +1755,58 @@ def prop_furniture(ctx, name, location, seed, kind, size, leg_radius, round_legs
         for dx in (-1, 1):
             for dy in (-1, 1):
                 leg(dx * (sx * 0.5 - inset), dy * (sy * 0.5 - inset), leg_h)
-        mesh_lib.add_box(bm, size=(sx, sy, top_thickness),
-                         center=(0, 0, sz - top_thickness * 0.5), bevel=0.01)
+        mesh_lib.add_box(
+            bm, size=(sx, sy, top_thickness), center=(0, 0, sz - top_thickness * 0.5), bevel=0.01
+        )
         if kind == "bed":
-            mesh_lib.add_box(bm, size=(sx * 0.06, sy, sz * 0.9),
-                             center=(-sx * 0.5 + sx * 0.03, 0, sz * 0.45 + top_thickness),
-                             bevel=0.01)
+            mesh_lib.add_box(
+                bm,
+                size=(sx * 0.06, sy, sz * 0.9),
+                center=(-sx * 0.5 + sx * 0.03, 0, sz * 0.45 + top_thickness),
+                bevel=0.01,
+            )
     elif kind == "stool":
         leg_h = sz - top_thickness
         for i in range(3):
             angle = math.tau * i / 3
             leg(math.cos(angle) * sx * 0.32, math.sin(angle) * sx * 0.32, leg_h)
-        mesh_lib.add_cylinder(bm, radius=sx * 0.5, depth=top_thickness, segments=12,
-                              center=(0, 0, sz - top_thickness * 0.5), bevel=0.008)
+        mesh_lib.add_cylinder(
+            bm,
+            radius=sx * 0.5,
+            depth=top_thickness,
+            segments=12,
+            center=(0, 0, sz - top_thickness * 0.5),
+            bevel=0.008,
+        )
     elif kind == "shelf":
         for dx in (-1, 1):
-            mesh_lib.add_box(bm, size=(leg_radius * 2, sy, sz),
-                             center=(dx * (sx * 0.5 - leg_radius), 0, sz * 0.5), bevel=0.006)
+            mesh_lib.add_box(
+                bm,
+                size=(leg_radius * 2, sy, sz),
+                center=(dx * (sx * 0.5 - leg_radius), 0, sz * 0.5),
+                bevel=0.006,
+            )
         shelves = max(2, int(sz / 0.42))
         for index in range(shelves):
             z = sz * (index + 0.5) / shelves
-            mesh_lib.add_box(bm, size=(sx - leg_radius * 2, sy, top_thickness * 0.8),
-                             center=(0, 0, z), bevel=0.006)
+            mesh_lib.add_box(
+                bm,
+                size=(sx - leg_radius * 2, sy, top_thickness * 0.8),
+                center=(0, 0, z),
+                bevel=0.006,
+            )
 
     mesh_lib.cleanup(bm)
     obj = mesh_lib.to_object(bm, _named(name, kind))
     obj.location = location
     result = finish_lib.finish(
-        ctx, obj, material=material, color=color or None, uv="box",
-        origin="bottom", smooth=round_legs,
+        ctx,
+        obj,
+        material=material,
+        color=color or None,
+        uv="box",
+        origin="bottom",
+        smooth=round_legs,
     )
     finish_lib.budget_note(ctx, obj, 500)
     return result
@@ -862,58 +1834,98 @@ def prop_weapon(ctx, name, location, seed, kind, length, blade_width, metal, gri
     if kind in ("sword", "dagger"):
         blade_len = length * (0.74 if kind == "sword" else 0.62)
         grip_len = length - blade_len
-        mesh_lib.add_box(metal_bm, size=(blade_width, blade_width * 0.24, blade_len),
-                         center=(0, 0, grip_len + blade_len * 0.5), bevel=blade_width * 0.09)
+        mesh_lib.add_box(
+            metal_bm,
+            size=(blade_width, blade_width * 0.24, blade_len),
+            center=(0, 0, grip_len + blade_len * 0.5),
+            bevel=blade_width * 0.09,
+        )
         tip = grip_len + blade_len
         for vert in metal_bm.verts:
             if vert.co.z > tip - blade_len * 0.16:
                 vert.co.x *= 0.18
                 vert.co.y *= 0.5
-        mesh_lib.add_box(metal_bm, size=(blade_width * 3.1, blade_width * 0.55, 0.035),
-                         center=(0, 0, grip_len), bevel=0.006)
-        mesh_lib.add_cylinder(grip_bm, radius=blade_width * 0.32, depth=grip_len * 0.82,
-                              segments=8, center=(0, 0, grip_len * 0.5))
-        mesh_lib.add_icosphere(metal_bm, radius=blade_width * 0.42, subdivisions=1,
-                               center=(0, 0, grip_len * 0.05))
+        mesh_lib.add_box(
+            metal_bm,
+            size=(blade_width * 3.1, blade_width * 0.55, 0.035),
+            center=(0, 0, grip_len),
+            bevel=0.006,
+        )
+        mesh_lib.add_cylinder(
+            grip_bm,
+            radius=blade_width * 0.32,
+            depth=grip_len * 0.82,
+            segments=8,
+            center=(0, 0, grip_len * 0.5),
+        )
+        mesh_lib.add_icosphere(
+            metal_bm, radius=blade_width * 0.42, subdivisions=1, center=(0, 0, grip_len * 0.05)
+        )
     elif kind == "axe":
         haft = length
-        mesh_lib.add_cylinder(grip_bm, radius=0.026, depth=haft, segments=8,
-                              center=(0, 0, haft * 0.5))
+        mesh_lib.add_cylinder(
+            grip_bm, radius=0.026, depth=haft, segments=8, center=(0, 0, haft * 0.5)
+        )
         head_z = haft * 0.88
-        mesh_lib.add_box(metal_bm, size=(blade_width * 2.6, 0.05, blade_width * 2.2),
-                         center=(blade_width * 1.0, 0, head_z), bevel=0.008)
+        mesh_lib.add_box(
+            metal_bm,
+            size=(blade_width * 2.6, 0.05, blade_width * 2.2),
+            center=(blade_width * 1.0, 0, head_z),
+            bevel=0.008,
+        )
         for vert in metal_bm.verts:
             if vert.co.x > blade_width * 1.9:
                 vert.co.y *= 0.22
                 vert.co.z += (vert.co.z - head_z) * 0.35
     elif kind == "spear":
-        mesh_lib.add_cylinder(grip_bm, radius=0.022, depth=length * 0.9, segments=8,
-                              center=(0, 0, length * 0.45))
-        mesh_lib.add_cylinder(metal_bm, radius=blade_width * 0.5, radius_top=0.0,
-                              depth=length * 0.16, segments=6,
-                              center=(0, 0, length * 0.92))
+        mesh_lib.add_cylinder(
+            grip_bm, radius=0.022, depth=length * 0.9, segments=8, center=(0, 0, length * 0.45)
+        )
+        mesh_lib.add_cylinder(
+            metal_bm,
+            radius=blade_width * 0.5,
+            radius_top=0.0,
+            depth=length * 0.16,
+            segments=6,
+            center=(0, 0, length * 0.92),
+        )
     elif kind == "hammer":
-        mesh_lib.add_cylinder(grip_bm, radius=0.03, depth=length, segments=8,
-                              center=(0, 0, length * 0.5))
-        mesh_lib.add_box(metal_bm, size=(blade_width * 2.4, blade_width * 1.6, blade_width * 1.6),
-                         center=(0, 0, length * 0.9), bevel=0.012)
+        mesh_lib.add_cylinder(
+            grip_bm, radius=0.03, depth=length, segments=8, center=(0, 0, length * 0.5)
+        )
+        mesh_lib.add_box(
+            metal_bm,
+            size=(blade_width * 2.4, blade_width * 1.6, blade_width * 1.6),
+            center=(0, 0, length * 0.9),
+            bevel=0.012,
+        )
     else:  # shield
-        mesh_lib.add_cylinder(metal_bm, radius=length * 0.42, depth=0.05, segments=14,
-                              center=(0, 0, 0), bevel=0.012)
+        mesh_lib.add_cylinder(
+            metal_bm, radius=length * 0.42, depth=0.05, segments=14, center=(0, 0, 0), bevel=0.012
+        )
         for vert in metal_bm.verts:
             radial = math.hypot(vert.co.x, vert.co.y) / max(length * 0.42, 1e-6)
             vert.co.z += (1.0 - radial * radial) * 0.07
-        mesh_lib.add_icosphere(metal_bm, radius=length * 0.09, subdivisions=1,
-                               center=(0, 0, 0.06))
-        mesh_lib.add_box(grip_bm, size=(length * 0.5, 0.035, 0.035), center=(0, 0, -0.05),
-                         bevel=0.005)
+        mesh_lib.add_icosphere(metal_bm, radius=length * 0.09, subdivisions=1, center=(0, 0, 0.06))
+        mesh_lib.add_box(
+            grip_bm, size=(length * 0.5, 0.035, 0.035), center=(0, 0, -0.05), bevel=0.005
+        )
 
     mesh_lib.cleanup(metal_bm)
     mesh_lib.cleanup(grip_bm)
     blade = mesh_lib.to_object(metal_bm, base_name)
     blade.location = location
-    finish_lib.finish(ctx, blade, material=metal, color=color or None, uv="box",
-                      origin=None, smooth=True, smooth_angle=35.0, apply_transforms=False)
+    finish_lib.finish(
+        ctx,
+        blade,
+        material=metal,
+        color=color or None,
+        uv="box",
+        origin=None,
+        smooth=True,
+        smooth_angle=35.0,
+        apply_transforms=False,
+    )
 
     parts = [blade]
     handle = mesh_lib.to_object(grip_bm, f"{base_name}_grip")
@@ -921,8 +1933,15 @@ def prop_weapon(ctx, name, location, seed, kind, length, blade_width, metal, gri
         scene_lib.delete(handle)
     else:
         handle.location = location
-        finish_lib.finish(ctx, handle, material=grip, uv="cylinder", origin=None, smooth=True,
-                          apply_transforms=False)
+        finish_lib.finish(
+            ctx,
+            handle,
+            material=grip,
+            uv="cylinder",
+            origin=None,
+            smooth=True,
+            apply_transforms=False,
+        )
         parts.append(handle)
 
     merged = scene_lib.join(parts, base_name) if len(parts) > 1 else blade
@@ -934,6 +1953,623 @@ def prop_weapon(ctx, name, location, seed, kind, length, blade_width, metal, gri
     )
     result = finish_lib.report(ctx, merged)
     finish_lib.budget_note(ctx, merged, 700)
+    return result
+
+
+@op(
+    "prop.bow",
+    summary=(
+        "Serious hand-ready recurved bow with tapered laminated limbs, wrapped grip, "
+        "taut drawn string and optional nocked arrow. One joined three-material mesh "
+        "with its pivot at the grip for direct bone attachment."
+    ),
+    params=_params(
+        length=("num", 1.42, "Tip-to-tip height in metres"),
+        reflex=("num", 0.16, "Forward recurve at each tip"),
+        draw=("num", 0.24, "String draw behind the grip in metres"),
+        arrow=("bool", True, "Include a nocked arrow"),
+        wood_color=("str", "#4a3020", "Laminated limb and grip colour"),
+        bronze_color=("str", "#6f512d", "Tip, arrowhead and grip fitting colour"),
+        cord_color=("str", "#9b8f77", "Bowstring and fletching colour"),
+        uv_scale=("num", 2.0, "Box unwrap scale"),
+    ),
+    tags=["prop", "weapon", "bow", "archery"],
+)
+def prop_bow(
+    ctx,
+    name,
+    location,
+    seed,
+    length,
+    reflex,
+    draw,
+    arrow,
+    wood_color,
+    bronze_color,
+    cord_color,
+    uv_scale,
+):
+    """Build a readable ancient bow around a grip-centred origin.
+
+    Local +Z is up the bow, local -Y is the firing direction and +Y is the
+    drawn string. This makes `char.attach` offsets predictable while preserving
+    the recurved silhouette from both an RTS camera and a shoulder close-up.
+    """
+    ctx.reseed(seed)
+    length = max(0.8, min(2.2, float(length)))
+    reflex = max(0.04, min(length * 0.24, float(reflex)))
+    draw = max(0.04, min(length * 0.28, float(draw)))
+    uv_scale = max(0.1, float(uv_scale))
+
+    materials = [
+        mat_lib.principled("m_bow_wood", wood_color, roughness=0.78),
+        mat_lib.principled("m_bow_bronze", bronze_color, roughness=0.38, metallic=0.76),
+        mat_lib.principled("m_bow_cord", cord_color, roughness=0.96),
+    ]
+    WOOD, BRONZE, CORD = range(len(materials))
+    bm = mesh_lib.new_bmesh()
+    parts = 0
+
+    def mark(faces, slot):
+        nonlocal parts
+        for face in faces:
+            face.material_index = slot
+        parts += 1
+        return faces
+
+    def limb_between(start, end, width, slot, thickness=0.026):
+        a, b = Vector(start), Vector(end)
+        axis = b - a
+        if axis.length < 1e-5:
+            return []
+        faces = mesh_lib.add_box(
+            bm,
+            size=(thickness, width, axis.length * 1.04),
+            bevel=min(thickness, width) * 0.2,
+        )
+        verts = list({vert for face in faces for vert in face.verts})
+        orient = axis.normalized().to_track_quat("Z", "Y").to_matrix().to_4x4()
+        bmesh.ops.transform(
+            bm,
+            matrix=Matrix.Translation((a + b) * 0.5) @ orient,
+            verts=verts,
+        )
+        return mark(faces, slot)
+
+    def between(start, end, radius, slot, segments=6):
+        a, b = Vector(start), Vector(end)
+        axis = b - a
+        if axis.length < 1e-5:
+            return []
+        faces = mesh_lib.add_cylinder(
+            bm,
+            radius=radius,
+            depth=axis.length,
+            segments=segments,
+        )
+        verts = list({vert for face in faces for vert in face.verts})
+        orient = axis.normalized().to_track_quat("Z", "Y").to_matrix().to_4x4()
+        bmesh.ops.transform(
+            bm,
+            matrix=Matrix.Translation((a + b) * 0.5) @ orient,
+            verts=verts,
+        )
+        return mark(faces, slot)
+
+    half = length * 0.5
+    grip_half = length * 0.075
+    tips = []
+    # Four tapered laminations per side create a continuous reflex/recurve
+    # profile without the toy-like straight rod silhouette.
+    for sign in (-1.0, 1.0):
+        points = [
+            Vector((0.0, 0.0, sign * grip_half)),
+            Vector((0.0, -reflex * 0.12, sign * length * 0.22)),
+            Vector((0.0, -reflex * 0.28, sign * length * 0.36)),
+            Vector((0.0, -reflex * 0.10, sign * length * 0.46)),
+            Vector((0.0, reflex, sign * half)),
+        ]
+        widths = (length * 0.042, length * 0.036, length * 0.028, length * 0.02)
+        for index in range(len(points) - 1):
+            limb_between(
+                points[index],
+                points[index + 1],
+                widths[index],
+                WOOD if index < 3 else BRONZE,
+                thickness=length * (0.018 if index < 2 else 0.014),
+            )
+        tips.append(points[-1])
+
+    # Wrapped grip with bronze collars.
+    grip_faces = mesh_lib.add_cylinder(
+        bm,
+        radius=length * 0.025,
+        depth=grip_half * 2.05,
+        segments=10,
+    )
+    mark(grip_faces, WOOD)
+    for z in (-grip_half, grip_half):
+        collar = mesh_lib.add_torus(
+            bm,
+            major=length * 0.027,
+            minor=length * 0.0045,
+            major_segments=12,
+            minor_segments=5,
+            center=(0.0, 0.0, z),
+        )
+        mark(collar, BRONZE)
+
+    # String converges behind the grip to show stored energy.
+    nock = Vector((0.0, draw, 0.0))
+    between(tips[0], nock, length * 0.004, CORD, 5)
+    between(nock, tips[1], length * 0.004, CORD, 5)
+
+    if arrow:
+        # Nocked arrow points along -Y, with a bronze head and pale fletching.
+        between(
+            (0.0, draw + length * 0.25, 0.0), (0.0, -length * 0.34, 0.0), length * 0.006, WOOD, 7
+        )
+        head = mesh_lib.add_cylinder(
+            bm,
+            radius=length * 0.018,
+            radius_top=0.0,
+            depth=length * 0.075,
+            segments=6,
+        )
+        head_verts = list({vert for face in head for vert in face.verts})
+        bmesh.ops.transform(
+            bm,
+            matrix=Matrix.Translation((0.0, -length * 0.38, 0.0))
+            @ Matrix.Rotation(math.pi * 0.5, 4, "X"),
+            verts=head_verts,
+        )
+        mark(head, BRONZE)
+        for sign in (-1.0, 1.0):
+            fletch = mesh_lib.add_box(
+                bm,
+                size=(length * 0.025, length * 0.10, length * 0.008),
+                bevel=length * 0.002,
+            )
+            verts = list({vert for face in fletch for vert in face.verts})
+            bmesh.ops.transform(
+                bm,
+                matrix=Matrix.Translation((sign * length * 0.014, draw + length * 0.18, 0.0))
+                @ Matrix.Rotation(sign * math.radians(12), 4, "Y"),
+                verts=verts,
+            )
+            mark(fletch, CORD)
+
+    mesh_lib.cleanup(bm, merge_dist=1e-5)
+    obj = mesh_lib.to_object(bm, _named(name, "recurve_bow"))
+    for material in materials:
+        obj.data.materials.append(material)
+    obj.location = location
+    obj["bforge_weapon"] = "bow"
+    obj["bforge_parts"] = parts
+    result = finish_lib.finish(
+        ctx,
+        obj,
+        material="",
+        uv="box",
+        uv_scale=uv_scale,
+        origin="center",
+        smooth=True,
+        smooth_angle=34.0,
+    )
+    result.update({"parts": parts, "arrow": bool(arrow)})
+    finish_lib.budget_note(ctx, obj, 1800)
+    return result
+
+
+@op(
+    "prop.crossbow",
+    summary=(
+        "Serious game-ready crossbow with a shouldered stock, curved segmented prod, "
+        "taut three-part string, trigger guard, loaded bolt and integrated optic. "
+        "Mastery styles add magazines, Daedalus gearing and an Aegis power core "
+        "without changing the hand-ready pivot. One joined multi-material mesh."
+    ),
+    params=_params(
+        style=("enum:pilgrim|repeater|daedalus|aegis", "pilgrim", "Construction and mastery tier"),
+        length=("num", 1.18, "Stock length in metres"),
+        span=("num", 0.92, "Unstrung prod span in metres"),
+        scope=("bool", True, "Mount a compact tube optic and lens"),
+        wood_color=("str", "#493323", "Seasoned stock colour"),
+        bronze_color=("str", "#73512b", "Bronze fittings and prod colour"),
+        iron_color=("str", "#343a3c", "Iron rail, trigger and mechanism colour"),
+        cord_color=("str", "#9a8d72", "String and fletching colour"),
+        lens_color=("str", "#431514", "Dark optic or Aegis core colour"),
+        uv_scale=("num", 2.0, "Box unwrap scale"),
+    ),
+    tags=["prop", "weapon", "crossbow", "fps"],
+)
+def prop_crossbow(
+    ctx,
+    name,
+    location,
+    seed,
+    style,
+    length,
+    span,
+    scope,
+    wood_color,
+    bronze_color,
+    iron_color,
+    cord_color,
+    lens_color,
+    uv_scale,
+):
+    """Build a viewmodel-readable crossbow as one draw mesh.
+
+    Local +Z is the firing axis and local +Y is the top of the stock. The pivot
+    sits at the shoulder end, matching prop.weapon's hand-ready convention and
+    making the asset predictable in Babylon/Godot/Three without corrective
+    object transforms in Blender.
+    """
+    ctx.reseed(seed)
+    tier = {"pilgrim": 0, "repeater": 1, "daedalus": 2, "aegis": 3}[style]
+    length = max(0.82, min(1.65, float(length)))
+    span = max(length * 0.55, min(length * 1.08, float(span)))
+    uv_scale = max(0.1, float(uv_scale))
+
+    materials = [
+        mat_lib.principled("m_crossbow_wood", wood_color, roughness=0.82),
+        mat_lib.principled("m_crossbow_bronze", bronze_color, roughness=0.34, metallic=0.78),
+        mat_lib.principled("m_crossbow_iron", iron_color, roughness=0.3, metallic=0.88),
+        mat_lib.principled("m_crossbow_cord", cord_color, roughness=0.96),
+        mat_lib.principled(
+            "m_crossbow_lens",
+            lens_color,
+            roughness=0.18,
+            metallic=0.12,
+            emission=0.18 + tier * 0.12,
+            emission_color=lens_color,
+        ),
+    ]
+    WOOD, BRONZE, IRON, CORD, LENS = range(len(materials))
+    bm = mesh_lib.new_bmesh()
+    parts = 0
+
+    def mark(faces, slot):
+        nonlocal parts
+        for face in faces:
+            face.material_index = slot
+        parts += 1
+        return faces
+
+    def box(size, center, slot, bevel=0.008, rotation=None):
+        faces = mesh_lib.add_box(bm, size=size, bevel=bevel)
+        verts = list({vert for face in faces for vert in face.verts})
+        matrix = Matrix.Translation(Vector(center))
+        if rotation:
+            rx, ry, rz = rotation
+            matrix = (
+                matrix
+                @ Matrix.Rotation(rz, 4, "Z")
+                @ Matrix.Rotation(ry, 4, "Y")
+                @ Matrix.Rotation(rx, 4, "X")
+            )
+        bmesh.ops.transform(bm, matrix=matrix, verts=verts)
+        return mark(faces, slot)
+
+    def between(start, end, radius, slot, segments=8, top_scale=1.0):
+        a, b = Vector(start), Vector(end)
+        axis = b - a
+        if axis.length < 1e-5:
+            return []
+        faces = mesh_lib.add_cylinder(
+            bm,
+            radius=radius,
+            radius_top=max(0.002, radius * top_scale),
+            depth=axis.length,
+            segments=segments,
+        )
+        verts = list({vert for face in faces for vert in face.verts})
+        orient = axis.normalized().to_track_quat("Z", "Y").to_matrix().to_4x4()
+        bmesh.ops.transform(
+            bm,
+            matrix=Matrix.Translation((a + b) * 0.5) @ orient,
+            verts=verts,
+        )
+        return mark(faces, slot)
+
+    def torus(major, minor, center, slot, rotation=None, segments=16):
+        faces = mesh_lib.add_torus(
+            bm,
+            major=major,
+            minor=minor,
+            major_segments=segments,
+            minor_segments=6,
+        )
+        verts = list({vert for face in faces for vert in face.verts})
+        matrix = Matrix.Translation(Vector(center))
+        if rotation:
+            rx, ry, rz = rotation
+            matrix = (
+                matrix
+                @ Matrix.Rotation(rz, 4, "Z")
+                @ Matrix.Rotation(ry, 4, "Y")
+                @ Matrix.Rotation(rx, 4, "X")
+            )
+        bmesh.ops.transform(bm, matrix=matrix, verts=verts)
+        return mark(faces, slot)
+
+    def swept_stock(path, scales, slot):
+        """Append a shouldered octagonal stock with a grown-wood silhouette."""
+        profile = [
+            (-0.5, -0.30),
+            (-0.30, -0.5),
+            (0.30, -0.5),
+            (0.5, -0.30),
+            (0.5, 0.30),
+            (0.30, 0.5),
+            (-0.30, 0.5),
+            (-0.5, 0.30),
+        ]
+        return mark(
+            mesh_lib.sweep(
+                bm,
+                path,
+                profile,
+                scales=scales,
+                up=(0.0, 1.0, 0.0),
+            ),
+            slot,
+        )
+
+    stock_w = length * (0.092 + tier * 0.004)
+    stock_h = length * 0.105
+    prod_z = length * 0.72
+    latch_z = length * 0.47
+
+    # Shoulder stock: one continuous octagonal grown-wood form, tapered at the
+    # waist and swollen around the lock. The old stack of cuboids read as a
+    # wooden T in gameplay; this profile holds a weapon silhouette at distance.
+    swept_stock(
+        [
+            (0.0, -stock_h * 0.06, length * 0.015),
+            (0.0, -stock_h * 0.03, length * 0.17),
+            (0.0, -stock_h * 0.08, length * 0.31),
+            (0.0, 0.0, length * 0.50),
+            (0.0, stock_h * 0.05, length * 0.70),
+            (0.0, stock_h * 0.03, length * 0.91),
+            (0.0, 0.0, length * 0.99),
+        ],
+        [
+            (stock_w * 0.88, stock_h * 0.92),
+            (stock_w * 0.82, stock_h * 0.78),
+            (stock_w * 0.56, stock_h * 0.64),
+            (stock_w * 0.70, stock_h * 0.76),
+            (stock_w * 0.62, stock_h * 0.68),
+            (stock_w * 0.47, stock_h * 0.54),
+            (stock_w * 0.38, stock_h * 0.45),
+        ],
+        WOOD,
+    )
+    # Broad iron buttplate catches a rim light and gives the shoulder end a
+    # deliberate termination instead of a bare rectangular cap.
+    box(
+        (stock_w * 1.88, stock_h * 1.10, length * 0.028),
+        (0.0, -stock_h * 0.06, length * 0.018),
+        IRON,
+        stock_w * 0.12,
+    )
+    box(
+        (stock_w * 1.7, stock_h * 0.38, length * 0.19),
+        (0.0, stock_h * 0.63, length * 0.17),
+        WOOD,
+        stock_w * 0.08,
+    )
+    box(
+        (stock_w * 0.86, stock_h * 0.7, length * 0.24),
+        (0.0, -stock_h * 0.5, length * 0.25),
+        WOOD,
+        stock_w * 0.08,
+        rotation=(math.radians(-13), 0.0, 0.0),
+    )
+
+    # Bronze reinforcing furniture and an iron firing channel.
+    for z in (length * 0.27, length * 0.55, length * 0.69):
+        box((stock_w * 1.36, stock_h * 1.14, length * 0.025), (0.0, 0.0, z), BRONZE, 0.004)
+    box(
+        (stock_w * 0.34, stock_h * 0.12, length * 0.65),
+        (0.0, stock_h * 0.58, length * 0.63),
+        IRON,
+        0.004,
+    )
+    box(
+        (stock_w * 1.55, stock_h * 1.35, length * 0.12),
+        (0.0, 0.0, prod_z - length * 0.035),
+        BRONZE,
+        0.012,
+    )
+
+    # Trigger and guard. The open ring catches highlights and instantly reads as
+    # a manufactured weapon rather than a wooden T shape.
+    between(
+        (-stock_w * 0.17, -stock_h * 0.46, length * 0.34),
+        (stock_w * 0.16, -stock_h * 0.72, length * 0.29),
+        stock_w * 0.038,
+        IRON,
+        6,
+    )
+    torus(
+        stock_w * 0.32,
+        stock_w * 0.045,
+        (0.0, -stock_h * 0.68, length * 0.30),
+        BRONZE,
+        rotation=(math.pi * 0.5, 0.0, 0.0),
+        segments=14,
+    )
+
+    # The prod is a shallow recurved arc made from three tapered segments per
+    # side. A straight rod says toy; this silhouette says stored energy.
+    tips = []
+    for side in (-1.0, 1.0):
+        root = Vector((side * stock_w * 0.5, 0.0, prod_z))
+        elbow = Vector((side * span * 0.28, 0.006, prod_z + length * 0.075))
+        outer = Vector((side * span * 0.46, 0.0, prod_z + length * 0.035))
+        tip = Vector((side * span * 0.5, -0.004, prod_z - length * 0.025))
+        between(root, elbow, stock_w * 0.145, BRONZE, 10, 0.84)
+        between(elbow, outer, stock_w * 0.118, BRONZE, 9, 0.76)
+        between(outer, tip, stock_w * 0.084, IRON, 8, 0.66)
+        torus(stock_w * 0.09, stock_w * 0.026, tip, IRON, segments=10)
+        tips.append(tip)
+
+    # Taut bowstring converges on the latch, visibly separating the mechanism
+    # from the prod even in a dark first-person frame.
+    latch = Vector((0.0, -stock_h * 0.04, latch_z))
+    between(tips[0], latch, stock_w * 0.021, CORD, 5)
+    between(latch, tips[1], stock_w * 0.021, CORD, 5)
+    between(tips[0], tips[1], stock_w * 0.013, CORD, 4)
+
+    # Loaded bolt, head and fletching.
+    bolt_y = stock_h * 0.69
+    between(
+        (0.0, bolt_y, length * 0.43), (0.0, bolt_y, length * 1.02), stock_w * 0.026, IRON, 7, 0.72
+    )
+    faces = mesh_lib.add_cylinder(
+        bm,
+        radius=stock_w * 0.065,
+        radius_top=0.0,
+        depth=length * 0.10,
+        segments=6,
+    )
+    head_verts = list({vert for face in faces for vert in face.verts})
+    bmesh.ops.transform(
+        bm,
+        matrix=Matrix.Translation(Vector((0.0, bolt_y, length * 1.06))),
+        verts=head_verts,
+    )
+    mark(faces, IRON)
+    for side in (-1.0, 1.0):
+        box(
+            (stock_w * 0.06, stock_w * 0.22, length * 0.095),
+            (side * stock_w * 0.055, bolt_y, length * 0.47),
+            CORD,
+            0.002,
+            rotation=(0.0, 0.0, side * math.radians(16)),
+        )
+
+    # Compact integrated optic. It is proportioned to the weapon, unlike a
+    # screen-space cylinder bolted on after import.
+    if scope:
+        scope_y = stock_h * 1.43
+        scope_a, scope_b = length * 0.39, length * 0.68
+        box(
+            (stock_w * 0.54, stock_h * 0.18, scope_b - scope_a + length * 0.09),
+            (0.0, stock_h * 0.84, (scope_a + scope_b) * 0.5),
+            IRON,
+            0.004,
+        )
+        between(
+            (0.0, scope_y, scope_a),
+            (0.0, scope_y, scope_b),
+            stock_w * (0.20 + tier * 0.012),
+            IRON,
+            12,
+        )
+        for z in (scope_a, scope_b):
+            torus(
+                stock_w * (0.245 + tier * 0.012),
+                stock_w * 0.048,
+                (0.0, scope_y, z),
+                BRONZE,
+                segments=16,
+            )
+        faces = mesh_lib.add_cylinder(
+            bm,
+            radius=stock_w * (0.19 + tier * 0.01),
+            depth=stock_w * 0.025,
+            segments=14,
+            center=(0.0, scope_y, scope_b + stock_w * 0.012),
+        )
+        mark(faces, LENS)
+
+    # Mastery tiers change construction, not just paint.
+    if tier >= 1:
+        # Under-slung bolt cassette and visible spare shafts.
+        box(
+            (stock_w * 1.55, stock_h * 0.78, length * (0.22 + tier * 0.025)),
+            (0.0, -stock_h * 0.9, length * 0.57),
+            IRON,
+            0.009,
+        )
+        spare_count = 3 if tier == 1 else 5
+        for index in range(spare_count):
+            x = (index - (spare_count - 1) * 0.5) * stock_w * 0.28
+            between(
+                (x, -stock_h * 1.32, length * 0.46),
+                (x, -stock_h * 1.32, length * 0.66),
+                stock_w * 0.018,
+                CORD,
+                5,
+            )
+    if tier >= 2:
+        # Daedalus ratchet wheels on both sides and rigid side rails.
+        for side in (-1.0, 1.0):
+            gear_x = side * stock_w * 0.92
+            torus(
+                stock_w * 0.26,
+                stock_w * 0.055,
+                (gear_x, 0.0, length * 0.58),
+                BRONZE,
+                rotation=(0.0, math.pi * 0.5, 0.0),
+                segments=18,
+            )
+            between(
+                (side * stock_w * 0.72, 0.0, length * 0.43),
+                (side * stock_w * 0.72, 0.0, prod_z),
+                stock_w * 0.038,
+                IRON,
+                7,
+            )
+    if tier >= 3:
+        # Aegis power cores and a broader forward armour plate.
+        box(
+            (stock_w * 2.05, stock_h * 1.58, length * 0.10),
+            (0.0, 0.0, prod_z - length * 0.08),
+            BRONZE,
+            0.016,
+        )
+        for side in (-1.0, 0.0, 1.0):
+            faces = mesh_lib.add_icosphere(
+                bm,
+                radius=stock_w * (0.12 if side else 0.16),
+                subdivisions=2,
+                center=(side * stock_w * 0.55, stock_h * 0.62, length * 0.61),
+            )
+            mark(faces, LENS)
+
+    mesh_lib.cleanup(bm, merge_dist=1e-5)
+    obj = mesh_lib.to_object(bm, _named(name, f"crossbow_{style}"))
+    for material in materials:
+        obj.data.materials.append(material)
+    obj.location = location
+    obj["bforge_weapon"] = "crossbow"
+    obj["bforge_crossbow_style"] = style
+    obj["bforge_parts"] = parts
+    result = finish_lib.finish(
+        ctx,
+        obj,
+        material="",
+        uv="box",
+        uv_scale=uv_scale,
+        origin="bottom",
+        smooth=True,
+        smooth_angle=38.0,
+    )
+    result.update(
+        {
+            "style": style,
+            "parts": parts,
+            "scope": bool(scope),
+            "magazine": tier >= 1,
+            "gearing": tier >= 2,
+            "power_core": tier >= 3,
+        }
+    )
+    finish_lib.budget_note(ctx, obj, 6500)
     return result
 
 
@@ -976,9 +2612,18 @@ def prop_banner(ctx, name, location, seed, size, wave, segments, pole, material,
             )
     cloth = mesh_lib.to_object(bm, _named(name, "banner"))
     cloth.location = location
-    finish_lib.finish(ctx, cloth, material=material, color=color or None, uv="box",
-                      uv_scale=max(width, drop), origin=None, smooth=True, smooth_angle=70.0,
-                      apply_transforms=False)
+    finish_lib.finish(
+        ctx,
+        cloth,
+        material=material,
+        color=color or None,
+        uv="box",
+        uv_scale=max(width, drop),
+        origin=None,
+        smooth=True,
+        smooth_angle=70.0,
+        apply_transforms=False,
+    )
 
     parts = [cloth]
     if pole:
@@ -1051,7 +2696,12 @@ def prop_debris(ctx, name, location, seed, count, radius, piece_size, kind, mate
     obj.location = location
     preset = material or ("wood" if kind == "wood" else "rock")
     result = finish_lib.finish(
-        ctx, obj, material=preset, uv="box", origin="center_xy", smooth=False,
+        ctx,
+        obj,
+        material=preset,
+        uv="box",
+        origin="center_xy",
+        smooth=False,
     )
     finish_lib.budget_note(ctx, obj, count * 90)
     return result

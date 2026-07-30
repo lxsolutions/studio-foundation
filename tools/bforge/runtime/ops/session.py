@@ -178,6 +178,38 @@ def session_import(ctx, path, prefix, location, reset_first):
     if not imported:
         raise OpError(f"{target.name} imported no objects — the file may be empty")
 
+    # Blender's glTF importer creates one renderable Icosphere as an armature
+    # display helper for some skinned files. It is not a glTF mesh (the same file
+    # reports one mesh through glTF-Transform) yet it otherwise looks like an
+    # ordinary 80-triangle, two-metre object. Leaving it in the imported scene
+    # makes audit invent geometry, inflate bounds and report a false texel-density
+    # mismatch against a helper the game will never load.
+    #
+    # Keep the predicate deliberately exact so an authored unmaterialled sphere
+    # is not discarded merely because a rig exists nearby.
+    has_armature = any(obj.type == "ARMATURE" for obj in imported)
+    generated_shapes = [
+        obj
+        for obj in imported
+        if (
+            suffix in (".glb", ".gltf")
+            and has_armature
+            and obj.type == "MESH"
+            and obj.name == "Icosphere"
+            and obj.parent is None
+            and len(obj.data.materials) == 0
+            and mesh_lib.tri_count(obj) == 80
+            and len(obj.data.vertices) == 42
+        )
+    ]
+    for helper in generated_shapes:
+        scene_lib.delete(helper)
+    if generated_shapes:
+        imported = [obj for obj in imported if obj not in generated_shapes]
+        ctx.note(
+            f"discarded {len(generated_shapes)} Blender glTF armature display helper(s)"
+        )
+
     for obj in imported:
         if prefix:
             obj.name = scene_lib.unique_name(f"{prefix}_{obj.name}")

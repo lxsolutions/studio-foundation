@@ -23,6 +23,7 @@ CASES = [
     ("prop.barrel", {"name": "barrel", "height": 1.0, "seed": 5}),
     ("prop.chest", {"name": "chest", "separate_lid": False, "seed": 11}),
     ("prop.sack", {"name": "sack", "seed": 2}),
+    ("prop.relic", {"name": "relic", "form": "medallion", "motif": "rosette", "size": 0.42, "seed": 37}),
     ("prop.rock", {"name": "rock", "detail": 2, "seed": 9}),
     ("prop.crystal", {"name": "crystal", "count": 6, "seed": 4}),
     ("prop.tree", {"name": "tree", "canopy_style": "layered", "seed": 8}),

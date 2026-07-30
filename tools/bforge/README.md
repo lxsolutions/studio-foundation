@@ -76,6 +76,157 @@ The ore seam is painted onto a band of the rock's own faces with
 `material.face_assign` — zero extra triangles, impossible to bury inside the
 rock, and it reads as "valuable" at 20 px tall.
 
+**Spike** uses `arch.defense_tower` as one reproducible Greek-defense family
+instead of maintaining three unrelated Blender files. Arrow, ballista and storm
+variants share serious weathered masonry and a six-material palette, but the
+weapon crowns stay readable from an RTS camera: elevated archer canopy,
+horizontal torsion engine and vertical bronze conductor. The same models hold
+up in first person, and Spike supplies its own simple gameplay colliders.
+
+| variant | triangles | GLB | tallest extent |
+| --- | ---: | ---: | ---: |
+| arrow | 3,164 | 264 KB | 5.19 m |
+| ballista | 2,286 | 187 KB | 4.56 m |
+| storm | 2,552 | 197 KB | 4.93 m |
+
+The three replaced runtime GLBs occupied 6.4 MB; the generated family occupies
+646 KB and passes `bforge audit` with zero warnings.
+
+![Spike Greek ballista review sheet](../../docs/bforge/img/spike_ballista.png)
+
+`arch.field_building` applies that same family discipline to the structures
+between the towers. Farm, campaign-tent, barracks, wall, road-stele, courtyard
+house, stoa-fronted emporium and mining-lattice variants share one restrained
+limestone/terracotta/oxblood-cloth/timber/bronze palette while preserving
+distinct economy, expedition, military, fortification, navigation and civic
+silhouettes. Every model is ground-origin authored, stays below 3,000
+triangles, and can ride on an engine's cheap gameplay collider without
+coupling art to simulation.
+
+| variant | triangles | GLB | tallest extent |
+| --- | ---: | ---: | ---: |
+| farmstead | 2,648 | 215 KB | 1.47 m |
+| strategos campaign tent | 2,044 | 156 KB | 2.53 m |
+| hoplite barracks | 2,112 | 162 KB | 2.83 m |
+| ashlar wall | 2,808 | 234 KB | 2.08 m |
+| road stele | 632 | 57 KB | 2.06 m |
+
+![Spike Greek field-building review sheet](../../docs/bforge/img/spike_field_barracks.png)
+
+Spike's Mining Settlement uses the three civic programmes as visible Age
+progression instead of changing only numbers in a menu. Timber Age raises a
+low Delver House, Engine Age adds a working stoa shop, and Forge Age crowns the
+claim with a tall braced survey lattice. All three are strict browser assets
+with six shared material contracts and zero audit warnings.
+
+| civic programme | triangles | GLB | bounds |
+| --- | ---: | ---: | ---: |
+| Delver House | 1,656 | 134 KB | 3.91 × 3.39 × 3.46 m |
+| Doros' Emporium | 1,872 | 146 KB | 4.71 × 3.46 × 3.10 m |
+| Prospector Lattice | 1,350 | 103 KB | 2.50 × 2.50 × 5.39 m |
+
+![Spike Greek civic-annex review sheet](../../docs/bforge/img/spike_civic_annex_v1.png)
+
+`arch.hellenic_ruin` adds a reusable landmark tier above road stelae. Shrine,
+colonnade and hero-tomb programmes share one weathered limestone/foundation/
+patina material contract, but author different structural grammar: displaced
+Doric pediments and altar, an asymmetric processional column line, or a heavy
+heroon burial core. Fallen drums and rubble are generated as parts of the
+joined ground-origin mesh, so the silhouette and footprint stay deterministic
+across rebuilds.
+
+| programme | triangles | GLB | bounds |
+| --- | ---: | ---: | ---: |
+| ruined shrine | 2,588 | 205 KB | 5.61 × 4.05 × 5.25 m |
+| broken colonnade | 2,340 | 181 KB | 6.42 × 3.38 × 4.00 m |
+| hero tomb | 1,828 | 144 KB | 5.42 × 4.02 × 4.60 m |
+
+Spike uses the three as seeded wilderness districts visible from FPS, Hero and
+Commander cameras. Strict audits pass with zero errors and zero warnings; the
+live regression also proves grounded bounds, distinct silhouettes and
+deterministic regeneration.
+
+![Spike Hellenic ruin review sheet](../../docs/bforge/img/spike_hellenic_ruin_v1.png)
+
+Spike's delver exposed a different pipeline failure: a nominally
+"realistic" humanoid could still be a tube-limbed mannequin, and the active
+Death action could make its automatic review sheet look collapsed. The
+character pipeline now shapes chest and waist depth, jaw, nose, ears, hands and
+feet; `greek_delver` adds an open-faced miner crown, trimmed beard, lamp,
+pauldron, satchel and stowed pickaxe; and `char.pose` clears only the active
+animation assignment while retaining every fake-user action for export.
+
+The accepted `spike_delver_v3` is one skinned mesh: 3,336 triangles, six
+materials, a 19-bone rig, and five verified glTF clips (`idle`, `walk`, `run`,
+`attack`, `death`) in a 282 KB GLB. `bforge audit --fail-on warning` reports
+zero errors and zero warnings.
+
+![Spike serious Greek delver review sheet](../../docs/bforge/img/spike_delver_v3.png)
+
+`prop.tree` now authors Mediterranean growth by species and age instead of
+making runtime clones do all of the visual work. Olive trees gain rooted,
+multi-stem, storm-broken silhouettes as they age; cypresses progress from a
+young narrow column to mature mass and an ancient crown with authored gaps.
+Spike uses six generated young, mature/windswept and ancient olive/cypress
+assets, then applies only bounded nonuniform growth in-engine.
+
+| tree | triangles | GLB |
+| --- | ---: | ---: |
+| ancient olive | 2,748 | 151 KB |
+| windswept olive | 2,760 | 152 KB |
+| young olive | 1,560 | 85 KB |
+| ancient cypress | 2,488 | 144 KB |
+| mature cypress | 3,912 | 225 KB |
+| young cypress | 2,472 | 142 KB |
+
+The complete family passes `bforge audit --fail-on warning` with zero errors
+and zero warnings.
+
+![Spike Mediterranean tree review sheet](../../docs/bforge/img/spike_tree_family_v4.png)
+
+`prop.rock` now authors geological formations instead of limiting every game
+rock to one displaced sphere. `formation` selects a grounded boulder, a
+two-piece bedded slab, a three-mass outcrop, or five-piece scree; `strata`
+controls visible sedimentary bedding without changing the deterministic seed.
+The second-generation geometry adds oblique fracture clipping, geological
+shear, flattened weathered caps and course-by-course lateral slip. Those
+broad planes survive an RTS camera where surface-sized noise disappears.
+Spike uses the complete Attic limestone family as lightweight art over its
+existing gameplay colliders.
+
+| formation | pieces | triangles | GLB |
+| --- | ---: | ---: | ---: |
+| boulder | 1 | 320 | 31 KB |
+| slab | 2 | 640 | 61 KB |
+| outcrop | 3 | 956 | 92 KB |
+| scree | 5 | 1,598 | 147 KB |
+
+The live Blender regression verifies grounded bounds, distinct formation
+silhouettes, stepped bedding courses, stable vertex order and byte-identical
+regeneration. The review also caught a subtler fidelity failure: technically
+distinct icosphere clusters were still round enough to read as inflated
+potatoes in the shipped Commander view. Multi-view contact sheets made the
+silhouette problem visible before the replacement assets reached the game.
+
+![Spike stratified limestone outcrop review sheet](../../docs/bforge/img/spike_limestone_outcrop_v2.png)
+
+`prop.relic` turns rare game drops into authored equipment instead of emissive
+cubes. `form` selects a hanging medallion, gemstone signet, or stepped votive;
+medallions can carry a raised solar rosette, lambda, or plain face. Each form
+keeps primary metal, trim, and inset stone in separate material slots so rarity
+can be recoloured without rebuilding the mesh.
+
+Spike's first production relic is an 896-triangle, 52 KB Laurion medallion with
+a grounded pivot, bronze body, gold relief, violet stone, and a silhouette that
+survives both Hero and Commander cameras. Contact-sheet review caught a reusable
+assembly mistake before export: applying a centre origin to every sub-part
+recentred the bail and relief inside the coin. The recipe now preserves authored
+part coordinates until the final joined pickup receives its bottom pivot.
+
+The live Blender regression builds all three forms, verifies distinct grounded
+bounds and three-material output, enforces the prop triangle budget, and proves
+deterministic regeneration.
+
 ---
 
 ## Why this exists
@@ -130,7 +281,7 @@ tools/bforge/
     daemon.py          JSON-line RPC loop
     registry.py        @op decorator: types, coercion, schema generation
     lib/               mesh, uvs, materials, scene-graph, finishing pass
-    ops/               the ~89 operations, grouped by namespace
+    ops/               the 120 operations, grouped by namespace
   catalog.json       committed op snapshot (so tools/list needs no Blender)
   tests/             unit + live-integration + visual gallery
 ```
@@ -165,7 +316,7 @@ in this repo's `.mcp.json`:
 ```
 
 Five tools by default — `bforge_ops`, `bforge_describe`, `bforge_run`,
-`bforge_run_batch`, `bforge_session` — because 89 individual MCP tools swamps
+`bforge_run_batch`, `bforge_session` — because 120 individual MCP tools swamps
 most clients' tool lists. `bforge_run_batch` builds a whole asset in one round
 trip. Pass `--tools full` to expose every op as its own MCP tool instead.
 
@@ -204,11 +355,44 @@ Both halves matter. `check.critique` catches non-manifold edges and texel
 mismatch that no render shows; the contact sheet catches "the proportions are
 wrong" that no metric shows.
 
+The generated `.meta.json` also carries a `measured.material_contracts` entry
+for every material: its linear PBR base colour, artist-facing sRGB hex,
+roughness, metallic value and stable material name. Engines can recolour an
+asset without guessing which colour space their shader property expects; this
+is especially important for dark foliage and cloth, where assigning the hex
+channels directly to a linear albedo produces a visibly washed-out result.
+
+For an ordered unlock family, audit every runtime asset together and request the
+set comparison:
+
+```sh
+bforge audit pilgrim.glb repeater.glb daedalus.glb aegis.glb \
+  --render-dir review --progression-report
+```
+
+The optional `progression` block compares triangle growth, authored scale, and
+material changes in argument order. With `--fail-on warning`, a flat complexity
+ladder or a greater-than-1.5x scale mismatch becomes CI-actionable. The default
+single-asset JSON stays unchanged when the flag is omitted.
+
+Shipping raster art can go through the same read-only audit command. PNG, JPEG,
+and WebP files are measured with `check.image` instead of being imported as
+Blender scenes:
+
+```sh
+bforge audit miner-walk.png mine-terrain.webp --fail-on warning
+```
+
+Each image row reports dimensions, subject coverage, displayed and linear
+luminance, crushed/blown pixels, saturation, dominant colours, and actionable
+findings. `--render-dir` only applies to imported 3D assets; raster files are
+already the review artifact.
+
 ---
 
 ## What it can make
 
-89 ops across 13 namespaces. Full reference: [`docs/bforge/OPS.md`](../../docs/bforge/OPS.md).
+117 ops across 13 namespaces. Full reference: [`docs/bforge/OPS.md`](../../docs/bforge/OPS.md).
 
 - **`prop.*`** — crate, barrel, chest, sack, rock, crystal, tree, pillar, torch,
   fence, furniture, weapon, banner, debris
@@ -235,6 +419,39 @@ wrong" that no metric shows.
 - **`session.import`** — pull in an existing GLB/glTF/OBJ/FBX/blend to inspect,
   critique, fix or extend assets a game already ships. This is how the Chariot
   audit above was done.
+
+`render.view` and `render.camera` accept `transparent=true` for real RGBA
+inventory icons, weapon cards and UI compositing. Lighting still uses the
+normal subject-scaled rig; only the world background becomes transparent:
+
+```python
+forge.call(
+    "render.view",
+    objects=["crossbow"],
+    view="hero",
+    out="crossbow-card.png",
+    resolution=512,
+    transparent=True,
+)
+```
+
+Validate those cutouts with the same tool instead of trusting a filename or a
+checkerboard preview. `check.image` now uses alpha as the authoritative subject
+mask and can enforce square dimensions, transparent corners, safe coverage and
+a minimum shipping size:
+
+```python
+forge.call(
+    "check.image",
+    path="guardian-art.png",
+    require_alpha=True,
+    require_clear_corners=True,
+    require_square=True,
+    minimum_size=256,
+    minimum_coverage=0.20,
+    maximum_coverage=0.92,
+)
+```
 
 ---
 
@@ -268,6 +485,9 @@ wrong" that no metric shows.
   and opt-in where a GPU context exists.
 - Contact sheets cost a few seconds. Use `tile=300, samples=16` while
   iterating.
+- Contact-sheet scratch panels are namespaced by output stem, so independent
+  Blender daemons can safely forge different assets into the same output
+  directory in parallel.
 - Scene state lives in the daemon. If it dies, state is lost — rebuild from
   `session.reset`. The client detects the death, reports Blender's stderr tail,
   and restarts on the next call.
@@ -281,7 +501,7 @@ wrong" that no metric shows.
 
 ```bash
 just bforge-test        # schema + MCP protocol (fast, no Blender)
-just bforge-test-live   # 42 live Blender integration tests
+just bforge-test-live   # 79 live Blender integration tests
 just bforge-gallery     # regenerate the visual review gallery
 ```
 

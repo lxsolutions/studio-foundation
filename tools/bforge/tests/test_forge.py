@@ -127,6 +127,168 @@ class Geometry(ForgeCase):
         second = self.forge.call("prop.rock", name="r", seed=2)
         self.assertNotEqual(first["bounds"], second["bounds"])
 
+    def test_rock_formations_are_grounded_distinct_and_deterministic(self):
+        results = {}
+        for formation in ("boulder", "slab", "outcrop", "scree"):
+            self.forge.call("session.reset")
+            results[formation] = self.forge.call(
+                "prop.rock",
+                name=formation,
+                seed=29,
+                formation=formation,
+                size=[1.8, 1.35, 1.05],
+                detail=2,
+                roughness=0.24,
+                strata=0.62,
+                angular=True,
+            )
+            self.assertEqual(results[formation]["formation"], formation)
+            self.assertAlmostEqual(results[formation]["bounds"]["min"][2], 0.0, places=3)
+            self.assertEqual(results[formation]["bedding_courses"], 6)
+
+        self.assertEqual(results["boulder"]["piece_count"], 1)
+        self.assertEqual(results["slab"]["piece_count"], 2)
+        self.assertEqual(results["outcrop"]["piece_count"], 3)
+        self.assertEqual(results["scree"]["piece_count"], 5)
+        self.assertLess(
+            results["slab"]["bounds"]["size"][2], results["boulder"]["bounds"]["size"][2]
+        )
+        self.assertGreater(results["slab"]["bounds"]["size"][2], 0.3)
+        self.assertLess(
+            results["slab"]["bounds"]["size"][2],
+            results["slab"]["bounds"]["size"][0] * 0.42,
+        )
+        self.assertLess(
+            results["outcrop"]["bounds"]["size"][2],
+            results["outcrop"]["bounds"]["size"][0] * 0.62,
+        )
+        self.assertGreater(results["outcrop"]["triangles"], results["boulder"]["triangles"])
+        self.assertGreater(results["scree"]["triangles"], results["outcrop"]["triangles"])
+        self.assertGreater(results["scree"]["bounds"]["size"][0], 1.2)
+        self.assertEqual(len({tuple(result["bounds"]["size"]) for result in results.values()}), 4)
+
+        self.forge.call("session.reset")
+        repeated = self.forge.call(
+            "prop.rock",
+            name="outcrop",
+            seed=29,
+            formation="outcrop",
+            size=[1.8, 1.35, 1.05],
+            detail=2,
+            roughness=0.24,
+            strata=0.62,
+            angular=True,
+        )
+        self.assertEqual(results["outcrop"]["triangles"], repeated["triangles"])
+        self.assertEqual(results["outcrop"]["bounds"], repeated["bounds"])
+
+    def test_relic_forms_are_grounded_multi_material_pickups(self):
+        results = {}
+        for form in ("medallion", "ring", "idol"):
+            self.forge.call("session.reset")
+            results[form] = self.forge.call(
+                "prop.relic",
+                name=form,
+                form=form,
+                motif="rosette",
+                size=0.42,
+                seed=37,
+            )
+            self.assertEqual(results[form]["form"], form)
+            self.assertAlmostEqual(results[form]["bounds"]["min"][2], 0.0, places=3)
+            self.assertGreaterEqual(len(results[form]["materials"]), 3)
+            self.assertGreaterEqual(results[form]["part_count"], 3)
+            self.assertLess(results[form]["triangles"], 1200)
+
+        self.assertEqual(len({tuple(result["bounds"]["size"]) for result in results.values()}), 3)
+        self.assertGreater(results["medallion"]["bounds"]["size"][2], results["ring"]["bounds"]["size"][2])
+        self.assertGreater(results["idol"]["bounds"]["size"][1], results["medallion"]["bounds"]["size"][1])
+
+        self.forge.call("session.reset")
+        repeated = self.forge.call(
+            "prop.relic",
+            name="medallion",
+            form="medallion",
+            motif="rosette",
+            size=0.42,
+            seed=37,
+        )
+        self.assertEqual(results["medallion"]["triangles"], repeated["triangles"])
+        self.assertEqual(results["medallion"]["bounds"], repeated["bounds"])
+        self.assertEqual(results["medallion"]["motif"], "rosette")
+
+    def test_natural_tree_styles_are_deterministic_branch_readable_assets(self):
+        olive = self.forge.call(
+            "prop.tree",
+            name="olive",
+            seed=17,
+            canopy_style="olive",
+            age="ancient",
+            height=5.2,
+            canopy_radius=1.8,
+            detail=2,
+        )
+        self.assertGreater(olive["triangles"], 1200)
+        self.assertLess(olive["triangles"], 4200)
+        self.assertEqual(len(olive["materials"]), 2)
+        self.assertAlmostEqual(olive["bounds"]["min"][2], 0.0, places=3)
+        self.assertEqual(olive["species"], "olive")
+        self.assertEqual(olive["age"], "ancient")
+        self.assertEqual(olive["silhouette"], "ancient_windswept_olive")
+        self.assertGreaterEqual(olive["branch_count"], 30)
+        self.assertGreaterEqual(olive["foliage_masses"], 60)
+
+        self.forge.call("session.reset")
+        repeated = self.forge.call(
+            "prop.tree",
+            name="olive",
+            seed=17,
+            canopy_style="olive",
+            age="ancient",
+            height=5.2,
+            canopy_radius=1.8,
+            detail=2,
+        )
+        self.assertEqual(olive["triangles"], repeated["triangles"])
+        self.assertEqual(olive["bounds"], repeated["bounds"])
+
+        self.forge.call("session.reset")
+        cypress = self.forge.call(
+            "prop.tree",
+            name="cypress",
+            seed=23,
+            canopy_style="cypress",
+            age="ancient",
+            height=7.0,
+            canopy_radius=1.05,
+            detail=2,
+        )
+        self.assertGreater(cypress["triangles"], 1200)
+        self.assertLess(cypress["triangles"], 4200)
+        self.assertEqual(len(cypress["materials"]), 2)
+        self.assertGreater(cypress["bounds"]["size"][2], cypress["bounds"]["size"][0] * 2.5)
+        self.assertEqual(cypress["species"], "cypress")
+        self.assertEqual(cypress["age"], "ancient")
+        self.assertEqual(cypress["silhouette"], "ancient_columnar_cypress")
+        self.assertGreaterEqual(cypress["branch_count"], 28)
+        self.assertGreaterEqual(cypress["foliage_masses"], 70)
+
+        self.forge.call("session.reset")
+        young = self.forge.call(
+            "prop.tree",
+            name="cypress",
+            seed=23,
+            canopy_style="cypress",
+            age="young",
+            height=7.0,
+            canopy_radius=1.05,
+            detail=2,
+        )
+        self.assertEqual(young["silhouette"], "young_columnar_cypress")
+        self.assertNotEqual(cypress["branch_count"], young["branch_count"])
+        self.assertNotEqual(cypress["foliage_masses"], young["foliage_masses"])
+        self.assertNotEqual(cypress["bounds"], young["bounds"])
+
     def test_origin_modes_place_the_pivot_correctly(self):
         result = self.forge.call("build.box", name="b", size=[1, 1, 2], origin="bottom")
         self.assertAlmostEqual(result["bounds"]["min"][2], 0.0, places=4)
@@ -150,6 +312,254 @@ class Geometry(ForgeCase):
         one = self.forge.call("build.box", name="unit", size=[1, 1, 1])
         result = self.forge.call("build.array", name="unit", counts=[4], spacing=[2, 0, 0])
         self.assertAlmostEqual(result["triangles"], one["triangles"] * 4)
+
+
+class Architecture(ForgeCase):
+    def test_civic_hall_is_a_deterministic_material_disciplined_mine_town_centre(self):
+        first = self.forge.call(
+            "arch.civic_hall",
+            name="laurion",
+            style="greek_mine",
+            width=10.4,
+            depth=8.4,
+            height=6.8,
+            columns=6,
+            tile_rows=7,
+        )
+        self.assertEqual(first["style"], "greek_mine")
+        self.assertTrue(first["mine_portal"])
+        self.assertTrue(first["hoist"])
+        self.assertEqual(first["columns"], 6)
+        self.assertEqual(first["tile_rows"], 7)
+        self.assertGreaterEqual(first["parts"], 90)
+        self.assertGreater(first["portal_width"], 2.0)
+        self.assertGreater(first["triangles"], 3_000)
+        self.assertLess(first["triangles"], 18_000)
+        self.assertEqual(
+            first["materials"],
+            [
+                "m_civic_stone",
+                "m_civic_foundation",
+                "m_civic_roof",
+                "m_civic_timber",
+                "m_civic_metal",
+                "m_civic_cloth",
+                "m_civic_void",
+            ],
+        )
+        self.assertAlmostEqual(first["bounds"]["min"][2], 0.0, places=3)
+        self.assertGreater(first["bounds"]["size"][0], 10.0)
+        self.assertGreater(first["bounds"]["size"][1], 8.0)
+
+        self.forge.call("session.reset")
+        repeated = self.forge.call(
+            "arch.civic_hall",
+            name="laurion",
+            style="greek_mine",
+            width=10.4,
+            depth=8.4,
+            height=6.8,
+            columns=6,
+            tile_rows=7,
+        )
+        self.assertEqual(first["triangles"], repeated["triangles"])
+        self.assertEqual(first["bounds"], repeated["bounds"])
+
+    def test_polis_style_removes_mine_only_parts(self):
+        polis = self.forge.call(
+            "arch.civic_hall",
+            name="polis",
+            style="greek_polis",
+        )
+        self.assertEqual(polis["style"], "greek_polis")
+        self.assertFalse(polis["mine_portal"])
+        self.assertFalse(polis["hoist"])
+        self.assertEqual(polis["portal_width"], 0.0)
+        self.assertLess(polis["parts"], 110)
+
+    def test_defense_tower_family_has_distinct_deterministic_silhouettes(self):
+        expected = {
+            "arrow": "elevated_archer_crown",
+            "ballista": "horizontal_torsion_engine",
+            "storm": "vertical_bronze_conductor",
+        }
+        family = {}
+        for style, silhouette in expected.items():
+            self.forge.call("session.reset")
+            tower = self.forge.call(
+                "arch.defense_tower",
+                name=f"{style}_tower",
+                style=style,
+                width=3.0,
+                height=5.2,
+            )
+            family[style] = tower
+            self.assertEqual(tower["style"], style)
+            self.assertEqual(tower["silhouette"], silhouette)
+            self.assertGreaterEqual(tower["parts"], 20)
+            self.assertGreater(tower["triangles"], 500)
+            self.assertLess(tower["triangles"], 9_000)
+            self.assertAlmostEqual(tower["bounds"]["min"][2], 0.0, places=3)
+            self.assertGreater(tower["bounds"]["size"][0], 2.7)
+            self.assertGreater(tower["bounds"]["size"][1], 2.7)
+            self.assertEqual(
+                tower["materials"],
+                [
+                    "m_defense_stone",
+                    "m_defense_foundation",
+                    "m_defense_timber",
+                    "m_defense_metal",
+                    "m_defense_cloth",
+                    "m_defense_energy",
+                ],
+            )
+
+        self.assertGreater(
+            family["storm"]["bounds"]["size"][2],
+            family["ballista"]["bounds"]["size"][2],
+        )
+        self.assertGreater(
+            family["ballista"]["bounds"]["size"][0],
+            family["storm"]["bounds"]["size"][0],
+        )
+
+        self.forge.call("session.reset")
+        repeated = self.forge.call(
+            "arch.defense_tower",
+            name="arrow_tower",
+            style="arrow",
+            width=3.0,
+            height=5.2,
+        )
+        self.assertEqual(family["arrow"]["triangles"], repeated["triangles"])
+        self.assertEqual(family["arrow"]["bounds"], repeated["bounds"])
+
+    def test_hellenic_ruins_are_grounded_distinct_landmarks(self):
+        expected = {
+            "shrine": "ruined_doric_shrine",
+            "colonnade": "broken_processional_colonnade",
+            "tomb": "weathered_hero_tomb",
+        }
+        family = {}
+        for index, (style, silhouette) in enumerate(expected.items()):
+            self.forge.call("session.reset")
+            ruin = self.forge.call(
+                "arch.hellenic_ruin",
+                name=f"ruin_{style}",
+                style=style,
+                width=5.2,
+                depth=3.8,
+                height=4.2,
+                weathering=0.72,
+                seed=83 + index,
+            )
+            family[style] = ruin
+            self.assertEqual(ruin["style"], style)
+            self.assertEqual(ruin["silhouette"], silhouette)
+            self.assertEqual(ruin["weathering"], 0.72)
+            self.assertGreaterEqual(ruin["parts"], 18)
+            self.assertGreater(ruin["triangles"], 900)
+            self.assertLess(ruin["triangles"], 7_500)
+            self.assertAlmostEqual(ruin["bounds"]["min"][2], 0.0, places=3)
+            self.assertGreater(ruin["bounds"]["size"][0], 4.8)
+            self.assertGreater(ruin["bounds"]["size"][1], 3.4)
+            self.assertEqual(
+                ruin["materials"],
+                ["m_ruin_limestone", "m_ruin_foundation", "m_ruin_patina"],
+            )
+
+        self.assertEqual(len({item["silhouette"] for item in family.values()}), 3)
+        self.assertGreater(
+            family["shrine"]["bounds"]["size"][2],
+            family["colonnade"]["bounds"]["size"][2],
+        )
+
+        self.forge.call("session.reset")
+        repeated = self.forge.call(
+            "arch.hellenic_ruin",
+            name="ruin_shrine",
+            style="shrine",
+            width=5.2,
+            depth=3.8,
+            height=4.2,
+            weathering=0.72,
+            seed=83,
+        )
+        self.assertEqual(family["shrine"]["triangles"], repeated["triangles"])
+        self.assertEqual(family["shrine"]["bounds"], repeated["bounds"])
+
+    def test_field_building_family_is_serious_distinct_and_deterministic(self):
+        expected = {
+            "farm": ("furrowed_olive_plot", 3.4, 3.4, 1.8),
+            "camp": ("strategos_campaign_tent", 3.8, 3.0, 2.7),
+            "barracks": ("hoplite_training_hall", 3.2, 2.6, 2.8),
+            "wall": ("ashlar_parapet_segment", 2.4, 0.6, 2.2),
+            "waymarker": ("weathered_road_stele", 1.25, 1.1, 2.4),
+            "house": ("courtyard_delver_house", 3.8, 3.2, 3.2),
+            "emporium": ("stoa_fronted_emporium", 4.4, 3.2, 3.3),
+            "lattice": ("mining_survey_lattice", 2.5, 2.5, 5.8),
+        }
+        family = {}
+        for style, (silhouette, width, depth, height) in expected.items():
+            self.forge.call("session.reset")
+            building = self.forge.call(
+                "arch.field_building",
+                name=f"greek_{style}",
+                style=style,
+                width=width,
+                depth=depth,
+                height=height,
+            )
+            family[style] = building
+            self.assertEqual(building["style"], style)
+            self.assertEqual(building["silhouette"], silhouette)
+            self.assertGreaterEqual(building["parts"], 10)
+            self.assertGreater(building["triangles"], 150)
+            self.assertLess(building["triangles"], 6_000)
+            self.assertAlmostEqual(
+                building["bounds"]["min"][2],
+                0.0,
+                places=3,
+                msg=f"{style} must sit on the ground",
+            )
+            self.assertEqual(
+                building["materials"],
+                [
+                    "m_field_stone",
+                    "m_field_foundation",
+                    "m_field_timber",
+                    "m_field_roof",
+                    "m_field_metal",
+                    "m_field_crop",
+                ],
+            )
+
+        self.assertGreater(family["farm"]["bounds"]["size"][0], 3.2)
+        self.assertGreater(family["camp"]["bounds"]["size"][0], 4.3)
+        self.assertGreater(family["camp"]["bounds"]["size"][1], 3.3)
+        self.assertGreater(family["camp"]["bounds"]["size"][2], 2.3)
+        self.assertGreater(family["barracks"]["bounds"]["size"][2], 2.4)
+        self.assertLess(family["wall"]["bounds"]["size"][1], 0.8)
+        self.assertGreater(family["waymarker"]["bounds"]["size"][2], 2.0)
+        self.assertGreater(family["house"]["bounds"]["size"][0], 3.7)
+        self.assertGreater(family["emporium"]["bounds"]["size"][0], 4.4)
+        self.assertGreater(family["lattice"]["bounds"]["size"][2], 5.2)
+        self.assertGreater(
+            family["lattice"]["bounds"]["size"][2],
+            family["house"]["bounds"]["size"][2],
+        )
+
+        self.forge.call("session.reset")
+        repeated = self.forge.call(
+            "arch.field_building",
+            name="greek_wall_repeat",
+            style="wall",
+            width=2.4,
+            depth=0.6,
+            height=2.2,
+        )
+        self.assertEqual(family["wall"]["triangles"], repeated["triangles"])
+        self.assertEqual(family["wall"]["bounds"], repeated["bounds"])
 
 
 class Transforms(ForgeCase):
@@ -333,6 +743,27 @@ class ImportExisting(ForgeCase):
         imported = self.forge.call("session.import", path=exported["path"])
         self.assertEqual(imported["triangles"], source["triangles"])
 
+    def test_rig_import_ignores_blender_armature_display_helper(self):
+        source = self.forge.call(
+            "char.humanoid",
+            name="hero",
+            height=1.8,
+            build="realistic",
+        )
+        rig = self.forge.call("char.rig", name="hero", build="realistic")
+        self.forge.call(
+            "char.animate",
+            rig=rig["armature"],
+            clip="walk",
+            length=20,
+        )
+        exported = self.forge.call("export.gltf", out="rigged.glb", strict=False)
+        self.forge.call("session.reset")
+        imported = self.forge.call("session.import", path=exported["path"])
+        self.assertEqual(imported["meshes"], 1, imported["objects"])
+        self.assertEqual(imported["triangles"], source["triangles"])
+        self.assertNotIn("Icosphere", " ".join(imported["objects"]))
+
     def test_import_of_a_missing_file_is_a_clear_error(self):
         with self.assertRaises(ForgeError) as ctx:
             self.forge.call("session.import", path="does/not/exist.glb")
@@ -366,6 +797,39 @@ class ExplicitCamera(ForgeCase):
     def test_camera_render_of_an_empty_scene_errors(self):
         with self.assertRaises(ForgeError):
             self.forge.call("render.camera", out="x.png", position=[1, 1, 1], samples=1)
+
+    def test_view_can_render_a_transparent_rgba_ui_card(self):
+        self.forge.call("prop.crossbow", name="weapon", style="pilgrim", seed=17)
+        result = self.forge.call(
+            "render.view",
+            out="weapon-card.png",
+            objects=["weapon"],
+            view="hero",
+            resolution=128,
+            samples=2,
+            transparent=True,
+            _timeout=600,
+        )
+        png = Path(result["path"]).read_bytes()
+        self.assertEqual(png[:8], b"\x89PNG\r\n\x1a\n")
+        # PNG IHDR colour type 6 is truecolour with alpha. Merely naming the
+        # output .png is not enough: game UI cards need a real alpha channel.
+        self.assertEqual(png[25], 6)
+        self.assertTrue(result["transparent"])
+        analysis = self.forge.call(
+            "check.image",
+            path=result["path"],
+            require_alpha=True,
+            require_clear_corners=True,
+            require_square=True,
+            minimum_size=128,
+            minimum_coverage=0.01,
+            maximum_coverage=0.98,
+        )
+        self.assertTrue(analysis["ok"], analysis["findings"])
+        self.assertTrue(analysis["alpha"]["has_transparency"])
+        self.assertTrue(analysis["alpha"]["corners_clear"])
+        self.assertGreater(analysis["alpha"]["transparent_fraction"], 0.01)
 
 
 class UVs(ForgeCase):
@@ -462,6 +926,240 @@ class Characters(ForgeCase):
         heroic = self.forge.call("char.humanoid", name="b", height=1.8, build="heroic")
         self.assertGreater(chibi["head_unit_m"], heroic["head_unit_m"])
 
+    def test_greek_outfit_is_riggable_multi_material_game_geometry(self):
+        body = self.forge.call(
+            "char.humanoid",
+            name="delver",
+            height=1.9,
+            build="realistic",
+            detail=8,
+        )
+        self.assertEqual(body["anatomy"], "shaped_adult")
+        self.assertEqual(body["facial_parts"], 5)
+        outfit = self.forge.call(
+            "char.outfit",
+            name="delver",
+            style="greek_delver",
+            detail=10,
+        )
+        self.assertGreater(outfit["triangles"], body["triangles"])
+        self.assertLess(outfit["triangles"], 8000)
+        self.assertGreaterEqual(outfit["armour_parts"], 20)
+        self.assertGreaterEqual(len(outfit["materials"]), 5)
+        self.assertAlmostEqual(outfit["bounds"]["min"][2], 0.0, places=3)
+        self.assertEqual(outfit["silhouette"], "open_faced_mining_commander")
+        self.assertEqual(
+            outfit["facial_readability"],
+            "open_crown_cheeks_eyes_trimmed_beard",
+        )
+        self.assertEqual(outfit["work_gear_parts"], 4)
+        self.assertLess(outfit["bounds"]["size"][1], outfit["bounds"]["size"][0] * 0.9)
+
+        rig = self.forge.call("char.rig", name="delver", build="realistic")
+        self.assertEqual(rig["weighted_vertices"], outfit["vertices"])
+        animated = self.forge.call(
+            "char.animate",
+            rig=rig["armature"],
+            clip="walk",
+            length=20,
+        )
+        self.assertGreater(animated["keyframes"], 0)
+        posed = self.forge.call("char.pose", rig=rig["armature"], preset="rest")
+        self.assertEqual(posed["cleared_active_action"], animated["action"])
+        self.assertIn(animated["action"], posed["available_actions"])
+        self.assertEqual(posed["posed_bones"], [])
+
+    def test_rts_archer_and_heavy_guard_are_distinct_riggable_outfits(self):
+        self.forge.call(
+            "char.humanoid",
+            name="toxotes",
+            height=1.82,
+            build="lithe",
+            detail=8,
+        )
+        archer = self.forge.call(
+            "char.outfit",
+            name="toxotes",
+            style="toxotes",
+            detail=9,
+        )
+        self.assertEqual(archer["style"], "toxotes")
+        self.assertGreaterEqual(archer["armour_parts"], 28)
+        self.assertIn("m_outfit_leather", archer["materials"])
+        archer_rig = self.forge.call(
+            "char.rig",
+            name="toxotes",
+            height=1.82,
+            build="lithe",
+        )
+        self.assertEqual(archer_rig["weighted_vertices"], archer["vertices"])
+
+        self.forge.call("session.reset")
+        self.forge.call(
+            "char.humanoid",
+            name="hypaspist",
+            height=1.94,
+            build="heroic",
+            detail=8,
+        )
+        guard = self.forge.call(
+            "char.outfit",
+            name="hypaspist",
+            style="hypaspist",
+            detail=10,
+        )
+        self.assertEqual(guard["style"], "hypaspist")
+        self.assertGreater(guard["triangles"], archer["triangles"])
+        self.assertGreater(guard["armour_parts"], archer["armour_parts"])
+        guard_rig = self.forge.call(
+            "char.rig",
+            name="hypaspist",
+            height=1.94,
+            build="heroic",
+        )
+        self.assertEqual(guard_rig["weighted_vertices"], guard["vertices"])
+
+    def test_outfit_must_be_added_before_rigging(self):
+        self.forge.call("char.humanoid", name="hero")
+        self.forge.call("char.rig", name="hero")
+        with self.assertRaises(ForgeError) as ctx:
+            self.forge.call("char.outfit", name="hero")
+        self.assertIn("before char.rig", str(ctx.exception))
+
+    def test_boss_outfits_have_distinct_riggable_serious_silhouettes(self):
+        self.forge.call(
+            "char.skeleton",
+            name="strategos",
+            height=2.2,
+            build="heroic",
+            detail=8,
+        )
+        commander = self.forge.call(
+            "char.outfit",
+            name="strategos",
+            style="strategos",
+            detail=10,
+        )
+        self.assertEqual(commander["style"], "strategos")
+        self.assertGreaterEqual(commander["armour_parts"], 35)
+        self.assertIn("m_outfit_accent", commander["materials"])
+        self.assertNotIn("m_outfit_glow", commander["materials"])
+        commander_rig = self.forge.call(
+            "char.rig",
+            name="strategos",
+            height=2.2,
+            build="heroic",
+        )
+        self.assertEqual(commander_rig["weighted_vertices"], commander["vertices"])
+
+        self.forge.call("session.reset")
+        self.forge.call(
+            "char.humanoid",
+            name="warlock",
+            height=2.05,
+            build="lithe",
+            detail=8,
+        )
+        ritualist = self.forge.call(
+            "char.outfit",
+            name="warlock",
+            style="warlock",
+            detail=10,
+        )
+        self.assertEqual(ritualist["style"], "warlock")
+        self.assertGreaterEqual(ritualist["armour_parts"], 30)
+        self.assertIn("m_outfit_accent", ritualist["materials"])
+        self.assertIn("m_outfit_glow", ritualist["materials"])
+        ritualist_rig = self.forge.call(
+            "char.rig",
+            name="warlock",
+            height=2.05,
+            build="lithe",
+        )
+        self.assertEqual(ritualist_rig["weighted_vertices"], ritualist["vertices"])
+
+    def test_skeleton_body_outfits_rigs_and_animates(self):
+        bones = self.forge.call(
+            "char.skeleton",
+            name="peltast",
+            height=1.86,
+            build="lithe",
+            detail=8,
+        )
+        self.assertEqual(bones["anatomy"], "joined_bone_body")
+        self.assertEqual(len(bones["materials"]), 2)
+        self.assertGreater(bones["triangles"], 1000)
+        self.assertLess(bones["triangles"], 5000)
+        self.assertAlmostEqual(bones["bounds"]["min"][2], 0.0, places=3)
+
+        dressed = self.forge.call(
+            "char.outfit",
+            name="peltast",
+            style="peltast",
+            detail=8,
+        )
+        self.assertGreater(dressed["triangles"], bones["triangles"])
+        self.assertGreaterEqual(len(dressed["materials"]), 6)
+        rig = self.forge.call(
+            "char.rig",
+            name="peltast",
+            height=1.86,
+            build="lithe",
+        )
+        self.assertEqual(rig["weighted_vertices"], dressed["vertices"])
+        walk = self.forge.call(
+            "char.animate",
+            rig=rig["armature"],
+            clip="walk",
+            length=24,
+        )
+        self.assertGreater(walk["keyframes"], 0)
+
+
+class Creatures(ForgeCase):
+    def test_hound_is_deterministic_grounded_multi_material_geometry(self):
+        first = self.forge.call(
+            "creature.hound",
+            name="hound",
+            length=1.75,
+            shoulder_height=1.0,
+            detail=8,
+        )
+        self.assertEqual(first["creature"], "hound")
+        self.assertEqual(len(first["materials"]), 4)
+        self.assertGreater(first["triangles"], 700)
+        self.assertLess(first["triangles"], 5000)
+        self.assertAlmostEqual(first["bounds"]["min"][2], 0.0, places=3)
+        self.assertGreater(first["bounds"]["size"][1], first["bounds"]["size"][2])
+
+        self.forge.call("session.reset")
+        second = self.forge.call(
+            "creature.hound",
+            name="hound",
+            length=1.75,
+            shoulder_height=1.0,
+            detail=8,
+        )
+        self.assertEqual(first["triangles"], second["triangles"])
+        self.assertEqual(first["bounds"], second["bounds"])
+
+    def test_scarab_is_low_wide_grounded_multi_material_geometry(self):
+        scarab = self.forge.call(
+            "creature.scarab",
+            name="scarab",
+            length=1.55,
+            width=0.95,
+            height=0.62,
+            detail=8,
+        )
+        self.assertEqual(scarab["creature"], "scarab")
+        self.assertEqual(len(scarab["materials"]), 4)
+        self.assertGreater(scarab["triangles"], 700)
+        self.assertLess(scarab["triangles"], 5000)
+        self.assertAlmostEqual(scarab["bounds"]["min"][2], 0.0, places=3)
+        self.assertGreater(scarab["bounds"]["size"][0], scarab["bounds"]["size"][2])
+        self.assertGreater(scarab["bounds"]["size"][1], scarab["bounds"]["size"][2])
+
 
 class Validation(ForgeCase):
     def test_generated_props_pass_studio_validation(self):
@@ -512,6 +1210,31 @@ class Export(ForgeCase):
             self.forge.call("export.gltf", out="bad.glb", strict=True)
         self.assertIn("unapplied scale", str(ctx.exception))
 
+    def test_bone_attachment_rotation_is_not_an_export_warning(self):
+        self.forge.call("char.humanoid", name="hero")
+        rig = self.forge.call("char.rig", name="hero")
+        self.forge.call(
+            "build.cylinder",
+            name="spear",
+            radius=0.025,
+            depth=1.8,
+            location=[-0.2, 0.0, 0.9],
+        )
+        self.forge.call(
+            "char.attach",
+            prop="spear",
+            rig=rig["armature"],
+            bone="hand_r",
+            keep_transform=True,
+        )
+        report = self.forge.call("check.asset", triangle_budget=5000)
+        transform = next(check for check in report["checks"] if check["id"] == "transforms:spear")
+        self.assertEqual(transform["level"], "ok")
+        exported = self.forge.call("export.gltf", out="attached.glb", strict=True)
+        self.assertFalse(
+            any("spear" in warning and "rotation" in warning for warning in exported["warnings"])
+        )
+
     def test_strict_export_blocks_unbaked_procedural_materials(self):
         self.forge.call("build.box", name="b")
         self.forge.call("material.procedural", object="b", kind="noise")
@@ -529,6 +1252,72 @@ class Export(ForgeCase):
         self.assertEqual(meta["provenance"]["method"], "ai_generated")
         self.assertEqual(meta["provenance"]["ai"]["prompt"], "a wooden crate")
 
+    def test_meta_sidecar_records_linear_and_display_material_contracts(self):
+        self.forge.call(
+            "build.box",
+            name="olive_leaf",
+            material="leaf",
+            color="#4e6145",
+        )
+        result = self.forge.call(
+            "export.meta",
+            out="olive_leaf.meta.json",
+            asset_id="olive_leaf",
+        )
+        meta = json.loads(Path(result["path"]).read_text(encoding="utf-8"))
+        self.assertEqual(meta["measured"]["materials"], ["m_leaf"])
+        contracts = meta["measured"]["material_contracts"]
+        self.assertEqual(len(contracts), 1)
+        self.assertEqual(contracts[0]["name"], "m_leaf")
+        self.assertEqual(contracts[0]["base_color"]["srgb_hex"], "#4e6145")
+        self.assertEqual(len(contracts[0]["base_color"]["linear"]), 4)
+        self.assertLess(contracts[0]["base_color"]["linear"][0], 0.1)
+        self.assertAlmostEqual(contracts[0]["roughness"], 0.75, places=3)
+        self.assertEqual(contracts[0]["metallic"], 0.0)
+
+    def test_crossbow_styles_add_real_construction_with_one_joined_mesh(self):
+        previous_tris = 0
+        for style in ("pilgrim", "repeater", "daedalus", "aegis"):
+            self.forge.call("session.reset")
+            result = self.forge.call(
+                "prop.crossbow",
+                name=f"crossbow_{style}",
+                style=style,
+                length=1.18,
+                span=0.92,
+                scope=True,
+                seed=17,
+            )
+            self.assertGreater(result["triangles"], 1600)
+            self.assertLessEqual(result["triangles"], 6500)
+            self.assertGreater(result["triangles"], previous_tris)
+            self.assertEqual(len(result["materials"]), 5)
+            self.assertGreater(result["bounds"]["size"][0], 0.85)
+            self.assertGreater(result["bounds"]["size"][2], 1.1)
+            self.assertTrue(result["scope"])
+            self.assertEqual(result["magazine"], style != "pilgrim")
+            self.assertEqual(result["gearing"], style in ("daedalus", "aegis"))
+            self.assertEqual(result["power_core"], style == "aegis")
+            previous_tris = result["triangles"]
+
+    def test_recurve_bow_has_a_grip_pivot_string_and_nocked_arrow(self):
+        result = self.forge.call(
+            "prop.bow",
+            name="toxotes_bow",
+            length=1.42,
+            reflex=0.16,
+            draw=0.24,
+            arrow=True,
+            seed=19,
+        )
+        self.assertGreater(result["triangles"], 500)
+        self.assertLessEqual(result["triangles"], 1800)
+        self.assertEqual(len(result["materials"]), 3)
+        self.assertGreater(result["bounds"]["size"][2], 1.35)
+        self.assertGreater(result["bounds"]["size"][1], 0.45)
+        self.assertTrue(result["arrow"])
+        self.assertGreaterEqual(result["parts"], 14)
+
     def test_export_asset_writes_the_full_hand_off(self):
         self.forge.call("prop.barrel", name="barrel", seed=1)
         result = self.forge.call(
@@ -536,6 +1325,13 @@ class Export(ForgeCase):
         )
         for kind in ("blend", "glb", "meta"):
             self.assertIn(kind, result["outputs"])
+        meta_path = Path(result["detail"]["meta"]["path"])
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        self.assertEqual(
+            meta["budgets"]["materials"],
+            len(meta["measured"]["materials"]),
+            "export.asset must not hard-code a budget that contradicts its measured asset",
+        )
 
 
 class Rendering(ForgeCase):

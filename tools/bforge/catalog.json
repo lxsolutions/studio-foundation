@@ -143,6 +143,126 @@
       }
     },
     {
+      "name": "arch.civic_hall",
+      "summary": "A complete classical town centre in one joined, material-disciplined asset: stepped masonry masses, pedimented portico, tiled gable roofs, buttresses, windows and faction banner. The greek_mine style adds an arched shaft mouth and working timber headframe/hoist, making an RTS civic centre that is also credible at first-person distance.",
+      "tags": [
+        "build",
+        "architecture",
+        "rts"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name",
+            "default": "civic_hall"
+          },
+          "style": {
+            "type": "string",
+            "enum": [
+              "greek_mine",
+              "greek_polis"
+            ],
+            "description": "Architecture programme",
+            "default": "greek_mine"
+          },
+          "width": {
+            "type": "number",
+            "description": "Overall facade width in metres",
+            "default": 10.4
+          },
+          "depth": {
+            "type": "number",
+            "description": "Overall building depth in metres",
+            "default": 8.4
+          },
+          "height": {
+            "type": "number",
+            "description": "Height to the upper roof eaves",
+            "default": 6.8
+          },
+          "columns": {
+            "type": "integer",
+            "description": "Doric columns across the front portico",
+            "default": 6
+          },
+          "tile_rows": {
+            "type": "integer",
+            "description": "Raised tile bands across each major roof",
+            "default": 7
+          },
+          "mine_portal": {
+            "type": "boolean",
+            "description": "Add an arched mine mouth through the facade",
+            "default": true
+          },
+          "hoist": {
+            "type": "boolean",
+            "description": "Add the timber headframe, wheel, spokes, axle and rope",
+            "default": true
+          },
+          "stone_color": {
+            "type": "string",
+            "description": "Primary weathered masonry",
+            "default": "#817765"
+          },
+          "foundation_color": {
+            "type": "string",
+            "description": "Podium, courses and buttress stone",
+            "default": "#4c4841"
+          },
+          "roof_color": {
+            "type": "string",
+            "description": "Dark terracotta tile",
+            "default": "#552c24"
+          },
+          "timber_color": {
+            "type": "string",
+            "description": "Mine framing and doors",
+            "default": "#2b1d16"
+          },
+          "metal_color": {
+            "type": "string",
+            "description": "Bronze/iron fittings",
+            "default": "#61441f"
+          },
+          "cloth_color": {
+            "type": "string",
+            "description": "Faction banner",
+            "default": "#4a2024"
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World position",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "rotation": {
+            "type": "number",
+            "description": "Yaw in degrees",
+            "default": 0.0
+          },
+          "uv_scale": {
+            "type": "number",
+            "description": "Metres per UV tile",
+            "default": 1.4
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "arch.colonnade",
       "summary": "A ring or run of free-standing columns with an entablature \u2014 temple fronts, stadium rims, forum porticos. Cheaper than an arcade and the right silhouette for a top storey.",
       "tags": [
@@ -264,6 +384,210 @@
       }
     },
     {
+      "name": "arch.defense_tower",
+      "summary": "A browser-budget classical Greek defense tower with one disciplined material set and three gameplay-readable silhouettes: an elevated arrow crown, a horizontal torsion ballista, or a vertical bronze storm conductor. All variants share stepped weathered masonry, battered buttresses, string courses and oxblood faction cloth.",
+      "tags": [
+        "build",
+        "architecture",
+        "rts",
+        "tower-defense"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name",
+            "default": "defense_tower"
+          },
+          "style": {
+            "type": "string",
+            "enum": [
+              "arrow",
+              "ballista",
+              "storm"
+            ],
+            "description": "Weapon and crown silhouette",
+            "default": "arrow"
+          },
+          "width": {
+            "type": "number",
+            "description": "Overall masonry footprint width in metres",
+            "default": 3.0
+          },
+          "height": {
+            "type": "number",
+            "description": "Overall structure height before the weapon crown",
+            "default": 5.2
+          },
+          "stone_color": {
+            "type": "string",
+            "description": "Primary weathered limestone",
+            "default": "#777064"
+          },
+          "foundation_color": {
+            "type": "string",
+            "description": "Podium, buttress and course stone",
+            "default": "#403e3a"
+          },
+          "timber_color": {
+            "type": "string",
+            "description": "Weapon frame, canopy and rails",
+            "default": "#2a1c14"
+          },
+          "metal_color": {
+            "type": "string",
+            "description": "Bronze and dark iron fittings",
+            "default": "#72502a"
+          },
+          "cloth_color": {
+            "type": "string",
+            "description": "Oxblood faction cloth",
+            "default": "#491c20"
+          },
+          "energy_color": {
+            "type": "string",
+            "description": "Restrained storm conductor emission",
+            "default": "#7e9ca3"
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World position",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "rotation": {
+            "type": "number",
+            "description": "Yaw in degrees",
+            "default": 0.0
+          },
+          "uv_scale": {
+            "type": "number",
+            "description": "Metres per UV tile",
+            "default": 0.9
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "arch.field_building",
+      "summary": "A browser-budget Greek settlement family for the structures surrounding a civic hall: a furrowed farmstead, strategos campaign tent, hoplite barracks, modular ashlar wall, weathered road stele, courtyard house, stoa-fronted emporium, or mining survey lattice. Variants share restrained limestone, timber, cloth, terracotta, bronze and crop materials while keeping silhouettes readable from an RTS camera.",
+      "tags": [
+        "build",
+        "architecture",
+        "rts",
+        "economy"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name",
+            "default": "field_building"
+          },
+          "style": {
+            "type": "string",
+            "enum": [
+              "farm",
+              "camp",
+              "barracks",
+              "wall",
+              "waymarker",
+              "house",
+              "emporium",
+              "lattice"
+            ],
+            "description": "Settlement structure silhouette",
+            "default": "farm"
+          },
+          "width": {
+            "type": "number",
+            "description": "Overall footprint width in metres",
+            "default": 3.4
+          },
+          "depth": {
+            "type": "number",
+            "description": "Overall footprint depth in metres",
+            "default": 3.4
+          },
+          "height": {
+            "type": "number",
+            "description": "Authored visual height in metres",
+            "default": 2.2
+          },
+          "stone_color": {
+            "type": "string",
+            "description": "Primary weathered limestone",
+            "default": "#777064"
+          },
+          "foundation_color": {
+            "type": "string",
+            "description": "Podium, earth and shadow stone",
+            "default": "#403e3a"
+          },
+          "timber_color": {
+            "type": "string",
+            "description": "Posts, doors, racks and tools",
+            "default": "#2a1c14"
+          },
+          "roof_color": {
+            "type": "string",
+            "description": "Muted terracotta roof and painted details",
+            "default": "#552c24"
+          },
+          "metal_color": {
+            "type": "string",
+            "description": "Bronze and dark iron fittings",
+            "default": "#72502a"
+          },
+          "crop_color": {
+            "type": "string",
+            "description": "Olive, grain and restrained field growth",
+            "default": "#525632"
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World position",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "rotation": {
+            "type": "number",
+            "description": "Yaw in degrees",
+            "default": 0.0
+          },
+          "uv_scale": {
+            "type": "number",
+            "description": "Metres per UV tile",
+            "default": 0.7
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "arch.gateway",
       "summary": "A monumental arched gate \u2014 the triumphal entrance every Roman venue frames its far end with. One big central arch, optional flanking arches, an attic storey above.",
       "tags": [
@@ -343,6 +667,104 @@
             "type": "number",
             "description": "Metres per UV tile",
             "default": 3.0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "arch.hellenic_ruin",
+      "summary": "A grounded archaeological Greek landmark authored as a ruined Doric shrine, broken colonnade, or hero tomb. Broad podiums, uneven standing columns, fallen drums, displaced lintels, pediment fragments and restrained bronze votives produce serious navigation silhouettes from FPS through RTS distance.",
+      "tags": [
+        "build",
+        "architecture",
+        "environment",
+        "landmark",
+        "greek"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name",
+            "default": "hellenic_ruin"
+          },
+          "style": {
+            "type": "string",
+            "enum": [
+              "shrine",
+              "colonnade",
+              "tomb"
+            ],
+            "description": "Archaeological landmark silhouette",
+            "default": "shrine"
+          },
+          "width": {
+            "type": "number",
+            "description": "Overall footprint width in metres",
+            "default": 5.2
+          },
+          "depth": {
+            "type": "number",
+            "description": "Overall footprint depth in metres",
+            "default": 3.8
+          },
+          "height": {
+            "type": "number",
+            "description": "Tallest surviving architectural extent",
+            "default": 4.2
+          },
+          "weathering": {
+            "type": "number",
+            "description": "Damage strength from restrained wear to heavily displaced remains",
+            "default": 0.65
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Deterministic fracture and rubble seed",
+            "default": 0
+          },
+          "stone_color": {
+            "type": "string",
+            "description": "Weathered Attic limestone",
+            "default": "#8b8374"
+          },
+          "foundation_color": {
+            "type": "string",
+            "description": "Dark podium, crevice and buried stone",
+            "default": "#46433d"
+          },
+          "patina_color": {
+            "type": "string",
+            "description": "Tarnished bronze votive and inscription colour",
+            "default": "#52645b"
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World position",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "rotation": {
+            "type": "number",
+            "description": "Yaw in degrees",
+            "default": 0.0
+          },
+          "uv_scale": {
+            "type": "number",
+            "description": "Metres per UV tile",
+            "default": 0.8
           }
         },
         "additionalProperties": false
@@ -1726,7 +2148,7 @@
     },
     {
       "name": "char.humanoid",
-      "summary": "Proportioned humanoid blockout using classic figure-drawing head ratios (7.5 realistic, 8 heroic, 4 chibi). ~1400 tris. Pair with char.rig and char.animate for a complete animated character.",
+      "summary": "Animation-ready anatomical humanoid using classic figure-drawing head ratios (7.5 realistic, 8 heroic, 4 chibi). Shaped chest/waist depth, jaw, nose, ears, hands and feet avoid the tube-limbed mannequin look. Pair with char.outfit, char.rig and char.animate.",
       "tags": [
         "char"
       ],
@@ -1790,6 +2212,68 @@
             "type": "integer",
             "description": "Random seed",
             "default": 0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "char.outfit",
+      "summary": "Add a production-readable rigid outfit to an unrigged humanoid, then join it into the body so char.rig skins every shell. Greek delver, hoplite and peltast armour include cuirass, straps, pteruges, helmets, bracers and greaves; toxotes and hypaspist provide RTS-readable archer and heavy-guard silhouettes; strategos and warlock add boss-readable officer and ritual silhouettes; stalker and oracle add undead hoods, masks and robes.",
+      "tags": [
+        "char",
+        "armour",
+        "undead"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Unrigged humanoid mesh from char.humanoid"
+          },
+          "style": {
+            "type": "string",
+            "enum": [
+              "greek_delver",
+              "hoplite",
+              "peltast",
+              "toxotes",
+              "hypaspist",
+              "strategos",
+              "stalker",
+              "oracle",
+              "warlock"
+            ],
+            "description": "Outfit silhouette",
+            "default": "greek_delver"
+          },
+          "cloth": {
+            "type": "string",
+            "description": "Coarse tunic/linen colour",
+            "default": "#262522"
+          },
+          "leather": {
+            "type": "string",
+            "description": "Straps, belt and boot-wrap colour",
+            "default": "#38261c"
+          },
+          "metal": {
+            "type": "string",
+            "description": "Aged bronze armour colour",
+            "default": "#71502d"
+          },
+          "accent": {
+            "type": "string",
+            "description": "Small lamp or crest accent",
+            "default": "#d18a32"
+          },
+          "detail": {
+            "type": "integer",
+            "description": "Radial segment count, 8-16",
+            "default": 10
           }
         },
         "additionalProperties": false
@@ -1880,6 +2364,77 @@
       }
     },
     {
+      "name": "char.skeleton",
+      "summary": "Build an anatomically readable bone-body on the same proportions as char.humanoid. The joined rib cage, skull, long bones and dark sockets remain compatible with char.outfit, char.rig and char.animate.",
+      "tags": [
+        "char",
+        "creature",
+        "undead"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name",
+            "default": "skeleton"
+          },
+          "height": {
+            "type": "number",
+            "description": "Total height in metres",
+            "default": 1.86
+          },
+          "build": {
+            "type": "string",
+            "enum": [
+              "realistic",
+              "heroic",
+              "lithe"
+            ],
+            "description": "Bone proportions",
+            "default": "lithe"
+          },
+          "detail": {
+            "type": "integer",
+            "description": "Bone cross-section segments, 6-12",
+            "default": 8
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World position",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "bone": {
+            "type": "string",
+            "description": "Aged bone colour",
+            "default": "#b8ad92"
+          },
+          "socket": {
+            "type": "string",
+            "description": "Eye, nose and mouth cavity colour",
+            "default": "#171817"
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Random seed",
+            "default": 0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "check.asset",
       "summary": "Run the studio's ADR 0006 asset rules against the open scene: naming, units, applied transforms, origins, UVs, budgets, bone conventions, collision, textures, glTF-safe shaders. Same checks as `just asset-validate`, but before you write the file.",
       "tags": [
@@ -1958,7 +2513,7 @@
         "properties": {
           "path": {
             "type": "string",
-            "description": "PNG to analyse \u2014 a render, a contact sheet, or a baked texture"
+            "description": "PNG, JPEG or WebP to analyse \u2014 a render, sprite sheet, contact sheet, or baked texture"
           },
           "colors": {
             "type": "integer",
@@ -1979,6 +2534,36 @@
               0.065,
               1.0
             ]
+          },
+          "require_alpha": {
+            "type": "boolean",
+            "description": "Fail when the image has no meaningful transparent pixels",
+            "default": false
+          },
+          "require_clear_corners": {
+            "type": "boolean",
+            "description": "Fail when the four corners are not transparent; useful for UI icons and cutouts",
+            "default": false
+          },
+          "require_square": {
+            "type": "boolean",
+            "description": "Fail when width and height differ",
+            "default": false
+          },
+          "minimum_size": {
+            "type": "integer",
+            "description": "Fail when either image dimension is below this many pixels (0 disables)",
+            "default": 0
+          },
+          "minimum_coverage": {
+            "type": "number",
+            "description": "Minimum fraction of the frame occupied by the visible subject",
+            "default": 0.04
+          },
+          "maximum_coverage": {
+            "type": "number",
+            "description": "Maximum fraction of the frame occupied by the visible subject",
+            "default": 1.0
           }
         },
         "additionalProperties": false
@@ -2004,6 +2589,158 @@
             "type": "integer",
             "description": "Rays per axis for the projected-area estimate",
             "default": 64
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "creature.hound",
+      "summary": "Build a gaunt game-ready war hound with readable canine anatomy, bent legs, muzzle, ears, segmented tail and a separate bronze collar. The joined mesh can be exported static or bound to a custom quadruped rig.",
+      "tags": [
+        "creature",
+        "quadruped",
+        "game"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name",
+            "default": "war_hound"
+          },
+          "length": {
+            "type": "number",
+            "description": "Nose-to-rump length in metres",
+            "default": 1.75
+          },
+          "shoulder_height": {
+            "type": "number",
+            "description": "Ground-to-shoulder height",
+            "default": 1.0
+          },
+          "bulk": {
+            "type": "number",
+            "description": "Torso and limb thickness multiplier",
+            "default": 1.0
+          },
+          "detail": {
+            "type": "integer",
+            "description": "Radial segment count, 6-12",
+            "default": 8
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World position",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "hide": {
+            "type": "string",
+            "description": "Dark hide colour",
+            "default": "#25231f"
+          },
+          "leather": {
+            "type": "string",
+            "description": "Collar leather colour",
+            "default": "#3b241c"
+          },
+          "metal": {
+            "type": "string",
+            "description": "Collar and spike metal colour",
+            "default": "#6f4d2b"
+          },
+          "eyes": {
+            "type": "string",
+            "description": "Eye colour",
+            "default": "#9b5428"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "creature.scarab",
+      "summary": "Build a low, wide carrion scarab with layered segmented shell plates, six bent legs, hooked forelimbs and mandibles. The joined multi-material mesh is readable from an isometric camera and ready for a custom rig.",
+      "tags": [
+        "creature",
+        "arthropod",
+        "game"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name",
+            "default": "carrion_scarab"
+          },
+          "length": {
+            "type": "number",
+            "description": "Mandible-to-abdomen length in metres",
+            "default": 1.55
+          },
+          "width": {
+            "type": "number",
+            "description": "Maximum shell width",
+            "default": 0.95
+          },
+          "height": {
+            "type": "number",
+            "description": "Maximum shell height",
+            "default": 0.62
+          },
+          "detail": {
+            "type": "integer",
+            "description": "Radial segment count, 6-12",
+            "default": 8
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World position",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "shell": {
+            "type": "string",
+            "description": "Aged shell colour",
+            "default": "#4e3925"
+          },
+          "edge": {
+            "type": "string",
+            "description": "Raised shell-edge colour",
+            "default": "#84603a"
+          },
+          "body": {
+            "type": "string",
+            "description": "Underside and leg colour",
+            "default": "#171715"
+          },
+          "eyes": {
+            "type": "string",
+            "description": "Eye colour",
+            "default": "#8d3f22"
           }
         },
         "additionalProperties": false
@@ -2666,6 +3403,16 @@
             "type": "string",
             "description": "What the asset was asked for \u2014 recorded in provenance",
             "default": ""
+          },
+          "triangle_budget": {
+            "type": "integer",
+            "description": "Triangle budget recorded in metadata; 0 uses the measured export",
+            "default": 0
+          },
+          "material_budget": {
+            "type": "integer",
+            "description": "Material budget recorded in metadata; 0 uses the measured export",
+            "default": 0
           },
           "contact_sheet": {
             "type": "boolean",
@@ -4678,6 +5425,88 @@
       }
     },
     {
+      "name": "prop.bow",
+      "summary": "Serious hand-ready recurved bow with tapered laminated limbs, wrapped grip, taut drawn string and optional nocked arrow. One joined three-material mesh with its pivot at the grip for direct bone attachment.",
+      "tags": [
+        "prop",
+        "weapon",
+        "bow",
+        "archery"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name (defaults to the recipe name)",
+            "default": ""
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World position in metres",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Random seed \u2014 same seed always gives the same asset",
+            "default": 0
+          },
+          "length": {
+            "type": "number",
+            "description": "Tip-to-tip height in metres",
+            "default": 1.42
+          },
+          "reflex": {
+            "type": "number",
+            "description": "Forward recurve at each tip",
+            "default": 0.16
+          },
+          "draw": {
+            "type": "number",
+            "description": "String draw behind the grip in metres",
+            "default": 0.24
+          },
+          "arrow": {
+            "type": "boolean",
+            "description": "Include a nocked arrow",
+            "default": true
+          },
+          "wood_color": {
+            "type": "string",
+            "description": "Laminated limb and grip colour",
+            "default": "#4a3020"
+          },
+          "bronze_color": {
+            "type": "string",
+            "description": "Tip, arrowhead and grip fitting colour",
+            "default": "#6f512d"
+          },
+          "cord_color": {
+            "type": "string",
+            "description": "Bowstring and fletching colour",
+            "default": "#9b8f77"
+          },
+          "uv_scale": {
+            "type": "number",
+            "description": "Box unwrap scale",
+            "default": 2.0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "prop.chest",
       "summary": "Treasure chest with a curved lid, iron banding and a lock plate. ~700 tris. Lid is a separate object so it can be hinged and animated.",
       "tags": [
@@ -4843,6 +5672,104 @@
             "type": "number",
             "description": "Metres per UV tile",
             "default": 1.0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "prop.crossbow",
+      "summary": "Serious game-ready crossbow with a shouldered stock, curved segmented prod, taut three-part string, trigger guard, loaded bolt and integrated optic. Mastery styles add magazines, Daedalus gearing and an Aegis power core without changing the hand-ready pivot. One joined multi-material mesh.",
+      "tags": [
+        "prop",
+        "weapon",
+        "crossbow",
+        "fps"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name (defaults to the recipe name)",
+            "default": ""
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World position in metres",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Random seed \u2014 same seed always gives the same asset",
+            "default": 0
+          },
+          "style": {
+            "type": "string",
+            "enum": [
+              "pilgrim",
+              "repeater",
+              "daedalus",
+              "aegis"
+            ],
+            "description": "Construction and mastery tier",
+            "default": "pilgrim"
+          },
+          "length": {
+            "type": "number",
+            "description": "Stock length in metres",
+            "default": 1.18
+          },
+          "span": {
+            "type": "number",
+            "description": "Unstrung prod span in metres",
+            "default": 0.92
+          },
+          "scope": {
+            "type": "boolean",
+            "description": "Mount a compact tube optic and lens",
+            "default": true
+          },
+          "wood_color": {
+            "type": "string",
+            "description": "Seasoned stock colour",
+            "default": "#493323"
+          },
+          "bronze_color": {
+            "type": "string",
+            "description": "Bronze fittings and prod colour",
+            "default": "#73512b"
+          },
+          "iron_color": {
+            "type": "string",
+            "description": "Iron rail, trigger and mechanism colour",
+            "default": "#343a3c"
+          },
+          "cord_color": {
+            "type": "string",
+            "description": "String and fletching colour",
+            "default": "#9a8d72"
+          },
+          "lens_color": {
+            "type": "string",
+            "description": "Dark optic or Aegis core colour",
+            "default": "#431514"
+          },
+          "uv_scale": {
+            "type": "number",
+            "description": "Box unwrap scale",
+            "default": 2.0
           }
         },
         "additionalProperties": false
@@ -5242,8 +6169,99 @@
       }
     },
     {
+      "name": "prop.relic",
+      "summary": "Grounded game-loot relic as a Greek medallion, signet ring, or votive idol. Separate aged metal, trim, and inset materials remain readable at pickup scale. ~300-700 tris.",
+      "tags": [
+        "prop",
+        "loot",
+        "equipment"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name (defaults to the recipe name)",
+            "default": ""
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World position in metres",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Random seed \u2014 same seed always gives the same asset",
+            "default": 0
+          },
+          "form": {
+            "type": "string",
+            "enum": [
+              "medallion",
+              "ring",
+              "idol"
+            ],
+            "description": "Loot silhouette: hanging seal, gemstone signet, or small temple votive",
+            "default": "medallion"
+          },
+          "motif": {
+            "type": "string",
+            "enum": [
+              "rosette",
+              "lambda",
+              "plain"
+            ],
+            "description": "Raised face mark for medallions; ignored by ring and idol forms",
+            "default": "rosette"
+          },
+          "size": {
+            "type": "number",
+            "description": "Overall height in metres",
+            "default": 0.42
+          },
+          "material": {
+            "type": "string",
+            "description": "Primary aged-metal material preset",
+            "default": "bronze"
+          },
+          "trim_material": {
+            "type": "string",
+            "description": "Raised rim and detail material preset",
+            "default": "gold"
+          },
+          "gem_material": {
+            "type": "string",
+            "description": "Inset stone material preset",
+            "default": "crystal"
+          },
+          "color": {
+            "type": "string",
+            "description": "Override primary metal colour",
+            "default": ""
+          },
+          "gem_color": {
+            "type": "string",
+            "description": "Inset stone colour",
+            "default": "crystal_violet"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "prop.rock",
-      "summary": "Irregular rock with a flat base so it sits on the ground instead of floating. ~200 tris at detail 2. The single most reused environment prop in any game.",
+      "summary": "Grounded natural rock authored as a boulder, bedded slab, multi-stone outcrop or scree cluster. Layered displacement and optional strata avoid the inflated-potato silhouette.",
       "tags": [
         "prop",
         "nature"
@@ -5300,6 +6318,22 @@
             "type": "number",
             "description": "Surface irregularity (0 = smooth boulder, 0.5 = jagged)",
             "default": 0.28
+          },
+          "formation": {
+            "type": "string",
+            "enum": [
+              "boulder",
+              "slab",
+              "outcrop",
+              "scree"
+            ],
+            "description": "Geological silhouette: one mass, bedded shelf, exposed cluster or broken field stone",
+            "default": "boulder"
+          },
+          "strata": {
+            "type": "number",
+            "description": "Horizontal bedding strength from 0 (none) to 1 (strong limestone courses)",
+            "default": 0.35
           },
           "flatten_base": {
             "type": "boolean",
@@ -5467,7 +6501,7 @@
     },
     {
       "name": "prop.tree",
-      "summary": "Stylised low-poly tree: tapered trunk plus layered canopy. ~450 tris. Canopy is a separate material slot so it can take a foliage/alpha shader.",
+      "summary": "Game-ready tree with stylised and natural Mediterranean forms. Olive and cypress styles add age-authored roots, branch-readable crowns and negative space while preserving the cheap legacy silhouettes.",
       "tags": [
         "prop",
         "nature"
@@ -5517,10 +6551,22 @@
               "cone",
               "blob",
               "layered",
-              "palm"
+              "palm",
+              "olive",
+              "cypress"
             ],
-            "description": "Canopy shape",
+            "description": "Canopy shape or natural species",
             "default": "layered"
+          },
+          "age": {
+            "type": "string",
+            "enum": [
+              "young",
+              "mature",
+              "ancient"
+            ],
+            "description": "Natural species growth stage: changes roots, trunk forks, crown spread and gaps",
+            "default": "mature"
           },
           "canopy_layers": {
             "type": "integer",
@@ -5531,6 +6577,11 @@
             "type": "number",
             "description": "Canopy spread in metres",
             "default": 1.4
+          },
+          "detail": {
+            "type": "integer",
+            "description": "Natural olive/cypress foliage density, 1-3; ignored by legacy styles",
+            "default": 2
           },
           "lean": {
             "type": "number",
@@ -5712,6 +6763,11 @@
             "type": "number",
             "description": "Ambient dome strength. Higher fills shadows but piles white specular sheen onto every surface, which washes out saturated albedo",
             "default": 0.32
+          },
+          "transparent": {
+            "type": "boolean",
+            "description": "Render the world as transparent RGBA for UI cards, inventory icons and compositing",
+            "default": false
           }
         },
         "additionalProperties": false
@@ -6084,6 +7140,11 @@
             "type": "number",
             "description": "Ambient dome strength. Higher fills shadows but piles white specular sheen onto every surface, which washes out saturated albedo",
             "default": 0.32
+          },
+          "transparent": {
+            "type": "boolean",
+            "description": "Render the world as transparent RGBA for UI cards, inventory icons and compositing",
+            "default": false
           }
         },
         "additionalProperties": false

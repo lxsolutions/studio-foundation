@@ -26,8 +26,13 @@ def posed_size(forge, location, pose=POSE):
     """Build, rig, pose and bake a figure at `location`; return size, bake, area."""
     forge.call("session.reset")
     forge.call(
-        "char.humanoid", name="f", height=HEIGHT, build="heroic",
-        bulk=1.25, detail=8, location=location,
+        "char.humanoid",
+        name="f",
+        height=HEIGHT,
+        build="heroic",
+        bulk=1.25,
+        detail=8,
+        location=location,
     )
     rig = forge.call("char.rig", name="f", height=HEIGHT, build="heroic")
     if pose:
@@ -57,7 +62,7 @@ def main():
         # armature-local bone positions, so every bone was displaced by exactly
         # the character's offset from the origin. A figure built on a vehicle
         # floor got its pelvis weighted to its shins.
-        drift = max(abs(a - b) for a, b in zip(at_origin, offset))
+        drift = max(abs(a - b) for a, b in zip(at_origin, offset, strict=True))
         if drift > 0.01:
             failures.append(
                 f"rigging depends on where the character stands: at origin {at_origin} "

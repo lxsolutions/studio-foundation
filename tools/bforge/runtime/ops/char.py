@@ -20,7 +20,6 @@ from lib import finish as finish_lib
 from lib import mat as mat_lib
 from lib import mesh as mesh_lib
 from lib import scene as scene_lib
-from lib import uvs as uv_lib
 from mathutils import Matrix, Vector
 from registry import OpError, op
 
@@ -29,10 +28,10 @@ from registry import OpError, op
 # gets a believable silhouette without knowing any of this.
 BUILDS = {
     "realistic": {"heads": 7.5, "shoulder": 0.245, "waist": 0.145, "limb": 1.0, "bulk": 1.0},
-    "heroic":    {"heads": 8.0, "shoulder": 0.285, "waist": 0.140, "limb": 1.03, "bulk": 1.18},
-    "stylized":  {"heads": 5.5, "shoulder": 0.230, "waist": 0.150, "limb": 0.92, "bulk": 1.10},
-    "chibi":     {"heads": 3.6, "shoulder": 0.200, "waist": 0.165, "limb": 0.80, "bulk": 1.25},
-    "lithe":     {"heads": 8.2, "shoulder": 0.205, "waist": 0.120, "limb": 1.06, "bulk": 0.82},
+    "heroic": {"heads": 8.0, "shoulder": 0.285, "waist": 0.140, "limb": 1.03, "bulk": 1.18},
+    "stylized": {"heads": 5.5, "shoulder": 0.230, "waist": 0.150, "limb": 0.92, "bulk": 1.10},
+    "chibi": {"heads": 3.6, "shoulder": 0.200, "waist": 0.165, "limb": 0.80, "bulk": 1.25},
+    "lithe": {"heads": 8.2, "shoulder": 0.205, "waist": 0.120, "limb": 1.06, "bulk": 0.82},
 }
 
 
@@ -91,20 +90,31 @@ def _skeleton(height, build):
 
 
 PARENTS = {
-    "spine": "hips", "chest": "spine", "neck": "chest", "head": "neck",
-    "shoulder_l": "chest", "upper_arm_l": "shoulder_l", "forearm_l": "upper_arm_l",
+    "spine": "hips",
+    "chest": "spine",
+    "neck": "chest",
+    "head": "neck",
+    "shoulder_l": "chest",
+    "upper_arm_l": "shoulder_l",
+    "forearm_l": "upper_arm_l",
     "hand_l": "forearm_l",
-    "shoulder_r": "chest", "upper_arm_r": "shoulder_r", "forearm_r": "upper_arm_r",
+    "shoulder_r": "chest",
+    "upper_arm_r": "shoulder_r",
+    "forearm_r": "upper_arm_r",
     "hand_r": "forearm_r",
-    "thigh_l": "hips", "shin_l": "thigh_l", "foot_l": "shin_l",
-    "thigh_r": "hips", "shin_r": "thigh_r", "foot_r": "hips",
+    "thigh_l": "hips",
+    "shin_l": "thigh_l",
+    "foot_l": "shin_l",
+    "thigh_r": "hips",
+    "shin_r": "thigh_r",
+    "foot_r": "hips",
 }
 PARENTS["foot_r"] = "shin_r"
 
 
 @op(
     "char.humanoid",
-    summary="Proportioned humanoid blockout using classic figure-drawing head ratios (7.5 realistic, 8 heroic, 4 chibi). ~1400 tris. Pair with char.rig and char.animate for a complete animated character.",
+    summary="Animation-ready anatomical humanoid using classic figure-drawing head ratios (7.5 realistic, 8 heroic, 4 chibi). Shaped chest/waist depth, jaw, nose, ears, hands and feet avoid the tube-limbed mannequin look. Pair with char.outfit, char.rig and char.animate.",
     params={
         "name": ("str", "character", "Object name"),
         "height": ("num", 1.8, "Total height in metres"),
@@ -124,7 +134,7 @@ def char_humanoid(ctx, name, height, build, bulk, detail, location, skin, seed):
     sides = max(5, min(16, detail))
     bm = mesh_lib.new_bmesh()
 
-    def limb(a, b, radius_a, radius_b):
+    def limb(a, b, radius_a, radius_b, radial_scale=(1.0, 1.0)):
         start, end = Vector(a), Vector(b)
         axis = end - start
         length = axis.length
@@ -132,11 +142,16 @@ def char_humanoid(ctx, name, height, build, bulk, detail, location, skin, seed):
             return
         piece = mesh_lib.new_bmesh()
         mesh_lib.add_cylinder(
-            piece, radius=radius_a, radius_top=radius_b, depth=length,
-            segments=sides, center=(0.0, 0.0, length * 0.5),
+            piece,
+            radius=radius_a,
+            radius_top=radius_b,
+            depth=length,
+            segments=sides,
+            center=(0.0, 0.0, length * 0.5),
         )
         rotation = axis.normalized().to_track_quat("Z", "Y").to_matrix().to_4x4()
-        bmesh_transform(piece, Matrix.Translation(start) @ rotation)
+        radial = Matrix.Diagonal(Vector((radial_scale[0], radial_scale[1], 1.0, 1.0)))
+        bmesh_transform(piece, Matrix.Translation(start) @ rotation @ radial)
         _absorb(bm, piece)
 
     def blob(center, radius, squash=(1.0, 1.0, 1.0)):
@@ -150,12 +165,50 @@ def char_humanoid(ctx, name, height, build, bulk, detail, location, skin, seed):
     torso_r = height * 0.078 * girth
     # Torso as a stack so the waist actually narrows — a single capsule reads
     # as a barrel and is the classic giveaway of a generated character.
-    limb(joints["hips"][0], joints["spine"][1], torso_r * 1.02, torso_r * 0.86)
-    limb(joints["spine"][1], joints["chest"][1], torso_r * 0.86, torso_r * 1.16)
-    limb(joints["neck"][0], joints["neck"][1], torso_r * 0.42, torso_r * 0.40)
+    limb(
+        joints["hips"][0],
+        joints["spine"][1],
+        torso_r * 1.02,
+        torso_r * 0.86,
+        (1.08, 0.72),
+    )
+    limb(
+        joints["spine"][1],
+        joints["chest"][1],
+        torso_r * 0.86,
+        torso_r * 1.16,
+        (1.18, 0.68),
+    )
+    limb(
+        joints["neck"][0],
+        joints["neck"][1],
+        torso_r * 0.42,
+        torso_r * 0.40,
+        (1.0, 0.88),
+    )
 
     head_center = Vector(joints["head"][0]).lerp(Vector(joints["head"][1]), 0.5)
-    blob(head_center, head_unit * 0.46, (0.88, 0.94, 1.0))
+    blob(
+        head_center + Vector((0.0, 0.0, head_unit * 0.03)),
+        head_unit * 0.44,
+        (0.84, 0.90, 0.96),
+    )
+    blob(
+        head_center + Vector((0.0, -head_unit * 0.035, -head_unit * 0.20)),
+        head_unit * 0.31,
+        (0.82, 0.74, 0.68),
+    )
+    blob(
+        head_center + Vector((0.0, -head_unit * 0.42, -head_unit * 0.035)),
+        head_unit * 0.105,
+        (0.62, 1.34, 1.08),
+    )
+    for sign in (-1.0, 1.0):
+        blob(
+            head_center + Vector((sign * head_unit * 0.39, 0.0, -head_unit * 0.02)),
+            head_unit * 0.10,
+            (0.50, 0.34, 0.82),
+        )
 
     for side in ("l", "r"):
         upper_r = height * 0.030 * girth
@@ -164,14 +217,25 @@ def char_humanoid(ctx, name, height, build, bulk, detail, location, skin, seed):
         # Deltoid cap. Without it the shoulder is a short, fat cone pointing
         # sideways and reads as a flat slab bolted to the torso.
         blob(shoulder_tail, upper_r * 1.18, (1.0, 1.0, 0.85))
-        limb(joints[f"upper_arm_{side}"][0], joints[f"upper_arm_{side}"][1],
-             upper_r * 1.05, upper_r * 0.88)
-        limb(joints[f"forearm_{side}"][0], joints[f"forearm_{side}"][1],
-             upper_r * 0.88, upper_r * 0.66)
-        hand_center = Vector(joints[f"hand_{side}"][0]).lerp(
-            Vector(joints[f"hand_{side}"][1]), 0.6
+        limb(
+            joints[f"upper_arm_{side}"][0],
+            joints[f"upper_arm_{side}"][1],
+            upper_r * 1.05,
+            upper_r * 0.88,
         )
+        limb(
+            joints[f"forearm_{side}"][0],
+            joints[f"forearm_{side}"][1],
+            upper_r * 0.88,
+            upper_r * 0.66,
+        )
+        hand_center = Vector(joints[f"hand_{side}"][0]).lerp(Vector(joints[f"hand_{side}"][1]), 0.6)
         blob(hand_center, upper_r * 0.82, (0.75, 1.0, 1.15))
+        blob(
+            hand_center + Vector((0.0, -upper_r * 0.48, -upper_r * 0.08)),
+            upper_r * 0.34,
+            (0.56, 0.82, 1.0),
+        )
 
         thigh_r = height * 0.043 * girth
         limb(joints[f"thigh_{side}"][0], joints[f"thigh_{side}"][1], thigh_r * 1.1, thigh_r * 0.82)
@@ -180,7 +244,8 @@ def char_humanoid(ctx, name, height, build, bulk, detail, location, skin, seed):
         foot_center = Vector(foot_a).lerp(Vector(foot_b), 0.55)
         blob(
             (foot_center.x, foot_center.y - height * 0.012, height * 0.028),
-            thigh_r * 0.72, (0.85, 1.75, 0.55),
+            thigh_r * 0.72,
+            (0.85, 1.75, 0.55),
         )
 
     mesh_lib.cleanup(bm, merge_dist=height * 0.002)
@@ -188,17 +253,1046 @@ def char_humanoid(ctx, name, height, build, bulk, detail, location, skin, seed):
     obj.location = location
     skin_mat = mat_lib.principled(f"m_{obj.name}_skin", color=skin, roughness=0.68)
     result = finish_lib.finish(
-        ctx, obj, material=skin_mat, uv="smart_packed", origin="bottom", smooth=True,
+        ctx,
+        obj,
+        material=skin_mat,
+        uv="smart_packed",
+        origin="bottom",
+        smooth=True,
         smooth_angle=50.0,
     )
     result["build"] = build
     result["height_m"] = height
     result["head_unit_m"] = round(head_unit, 4)
+    result["anatomy"] = "shaped_chibi" if build == "chibi" else "shaped_adult"
+    result["facial_parts"] = 5
     ctx.note(
-        f"'{obj.name}' is a blockout. Run char.rig name='{obj.name}' to add a skinned "
-        "armature, then char.animate for idle/walk/run clips."
+        f"'{obj.name}' is an unrigged anatomical base. Add char.outfit before "
+        "char.rig when armour is required, then char.animate for motion clips."
     )
     finish_lib.budget_note(ctx, obj, 3000)
+    return result
+
+
+@op(
+    "char.skeleton",
+    summary=(
+        "Build an anatomically readable bone-body on the same proportions as "
+        "char.humanoid. The joined rib cage, skull, long bones and dark sockets "
+        "remain compatible with char.outfit, char.rig and char.animate."
+    ),
+    params={
+        "name": ("str", "skeleton", "Object name"),
+        "height": ("num", 1.86, "Total height in metres"),
+        "build": ("enum:realistic|heroic|lithe", "lithe", "Bone proportions"),
+        "detail": ("int", 8, "Bone cross-section segments, 6-12"),
+        "location": ("vec3", [0.0, 0.0, 0.0], "World position"),
+        "bone": ("str", "#b8ad92", "Aged bone colour"),
+        "socket": ("str", "#171817", "Eye, nose and mouth cavity colour"),
+        "seed": ("int", 0, "Random seed"),
+    },
+    tags=["char", "creature", "undead"],
+)
+def char_skeleton(ctx, name, height, build, detail, location, bone, socket, seed):
+    ctx.reseed(seed)
+    joints, spec, head_unit = _skeleton(height, build)
+    sides = max(6, min(12, detail))
+    bone_bm = mesh_lib.new_bmesh()
+    socket_bm = mesh_lib.new_bmesh()
+
+    def absorb_primitive(target, primitive, matrix=None):
+        piece = mesh_lib.new_bmesh()
+        primitive(piece)
+        if matrix is not None:
+            bmesh_transform(piece, matrix)
+        _absorb(target, piece)
+
+    def limb(a, b, radius_a, radius_b=None, *, offset=(0.0, 0.0, 0.0)):
+        start = Vector(a) + Vector(offset)
+        end = Vector(b) + Vector(offset)
+        axis = end - start
+        if axis.length < 1e-5:
+            return
+        top = radius_a if radius_b is None else radius_b
+        matrix = (
+            Matrix.Translation(start)
+            @ axis.normalized().to_track_quat("Z", "Y").to_matrix().to_4x4()
+        )
+        absorb_primitive(
+            bone_bm,
+            lambda bm: mesh_lib.add_cylinder(
+                bm,
+                radius=radius_a,
+                radius_top=top,
+                depth=axis.length,
+                segments=sides,
+                center=(0.0, 0.0, axis.length * 0.5),
+            ),
+            matrix,
+        )
+
+    def blob(target, center, radius, scale=(1.0, 1.0, 1.0), subdivisions=1):
+        matrix = Matrix.Translation(Vector(center)) @ Matrix.Diagonal(Vector((*scale, 1.0)))
+        absorb_primitive(
+            target,
+            lambda bm: mesh_lib.add_icosphere(bm, radius=radius, subdivisions=subdivisions),
+            matrix,
+        )
+
+    # Spine, sternum and collar establish the torso even before the ribs are
+    # visible. Bone cylinders are deliberately narrower than a living body's
+    # limbs so an RTS silhouette cannot be mistaken for a recoloured human.
+    limb(joints["hips"][0], joints["chest"][1], height * 0.019, height * 0.014)
+    sternum_a = (0.0, -height * 0.052, height * 0.585)
+    sternum_b = (0.0, -height * 0.058, height * 0.785)
+    limb(sternum_a, sternum_b, height * 0.012)
+    for _side, sign in (("l", 1.0), ("r", -1.0)):
+        collar_end = (
+            sign * height * spec["shoulder"] * 0.43,
+            -height * 0.012,
+            height * 0.79,
+        )
+        limb((0.0, 0.0, height * 0.775), collar_end, height * 0.014, height * 0.011)
+
+    # Five elliptical rib rings retain negative space. Full rings are cheaper
+    # and more legible at game distance than dozens of fragile individual arcs.
+    for index in range(5):
+        z = height * (0.61 + index * 0.037)
+        taper = 1.0 - abs(index - 2) * 0.085
+        matrix = Matrix.Translation(Vector((0.0, 0.0, z))) @ Matrix.Diagonal(
+            Vector((taper, 0.52, 1.0, 1.0))
+        )
+        absorb_primitive(
+            bone_bm,
+            lambda bm, major=height * 0.112, minor=height * 0.0085: mesh_lib.add_torus(
+                bm,
+                major=major,
+                minor=minor,
+                major_segments=max(12, sides * 2),
+                minor_segments=5,
+            ),
+            matrix,
+        )
+
+    # Pelvic ring and sacrum.
+    absorb_primitive(
+        bone_bm,
+        lambda bm: mesh_lib.add_torus(
+            bm,
+            major=height * 0.075,
+            minor=height * 0.014,
+            major_segments=max(12, sides * 2),
+            minor_segments=6,
+        ),
+        Matrix.Translation(Vector((0.0, 0.0, height * 0.495)))
+        @ Matrix.Diagonal(Vector((1.28, 0.7, 1.0, 1.0))),
+    )
+    blob(bone_bm, (0.0, 0.0, height * 0.505), height * 0.035, (0.72, 0.5, 1.05))
+
+    for side, _sign in (("l", 1.0), ("r", -1.0)):
+        # Two long bones per major limb make the skeletal construction explicit.
+        for bone_name, radius, separation in (
+            (f"upper_arm_{side}", height * 0.013, height * 0.009),
+            (f"forearm_{side}", height * 0.010, height * 0.008),
+            (f"thigh_{side}", height * 0.016, height * 0.010),
+            (f"shin_{side}", height * 0.012, height * 0.009),
+        ):
+            a, b = joints[bone_name]
+            limb(a, b, radius, radius * 0.82, offset=(0.0, -separation, 0.0))
+            limb(a, b, radius * 0.82, radius * 0.7, offset=(0.0, separation, 0.0))
+            blob(bone_bm, a, radius * 1.65, (1.0, 0.86, 1.0))
+            blob(bone_bm, b, radius * 1.45, (1.0, 0.86, 1.0))
+
+        shoulder_a, shoulder_b = joints[f"shoulder_{side}"]
+        limb(shoulder_a, shoulder_b, height * 0.014, height * 0.012)
+        hand_a, hand_b = joints[f"hand_{side}"]
+        hand_center = Vector(hand_a).lerp(Vector(hand_b), 0.55)
+        blob(
+            bone_bm,
+            hand_center,
+            height * 0.026,
+            (0.64, 0.82, 1.18),
+        )
+        foot_a, foot_b = joints[f"foot_{side}"]
+        foot_center = Vector(foot_a).lerp(Vector(foot_b), 0.58)
+        blob(
+            bone_bm,
+            (foot_center.x, foot_center.y, height * 0.03),
+            height * 0.029,
+            (0.72, 1.6, 0.45),
+        )
+
+    # Low-poly skull, jaw and cheek bones. Dark inset meshes create actual eye
+    # and nasal cavities after export instead of painted dots.
+    head_center = Vector(joints["head"][0]).lerp(Vector(joints["head"][1]), 0.57)
+    skull_r = head_unit * 0.43
+    blob(bone_bm, head_center, skull_r, (0.83, 0.91, 1.0), subdivisions=2)
+    jaw_z = head_center.z - skull_r * 0.68
+    absorb_primitive(
+        bone_bm,
+        lambda bm: mesh_lib.add_box(
+            bm,
+            size=(skull_r * 1.18, skull_r * 0.78, skull_r * 0.42),
+            bevel=skull_r * 0.08,
+            segments=1,
+        ),
+        Matrix.Translation(Vector((0.0, -skull_r * 0.12, jaw_z))),
+    )
+    for sign in (-1.0, 1.0):
+        blob(
+            socket_bm,
+            (
+                sign * skull_r * 0.34,
+                head_center.y - skull_r * 0.78,
+                head_center.z + skull_r * 0.16,
+            ),
+            skull_r * 0.24,
+            (1.08, 0.34, 0.86),
+        )
+    blob(
+        socket_bm,
+        (0.0, head_center.y - skull_r * 0.84, head_center.z - skull_r * 0.12),
+        skull_r * 0.13,
+        (0.72, 0.3, 1.15),
+    )
+    absorb_primitive(
+        socket_bm,
+        lambda bm: mesh_lib.add_box(
+            bm,
+            size=(skull_r * 0.82, skull_r * 0.08, skull_r * 0.11),
+            bevel=skull_r * 0.015,
+            segments=1,
+        ),
+        Matrix.Translation(Vector((0.0, -skull_r * 0.54, jaw_z))),
+    )
+
+    mesh_lib.cleanup(bone_bm, merge_dist=height * 0.0008)
+    mesh_lib.cleanup(socket_bm, merge_dist=height * 0.0008)
+    bone_obj = mesh_lib.to_object(bone_bm, scene_lib.unique_name(name))
+    socket_obj = mesh_lib.to_object(socket_bm, scene_lib.unique_name(f"{name}_sockets"))
+    bone_obj.location = location
+    socket_obj.location = location
+    bone_mat = mat_lib.principled(
+        f"m_{bone_obj.name}_bone", color=bone, roughness=0.88, metallic=0.0
+    )
+    socket_mat = mat_lib.principled(
+        f"m_{bone_obj.name}_sockets", color=socket, roughness=1.0, metallic=0.0
+    )
+    finish_lib.finish(
+        ctx,
+        bone_obj,
+        material=bone_mat,
+        uv="smart_packed",
+        origin=None,
+        smooth=True,
+        smooth_angle=48.0,
+    )
+    finish_lib.finish(
+        ctx,
+        socket_obj,
+        material=socket_mat,
+        uv="smart_packed",
+        origin=None,
+        smooth=True,
+        smooth_angle=48.0,
+    )
+    merged = scene_lib.join([bone_obj, socket_obj], bone_obj.name)
+    scene_lib.set_origin(merged, "bottom")
+    scene_lib.apply_transforms(merged)
+    mesh_lib.shade_auto_smooth(merged, 50.0)
+    result = finish_lib.report(ctx, merged)
+    result["build"] = build
+    result["height_m"] = height
+    result["head_unit_m"] = round(head_unit, 4)
+    result["anatomy"] = "joined_bone_body"
+    ctx.note(
+        f"'{merged.name}' is an unrigged bone-body. Add char.outfit before "
+        "char.rig; use the same height and build for deterministic skinning."
+    )
+    finish_lib.budget_note(ctx, merged, 5000)
+    return result
+
+
+@op(
+    "char.outfit",
+    summary=(
+        "Add a production-readable rigid outfit to an unrigged humanoid, then join it "
+        "into the body so char.rig skins every shell. Greek delver, hoplite and "
+        "peltast armour include cuirass, straps, pteruges, helmets, bracers and "
+        "greaves; toxotes and hypaspist provide RTS-readable archer and heavy-guard "
+        "silhouettes; strategos and warlock add boss-readable officer and ritual "
+        "silhouettes; stalker and oracle add undead hoods, masks and robes."
+    ),
+    params={
+        "name": ("str", None, "Unrigged humanoid mesh from char.humanoid"),
+        "style": (
+            "enum:greek_delver|hoplite|peltast|toxotes|hypaspist|strategos|stalker|oracle|warlock",
+            "greek_delver",
+            "Outfit silhouette",
+        ),
+        "cloth": ("str", "#262522", "Coarse tunic/linen colour"),
+        "leather": ("str", "#38261c", "Straps, belt and boot-wrap colour"),
+        "metal": ("str", "#71502d", "Aged bronze armour colour"),
+        "accent": ("str", "#d18a32", "Small lamp or crest accent"),
+        "detail": ("int", 10, "Radial segment count, 8-16"),
+    },
+    tags=["char", "armour", "undead"],
+)
+def char_outfit(ctx, name, style, cloth, leather, metal, accent, detail):
+    body = _get(name)
+    if body.type != "MESH":
+        raise OpError(f"'{name}' is a {body.type}, not a humanoid mesh")
+    if any(modifier.type == "ARMATURE" for modifier in body.modifiers):
+        raise OpError(
+            f"'{name}' is already rigged. Add char.outfit before char.rig so every "
+            "armour shell receives deterministic skin weights."
+        )
+
+    bounds = mesh_lib.bounds(body)
+    height = bounds["size"][2] or 1.8
+    sides = max(8, min(16, detail))
+    origin = body.location.copy()
+    parts = []
+
+    cloth_mat = mat_lib.principled("m_outfit_linen", color=cloth, roughness=0.94, metallic=0.0)
+    leather_mat = mat_lib.principled(
+        "m_outfit_leather", color=leather, roughness=0.82, metallic=0.0
+    )
+    metal_mat = mat_lib.principled("m_outfit_bronze", color=metal, roughness=0.43, metallic=0.78)
+    dark_metal_mat = mat_lib.principled(
+        "m_outfit_dark_metal", color="#17191a", roughness=0.54, metallic=0.72
+    )
+    accent_cloth_mat = mat_lib.principled(
+        "m_outfit_accent", color=accent, roughness=0.88, metallic=0.0
+    )
+    glow_mat = mat_lib.principled(
+        "m_outfit_glow",
+        color=accent,
+        roughness=0.42,
+        metallic=0.08,
+        emission=0.48,
+        emission_color=accent,
+    )
+
+    def finish_part(bm, label, material, *, smooth=False):
+        mesh_lib.cleanup(bm, merge_dist=height * 0.0004)
+        part = mesh_lib.to_object(bm, scene_lib.unique_name(f"{body.name}_{label}"))
+        part.location = origin
+        finish_lib.finish(
+            ctx,
+            part,
+            material=material,
+            uv="smart_packed",
+            origin=None,
+            smooth=smooth,
+            smooth_angle=48.0,
+        )
+        parts.append(part)
+        return part
+
+    def cylinder(
+        label,
+        radius,
+        depth,
+        center,
+        material,
+        *,
+        scale=(1.0, 1.0, 1.0),
+        radius_top=None,
+        smooth=True,
+    ):
+        bm = mesh_lib.new_bmesh()
+        mesh_lib.add_cylinder(
+            bm,
+            radius=radius,
+            radius_top=radius_top,
+            depth=depth,
+            segments=sides,
+        )
+        matrix = Matrix.Translation(Vector(center)) @ Matrix.Diagonal(Vector((*scale, 1.0)))
+        bmesh_transform(bm, matrix)
+        return finish_part(bm, label, material, smooth=smooth)
+
+    def ellipsoid(label, radius, center, scale, material):
+        bm = mesh_lib.new_bmesh()
+        mesh_lib.add_icosphere(bm, radius=radius, subdivisions=2)
+        matrix = Matrix.Translation(Vector(center)) @ Matrix.Diagonal(Vector((*scale, 1.0)))
+        bmesh_transform(bm, matrix)
+        return finish_part(bm, label, material, smooth=True)
+
+    def box(label, size, center, material, *, rotation=(0.0, 0.0, 0.0), bevel=0.0):
+        bm = mesh_lib.new_bmesh()
+        mesh_lib.add_box(bm, size=size, bevel=bevel, segments=1)
+        rx, ry, rz = (math.radians(value) for value in rotation)
+        matrix = (
+            Matrix.Translation(Vector(center))
+            @ Matrix.Rotation(rz, 4, "Z")
+            @ Matrix.Rotation(ry, 4, "Y")
+            @ Matrix.Rotation(rx, 4, "X")
+        )
+        bmesh_transform(bm, matrix)
+        return finish_part(bm, label, material)
+
+    # Boss styles use shaped volumes instead of the generic torso cylinder.
+    # That keeps a commander from reading as a barrel and a living ritualist
+    # from sharing the Bone Oracle's funerary column silhouette.
+    ritual_style = style in {"oracle", "warlock"}
+    armoured_style = style in {"hoplite", "hypaspist", "strategos"}
+    if style == "strategos":
+        ellipsoid(
+            "muscle_cuirass",
+            height * 0.13,
+            (0.0, 0.0, height * 0.675),
+            (1.23, 0.72, 1.42),
+            metal_mat,
+        )
+        for index, z in enumerate((0.59, 0.635, 0.68)):
+            box(
+                f"cuirass_lame_{index}",
+                (height * (0.205 - index * 0.012), height * 0.024, height * 0.055),
+                (0.0, -height * 0.105, height * z),
+                metal_mat,
+                bevel=height * 0.006,
+            )
+    elif style == "greek_delver":
+        # The worker-commander wears layered linen and leather over an actual
+        # human chest. A shallow shaped tunic preserves the waist and arm gaps;
+        # the old full-height circular cuirass read as a featureless slab.
+        ellipsoid(
+            "delver_tunic",
+            height * 0.122,
+            (0.0, 0.0, height * 0.67),
+            (1.18, 0.62, 1.18),
+            cloth_mat,
+        )
+        box(
+            "delver_chest_panel",
+            (height * 0.17, height * 0.022, height * 0.18),
+            (0.0, -height * 0.083, height * 0.665),
+            leather_mat,
+            bevel=height * 0.009,
+        )
+        for side, sign in (("l", 1.0), ("r", -1.0)):
+            box(
+                f"delver_side_lame_{side}",
+                (height * 0.055, height * 0.025, height * 0.19),
+                (sign * height * 0.118, -height * 0.015, height * 0.65),
+                leather_mat,
+                rotation=(0.0, 0.0, sign * 3.0),
+                bevel=height * 0.007,
+            )
+    elif style == "warlock":
+        ellipsoid(
+            "robe_core",
+            height * 0.125,
+            (0.0, 0.0, height * 0.66),
+            (1.0, 0.63, 1.48),
+            cloth_mat,
+        )
+        box(
+            "ritual_stole",
+            (height * 0.105, height * 0.018, height * 0.36),
+            (0.0, -height * 0.086, height * 0.64),
+            accent_cloth_mat,
+            bevel=height * 0.006,
+        )
+    else:
+        torso_depth = height * (0.38 if style == "oracle" else 0.31)
+        torso_center = height * (0.63 if style == "oracle" else 0.665)
+        cylinder(
+            "cuirass",
+            height * 0.128,
+            torso_depth,
+            (0.0, 0.0, torso_center),
+            metal_mat if style in {"hoplite", "hypaspist"} else cloth_mat,
+            scale=(0.96 if style == "oracle" else 1.02, 0.62, 1.0),
+            radius_top=height * (0.14 if style == "oracle" else 0.152),
+        )
+    cylinder(
+        "belt",
+        height * (0.145 if style == "greek_delver" else 0.163),
+        height * (0.038 if style == "greek_delver" else 0.052),
+        (0.0, 0.0, height * 0.505),
+        leather_mat,
+        scale=(1.0, 0.58, 1.0),
+    )
+
+    # Crossed straps identify the delver and stalker; the lighter peltast gets
+    # one baldric. The hoplite cuirass and oracle collar are intentionally clean.
+    front_y = -height * 0.092
+    strap_angles = {
+        "greek_delver": (-27.0, 27.0),
+        "stalker": (-31.0, 31.0),
+        "peltast": (-29.0,),
+        "toxotes": (-31.0,),
+    }.get(style, ())
+    for index, angle in enumerate(strap_angles):
+        box(
+            f"chest_strap_{index}",
+            (height * 0.035, height * 0.018, height * 0.31),
+            (0.0, front_y, height * 0.68),
+            leather_mat,
+            rotation=(0.0, angle, 0.0),
+            bevel=height * 0.004,
+        )
+    if not ritual_style:
+        box(
+            "buckle",
+            (height * 0.09, height * 0.025, height * 0.07),
+            (0.0, -height * 0.101, height * 0.505),
+            metal_mat,
+            bevel=height * 0.006,
+        )
+    else:
+        cylinder(
+            "ritual_collar",
+            height * (0.165 if style == "warlock" else 0.155),
+            height * (0.045 if style == "warlock" else 0.055),
+            (0.0, 0.0, height * 0.79),
+            metal_mat,
+            scale=(1.0, 0.64, 1.0),
+            radius_top=height * 0.138,
+        )
+
+    if style == "hypaspist":
+        # A heavy guard is recognized by layered torso reinforcement, not by
+        # scaling a normal hoplite until it becomes a barrel.
+        for index, z in enumerate((0.59, 0.635, 0.68)):
+            box(
+                f"guard_lame_{index}",
+                (height * (0.19 - index * 0.01), height * 0.024, height * 0.05),
+                (0.0, -height * 0.105, height * z),
+                metal_mat,
+                bevel=height * 0.005,
+            )
+
+    if style == "toxotes":
+        # A back quiver survives both the RTS camera and skeletal animation
+        # because it joins near the spine before deterministic skinning.
+        cylinder(
+            "quiver",
+            height * 0.052,
+            height * 0.43,
+            (height * 0.11, height * 0.105, height * 0.58),
+            leather_mat,
+            scale=(0.82, 0.72, 1.0),
+            radius_top=height * 0.065,
+        )
+        for index in range(5):
+            box(
+                f"quiver_arrow_{index}",
+                (height * 0.008, height * 0.008, height * 0.45),
+                (
+                    height * (0.082 + index * 0.014),
+                    height * 0.108,
+                    height * (0.67 + (index % 2) * 0.012),
+                ),
+                dark_metal_mat if index % 2 else accent_cloth_mat,
+                bevel=height * 0.0015,
+            )
+
+    # Separate skirt plates retain negative space while sharing the hips shell
+    # after char.rig, so the legs can stride without dragging one solid cone.
+    plate_count = {
+        "hoplite": 12,
+        "greek_delver": 8,
+        "peltast": 8,
+        "toxotes": 8,
+        "hypaspist": 12,
+        "strategos": 14,
+        "stalker": 10,
+        "oracle": 16,
+        "warlock": 10,
+    }[style]
+    plate_length = height * (
+        0.39
+        if style == "warlock"
+        else 0.36
+        if style == "oracle"
+        else 0.23
+        if style == "strategos"
+        else 0.165
+        if style == "greek_delver"
+        else 0.205
+    )
+    plate_z = height * (
+        0.30
+        if ritual_style
+        else 0.395
+        if style == "strategos"
+        else 0.425
+        if style == "greek_delver"
+        else 0.405
+    )
+    plate_radius_x = height * (
+        0.135
+        if ritual_style
+        else 0.15
+        if style == "strategos"
+        else 0.132
+        if style == "greek_delver"
+        else 0.142
+    )
+    plate_radius_y = height * (
+        0.075
+        if ritual_style
+        else 0.086
+        if style == "strategos"
+        else 0.070
+        if style == "greek_delver"
+        else 0.082
+    )
+    plate_material = (
+        metal_mat
+        if armoured_style
+        else cloth_mat
+        if style in {"stalker", "oracle", "warlock"}
+        else leather_mat
+    )
+    for index in range(plate_count):
+        angle = math.tau * index / plate_count
+        box(
+            f"pteruge_{index:02d}",
+            (height * 0.038, height * 0.018, plate_length),
+            (
+                math.cos(angle) * plate_radius_x,
+                math.sin(angle) * plate_radius_y,
+                plate_z,
+            ),
+            plate_material,
+            rotation=(0.0, 0.0, math.degrees(angle)),
+            bevel=height * 0.003,
+        )
+
+    if style == "strategos":
+        # Three overlapping panels read as a heavy officer cloak without
+        # welding the arms into one broad slab.
+        for index, x in enumerate((-0.105, 0.0, 0.105)):
+            box(
+                f"officer_cloak_{index}",
+                (height * 0.135, height * 0.022, height * (0.49 - abs(index - 1) * 0.04)),
+                (height * x, height * 0.105, height * 0.51),
+                accent_cloth_mat if index == 1 else cloth_mat,
+                rotation=(4.0, 0.0, (index - 1) * 3.0),
+                bevel=height * 0.009,
+            )
+    elif style == "warlock":
+        # Layered front/back curtains preserve leg slits for animation while
+        # replacing the oracle-style broom of sixteen narrow strips.
+        for side, sign in (("l", 1.0), ("r", -1.0)):
+            box(
+                f"robe_front_{side}",
+                (height * 0.125, height * 0.022, height * 0.46),
+                (sign * height * 0.068, -height * 0.088, height * 0.275),
+                cloth_mat,
+                rotation=(2.0, 0.0, sign * 2.5),
+                bevel=height * 0.008,
+            )
+        box(
+            "robe_back",
+            (height * 0.27, height * 0.022, height * 0.48),
+            (0.0, height * 0.09, height * 0.285),
+            accent_cloth_mat,
+            rotation=(-2.0, 0.0, 0.0),
+            bevel=height * 0.009,
+        )
+    elif style == "greek_delver":
+        # Stowed work gear makes the mining role readable without turning the
+        # silhouette into a fantasy backpack or welding a weapon to either hand.
+        box(
+            "stowed_pick_handle",
+            (height * 0.022, height * 0.022, height * 0.48),
+            (-height * 0.095, height * 0.084, height * 0.64),
+            leather_mat,
+            rotation=(0.0, 22.0, 0.0),
+            bevel=height * 0.003,
+        )
+        box(
+            "stowed_pick_head",
+            (height * 0.25, height * 0.026, height * 0.035),
+            (-height * 0.185, height * 0.085, height * 0.845),
+            dark_metal_mat,
+            rotation=(0.0, -7.0, 0.0),
+            bevel=height * 0.004,
+        )
+        box(
+            "field_satchel",
+            (height * 0.15, height * 0.075, height * 0.16),
+            (height * 0.145, height * 0.045, height * 0.48),
+            leather_mat,
+            rotation=(2.0, 0.0, -4.0),
+            bevel=height * 0.012,
+        )
+        box(
+            "field_satchel_flap",
+            (height * 0.14, height * 0.018, height * 0.065),
+            (height * 0.145, -height * 0.002, height * 0.515),
+            metal_mat,
+            rotation=(6.0, 0.0, -4.0),
+            bevel=height * 0.006,
+        )
+
+    # Asymmetry distinguishes a worker or light peltast from a line soldier.
+    shoulders = {
+        "hoplite": ("l", "r"),
+        "hypaspist": ("l", "r"),
+        "oracle": ("l", "r"),
+        "strategos": ("l", "r"),
+        "warlock": ("l", "r"),
+        "greek_delver": ("l",),
+        "peltast": ("l",),
+        "toxotes": ("l",),
+        "stalker": (),
+    }[style]
+    for side in shoulders:
+        sign = 1.0 if side == "l" else -1.0
+        ellipsoid(
+            f"pauldron_{side}",
+            height
+            * (
+                0.052
+                if ritual_style
+                else 0.073
+                if style == "strategos"
+                else 0.052
+                if style == "greek_delver"
+                else 0.062
+            ),
+            (sign * height * 0.142, 0.0, height * 0.785),
+            (
+                1.62 if style == "strategos" else 1.34 if style == "greek_delver" else 1.45,
+                0.88,
+                0.58,
+            ),
+            cloth_mat
+            if style == "warlock"
+            else leather_mat
+            if style in {"peltast", "toxotes"}
+            else metal_mat,
+        )
+
+    for side, sign in (("l", 1.0), ("r", -1.0)):
+        cylinder(
+            f"bracer_{side}",
+            height * 0.034,
+            height * (0.135 if style == "greek_delver" else 0.17),
+            (sign * height * 0.123, 0.0, height * 0.575),
+            leather_mat
+            if style in {"peltast", "toxotes", "stalker", "oracle", "warlock"}
+            else metal_mat,
+            scale=(1.0, 0.78, 1.0),
+            radius_top=height * 0.029,
+        )
+        if not ritual_style:
+            cylinder(
+                f"greave_{side}",
+                height * (0.045 if style == "greek_delver" else 0.052),
+                height * (0.22 if style == "greek_delver" else 0.35),
+                (
+                    sign * height * 0.072,
+                    -height * 0.004,
+                    height * (0.19 if style == "greek_delver" else 0.205),
+                ),
+                leather_mat if style in {"peltast", "toxotes", "stalker"} else metal_mat,
+                scale=(1.0, 0.72, 1.0),
+                radius_top=height * 0.043,
+            )
+        box(
+            f"boot_wrap_{side}",
+            (height * 0.105, height * 0.125, height * 0.055),
+            (sign * height * 0.072, -height * 0.018, height * 0.055),
+            leather_mat,
+            bevel=height * 0.009,
+        )
+
+    if style == "greek_delver":
+        # A rear-shifted, shallow crown exposes the face. The old full cylinder
+        # put a solid bronze wall in front of the head and erased every feature.
+        ellipsoid(
+            "delver_helmet_crown",
+            height * 0.106,
+            (0.0, height * 0.020, height * 0.962),
+            (0.90, 0.54, 0.43),
+            metal_mat,
+        )
+        box(
+            "delver_helmet_brow",
+            (height * 0.195, height * 0.026, height * 0.028),
+            (0.0, -height * 0.060, height * 0.905),
+            metal_mat,
+            bevel=height * 0.005,
+        )
+        for side, sign in (("l", 1.0), ("r", -1.0)):
+            box(
+                f"delver_cheek_{side}",
+                (height * 0.030, height * 0.022, height * 0.078),
+                (sign * height * 0.074, -height * 0.052, height * 0.860),
+                metal_mat,
+                rotation=(0.0, 0.0, sign * 5.0),
+                bevel=height * 0.005,
+            )
+            box(
+                f"eye_shadow_{side}",
+                (height * 0.027, height * 0.012, height * 0.014),
+                (sign * height * 0.034, -height * 0.058, height * 0.885),
+                dark_metal_mat,
+                bevel=height * 0.002,
+            )
+        box(
+            "short_beard",
+            (height * 0.050, height * 0.014, height * 0.043),
+            (0.0, -height * 0.071, height * 0.825),
+            dark_metal_mat,
+            bevel=height * 0.007,
+        )
+        box(
+            "moustache",
+            (height * 0.058, height * 0.012, height * 0.011),
+            (0.0, -height * 0.074, height * 0.850),
+            dark_metal_mat,
+            bevel=height * 0.003,
+        )
+        box(
+            "helmet_spine",
+            (height * 0.020, height * 0.145, height * 0.045),
+            (0.0, height * 0.018, height * 0.995),
+            dark_metal_mat,
+            bevel=height * 0.004,
+        )
+        box(
+            "lamp_cage",
+            (height * 0.060, height * 0.030, height * 0.060),
+            (0.0, -height * 0.080, height * 0.935),
+            dark_metal_mat,
+            bevel=height * 0.004,
+        )
+        box(
+            "lamp",
+            (height * 0.033, height * 0.018, height * 0.036),
+            (0.0, -height * 0.098, height * 0.935),
+            glow_mat,
+            bevel=height * 0.003,
+        )
+    elif style in {"hoplite", "peltast", "hypaspist", "strategos"}:
+        cylinder(
+            "helmet",
+            height * 0.117,
+            height * 0.095,
+            (0.0, 0.0, height * 0.91),
+            metal_mat,
+            scale=(0.92, 0.95, 1.0),
+            radius_top=height * 0.078,
+        )
+        box(
+            "helmet_brow",
+            (height * 0.205, height * 0.035, height * 0.035),
+            (0.0, -height * 0.092, height * 0.875),
+            metal_mat,
+            bevel=height * 0.005,
+        )
+        box(
+            "helmet_spine",
+            (height * 0.022, height * (0.21 if style == "strategos" else 0.18), height * 0.05),
+            (0.0, 0.0, height * 0.965),
+            dark_metal_mat,
+            bevel=height * 0.004,
+        )
+        if style == "strategos":
+            box(
+                "helmet_face_guard",
+                (height * 0.16, height * 0.03, height * 0.19),
+                (0.0, -height * 0.108, height * 0.88),
+                metal_mat,
+                bevel=height * 0.008,
+            )
+            for side, sign in (("l", 1.0), ("r", -1.0)):
+                box(
+                    f"helmet_cheek_{side}",
+                    (height * 0.045, height * 0.035, height * 0.14),
+                    (sign * height * 0.075, -height * 0.098, height * 0.84),
+                    metal_mat,
+                    rotation=(0.0, 0.0, sign * 5.0),
+                    bevel=height * 0.006,
+                )
+            # A transverse officer crest gives a broad RTS-readable crown.
+            box(
+                "helmet_transverse_crest",
+                (height * 0.31, height * 0.06, height * 0.14),
+                (0.0, height * 0.008, height * 1.03),
+                accent_cloth_mat,
+                bevel=height * 0.012,
+            )
+        else:
+            crest_height = height * (
+                0.19 if style == "hoplite" else 0.16 if style == "hypaspist" else 0.11
+            )
+            box(
+                "helmet_crest",
+                (height * 0.035, height * 0.18, crest_height),
+                (0.0, height * 0.015, height * (1.015 if style == "hoplite" else 0.985)),
+                accent_cloth_mat,
+                bevel=height * 0.006,
+            )
+            if style == "hypaspist":
+                for side, sign in (("l", 1.0), ("r", -1.0)):
+                    box(
+                        f"guard_cheek_{side}",
+                        (height * 0.042, height * 0.032, height * 0.125),
+                        (sign * height * 0.072, -height * 0.102, height * 0.845),
+                        metal_mat,
+                        rotation=(0.0, 0.0, sign * 5.0),
+                        bevel=height * 0.005,
+                    )
+    elif style == "toxotes":
+        cylinder(
+            "archer_headwrap",
+            height * 0.112,
+            height * 0.15,
+            (0.0, 0.0, height * 0.955),
+            cloth_mat,
+            scale=(0.94, 0.88, 1.0),
+            radius_top=height * 0.086,
+        )
+        box(
+            "archer_brow_wrap",
+            (height * 0.19, height * 0.025, height * 0.045),
+            (0.0, -height * 0.102, height * 0.955),
+            accent_cloth_mat,
+            bevel=height * 0.005,
+        )
+        box(
+            "archer_wrap_tail",
+            (height * 0.085, height * 0.025, height * 0.26),
+            (height * 0.075, height * 0.08, height * 0.80),
+            cloth_mat,
+            rotation=(7.0, 0.0, -5.0),
+            bevel=height * 0.007,
+        )
+    elif style == "stalker":
+        cylinder(
+            "hood",
+            height * 0.145,
+            height * 0.255,
+            (0.0, height * 0.005, height * 0.895),
+            cloth_mat,
+            scale=(0.94, 0.83, 1.0),
+            radius_top=height * 0.075,
+        )
+        box(
+            "hood_shadow",
+            (height * 0.16, height * 0.025, height * 0.09),
+            (0.0, -height * 0.108, height * 0.89),
+            dark_metal_mat,
+            bevel=height * 0.008,
+        )
+        box(
+            "hood_tail",
+            (height * 0.15, height * 0.035, height * 0.28),
+            (0.0, height * 0.10, height * 0.76),
+            cloth_mat,
+            rotation=(12.0, 0.0, 0.0),
+            bevel=height * 0.012,
+        )
+    elif style == "oracle":
+        box(
+            "funerary_mask",
+            (height * 0.17, height * 0.07, height * 0.23),
+            (0.0, -height * 0.075, height * 0.91),
+            metal_mat,
+            bevel=height * 0.012,
+        )
+        cylinder(
+            "oracle_crown",
+            height * 0.105,
+            height * 0.22,
+            (0.0, 0.0, height * 1.045),
+            metal_mat,
+            scale=(0.92, 0.88, 1.0),
+            radius_top=height * 0.082,
+        )
+        for side, sign in (("l", 1.0), ("r", -1.0)):
+            box(
+                f"oracle_veil_{side}",
+                (height * 0.075, height * 0.025, height * 0.42),
+                (sign * height * 0.105, height * 0.035, height * 0.73),
+                cloth_mat,
+                rotation=(4.0, 0.0, sign * 5.0),
+                bevel=height * 0.007,
+            )
+        box(
+            "oracle_glow",
+            (height * 0.105, height * 0.018, height * 0.025),
+            (0.0, -height * 0.118, height * 0.93),
+            glow_mat,
+            bevel=height * 0.003,
+        )
+    else:  # warlock
+        cylinder(
+            "warlock_headwrap",
+            height * 0.108,
+            height * 0.16,
+            (0.0, 0.0, height * 0.965),
+            cloth_mat,
+            scale=(0.94, 0.88, 1.0),
+            radius_top=height * 0.09,
+        )
+        box(
+            "warlock_half_mask",
+            (height * 0.17, height * 0.055, height * 0.135),
+            (0.0, -height * 0.09, height * 0.94),
+            metal_mat,
+            bevel=height * 0.011,
+        )
+        box(
+            "warlock_brow",
+            (height * 0.195, height * 0.025, height * 0.035),
+            (0.0, -height * 0.114, height * 0.98),
+            metal_mat,
+            bevel=height * 0.005,
+        )
+        for side, sign in (("l", 1.0), ("r", -1.0)):
+            box(
+                f"warlock_cheek_{side}",
+                (height * 0.045, height * 0.03, height * 0.115),
+                (sign * height * 0.067, -height * 0.105, height * 0.905),
+                metal_mat,
+                rotation=(0.0, 0.0, sign * 6.0),
+                bevel=height * 0.005,
+            )
+            box(
+                f"warlock_veil_{side}",
+                (height * 0.082, height * 0.025, height * 0.34),
+                (sign * height * 0.105, height * 0.045, height * 0.76),
+                accent_cloth_mat,
+                rotation=(5.0, 0.0, sign * 5.0),
+                bevel=height * 0.008,
+            )
+        box(
+            "warlock_eye_rune",
+            (height * 0.085, height * 0.015, height * 0.018),
+            (0.0, -height * 0.123, height * 0.955),
+            glow_mat,
+            bevel=height * 0.003,
+        )
+
+    merged = scene_lib.join([body, *parts], body.name)
+    scene_lib.set_origin(merged, "bottom")
+    scene_lib.apply_transforms(merged)
+    mesh_lib.shade_auto_smooth(merged, 52.0)
+    result = finish_lib.report(ctx, merged)
+    result["style"] = style
+    result["height_m"] = round(height, 4)
+    result["armour_parts"] = len(parts)
+    if style == "greek_delver":
+        result["silhouette"] = "open_faced_mining_commander"
+        result["facial_readability"] = "open_crown_cheeks_eyes_trimmed_beard"
+        result["work_gear_parts"] = 4
+    ctx.note(
+        f"'{merged.name}' now carries the {style} outfit. Run char.rig next; the "
+        "joined disconnected shells let the deterministic skinner assign helmet, "
+        "bracers and greaves to their nearest bones."
+    )
+    finish_lib.budget_note(ctx, merged, 8000)
     return result
 
 
@@ -222,7 +1316,11 @@ def _absorb(target_bm, source_bm):
     params={
         "name": ("str", None, "Mesh object to rig"),
         "height": ("num", 0.0, "Character height; 0 measures it from the mesh bounds"),
-        "build": ("enum:realistic|heroic|stylized|chibi|lithe", "heroic", "Proportions the rig assumes — match char.humanoid"),
+        "build": (
+            "enum:realistic|heroic|stylized|chibi|lithe",
+            "heroic",
+            "Proportions the rig assumes — match char.humanoid",
+        ),
         "falloff": ("num", 1.6, "Weight blend sharpness; higher is more rigid"),
         "armature_name": ("str", "", "Armature object name (defaults to <mesh>_rig)"),
     },
@@ -295,9 +1393,7 @@ def char_rig(ctx, name, height, build, falloff, armature_name):
 # Bone pairs that may share a vertex: a bone and its direct parent. Built from
 # PARENTS so it stays correct if the skeleton ever gains bones.
 _RELATED = frozenset(
-    pair
-    for child, parent in PARENTS.items()
-    for pair in ((child, parent), (parent, child))
+    pair for child, parent in PARENTS.items() for pair in ((child, parent), (parent, child))
 )
 
 
@@ -357,9 +1453,7 @@ def _skin(obj, joints, falloff, rig=None):
     # first pose you apply tears the mesh into flat sheets. Characters authored
     # at the origin were unaffected, which is why this survived so long.
     rig_matrix = rig.matrix_world if rig is not None else Matrix.Identity(4)
-    segments = {
-        n: (rig_matrix @ Vector(a), rig_matrix @ Vector(b)) for n, (a, b) in joints.items()
-    }
+    segments = {n: (rig_matrix @ Vector(a), rig_matrix @ Vector(b)) for n, (a, b) in joints.items()}
 
     mesh = obj.data
     world = [matrix @ v.co for v in mesh.vertices]
@@ -384,9 +1478,7 @@ def _skin(obj, joints, falloff, rig=None):
     bone_shell = {}
     for bone_name in segments:
         votes = claims.get(bone_name, [])
-        bone_shell[bone_name] = (
-            max(set(votes), key=votes.count) if votes else None
-        )
+        bone_shell[bone_name] = max(set(votes), key=votes.count) if votes else None
 
     weighted = 0
     for index, point in enumerate(world):
@@ -396,9 +1488,7 @@ def _skin(obj, joints, falloff, rig=None):
             # A decorative shell no bone claims — fall back to every bone so it
             # is carried by something rather than left behind at the origin.
             candidates = list(segments)
-        distances = sorted(
-            (_distance_to_segment(point, *segments[n]), n) for n in candidates
-        )
+        distances = sorted((_distance_to_segment(point, *segments[n]), n) for n in candidates)
         best = distances[:2]
         # Within a shell a vertex may still be shared only by a bone and its
         # direct parent — that is what makes an elbow bend smoothly. Anything
@@ -463,12 +1553,24 @@ def _clip_keys(clip, length, amplitude):
     a = amplitude
     if clip == "idle":
         return {
-            1:            {"spine": (0, 0, 0), "chest": (0, 0, 0),
-                           "upper_arm_l": (0, 0, -6 * a), "upper_arm_r": (0, 0, 6 * a)},
-            length // 2:  {"spine": (-2.2 * a, 0, 0), "chest": (1.6 * a, 0, 0),
-                           "upper_arm_l": (0, 0, -8.5 * a), "upper_arm_r": (0, 0, 8.5 * a)},
-            length:       {"spine": (0, 0, 0), "chest": (0, 0, 0),
-                           "upper_arm_l": (0, 0, -6 * a), "upper_arm_r": (0, 0, 6 * a)},
+            1: {
+                "spine": (0, 0, 0),
+                "chest": (0, 0, 0),
+                "upper_arm_l": (0, 0, -6 * a),
+                "upper_arm_r": (0, 0, 6 * a),
+            },
+            length // 2: {
+                "spine": (-2.2 * a, 0, 0),
+                "chest": (1.6 * a, 0, 0),
+                "upper_arm_l": (0, 0, -8.5 * a),
+                "upper_arm_r": (0, 0, 8.5 * a),
+            },
+            length: {
+                "spine": (0, 0, 0),
+                "chest": (0, 0, 0),
+                "upper_arm_l": (0, 0, -6 * a),
+                "upper_arm_r": (0, 0, 6 * a),
+            },
         }
     if clip in ("walk", "run"):
         swing = (26 if clip == "walk" else 44) * a
@@ -478,73 +1580,118 @@ def _clip_keys(clip, length, amplitude):
         quarter = max(1, length // 4)
         return {
             1: {
-                "thigh_l": (swing, 0, 0), "thigh_r": (-swing, 0, 0),
-                "shin_l": (-knee * 0.25, 0, 0), "shin_r": (knee * 0.5, 0, 0),
-                "upper_arm_l": (-arm, 0, -6), "upper_arm_r": (arm, 0, 6),
+                "thigh_l": (swing, 0, 0),
+                "thigh_r": (-swing, 0, 0),
+                "shin_l": (-knee * 0.25, 0, 0),
+                "shin_r": (knee * 0.5, 0, 0),
+                "upper_arm_l": (-arm, 0, -6),
+                "upper_arm_r": (arm, 0, 6),
                 "hips": None,
             },
             quarter: {
-                "thigh_l": (0, 0, 0), "thigh_r": (0, 0, 0),
-                "shin_l": (-knee * 0.6, 0, 0), "shin_r": (-knee * 0.1, 0, 0),
-                "upper_arm_l": (0, 0, -6), "upper_arm_r": (0, 0, 6),
+                "thigh_l": (0, 0, 0),
+                "thigh_r": (0, 0, 0),
+                "shin_l": (-knee * 0.6, 0, 0),
+                "shin_r": (-knee * 0.1, 0, 0),
+                "upper_arm_l": (0, 0, -6),
+                "upper_arm_r": (0, 0, 6),
             },
             quarter * 2: {
-                "thigh_l": (-swing, 0, 0), "thigh_r": (swing, 0, 0),
-                "shin_l": (knee * 0.5, 0, 0), "shin_r": (-knee * 0.25, 0, 0),
-                "upper_arm_l": (arm, 0, -6), "upper_arm_r": (-arm, 0, 6),
+                "thigh_l": (-swing, 0, 0),
+                "thigh_r": (swing, 0, 0),
+                "shin_l": (knee * 0.5, 0, 0),
+                "shin_r": (-knee * 0.25, 0, 0),
+                "upper_arm_l": (arm, 0, -6),
+                "upper_arm_r": (-arm, 0, 6),
             },
             quarter * 3: {
-                "thigh_l": (0, 0, 0), "thigh_r": (0, 0, 0),
-                "shin_l": (-knee * 0.1, 0, 0), "shin_r": (-knee * 0.6, 0, 0),
-                "upper_arm_l": (0, 0, -6), "upper_arm_r": (0, 0, 6),
+                "thigh_l": (0, 0, 0),
+                "thigh_r": (0, 0, 0),
+                "shin_l": (-knee * 0.1, 0, 0),
+                "shin_r": (-knee * 0.6, 0, 0),
+                "upper_arm_l": (0, 0, -6),
+                "upper_arm_r": (0, 0, 6),
             },
             length: {
-                "thigh_l": (swing, 0, 0), "thigh_r": (-swing, 0, 0),
-                "shin_l": (-knee * 0.25, 0, 0), "shin_r": (knee * 0.5, 0, 0),
-                "upper_arm_l": (-arm, 0, -6), "upper_arm_r": (arm, 0, 6),
+                "thigh_l": (swing, 0, 0),
+                "thigh_r": (-swing, 0, 0),
+                "shin_l": (-knee * 0.25, 0, 0),
+                "shin_r": (knee * 0.5, 0, 0),
+                "upper_arm_l": (-arm, 0, -6),
+                "upper_arm_r": (arm, 0, 6),
             },
         }, lift
     if clip == "attack":
         return {
-            1:            {"upper_arm_r": (10, 0, 8), "chest": (0, 0, -8 * a),
-                           "forearm_r": (-20, 0, 0)},
-            max(2, int(length * 0.35)): {"upper_arm_r": (-95 * a, 0, 20), "chest": (0, 0, -26 * a),
-                                         "forearm_r": (-58 * a, 0, 0)},
-            max(3, int(length * 0.55)): {"upper_arm_r": (58 * a, 0, -6), "chest": (0, 0, 24 * a),
-                                         "forearm_r": (-4, 0, 0)},
-            length:       {"upper_arm_r": (10, 0, 8), "chest": (0, 0, -8 * a),
-                           "forearm_r": (-20, 0, 0)},
+            1: {"upper_arm_r": (10, 0, 8), "chest": (0, 0, -8 * a), "forearm_r": (-20, 0, 0)},
+            max(2, int(length * 0.35)): {
+                "upper_arm_r": (-95 * a, 0, 20),
+                "chest": (0, 0, -26 * a),
+                "forearm_r": (-58 * a, 0, 0),
+            },
+            max(3, int(length * 0.55)): {
+                "upper_arm_r": (58 * a, 0, -6),
+                "chest": (0, 0, 24 * a),
+                "forearm_r": (-4, 0, 0),
+            },
+            length: {"upper_arm_r": (10, 0, 8), "chest": (0, 0, -8 * a), "forearm_r": (-20, 0, 0)},
         }
     if clip == "jump":
         return {
-            1:                          {"thigh_l": (34 * a, 0, 0), "thigh_r": (34 * a, 0, 0),
-                                         "shin_l": (-62 * a, 0, 0), "shin_r": (-62 * a, 0, 0),
-                                         "spine": (14 * a, 0, 0)},
-            max(2, int(length * 0.4)):  {"thigh_l": (-12 * a, 0, 0), "thigh_r": (-12 * a, 0, 0),
-                                         "shin_l": (6 * a, 0, 0), "shin_r": (6 * a, 0, 0),
-                                         "spine": (-6 * a, 0, 0),
-                                         "upper_arm_l": (-110 * a, 0, -6),
-                                         "upper_arm_r": (-110 * a, 0, 6)},
-            length:                     {"thigh_l": (28 * a, 0, 0), "thigh_r": (28 * a, 0, 0),
-                                         "shin_l": (-48 * a, 0, 0), "shin_r": (-48 * a, 0, 0),
-                                         "spine": (10 * a, 0, 0)},
+            1: {
+                "thigh_l": (34 * a, 0, 0),
+                "thigh_r": (34 * a, 0, 0),
+                "shin_l": (-62 * a, 0, 0),
+                "shin_r": (-62 * a, 0, 0),
+                "spine": (14 * a, 0, 0),
+            },
+            max(2, int(length * 0.4)): {
+                "thigh_l": (-12 * a, 0, 0),
+                "thigh_r": (-12 * a, 0, 0),
+                "shin_l": (6 * a, 0, 0),
+                "shin_r": (6 * a, 0, 0),
+                "spine": (-6 * a, 0, 0),
+                "upper_arm_l": (-110 * a, 0, -6),
+                "upper_arm_r": (-110 * a, 0, 6),
+            },
+            length: {
+                "thigh_l": (28 * a, 0, 0),
+                "thigh_r": (28 * a, 0, 0),
+                "shin_l": (-48 * a, 0, 0),
+                "shin_r": (-48 * a, 0, 0),
+                "spine": (10 * a, 0, 0),
+            },
         }
     if clip == "death":
         return {
-            1:                          {"spine": (0, 0, 0), "chest": (0, 0, 0)},
-            max(2, int(length * 0.3)):  {"spine": (-22 * a, 0, 0), "chest": (-16 * a, 0, 0),
-                                         "head": (18 * a, 0, 0)},
-            length:                     {"spine": (-78 * a, 0, 0), "chest": (-38 * a, 0, 0),
-                                         "head": (30 * a, 0, 0),
-                                         "thigh_l": (48 * a, 0, 0), "thigh_r": (40 * a, 0, 0),
-                                         "shin_l": (-70 * a, 0, 0), "shin_r": (-62 * a, 0, 0)},
+            1: {"spine": (0, 0, 0), "chest": (0, 0, 0)},
+            max(2, int(length * 0.3)): {
+                "spine": (-22 * a, 0, 0),
+                "chest": (-16 * a, 0, 0),
+                "head": (18 * a, 0, 0),
+            },
+            length: {
+                "spine": (-78 * a, 0, 0),
+                "chest": (-38 * a, 0, 0),
+                "head": (30 * a, 0, 0),
+                "thigh_l": (48 * a, 0, 0),
+                "thigh_r": (40 * a, 0, 0),
+                "shin_l": (-70 * a, 0, 0),
+                "shin_r": (-62 * a, 0, 0),
+            },
         }
     # wave
     return {
-        1:                          {"upper_arm_r": (-140 * a, 0, 12), "forearm_r": (-20, 0, 0)},
-        max(2, int(length * 0.33)): {"upper_arm_r": (-150 * a, 0, 12), "forearm_r": (-46 * a, 0, 28 * a)},
-        max(3, int(length * 0.66)): {"upper_arm_r": (-150 * a, 0, 12), "forearm_r": (-46 * a, 0, -22 * a)},
-        length:                     {"upper_arm_r": (-140 * a, 0, 12), "forearm_r": (-20, 0, 0)},
+        1: {"upper_arm_r": (-140 * a, 0, 12), "forearm_r": (-20, 0, 0)},
+        max(2, int(length * 0.33)): {
+            "upper_arm_r": (-150 * a, 0, 12),
+            "forearm_r": (-46 * a, 0, 28 * a),
+        },
+        max(3, int(length * 0.66)): {
+            "upper_arm_r": (-150 * a, 0, 12),
+            "forearm_r": (-46 * a, 0, -22 * a),
+        },
+        length: {"upper_arm_r": (-140 * a, 0, 12), "forearm_r": (-20, 0, 0)},
     }
 
 
@@ -593,8 +1740,11 @@ def char_animate(ctx, rig, clip, length, amplitude, loop, action_name):
             _pose(obj, bone_name, frame, rotation_deg=rotation)
     if hip_lift:
         for frame, height in (
-            (1, 0.0), (max(2, length // 4), hip_lift), (max(3, length // 2), 0.0),
-            (max(4, length * 3 // 4), hip_lift), (length, 0.0),
+            (1, 0.0),
+            (max(2, length // 4), hip_lift),
+            (max(3, length // 2), 0.0),
+            (max(4, length * 3 // 4), hip_lift),
+            (length, 0.0),
         ):
             _pose(obj, "hips", frame, location=(0.0, 0.0, height))
 
@@ -636,7 +1786,7 @@ def char_animate(ctx, rig, clip, length, amplitude, loop, action_name):
     params={
         "rig": ("str", None, "Armature object name"),
         "preset": ("enum:rest|a_pose|t_pose|sit|crouch|custom", "a_pose", "Pose preset"),
-        "bones": ("obj", None, "custom only: {\"bone_name\": [rx, ry, rz], ...} in degrees"),
+        "bones": ("obj", None, 'custom only: {"bone_name": [rx, ry, rz], ...} in degrees'),
     },
     tags=["char", "rig"],
 )
@@ -645,15 +1795,33 @@ def char_pose(ctx, rig, preset, bones):
     if obj.type != "ARMATURE":
         raise OpError(f"'{rig}' is a {obj.type}, not an armature")
 
+    # A newly-authored animation remains active on the armature. Clear only the
+    # active assignment before setting a review pose; the actions themselves
+    # retain fake users and remain available to glTF export.
+    active_action = ""
+    if obj.animation_data is not None and obj.animation_data.action is not None:
+        active_action = obj.animation_data.action.name
+        obj.animation_data.action = None
+
     presets = {
         "rest": {},
         "t_pose": {"upper_arm_l": (0, 0, -90), "upper_arm_r": (0, 0, 90)},
         "a_pose": {"upper_arm_l": (0, 0, -50), "upper_arm_r": (0, 0, 50)},
-        "sit": {"thigh_l": (-88, 0, 0), "thigh_r": (-88, 0, 0),
-                "shin_l": (85, 0, 0), "shin_r": (85, 0, 0), "spine": (6, 0, 0)},
-        "crouch": {"thigh_l": (-62, 0, 0), "thigh_r": (-62, 0, 0),
-                   "shin_l": (78, 0, 0), "shin_r": (78, 0, 0), "spine": (22, 0, 0),
-                   "chest": (-8, 0, 0)},
+        "sit": {
+            "thigh_l": (-88, 0, 0),
+            "thigh_r": (-88, 0, 0),
+            "shin_l": (85, 0, 0),
+            "shin_r": (85, 0, 0),
+            "spine": (6, 0, 0),
+        },
+        "crouch": {
+            "thigh_l": (-62, 0, 0),
+            "thigh_r": (-62, 0, 0),
+            "shin_l": (78, 0, 0),
+            "shin_r": (78, 0, 0),
+            "spine": (22, 0, 0),
+            "chest": (-8, 0, 0),
+        },
     }
     if preset == "custom":
         if not bones:
@@ -665,17 +1833,23 @@ def char_pose(ctx, rig, preset, bones):
     for bone in obj.pose.bones:
         bone.rotation_mode = "XYZ"
         bone.rotation_euler = (0.0, 0.0, 0.0)
+        bone.location = (0.0, 0.0, 0.0)
     applied = []
     for bone_name, rotation in rotations.items():
         bone = obj.pose.bones.get(bone_name)
         if bone is None:
             raise OpError(
-                f"no bone '{bone_name}' on '{rig}'. Bones: "
-                f"{sorted(b.name for b in obj.pose.bones)}"
+                f"no bone '{bone_name}' on '{rig}'. Bones: {sorted(b.name for b in obj.pose.bones)}"
             )
         bone.rotation_euler = [math.radians(a) for a in rotation]
         applied.append(bone_name)
-    return {"rig": obj.name, "preset": preset, "posed_bones": applied}
+    return {
+        "rig": obj.name,
+        "preset": preset,
+        "posed_bones": applied,
+        "cleared_active_action": active_action,
+        "available_actions": [action.name for action in bpy.data.actions],
+    }
 
 
 @op(
@@ -687,7 +1861,11 @@ def char_pose(ctx, rig, preset, bones):
         "bone": ("str", "hand_r", "Bone to attach to"),
         "offset": ("vec3", [0.0, 0.0, 0.0], "Local offset in metres"),
         "rotation": ("vec3", [0.0, 0.0, 0.0], "Local rotation in degrees"),
-        "keep_transform": ("bool", False, "Keep the prop exactly where it already is, ignoring offset/rotation"),
+        "keep_transform": (
+            "bool",
+            False,
+            "Keep the prop exactly where it already is, ignoring offset/rotation",
+        ),
     },
     tags=["char", "rig"],
 )
@@ -747,7 +1925,11 @@ def char_attach(ctx, prop, rig, bone, offset, rotation, keep_transform):
     ),
     params={
         "mesh": ("str", None, "Skinned mesh object to freeze"),
-        "rig": ("str", None, "Armature to delete afterwards (default: the one deforming this mesh; pass \"\" to keep it)"),
+        "rig": (
+            "str",
+            None,
+            'Armature to delete afterwards (default: the one deforming this mesh; pass "" to keep it)',
+        ),
         "keep_groups": ("bool", False, "Keep the vertex groups after baking"),
     },
     tags=["char", "rig"],
@@ -797,7 +1979,7 @@ def char_bake_pose(ctx, mesh, rig, keep_groups):
         removed = target.name
         scene_lib.delete(target)
 
-    moved = max(abs(a - b) for a, b in zip(before, after))
+    moved = max(abs(a - b) for a, b in zip(before, after, strict=False))
     return {
         "mesh": obj.name,
         "rig_removed": removed,

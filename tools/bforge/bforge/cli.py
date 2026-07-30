@@ -6,6 +6,7 @@
     bforge run prop.barrel height=1.2 seed=4 --render out.png
     bforge script recipe.json                 # batch of ops from a file
     bforge make crate_a --recipe prop.crate --param size=[1,1,1] --export
+    bforge audit game/assets/*.glb --render-dir audit
     bforge catalog --refresh                  # regenerate the committed catalog
     bforge schema --format openai > tools.json
 
@@ -18,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 import time
 from pathlib import Path
@@ -227,6 +229,174 @@ def cmd_make(args) -> int:
         forge.stop()
 
 
+def _audit_prefix(path: Path) -> str:
+    """A deterministic import prefix that is safe for Blender object names."""
+    clean = re.sub(r"[^a-z0-9_]+", "_", path.stem.lower()).strip("_")
+    return f"audit_{clean or 'asset'}"
+
+
+def _progression_report(rows: list[dict]) -> dict:
+    """Compare ordered assets as a readable unlock/progression family."""
+    items = []
+    for row in rows:
+        info = row.get("info", {})
+        objects = info.get("objects", [])
+        sizes = [
+            float(axis)
+            for obj in objects
+            for axis in obj.get("bounds", {}).get("size", [])
+            if isinstance(axis, (int, float))
+        ]
+        items.append(
+            {
+                "asset": Path(row["asset"]).name,
+                "triangles": int(
+                    info.get(
+                        "total_triangles",
+                        sum(int(obj.get("triangles", 0)) for obj in objects),
+                    )
+                ),
+                "max_extent_m": round(max(sizes), 5) if sizes else None,
+                "materials": sorted(str(value) for value in info.get("materials", [])),
+            }
+        )
+
+    triangles = [item["triangles"] for item in items]
+    extents = [item["max_extent_m"] for item in items if item["max_extent_m"]]
+    increasing = len(triangles) > 1 and all(
+        current > previous for previous, current in zip(triangles, triangles[1:], strict=False)
+    )
+    scale_ratio = round(max(extents) / min(extents), 4) if extents else None
+    findings = []
+    if len(items) < 2:
+        findings.append(
+            {
+                "severity": "warning",
+                "issue": "progression set has fewer than two assets",
+                "detail": "set comparison needs an ordered family, not a single asset",
+                "fix": "pass every unlock tier to bforge audit in progression order",
+            }
+        )
+    elif not increasing:
+        findings.append(
+            {
+                "severity": "warning",
+                "issue": "mesh complexity does not rise through the progression set",
+                "detail": f"ordered triangle counts are {triangles}",
+                "fix": "inspect the contact sheets and confirm later tiers add readable silhouette detail",
+            }
+        )
+    if scale_ratio is not None and scale_ratio > 1.5:
+        findings.append(
+            {
+                "severity": "warning",
+                "issue": "progression set has inconsistent authored scale",
+                "detail": f"largest max extent is {scale_ratio:.2f}x the smallest",
+                "fix": "normalize scale before export or document an intentional size-class change",
+            }
+        )
+    if not findings:
+        scale_detail = f"{scale_ratio:.2f}x" if scale_ratio is not None else "unavailable"
+        findings.append(
+            {
+                "severity": "info",
+                "issue": "ordered progression is structurally readable",
+                "detail": f"triangle counts rise {triangles}; max-extent ratio is {scale_detail}",
+                "fix": "confirm silhouette and material changes in the contact sheets",
+            }
+        )
+    return {
+        "count": len(items),
+        "items": items,
+        "strictly_increasing_triangles": increasing,
+        "max_extent_ratio": scale_ratio,
+        "findings": findings,
+        "warnings": sum(item["severity"] == "warning" for item in findings),
+    }
+
+
+def cmd_audit(args) -> int:
+    """Import and inspect shipping assets without writing a temporary recipe."""
+    assets = [Path(value).expanduser().resolve() for value in args.assets]
+    missing = [str(path) for path in assets if not path.is_file()]
+    if missing:
+        print(json.dumps({"error": "asset not found", "paths": missing}, indent=2), file=sys.stderr)
+        return 1
+
+    model_types = {".glb", ".gltf", ".obj", ".fbx", ".blend"}
+    image_types = {".png", ".jpg", ".jpeg", ".webp"}
+    allowed = model_types | image_types
+    unsupported = [str(path) for path in assets if path.suffix.lower() not in allowed]
+    if unsupported:
+        print(
+            json.dumps({"error": "unsupported asset type", "paths": unsupported}, indent=2),
+            file=sys.stderr,
+        )
+        return 1
+
+    forge = _forge(args)
+    rows = []
+    failed = False
+    try:
+        forge.start()
+        for path in assets:
+            row: dict = {"asset": str(path), "bytes": path.stat().st_size}
+            try:
+                if path.suffix.lower() in image_types:
+                    row["kind"] = "image"
+                    row["image"] = forge.call(
+                        "check.image",
+                        path=str(path),
+                        colors=6,
+                        _timeout=args.timeout,
+                    )
+                    errors = 0
+                    warnings = len(row["image"].get("findings", []))
+                else:
+                    row["import"] = forge.call(
+                        "session.import",
+                        path=str(path),
+                        prefix=_audit_prefix(path),
+                        reset_first=True,
+                        _timeout=args.timeout,
+                    )
+                    row["info"] = forge.call("session.info", detail="full")
+                    row["critique"] = forge.call(
+                        "check.critique",
+                        texture_size=args.texture_size,
+                        _timeout=args.timeout,
+                    )
+                    if args.render_dir:
+                        render_name = f"{Path(args.render_dir).as_posix().rstrip('/')}/{path.stem}-contact.png"
+                        row["render"] = forge.call(
+                            "render.contact_sheet",
+                            out=render_name,
+                            tile=args.tile,
+                            samples=args.samples,
+                            _timeout=max(args.timeout, 1200),
+                        )
+                    errors = int(row["critique"].get("errors", 0))
+                    warnings = int(row["critique"].get("warnings", 0))
+                row["status"] = {"errors": errors, "warnings": warnings}
+                failed = failed or errors > 0 or (args.fail_on == "warning" and warnings > 0)
+            except (ForgeError, DaemonError) as exc:
+                row["error"] = str(exc)
+                failed = True
+            rows.append(row)
+    except (ForgeError, DaemonError) as exc:
+        print(json.dumps({"error": str(exc)}, indent=2), file=sys.stderr)
+        return 1
+    finally:
+        forge.stop()
+
+    result = {"assets": rows}
+    if args.progression_report:
+        result["progression"] = _progression_report(rows)
+        failed = failed or (args.fail_on == "warning" and result["progression"]["warnings"] > 0)
+    _emit(result, True)
+    return 1 if failed and args.fail_on != "never" else 0
+
+
 def cmd_catalog(args) -> int:
     if args.refresh:
         forge = _forge(args)
@@ -345,6 +515,37 @@ def build_parser() -> argparse.ArgumentParser:
     make.add_argument("--prompt", default="", help="Recorded in the asset's provenance")
     make.add_argument("--timeout", type=float, default=900)
     make.set_defaults(func=cmd_make)
+
+    audit = sub.add_parser(
+        "audit",
+        help="Import, measure and critique existing game assets; optionally render contact sheets",
+    )
+    audit.add_argument(
+        "assets",
+        nargs="+",
+        help=".glb/.gltf/.obj/.fbx/.blend models or .png/.jpg/.webp images",
+    )
+    audit.add_argument(
+        "--render-dir",
+        default="",
+        help="Also write <asset>-contact.png sheets below this output directory",
+    )
+    audit.add_argument("--tile", type=int, default=300)
+    audit.add_argument("--samples", type=int, default=12)
+    audit.add_argument("--texture-size", type=int, default=1024)
+    audit.add_argument("--timeout", type=float, default=600)
+    audit.add_argument(
+        "--fail-on",
+        choices=["error", "warning", "never"],
+        default="error",
+        help="Exit nonzero on critique errors (default), warnings too, or never",
+    )
+    audit.add_argument(
+        "--progression-report",
+        action="store_true",
+        help="Compare assets in argument order as an unlock family (complexity, scale, materials)",
+    )
+    audit.set_defaults(func=cmd_audit)
 
     catalog = sub.add_parser("catalog", help="Show or regenerate the committed op catalog")
     catalog.add_argument("--refresh", action="store_true")

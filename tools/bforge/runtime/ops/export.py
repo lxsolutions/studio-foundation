@@ -168,12 +168,17 @@ def _preflight(meshes):
     for obj in meshes:
         name = obj.name
         scale = obj.scale
+        bone_attachment = (
+            obj.parent_type == "BONE"
+            and obj.parent is not None
+            and obj.parent.type == "ARMATURE"
+        )
         if any(abs(s - 1.0) > 1e-4 for s in scale):
             problems.append(
                 f"'{name}' has unapplied scale {[round(s, 3) for s in scale]} — the engine will "
                 "import it at the wrong size. Run object.transform apply=true."
             )
-        if any(abs(r) > 1e-4 for r in obj.rotation_euler):
+        if not bone_attachment and any(abs(r) > 1e-4 for r in obj.rotation_euler):
             warnings.append(
                 f"'{name}' has unapplied rotation; most engines handle this, but physics and "
                 "spawn alignment get confusing. Run object.transform apply=true."
@@ -236,6 +241,47 @@ def export_blend(ctx, out, compress, pack_textures):
     }
 
 
+def _material_contract(material):
+    """Describe the exact engine-facing PBR constants and their display colour.
+
+    Blender and glTF store base colour in linear space. Engine palette APIs
+    commonly accept sRGB hex values instead. Recording both makes that boundary
+    explicit and prevents a runtime from feeding a display value directly into
+    PBR albedo, which washes dark materials out dramatically.
+    """
+    contract = {
+        "name": material.name,
+        "preset": str(material.get("bforge_preset", material.name)),
+    }
+    if not material.use_nodes:
+        return contract
+    bsdf = next(
+        (node for node in material.node_tree.nodes if node.type == "BSDF_PRINCIPLED"),
+        None,
+    )
+    if bsdf is None:
+        return contract
+
+    base = bsdf.inputs.get("Base Color")
+    if base is not None and not base.is_linked:
+        rgba = [float(value) for value in base.default_value[:4]]
+        display = [
+            max(0, min(255, round(mat_lib.linear_to_srgb(value) * 255)))
+            for value in rgba[:3]
+        ]
+        contract["base_color"] = {
+            "linear": [round(value, 6) for value in rgba],
+            "srgb_hex": "#" + "".join(f"{value:02x}" for value in display),
+        }
+    roughness = bsdf.inputs.get("Roughness")
+    if roughness is not None and not roughness.is_linked:
+        contract["roughness"] = round(float(roughness.default_value), 4)
+    metallic = bsdf.inputs.get("Metallic")
+    if metallic is not None and not metallic.is_linked:
+        contract["metallic"] = round(float(metallic.default_value), 4)
+    return contract
+
+
 @op(
     "export.meta",
     summary="Write the .meta.json sidecar the studio asset pipeline requires — id, licence, provenance including AI-generation disclosure, budgets and policies. Without this, `just asset-validate` rejects the asset.",
@@ -261,6 +307,12 @@ def export_meta(ctx, out, asset_id, category, license, creator, source, ai_tool,
     identifier = scene_lib.sanitize(asset_id)
     meshes = [o for o in scene_lib.mesh_objects()]
     measured = sum(mesh_lib.tri_count(o) for o in meshes)
+    measured_materials = {
+        material.name: material
+        for obj in meshes
+        for material in obj.data.materials
+        if material
+    }
     payload = {
         "asset_id": identifier,
         "category": category,
@@ -287,9 +339,11 @@ def export_meta(ctx, out, asset_id, category, license, creator, source, ai_tool,
         "measured": {
             "triangles": measured,
             "objects": len(meshes),
-            "materials": sorted(
-                {m.name for o in meshes for m in o.data.materials if m}
-            ),
+            "materials": sorted(measured_materials),
+            "material_contracts": [
+                _material_contract(measured_materials[name])
+                for name in sorted(measured_materials)
+            ],
         },
     }
     path = ctx.out_path(out, ".json")
@@ -307,13 +361,15 @@ def export_meta(ctx, out, asset_id, category, license, creator, source, ai_tool,
         "engine": (f"enum:{'|'.join(PRESETS)}", "godot", "Target engine preset"),
         "category": ("enum:prop|character|environment|weapon|architecture|vfx|ui", "prop", "Asset category"),
         "ai_prompt": ("str", "", "What the asset was asked for — recorded in provenance"),
+        "triangle_budget": ("int", 0, "Triangle budget recorded in metadata; 0 uses the measured export"),
+        "material_budget": ("int", 0, "Material budget recorded in metadata; 0 uses the measured export"),
         "contact_sheet": ("bool", True, "Also render a review contact sheet"),
         "strict": ("bool", True, "Block export on problems that would corrupt the import"),
     },
     tags=["export", "io"],
 )
-def export_asset(ctx, asset_id, out_dir, objects, engine, category, ai_prompt, contact_sheet,
-                 strict):
+def export_asset(ctx, asset_id, out_dir, objects, engine, category, ai_prompt, triangle_budget,
+                 material_budget, contact_sheet, strict):
     from . import render as render_ops
 
     identifier = scene_lib.sanitize(asset_id)
@@ -321,9 +377,17 @@ def export_asset(ctx, asset_id, out_dir, objects, engine, category, ai_prompt, c
 
     blend = export_blend(ctx, f"{prefix}.blend", True, True)
     glb = export_gltf(ctx, f"{prefix}.glb", objects, engine, "glb", True, False, strict, None)
+    meshes = [obj for obj in scene_lib.mesh_objects()]
+    measured_materials = len({
+        material.name
+        for obj in meshes
+        for material in obj.data.materials
+        if material
+    })
     meta = export_meta(
         ctx, f"{prefix}.meta.json", identifier, category, "CC-BY-4.0", "bforge",
-        "procedural", "bforge", "", ai_prompt, 0, 2, "explicit", "auto",
+        "procedural", "bforge", "", ai_prompt, triangle_budget,
+        material_budget or max(measured_materials, 1), "explicit", "auto",
     )
     outputs = {"blend": blend, "glb": glb, "meta": meta}
     if contact_sheet:

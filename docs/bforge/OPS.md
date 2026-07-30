@@ -1,6 +1,6 @@
 # bforge op reference
 
-109 operations.
+120 operations.
 
 ## `arch.*`
 
@@ -34,6 +34,31 @@ A wall of repeating arched bays following a path — THE Roman building block. S
 | `cornice_jut` | number | 0.35 | How far the cornice projects past the wall |
 | `engaged_columns` | boolean | True | Half-columns on the piers — the Colosseum's storey articulation |
 
+### `arch.civic_hall`
+
+A complete classical town centre in one joined, material-disciplined asset: stepped masonry masses, pedimented portico, tiled gable roofs, buttresses, windows and faction banner. The greek_mine style adds an arched shaft mouth and working timber headframe/hoist, making an RTS civic centre that is also credible at first-person distance.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `name` | string | 'civic_hall' | Object name |
+| `style` | greek_mine \| greek_polis | 'greek_mine' | Architecture programme |
+| `width` | number | 10.4 | Overall facade width in metres |
+| `depth` | number | 8.4 | Overall building depth in metres |
+| `height` | number | 6.8 | Height to the upper roof eaves |
+| `columns` | integer | 6 | Doric columns across the front portico |
+| `tile_rows` | integer | 7 | Raised tile bands across each major roof |
+| `mine_portal` | boolean | True | Add an arched mine mouth through the facade |
+| `hoist` | boolean | True | Add the timber headframe, wheel, spokes, axle and rope |
+| `stone_color` | string | '#817765' | Primary weathered masonry |
+| `foundation_color` | string | '#4c4841' | Podium, courses and buttress stone |
+| `roof_color` | string | '#552c24' | Dark terracotta tile |
+| `timber_color` | string | '#2b1d16' | Mine framing and doors |
+| `metal_color` | string | '#61441f' | Bronze/iron fittings |
+| `cloth_color` | string | '#4a2024' | Faction banner |
+| `location` | array | [0.0, 0.0, 0.0] | World position |
+| `rotation` | number | 0.0 | Yaw in degrees |
+| `uv_scale` | number | 1.4 | Metres per UV tile |
+
 ### `arch.colonnade`
 
 A ring or run of free-standing columns with an entablature — temple fronts, stadium rims, forum porticos. Cheaper than an arcade and the right silhouette for a top storey.
@@ -60,6 +85,47 @@ A ring or run of free-standing columns with an entablature — temple fronts, st
 | `flutes` | boolean | False | Fluted shafts (costs triangles, only reads up close) |
 | `statues` | boolean | False | Blocky statue silhouettes above every fourth column |
 
+### `arch.defense_tower`
+
+A browser-budget classical Greek defense tower with one disciplined material set and three gameplay-readable silhouettes: an elevated arrow crown, a horizontal torsion ballista, or a vertical bronze storm conductor. All variants share stepped weathered masonry, battered buttresses, string courses and oxblood faction cloth.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `name` | string | 'defense_tower' | Object name |
+| `style` | arrow \| ballista \| storm | 'arrow' | Weapon and crown silhouette |
+| `width` | number | 3.0 | Overall masonry footprint width in metres |
+| `height` | number | 5.2 | Overall structure height before the weapon crown |
+| `stone_color` | string | '#777064' | Primary weathered limestone |
+| `foundation_color` | string | '#403e3a' | Podium, buttress and course stone |
+| `timber_color` | string | '#2a1c14' | Weapon frame, canopy and rails |
+| `metal_color` | string | '#72502a' | Bronze and dark iron fittings |
+| `cloth_color` | string | '#491c20' | Oxblood faction cloth |
+| `energy_color` | string | '#7e9ca3' | Restrained storm conductor emission |
+| `location` | array | [0.0, 0.0, 0.0] | World position |
+| `rotation` | number | 0.0 | Yaw in degrees |
+| `uv_scale` | number | 0.9 | Metres per UV tile |
+
+### `arch.field_building`
+
+A browser-budget Greek settlement family for the structures surrounding a civic hall: a furrowed farmstead, strategos campaign tent, hoplite barracks, modular ashlar wall, weathered road stele, courtyard house, stoa-fronted emporium, or mining survey lattice. Variants share restrained limestone, timber, cloth, terracotta, bronze and crop materials while keeping silhouettes readable from an RTS camera.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `name` | string | 'field_building' | Object name |
+| `style` | farm \| camp \| barracks \| wall \| waymarker \| house \| emporium \| lattice | 'farm' | Settlement structure silhouette |
+| `width` | number | 3.4 | Overall footprint width in metres |
+| `depth` | number | 3.4 | Overall footprint depth in metres |
+| `height` | number | 2.2 | Authored visual height in metres |
+| `stone_color` | string | '#777064' | Primary weathered limestone |
+| `foundation_color` | string | '#403e3a' | Podium, earth and shadow stone |
+| `timber_color` | string | '#2a1c14' | Posts, doors, racks and tools |
+| `roof_color` | string | '#552c24' | Muted terracotta roof and painted details |
+| `metal_color` | string | '#72502a' | Bronze and dark iron fittings |
+| `crop_color` | string | '#525632' | Olive, grain and restrained field growth |
+| `location` | array | [0.0, 0.0, 0.0] | World position |
+| `rotation` | number | 0.0 | Yaw in degrees |
+| `uv_scale` | number | 0.7 | Metres per UV tile |
+
 ### `arch.gateway`
 
 A monumental arched gate — the triumphal entrance every Roman venue frames its far end with. One big central arch, optional flanking arches, an attic storey above.
@@ -78,6 +144,26 @@ A monumental arched gate — the triumphal entrance every Roman venue frames its
 | `material` | string | 'stone' | Material preset |
 | `color` | string | '' | Override colour |
 | `uv_scale` | number | 3.0 | Metres per UV tile |
+
+### `arch.hellenic_ruin`
+
+A grounded archaeological Greek landmark authored as a ruined Doric shrine, broken colonnade, or hero tomb. Broad podiums, uneven standing columns, fallen drums, displaced lintels, pediment fragments and restrained bronze votives produce serious navigation silhouettes from FPS through RTS distance.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `name` | string | 'hellenic_ruin' | Object name |
+| `style` | shrine \| colonnade \| tomb | 'shrine' | Archaeological landmark silhouette |
+| `width` | number | 5.2 | Overall footprint width in metres |
+| `depth` | number | 3.8 | Overall footprint depth in metres |
+| `height` | number | 4.2 | Tallest surviving architectural extent |
+| `weathering` | number | 0.65 | Damage strength from restrained wear to heavily displaced remains |
+| `seed` | integer | 0 | Deterministic fracture and rubble seed |
+| `stone_color` | string | '#8b8374' | Weathered Attic limestone |
+| `foundation_color` | string | '#46433d' | Dark podium, crevice and buried stone |
+| `patina_color` | string | '#52645b' | Tarnished bronze votive and inscription colour |
+| `location` | array | [0.0, 0.0, 0.0] | World position |
+| `rotation` | number | 0.0 | Yaw in degrees |
+| `uv_scale` | number | 0.8 | Metres per UV tile |
 
 ## `build.*`
 
@@ -380,7 +466,7 @@ Freeze a posed rig into the mesh vertices and drop the skin. Turns a char.rig + 
 
 ### `char.humanoid`
 
-Proportioned humanoid blockout using classic figure-drawing head ratios (7.5 realistic, 8 heroic, 4 chibi). ~1400 tris. Pair with char.rig and char.animate for a complete animated character.
+Animation-ready anatomical humanoid using classic figure-drawing head ratios (7.5 realistic, 8 heroic, 4 chibi). Shaped chest/waist depth, jaw, nose, ears, hands and feet avoid the tube-limbed mannequin look. Pair with char.outfit, char.rig and char.animate.
 
 | parameter | type | default | description |
 | --- | --- | --- | --- |
@@ -392,6 +478,20 @@ Proportioned humanoid blockout using classic figure-drawing head ratios (7.5 rea
 | `location` | array | [0.0, 0.0, 0.0] | World position |
 | `skin` | string | '#c08a6a' | Body colour |
 | `seed` | integer | 0 | Random seed |
+
+### `char.outfit`
+
+Add a production-readable rigid outfit to an unrigged humanoid, then join it into the body so char.rig skins every shell. Greek delver, hoplite and peltast armour include cuirass, straps, pteruges, helmets, bracers and greaves; toxotes and hypaspist provide RTS-readable archer and heavy-guard silhouettes; strategos and warlock add boss-readable officer and ritual silhouettes; stalker and oracle add undead hoods, masks and robes.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `name` | string | None | Unrigged humanoid mesh from char.humanoid |
+| `style` | greek_delver \| hoplite \| peltast \| toxotes \| hypaspist \| strategos \| stalker \| oracle \| warlock | 'greek_delver' | Outfit silhouette |
+| `cloth` | string | '#262522' | Coarse tunic/linen colour |
+| `leather` | string | '#38261c' | Straps, belt and boot-wrap colour |
+| `metal` | string | '#71502d' | Aged bronze armour colour |
+| `accent` | string | '#d18a32' | Small lamp or crest accent |
+| `detail` | integer | 10 | Radial segment count, 8-16 |
 
 ### `char.pose`
 
@@ -414,6 +514,21 @@ Build a humanoid armature fitted to a mesh and skin it with distance-falloff wei
 | `build` | realistic \| heroic \| stylized \| chibi \| lithe | 'heroic' | Proportions the rig assumes — match char.humanoid |
 | `falloff` | number | 1.6 | Weight blend sharpness; higher is more rigid |
 | `armature_name` | string | '' | Armature object name (defaults to <mesh>_rig) |
+
+### `char.skeleton`
+
+Build an anatomically readable bone-body on the same proportions as char.humanoid. The joined rib cage, skull, long bones and dark sockets remain compatible with char.outfit, char.rig and char.animate.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `name` | string | 'skeleton' | Object name |
+| `height` | number | 1.86 | Total height in metres |
+| `build` | realistic \| heroic \| lithe | 'lithe' | Bone proportions |
+| `detail` | integer | 8 | Bone cross-section segments, 6-12 |
+| `location` | array | [0.0, 0.0, 0.0] | World position |
+| `bone` | string | '#b8ad92' | Aged bone colour |
+| `socket` | string | '#171817' | Eye, nose and mouth cavity colour |
+| `seed` | integer | 0 | Random seed |
 
 ## `check.*`
 
@@ -443,9 +558,15 @@ Measure an image instead of eyeballing it: luminance range, blown highlights, cr
 
 | parameter | type | default | description |
 | --- | --- | --- | --- |
-| `path` | string | None | PNG to analyse — a render, a contact sheet, or a baked texture |
+| `path` | string | None | PNG, JPEG or WebP to analyse — a render, sprite sheet, contact sheet, or baked texture |
 | `colors` | integer | 6 | How many dominant colours to report |
 | `background` | array | [0.05, 0.055, 0.065, 1.0] | Backdrop colour, excluded from subject stats |
+| `require_alpha` | boolean | False | Fail when the image has no meaningful transparent pixels |
+| `require_clear_corners` | boolean | False | Fail when the four corners are not transparent; useful for UI icons and cutouts |
+| `require_square` | boolean | False | Fail when width and height differ |
+| `minimum_size` | integer | 0 | Fail when either image dimension is below this many pixels (0 disables) |
+| `minimum_coverage` | number | 0.04 | Minimum fraction of the frame occupied by the visible subject |
+| `maximum_coverage` | number | 1.0 | Maximum fraction of the frame occupied by the visible subject |
 
 ### `check.silhouette`
 
@@ -455,6 +576,42 @@ Score how readable an object's silhouette is from the standard game camera angle
 | --- | --- | --- | --- |
 | `name` | string | None | Object to test |
 | `samples` | integer | 64 | Rays per axis for the projected-area estimate |
+
+## `creature.*`
+
+### `creature.hound`
+
+Build a gaunt game-ready war hound with readable canine anatomy, bent legs, muzzle, ears, segmented tail and a separate bronze collar. The joined mesh can be exported static or bound to a custom quadruped rig.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `name` | string | 'war_hound' | Object name |
+| `length` | number | 1.75 | Nose-to-rump length in metres |
+| `shoulder_height` | number | 1.0 | Ground-to-shoulder height |
+| `bulk` | number | 1.0 | Torso and limb thickness multiplier |
+| `detail` | integer | 8 | Radial segment count, 6-12 |
+| `location` | array | [0.0, 0.0, 0.0] | World position |
+| `hide` | string | '#25231f' | Dark hide colour |
+| `leather` | string | '#3b241c' | Collar leather colour |
+| `metal` | string | '#6f4d2b' | Collar and spike metal colour |
+| `eyes` | string | '#9b5428' | Eye colour |
+
+### `creature.scarab`
+
+Build a low, wide carrion scarab with layered segmented shell plates, six bent legs, hooked forelimbs and mandibles. The joined multi-material mesh is readable from an isometric camera and ready for a custom rig.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `name` | string | 'carrion_scarab' | Object name |
+| `length` | number | 1.55 | Mandible-to-abdomen length in metres |
+| `width` | number | 0.95 | Maximum shell width |
+| `height` | number | 0.62 | Maximum shell height |
+| `detail` | integer | 8 | Radial segment count, 6-12 |
+| `location` | array | [0.0, 0.0, 0.0] | World position |
+| `shell` | string | '#4e3925' | Aged shell colour |
+| `edge` | string | '#84603a' | Raised shell-edge colour |
+| `body` | string | '#171715' | Underside and leg colour |
+| `eyes` | string | '#8d3f22' | Eye colour |
 
 ## `env.*`
 
@@ -607,6 +764,8 @@ One call: save the .blend master, export the GLB, write the .meta.json sidecar a
 | `engine` | godot \| unity \| unreal \| threejs \| raw | 'godot' | Target engine preset |
 | `category` | prop \| character \| environment \| weapon \| architecture \| vfx \| ui | 'prop' | Asset category |
 | `ai_prompt` | string | '' | What the asset was asked for — recorded in provenance |
+| `triangle_budget` | integer | 0 | Triangle budget recorded in metadata; 0 uses the measured export |
+| `material_budget` | integer | 0 | Material budget recorded in metadata; 0 uses the measured export |
 | `contact_sheet` | boolean | True | Also render a review contact sheet |
 | `strict` | boolean | True | Block export on problems that would corrupt the import |
 
@@ -1104,6 +1263,24 @@ Lathed barrel with a belly and iron bands. ~500 tris. Bands get their own materi
 | `color` | string | '' | Override colour |
 | `open_top` | boolean | False | Hollow out the top (for water butts, planters) |
 
+### `prop.bow`
+
+Serious hand-ready recurved bow with tapered laminated limbs, wrapped grip, taut drawn string and optional nocked arrow. One joined three-material mesh with its pivot at the grip for direct bone attachment.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `name` | string | '' | Object name (defaults to the recipe name) |
+| `location` | array | [0.0, 0.0, 0.0] | World position in metres |
+| `seed` | integer | 0 | Random seed — same seed always gives the same asset |
+| `length` | number | 1.42 | Tip-to-tip height in metres |
+| `reflex` | number | 0.16 | Forward recurve at each tip |
+| `draw` | number | 0.24 | String draw behind the grip in metres |
+| `arrow` | boolean | True | Include a nocked arrow |
+| `wood_color` | string | '#4a3020' | Laminated limb and grip colour |
+| `bronze_color` | string | '#6f512d' | Tip, arrowhead and grip fitting colour |
+| `cord_color` | string | '#9b8f77' | Bowstring and fletching colour |
+| `uv_scale` | number | 2.0 | Box unwrap scale |
+
 ### `prop.chest`
 
 Treasure chest with a curved lid, iron banding and a lock plate. ~700 tris. Lid is a separate object so it can be hinged and animated.
@@ -1138,6 +1315,26 @@ Wooden crate with a recessed-panel frame. ~350 tris. The frame is what makes it 
 | `material` | string | 'wood' | Material preset |
 | `color` | string | '' | Override colour |
 | `uv_scale` | number | 1.0 | Metres per UV tile |
+
+### `prop.crossbow`
+
+Serious game-ready crossbow with a shouldered stock, curved segmented prod, taut three-part string, trigger guard, loaded bolt and integrated optic. Mastery styles add magazines, Daedalus gearing and an Aegis power core without changing the hand-ready pivot. One joined multi-material mesh.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `name` | string | '' | Object name (defaults to the recipe name) |
+| `location` | array | [0.0, 0.0, 0.0] | World position in metres |
+| `seed` | integer | 0 | Random seed — same seed always gives the same asset |
+| `style` | pilgrim \| repeater \| daedalus \| aegis | 'pilgrim' | Construction and mastery tier |
+| `length` | number | 1.18 | Stock length in metres |
+| `span` | number | 0.92 | Unstrung prod span in metres |
+| `scope` | boolean | True | Mount a compact tube optic and lens |
+| `wood_color` | string | '#493323' | Seasoned stock colour |
+| `bronze_color` | string | '#73512b' | Bronze fittings and prod colour |
+| `iron_color` | string | '#343a3c' | Iron rail, trigger and mechanism colour |
+| `cord_color` | string | '#9a8d72' | String and fletching colour |
+| `lens_color` | string | '#431514' | Dark optic or Aegis core colour |
+| `uv_scale` | number | 2.0 | Box unwrap scale |
 
 ### `prop.crystal`
 
@@ -1221,9 +1418,27 @@ Classical column: base, tapered shaft, capital, optional fluting. ~600 tris. Ins
 | `material` | string | 'stone' | Material preset |
 | `color` | string | '' | Override colour |
 
+### `prop.relic`
+
+Grounded game-loot relic as a Greek medallion, signet ring, or votive idol. Separate aged metal, trim, and inset materials remain readable at pickup scale. ~300-700 tris.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `name` | string | '' | Object name (defaults to the recipe name) |
+| `location` | array | [0.0, 0.0, 0.0] | World position in metres |
+| `seed` | integer | 0 | Random seed — same seed always gives the same asset |
+| `form` | medallion \| ring \| idol | 'medallion' | Loot silhouette: hanging seal, gemstone signet, or small temple votive |
+| `motif` | rosette \| lambda \| plain | 'rosette' | Raised face mark for medallions; ignored by ring and idol forms |
+| `size` | number | 0.42 | Overall height in metres |
+| `material` | string | 'bronze' | Primary aged-metal material preset |
+| `trim_material` | string | 'gold' | Raised rim and detail material preset |
+| `gem_material` | string | 'crystal' | Inset stone material preset |
+| `color` | string | '' | Override primary metal colour |
+| `gem_color` | string | 'crystal_violet' | Inset stone colour |
+
 ### `prop.rock`
 
-Irregular rock with a flat base so it sits on the ground instead of floating. ~200 tris at detail 2. The single most reused environment prop in any game.
+Grounded natural rock authored as a boulder, bedded slab, multi-stone outcrop or scree cluster. Layered displacement and optional strata avoid the inflated-potato silhouette.
 
 | parameter | type | default | description |
 | --- | --- | --- | --- |
@@ -1233,6 +1448,8 @@ Irregular rock with a flat base so it sits on the ground instead of floating. ~2
 | `size` | array | [1.0, 0.85, 0.7] | Bounding dimensions in metres |
 | `detail` | integer | 2 | Icosphere subdivisions: 1=80 tris, 2=320, 3=1280 |
 | `roughness` | number | 0.28 | Surface irregularity (0 = smooth boulder, 0.5 = jagged) |
+| `formation` | boulder \| slab \| outcrop \| scree | 'boulder' | Geological silhouette: one mass, bedded shelf, exposed cluster or broken field stone |
+| `strata` | number | 0.35 | Horizontal bedding strength from 0 (none) to 1 (strong limestone courses) |
 | `flatten_base` | boolean | True | Cut a flat bottom so it beds into terrain |
 | `angular` | boolean | False | Faceted/low-poly look instead of smooth |
 | `material` | string | 'rock' | Material preset |
@@ -1271,7 +1488,7 @@ Wall torch or standing brazier with an emissive flame. ~250 tris. Emissive props
 
 ### `prop.tree`
 
-Stylised low-poly tree: tapered trunk plus layered canopy. ~450 tris. Canopy is a separate material slot so it can take a foliage/alpha shader.
+Game-ready tree with stylised and natural Mediterranean forms. Olive and cypress styles add age-authored roots, branch-readable crowns and negative space while preserving the cheap legacy silhouettes.
 
 | parameter | type | default | description |
 | --- | --- | --- | --- |
@@ -1280,9 +1497,11 @@ Stylised low-poly tree: tapered trunk plus layered canopy. ~450 tris. Canopy is 
 | `seed` | integer | 0 | Random seed — same seed always gives the same asset |
 | `height` | number | 4.0 | Total height in metres |
 | `trunk_radius` | number | 0.18 | Trunk radius at the base |
-| `canopy_style` | cone \| blob \| layered \| palm | 'layered' | Canopy shape |
+| `canopy_style` | cone \| blob \| layered \| palm \| olive \| cypress | 'layered' | Canopy shape or natural species |
+| `age` | young \| mature \| ancient | 'mature' | Natural species growth stage: changes roots, trunk forks, crown spread and gaps |
 | `canopy_layers` | integer | 3 | layered style: number of tiers |
 | `canopy_radius` | number | 1.4 | Canopy spread in metres |
+| `detail` | integer | 2 | Natural olive/cypress foliage density, 1-3; ignored by legacy styles |
 | `lean` | number | 4.0 | Trunk lean in degrees — a perfectly vertical tree looks fake |
 | `trunk_material` | string | 'wood' | Trunk material preset |
 | `leaf_material` | string | 'leaf' | Canopy material preset |
@@ -1322,6 +1541,7 @@ Render from an explicit camera position and target. Auto-framing always fits the
 | `engine` | auto \| cycles \| eevee | 'auto' | Render engine |
 | `light_distance` | number | 0.0 | Light rig scale in metres; 0 fits it to the whole scene |
 | `world_light` | number | 0.32 | Ambient dome strength. Higher fills shadows but piles white specular sheen onto every surface, which washes out saturated albedo |
+| `transparent` | boolean | False | Render the world as transparent RGBA for UI cards, inventory icons and compositing |
 
 ### `render.cinematic`
 
@@ -1391,6 +1611,7 @@ Render one framed view of the scene or of specific objects. The camera and a thr
 | `engine` | auto \| cycles \| eevee | 'auto' | Render engine. 'auto' means Cycles/CPU, which is the only one that works without a GPU context; 'eevee' is faster but crashes headless on machines with no display server |
 | `ortho` | boolean | False | Orthographic projection (right for front/side/top reference) |
 | `world_light` | number | 0.32 | Ambient dome strength. Higher fills shadows but piles white specular sheen onto every surface, which washes out saturated albedo |
+| `transparent` | boolean | False | Render the world as transparent RGBA for UI cards, inventory icons and compositing |
 
 ## `rig.*`
 
