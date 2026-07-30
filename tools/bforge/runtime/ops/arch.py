@@ -2047,3 +2047,331 @@ def arch_field_building(
     )
     finish_lib.budget_note(ctx, obj, 6_000)
     return result
+
+
+@op(
+    "arch.hellenic_ruin",
+    summary=(
+        "A grounded archaeological Greek landmark authored as a ruined Doric shrine, "
+        "broken colonnade, or hero tomb. Broad podiums, uneven standing columns, fallen "
+        "drums, displaced lintels, pediment fragments and restrained bronze votives "
+        "produce serious navigation silhouettes from FPS through RTS distance."
+    ),
+    params={
+        "name": ("str", "hellenic_ruin", "Object name"),
+        "style": (
+            "enum:shrine|colonnade|tomb",
+            "shrine",
+            "Archaeological landmark silhouette",
+        ),
+        "width": ("num", 5.2, "Overall footprint width in metres"),
+        "depth": ("num", 3.8, "Overall footprint depth in metres"),
+        "height": ("num", 4.2, "Tallest surviving architectural extent"),
+        "weathering": (
+            "num",
+            0.65,
+            "Damage strength from restrained wear to heavily displaced remains",
+        ),
+        "seed": ("int", 0, "Deterministic fracture and rubble seed"),
+        "stone_color": ("str", "#8b8374", "Weathered Attic limestone"),
+        "foundation_color": ("str", "#46433d", "Dark podium, crevice and buried stone"),
+        "patina_color": ("str", "#52645b", "Tarnished bronze votive and inscription colour"),
+        "location": ("vec3", [0.0, 0.0, 0.0], "World position"),
+        "rotation": ("num", 0.0, "Yaw in degrees"),
+        "uv_scale": ("num", 0.8, "Metres per UV tile"),
+    },
+    tags=["build", "architecture", "environment", "landmark", "greek"],
+)
+def arch_hellenic_ruin(
+    ctx,
+    name,
+    style,
+    width,
+    depth,
+    height,
+    weathering,
+    seed,
+    stone_color,
+    foundation_color,
+    patina_color,
+    location,
+    rotation,
+    uv_scale,
+):
+    """Forge a one-draw-mesh ruin whose damage is authored into its silhouette."""
+    rng = ctx.reseed(seed)
+    width = max(2.4, min(12.0, float(width)))
+    depth = max(1.8, min(10.0, float(depth)))
+    height = max(2.0, min(9.0, float(height)))
+    damage = max(0.0, min(1.0, float(weathering)))
+    materials = [
+        mat_lib.principled("m_ruin_limestone", stone_color, roughness=0.93),
+        mat_lib.principled("m_ruin_foundation", foundation_color, roughness=0.98),
+        mat_lib.principled(
+            "m_ruin_patina",
+            patina_color,
+            roughness=0.56,
+            metallic=0.58,
+        ),
+    ]
+    STONE, FOUNDATION, PATINA = range(len(materials))
+    bm = mesh_lib.new_bmesh()
+    parts = 0
+
+    def mark(faces, slot):
+        nonlocal parts
+        for face in faces:
+            face.material_index = slot
+        parts += 1
+        return faces
+
+    def box(size, center, slot, bevel=0.025, rotation_xyz=(0.0, 0.0, 0.0)):
+        faces = mesh_lib.add_box(
+            bm,
+            size=size,
+            center=(0.0, 0.0, 0.0),
+            bevel=max(0.0, bevel),
+        )
+        verts = list({vert for face in faces for vert in face.verts})
+        rx, ry, rz = rotation_xyz
+        matrix = (
+            Matrix.Translation(Vector(center))
+            @ Matrix.Rotation(rz, 4, "Z")
+            @ Matrix.Rotation(ry, 4, "Y")
+            @ Matrix.Rotation(rx, 4, "X")
+        )
+        bmesh.ops.transform(bm, matrix=matrix, verts=verts)
+        return mark(faces, slot)
+
+    def cylinder(radius, depth_value, center, slot, segments=12, axis="z", radius_top=None):
+        faces = mesh_lib.add_cylinder(
+            bm,
+            radius=radius,
+            radius_top=radius_top,
+            depth=depth_value,
+            segments=segments,
+            center=(0.0, 0.0, 0.0),
+            bevel=min(radius * 0.09, 0.022),
+        )
+        verts = list({vert for face in faces for vert in face.verts})
+        matrix = Matrix.Translation(Vector(center))
+        if axis == "x":
+            matrix = matrix @ Matrix.Rotation(math.pi * 0.5, 4, "Y")
+        elif axis == "y":
+            matrix = matrix @ Matrix.Rotation(math.pi * 0.5, 4, "X")
+        bmesh.ops.transform(bm, matrix=matrix, verts=verts)
+        return mark(faces, slot)
+
+    def column(x, y, surviving_height, broken=False, lean=0.0):
+        radius = width * 0.052
+        base_h = height * 0.045
+        box(
+            (radius * 2.8, radius * 2.8, base_h),
+            (x, y, base_h * 0.5 + height * 0.09),
+            FOUNDATION,
+            0.018,
+            (0.0, lean * 0.3, lean * 0.18),
+        )
+        shaft_h = max(height * 0.24, surviving_height - height * 0.13)
+        cylinder(
+            radius,
+            shaft_h,
+            (x, y, height * 0.09 + base_h + shaft_h * 0.5),
+            STONE,
+            14,
+            radius_top=radius * 0.82,
+        )
+        if not broken:
+            cap_z = height * 0.09 + base_h + shaft_h
+            box((radius * 2.55, radius * 2.35, height * 0.055), (x, y, cap_z), STONE, 0.018)
+            box(
+                (radius * 3.05, radius * 2.65, height * 0.045),
+                (x, y, cap_z + height * 0.047),
+                STONE,
+                0.014,
+                (0.0, lean * 0.22, lean * 0.12),
+            )
+
+    def pediment(width_value, depth_value, base_z, rise, center_x=0.0):
+        half_w = width_value * 0.5
+        half_d = depth_value * 0.5
+        verts = [
+            bm.verts.new((center_x - half_w, -half_d, base_z)),
+            bm.verts.new((center_x + half_w, -half_d, base_z)),
+            bm.verts.new((center_x, -half_d, base_z + rise)),
+            bm.verts.new((center_x - half_w, half_d, base_z)),
+            bm.verts.new((center_x + half_w, half_d, base_z)),
+            bm.verts.new((center_x, half_d, base_z + rise)),
+        ]
+        faces = [
+            bm.faces.new((verts[0], verts[1], verts[2])),
+            bm.faces.new((verts[5], verts[4], verts[3])),
+            bm.faces.new((verts[0], verts[3], verts[4], verts[1])),
+            bm.faces.new((verts[1], verts[4], verts[5], verts[2])),
+            bm.faces.new((verts[2], verts[5], verts[3], verts[0])),
+        ]
+        return mark(faces, STONE)
+
+    # Every variant shares a partially buried two-step stereobate. Uneven slabs
+    # and a missing corner prevent the perfect white wedding-cake look.
+    podium_h = height * 0.09
+    box(
+        (width, depth, podium_h),
+        (0.0, 0.0, podium_h * 0.5),
+        FOUNDATION,
+        0.045,
+        (0.0, 0.0, math.radians(rng.uniform(-1.2, 1.2) * damage)),
+    )
+    box(
+        (width * 0.86, depth * 0.82, podium_h * 0.72),
+        (-width * 0.025, depth * 0.015, podium_h * 1.32),
+        STONE,
+        0.035,
+        (0.0, math.radians(rng.uniform(-1.0, 1.0) * damage), 0.0),
+    )
+
+    if style == "shrine":
+        column_h = height * 0.72
+        column(-width * 0.25, -depth * 0.22, column_h, broken=False, lean=-0.018 * damage)
+        column(width * 0.25, -depth * 0.22, column_h * (0.54 + damage * 0.08), broken=True)
+        column(-width * 0.25, depth * 0.22, column_h * 0.82, broken=False, lean=0.024 * damage)
+        column(width * 0.25, depth * 0.22, column_h * 0.42, broken=True)
+        lintel_z = height * 0.91
+        box(
+            (width * 0.68, depth * 0.18, height * 0.095),
+            (-width * 0.04, -depth * 0.22, lintel_z),
+            STONE,
+            0.028,
+            (0.0, math.radians(-2.8 * damage), math.radians(1.8 * damage)),
+        )
+        pediment(width * 0.66, depth * 0.16, lintel_z + height * 0.052, height * 0.18)
+        box(
+            (width * 0.28, depth * 0.24, height * 0.28),
+            (0.0, depth * 0.1, podium_h * 2.1),
+            FOUNDATION,
+            0.03,
+        )
+        box(
+            (width * 0.2, depth * 0.018, height * 0.18),
+            (0.0, depth * 0.1 - depth * 0.13, podium_h * 2.45),
+            PATINA,
+            0.008,
+        )
+        silhouette = "ruined_doric_shrine"
+
+    elif style == "colonnade":
+        for index, x in enumerate((-width * 0.33, 0.0, width * 0.33)):
+            surviving = height * (0.72 if index == 0 else 0.48 if index == 1 else 0.84)
+            column(
+                x,
+                0.0,
+                surviving,
+                broken=index == 1,
+                lean=(index - 1) * 0.022 * damage,
+            )
+        box(
+            (width * 0.62, depth * 0.22, height * 0.1),
+            (width * 0.12, 0.0, height * 0.88),
+            STONE,
+            0.03,
+            (0.0, math.radians(3.5 * damage), math.radians(-2.2 * damage)),
+        )
+        box(
+            (width * 0.46, depth * 0.20, height * 0.085),
+            (-width * 0.22, depth * 0.26, podium_h * 2.3),
+            STONE,
+            0.025,
+            (math.radians(7.0), math.radians(-5.0), math.radians(18.0)),
+        )
+        silhouette = "broken_processional_colonnade"
+
+    else:
+        # A compact naiskos/heroon: heavy tomb core, two surviving antae and a
+        # bronze name plate. It remains unmistakable even when the camera is too
+        # far away to resolve individual column drums.
+        core_w = width * 0.54
+        core_d = depth * 0.58
+        core_h = height * 0.48
+        box(
+            (core_w, core_d, core_h),
+            (0.0, depth * 0.08, podium_h * 1.7 + core_h * 0.5),
+            FOUNDATION,
+            0.04,
+        )
+        column(-width * 0.29, -depth * 0.24, height * 0.72, broken=False)
+        column(width * 0.29, -depth * 0.24, height * 0.55, broken=True)
+        lintel_z = height * 0.80
+        box(
+            (width * 0.74, depth * 0.18, height * 0.10),
+            (-width * 0.02, -depth * 0.24, lintel_z),
+            STONE,
+            0.026,
+            (0.0, math.radians(-2.0 * damage), math.radians(1.5 * damage)),
+        )
+        pediment(width * 0.71, depth * 0.16, lintel_z + height * 0.055, height * 0.19)
+        box(
+            (core_w * 0.54, depth * 0.025, core_h * 0.33),
+            (0.0, -core_d * 0.51 + depth * 0.08, podium_h * 1.7 + core_h * 0.55),
+            PATINA,
+            0.009,
+        )
+        silhouette = "weathered_hero_tomb"
+
+    # Fallen drums and cap fragments tell the damage story at ground level.
+    drum_radius = width * 0.052
+    for index in range(3 if style != "colonnade" else 4):
+        side = -1.0 if index % 2 == 0 else 1.0
+        x = side * width * (0.27 + index * 0.045)
+        y = depth * (-0.33 + index * 0.22)
+        cylinder(
+            drum_radius * (0.92 + rng.uniform(-0.08, 0.08)),
+            width * (0.15 + rng.uniform(-0.025, 0.035)),
+            (x, y, podium_h * 1.88 + drum_radius),
+            STONE,
+            12,
+            axis="x" if index % 2 == 0 else "y",
+        )
+    for index in range(5):
+        angle = rng.uniform(0.0, math.tau)
+        distance = rng.uniform(width * 0.32, width * 0.54)
+        scale = rng.uniform(width * 0.035, width * 0.07)
+        rubble = mesh_lib.add_icosphere(
+            bm,
+            radius=scale,
+            subdivisions=1,
+            center=(
+                math.cos(angle) * distance,
+                math.sin(angle) * distance * depth / width,
+                podium_h + scale * 0.65,
+            ),
+        )
+        mark(rubble, FOUNDATION if index % 2 else STONE)
+
+    mesh_lib.cleanup(bm, merge_dist=1e-4)
+    obj = mesh_lib.to_object(bm, scene_lib.unique_name(name))
+    for material in materials:
+        obj.data.materials.append(material)
+    obj.location = location
+    obj.rotation_euler = (0.0, 0.0, math.radians(rotation))
+    obj["bforge_architecture"] = "hellenic_ruin"
+    obj["bforge_ruin_style"] = style
+    obj["bforge_parts"] = parts
+    result = finish_lib.finish(
+        ctx,
+        obj,
+        material="",
+        uv="box",
+        uv_scale=max(0.1, float(uv_scale)),
+        origin="world",
+        smooth=False,
+    )
+    result.update(
+        {
+            "style": style,
+            "silhouette": silhouette,
+            "parts": parts,
+            "weathering": round(damage, 3),
+        }
+    )
+    finish_lib.budget_note(ctx, obj, 7_500)
+    return result

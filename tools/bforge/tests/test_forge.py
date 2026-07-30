@@ -434,6 +434,60 @@ class Architecture(ForgeCase):
         self.assertEqual(family["arrow"]["triangles"], repeated["triangles"])
         self.assertEqual(family["arrow"]["bounds"], repeated["bounds"])
 
+    def test_hellenic_ruins_are_grounded_distinct_landmarks(self):
+        expected = {
+            "shrine": "ruined_doric_shrine",
+            "colonnade": "broken_processional_colonnade",
+            "tomb": "weathered_hero_tomb",
+        }
+        family = {}
+        for index, (style, silhouette) in enumerate(expected.items()):
+            self.forge.call("session.reset")
+            ruin = self.forge.call(
+                "arch.hellenic_ruin",
+                name=f"ruin_{style}",
+                style=style,
+                width=5.2,
+                depth=3.8,
+                height=4.2,
+                weathering=0.72,
+                seed=83 + index,
+            )
+            family[style] = ruin
+            self.assertEqual(ruin["style"], style)
+            self.assertEqual(ruin["silhouette"], silhouette)
+            self.assertEqual(ruin["weathering"], 0.72)
+            self.assertGreaterEqual(ruin["parts"], 18)
+            self.assertGreater(ruin["triangles"], 900)
+            self.assertLess(ruin["triangles"], 7_500)
+            self.assertAlmostEqual(ruin["bounds"]["min"][2], 0.0, places=3)
+            self.assertGreater(ruin["bounds"]["size"][0], 4.8)
+            self.assertGreater(ruin["bounds"]["size"][1], 3.4)
+            self.assertEqual(
+                ruin["materials"],
+                ["m_ruin_limestone", "m_ruin_foundation", "m_ruin_patina"],
+            )
+
+        self.assertEqual(len({item["silhouette"] for item in family.values()}), 3)
+        self.assertGreater(
+            family["shrine"]["bounds"]["size"][2],
+            family["colonnade"]["bounds"]["size"][2],
+        )
+
+        self.forge.call("session.reset")
+        repeated = self.forge.call(
+            "arch.hellenic_ruin",
+            name="ruin_shrine",
+            style="shrine",
+            width=5.2,
+            depth=3.8,
+            height=4.2,
+            weathering=0.72,
+            seed=83,
+        )
+        self.assertEqual(family["shrine"]["triangles"], repeated["triangles"])
+        self.assertEqual(family["shrine"]["bounds"], repeated["bounds"])
+
     def test_field_building_family_is_serious_distinct_and_deterministic(self):
         expected = {
             "farm": ("furrowed_olive_plot", 3.4, 3.4, 1.8),

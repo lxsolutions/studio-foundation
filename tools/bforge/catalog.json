@@ -670,6 +670,104 @@
       }
     },
     {
+      "name": "arch.hellenic_ruin",
+      "summary": "A grounded archaeological Greek landmark authored as a ruined Doric shrine, broken colonnade, or hero tomb. Broad podiums, uneven standing columns, fallen drums, displaced lintels, pediment fragments and restrained bronze votives produce serious navigation silhouettes from FPS through RTS distance.",
+      "tags": [
+        "build",
+        "architecture",
+        "environment",
+        "landmark",
+        "greek"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name",
+            "default": "hellenic_ruin"
+          },
+          "style": {
+            "type": "string",
+            "enum": [
+              "shrine",
+              "colonnade",
+              "tomb"
+            ],
+            "description": "Archaeological landmark silhouette",
+            "default": "shrine"
+          },
+          "width": {
+            "type": "number",
+            "description": "Overall footprint width in metres",
+            "default": 5.2
+          },
+          "depth": {
+            "type": "number",
+            "description": "Overall footprint depth in metres",
+            "default": 3.8
+          },
+          "height": {
+            "type": "number",
+            "description": "Tallest surviving architectural extent",
+            "default": 4.2
+          },
+          "weathering": {
+            "type": "number",
+            "description": "Damage strength from restrained wear to heavily displaced remains",
+            "default": 0.65
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Deterministic fracture and rubble seed",
+            "default": 0
+          },
+          "stone_color": {
+            "type": "string",
+            "description": "Weathered Attic limestone",
+            "default": "#8b8374"
+          },
+          "foundation_color": {
+            "type": "string",
+            "description": "Dark podium, crevice and buried stone",
+            "default": "#46433d"
+          },
+          "patina_color": {
+            "type": "string",
+            "description": "Tarnished bronze votive and inscription colour",
+            "default": "#52645b"
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World position",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "rotation": {
+            "type": "number",
+            "description": "Yaw in degrees",
+            "default": 0.0
+          },
+          "uv_scale": {
+            "type": "number",
+            "description": "Metres per UV tile",
+            "default": 0.8
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "build.array",
       "summary": "Repeat an object along a vector, or in a 2D/3D grid. Fences, columns, pipes, city blocks, crowd props.",
       "tags": [

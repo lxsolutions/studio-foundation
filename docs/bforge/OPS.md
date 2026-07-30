@@ -1,6 +1,6 @@
 # bforge op reference
 
-119 operations.
+120 operations.
 
 ## `arch.*`
 
@@ -144,6 +144,26 @@ A monumental arched gate — the triumphal entrance every Roman venue frames its
 | `material` | string | 'stone' | Material preset |
 | `color` | string | '' | Override colour |
 | `uv_scale` | number | 3.0 | Metres per UV tile |
+
+### `arch.hellenic_ruin`
+
+A grounded archaeological Greek landmark authored as a ruined Doric shrine, broken colonnade, or hero tomb. Broad podiums, uneven standing columns, fallen drums, displaced lintels, pediment fragments and restrained bronze votives produce serious navigation silhouettes from FPS through RTS distance.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `name` | string | 'hellenic_ruin' | Object name |
+| `style` | shrine \| colonnade \| tomb | 'shrine' | Archaeological landmark silhouette |
+| `width` | number | 5.2 | Overall footprint width in metres |
+| `depth` | number | 3.8 | Overall footprint depth in metres |
+| `height` | number | 4.2 | Tallest surviving architectural extent |
+| `weathering` | number | 0.65 | Damage strength from restrained wear to heavily displaced remains |
+| `seed` | integer | 0 | Deterministic fracture and rubble seed |
+| `stone_color` | string | '#8b8374' | Weathered Attic limestone |
+| `foundation_color` | string | '#46433d' | Dark podium, crevice and buried stone |
+| `patina_color` | string | '#52645b' | Tarnished bronze votive and inscription colour |
+| `location` | array | [0.0, 0.0, 0.0] | World position |
+| `rotation` | number | 0.0 | Yaw in degrees |
+| `uv_scale` | number | 0.8 | Metres per UV tile |
 
 ## `build.*`
 

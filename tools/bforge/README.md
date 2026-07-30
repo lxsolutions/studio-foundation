@@ -112,6 +112,27 @@ coupling art to simulation.
 
 ![Spike Greek field-building review sheet](../../docs/bforge/img/spike_field_barracks.png)
 
+`arch.hellenic_ruin` adds a reusable landmark tier above road stelae. Shrine,
+colonnade and hero-tomb programmes share one weathered limestone/foundation/
+patina material contract, but author different structural grammar: displaced
+Doric pediments and altar, an asymmetric processional column line, or a heavy
+heroon burial core. Fallen drums and rubble are generated as parts of the
+joined ground-origin mesh, so the silhouette and footprint stay deterministic
+across rebuilds.
+
+| programme | triangles | GLB | bounds |
+| --- | ---: | ---: | ---: |
+| ruined shrine | 2,588 | 205 KB | 5.61 × 4.05 × 5.25 m |
+| broken colonnade | 2,340 | 181 KB | 6.42 × 3.38 × 4.00 m |
+| hero tomb | 1,828 | 144 KB | 5.42 × 4.02 × 4.60 m |
+
+Spike uses the three as seeded wilderness districts visible from FPS, Hero and
+Commander cameras. Strict audits pass with zero errors and zero warnings; the
+live regression also proves grounded bounds, distinct silhouettes and
+deterministic regeneration.
+
+![Spike Hellenic ruin review sheet](../../docs/bforge/img/spike_hellenic_ruin_v1.png)
+
 Spike's delver exposed a different pipeline failure: a nominally
 "realistic" humanoid could still be a tube-limbed mannequin, and the active
 Death action could make its automatic review sheet look collapsed. The
@@ -245,7 +266,7 @@ tools/bforge/
     daemon.py          JSON-line RPC loop
     registry.py        @op decorator: types, coercion, schema generation
     lib/               mesh, uvs, materials, scene-graph, finishing pass
-    ops/               the 117 operations, grouped by namespace
+    ops/               the 120 operations, grouped by namespace
   catalog.json       committed op snapshot (so tools/list needs no Blender)
   tests/             unit + live-integration + visual gallery
 ```
@@ -280,7 +301,7 @@ in this repo's `.mcp.json`:
 ```
 
 Five tools by default — `bforge_ops`, `bforge_describe`, `bforge_run`,
-`bforge_run_batch`, `bforge_session` — because 119 individual MCP tools swamps
+`bforge_run_batch`, `bforge_session` — because 120 individual MCP tools swamps
 most clients' tool lists. `bforge_run_batch` builds a whole asset in one round
 trip. Pass `--tools full` to expose every op as its own MCP tool instead.
 
