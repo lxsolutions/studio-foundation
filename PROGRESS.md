@@ -1401,3 +1401,40 @@ without Blender. Previously the only way to discover that was to forge and fail.
 
 The MCP self-check reporting 110 ops also confirms the catalog and runtime agree
 again, which they did not two rounds ago.
+
+## R35 — the forged crossbow loads and is standing on end: Z-up, again
+
+`loadForged` works. The frame shows the crossbow's real parts -- stirrup ring,
+riser plate, string bars -- so resolution, disposal and vertex colours are all
+fine. The asset is **rotated 90 degrees**: the riser reads as an enormous flat
+plate across the frame, the strings as vertical bars, the stirrup floating above.
+
+Cause: **Blender is Z-up and glTF is Y-up.** The exporter maps `(x, y, z)` to
+`(x, z, -y)`, so the +Z axis I built "forward" along becomes UP. Every offset in
+the recipe -- stock depth, riser at z=0.40, stirrup at z=0.50, string at z=0.255 --
+was authored as forward and arrives as vertical.
+
+**This is the second time this exact trap has cost a round in this session.** It
+was already written down, in this file, from the interior work: "Blender is Z-up;
+glTF converts (x,y,z) -> (x, z, -y). The room's Blender footprint of 0..16 on Y
+therefore lands on NEGATIVE Z." Knowing it was not enough; nothing in the pipeline
+enforces it.
+
+**The fix belongs in the tool, not in the recipe.** A per-recipe rotation is a
+patch each author has to remember, and this author already forgot once. Candidates,
+in order of preference:
+1. `export.gltf` gains an explicit `forward` axis argument, so a recipe declares
+   its intent and the export honours it.
+2. `check.critique` gains an orientation finding: a prop whose bounding box is
+   tallest along the axis that becomes UP, when its name suggests a held or
+   wheeled object, is almost certainly authored in the wrong axis.
+3. At minimum, the bforge skill documentation states the convention where a recipe
+   author reads it, next to the ops that place things.
+
+Option 1 is a real fix; option 2 catches the mistake even when the author does not
+declare anything, which is the case that actually happened. Both are cheap.
+
+**Not applied blind:** the immediate one-line scene-side rotation is not committed,
+because guessing the sign and burning a ten-minute build I cannot then verify is
+how the last two rounds went wrong. The forge-side fix and a re-measure is the
+right order.
