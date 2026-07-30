@@ -68,9 +68,18 @@ def check_asset(ctx, triangle_budget, material_budget, require_collision, requir
         )
 
     for obj in all_meshes:
-        clean = all(abs(a) < 1e-5 for a in obj.rotation_euler) and all(
-            abs(s - 1.0) < 1e-5 for s in obj.scale
+        bone_attachment = (
+            obj.parent_type == "BONE"
+            and obj.parent is not None
+            and obj.parent.type == "ARMATURE"
         )
+        # A bone-attached prop necessarily carries a local rotation/offset: that
+        # is how a vertical spear is aligned to a hand bone. Applying it after
+        # parenting destroys the authored attachment. Scale must still be clean.
+        clean = (
+            bone_attachment
+            or all(abs(a) < 1e-5 for a in obj.rotation_euler)
+        ) and all(abs(s - 1.0) < 1e-5 for s in obj.scale)
         record(
             f"transforms:{obj.name}",
             clean,

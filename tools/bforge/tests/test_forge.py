@@ -563,6 +563,88 @@ class Characters(ForgeCase):
             self.forge.call("char.outfit", name="hero")
         self.assertIn("before char.rig", str(ctx.exception))
 
+    def test_skeleton_body_outfits_rigs_and_animates(self):
+        bones = self.forge.call(
+            "char.skeleton",
+            name="peltast",
+            height=1.86,
+            build="lithe",
+            detail=8,
+        )
+        self.assertEqual(bones["anatomy"], "joined_bone_body")
+        self.assertEqual(len(bones["materials"]), 2)
+        self.assertGreater(bones["triangles"], 1000)
+        self.assertLess(bones["triangles"], 5000)
+        self.assertAlmostEqual(bones["bounds"]["min"][2], 0.0, places=3)
+
+        dressed = self.forge.call(
+            "char.outfit",
+            name="peltast",
+            style="peltast",
+            detail=8,
+        )
+        self.assertGreater(dressed["triangles"], bones["triangles"])
+        self.assertGreaterEqual(len(dressed["materials"]), 6)
+        rig = self.forge.call(
+            "char.rig",
+            name="peltast",
+            height=1.86,
+            build="lithe",
+        )
+        self.assertEqual(rig["weighted_vertices"], dressed["vertices"])
+        walk = self.forge.call(
+            "char.animate",
+            rig=rig["armature"],
+            clip="walk",
+            length=24,
+        )
+        self.assertGreater(walk["keyframes"], 0)
+
+
+class Creatures(ForgeCase):
+    def test_hound_is_deterministic_grounded_multi_material_geometry(self):
+        first = self.forge.call(
+            "creature.hound",
+            name="hound",
+            length=1.75,
+            shoulder_height=1.0,
+            detail=8,
+        )
+        self.assertEqual(first["creature"], "hound")
+        self.assertEqual(len(first["materials"]), 4)
+        self.assertGreater(first["triangles"], 700)
+        self.assertLess(first["triangles"], 5000)
+        self.assertAlmostEqual(first["bounds"]["min"][2], 0.0, places=3)
+        self.assertGreater(first["bounds"]["size"][1], first["bounds"]["size"][2])
+
+        self.forge.call("session.reset")
+        second = self.forge.call(
+            "creature.hound",
+            name="hound",
+            length=1.75,
+            shoulder_height=1.0,
+            detail=8,
+        )
+        self.assertEqual(first["triangles"], second["triangles"])
+        self.assertEqual(first["bounds"], second["bounds"])
+
+    def test_scarab_is_low_wide_grounded_multi_material_geometry(self):
+        scarab = self.forge.call(
+            "creature.scarab",
+            name="scarab",
+            length=1.55,
+            width=0.95,
+            height=0.62,
+            detail=8,
+        )
+        self.assertEqual(scarab["creature"], "scarab")
+        self.assertEqual(len(scarab["materials"]), 4)
+        self.assertGreater(scarab["triangles"], 700)
+        self.assertLess(scarab["triangles"], 5000)
+        self.assertAlmostEqual(scarab["bounds"]["min"][2], 0.0, places=3)
+        self.assertGreater(scarab["bounds"]["size"][0], scarab["bounds"]["size"][2])
+        self.assertGreater(scarab["bounds"]["size"][1], scarab["bounds"]["size"][2])
+
 
 class Validation(ForgeCase):
     def test_generated_props_pass_studio_validation(self):
@@ -612,6 +694,36 @@ class Export(ForgeCase):
         with self.assertRaises(ForgeError) as ctx:
             self.forge.call("export.gltf", out="bad.glb", strict=True)
         self.assertIn("unapplied scale", str(ctx.exception))
+
+    def test_bone_attachment_rotation_is_not_an_export_warning(self):
+        self.forge.call("char.humanoid", name="hero")
+        rig = self.forge.call("char.rig", name="hero")
+        self.forge.call(
+            "build.cylinder",
+            name="spear",
+            radius=0.025,
+            depth=1.8,
+            location=[-0.2, 0.0, 0.9],
+        )
+        self.forge.call(
+            "char.attach",
+            prop="spear",
+            rig=rig["armature"],
+            bone="hand_r",
+            keep_transform=True,
+        )
+        report = self.forge.call("check.asset", triangle_budget=5000)
+        transform = next(
+            check for check in report["checks"] if check["id"] == "transforms:spear"
+        )
+        self.assertEqual(transform["level"], "ok")
+        exported = self.forge.call("export.gltf", out="attached.glb", strict=True)
+        self.assertFalse(
+            any(
+                "spear" in warning and "rotation" in warning
+                for warning in exported["warnings"]
+            )
+        )
 
     def test_strict_export_blocks_unbaked_procedural_materials(self):
         self.forge.call("build.box", name="b")

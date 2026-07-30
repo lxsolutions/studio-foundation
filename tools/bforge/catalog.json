@@ -1797,10 +1797,11 @@
     },
     {
       "name": "char.outfit",
-      "summary": "Add a production-readable rigid outfit to an unrigged humanoid, then join it into the body so char.rig skins every shell. Greek delver and hoplite styles include cuirass, straps, pteruges, helmet, bracers and greaves.",
+      "summary": "Add a production-readable rigid outfit to an unrigged humanoid, then join it into the body so char.rig skins every shell. Greek delver, hoplite and peltast armour include cuirass, straps, pteruges, helmets, bracers and greaves; stalker and oracle add role-readable undead hoods, masks and robes.",
       "tags": [
         "char",
-        "armour"
+        "armour",
+        "undead"
       ],
       "mutates": true,
       "returns": "object",
@@ -1815,7 +1816,10 @@
             "type": "string",
             "enum": [
               "greek_delver",
-              "hoplite"
+              "hoplite",
+              "peltast",
+              "stalker",
+              "oracle"
             ],
             "description": "Outfit silhouette",
             "default": "greek_delver"
@@ -1928,6 +1932,77 @@
             "type": "string",
             "description": "Armature object name (defaults to <mesh>_rig)",
             "default": ""
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "char.skeleton",
+      "summary": "Build an anatomically readable bone-body on the same proportions as char.humanoid. The joined rib cage, skull, long bones and dark sockets remain compatible with char.outfit, char.rig and char.animate.",
+      "tags": [
+        "char",
+        "creature",
+        "undead"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name",
+            "default": "skeleton"
+          },
+          "height": {
+            "type": "number",
+            "description": "Total height in metres",
+            "default": 1.86
+          },
+          "build": {
+            "type": "string",
+            "enum": [
+              "realistic",
+              "heroic",
+              "lithe"
+            ],
+            "description": "Bone proportions",
+            "default": "lithe"
+          },
+          "detail": {
+            "type": "integer",
+            "description": "Bone cross-section segments, 6-12",
+            "default": 8
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World position",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "bone": {
+            "type": "string",
+            "description": "Aged bone colour",
+            "default": "#b8ad92"
+          },
+          "socket": {
+            "type": "string",
+            "description": "Eye, nose and mouth cavity colour",
+            "default": "#171817"
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Random seed",
+            "default": 0
           }
         },
         "additionalProperties": false
@@ -2058,6 +2133,158 @@
             "type": "integer",
             "description": "Rays per axis for the projected-area estimate",
             "default": 64
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "creature.hound",
+      "summary": "Build a gaunt game-ready war hound with readable canine anatomy, bent legs, muzzle, ears, segmented tail and a separate bronze collar. The joined mesh can be exported static or bound to a custom quadruped rig.",
+      "tags": [
+        "creature",
+        "quadruped",
+        "game"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name",
+            "default": "war_hound"
+          },
+          "length": {
+            "type": "number",
+            "description": "Nose-to-rump length in metres",
+            "default": 1.75
+          },
+          "shoulder_height": {
+            "type": "number",
+            "description": "Ground-to-shoulder height",
+            "default": 1.0
+          },
+          "bulk": {
+            "type": "number",
+            "description": "Torso and limb thickness multiplier",
+            "default": 1.0
+          },
+          "detail": {
+            "type": "integer",
+            "description": "Radial segment count, 6-12",
+            "default": 8
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World position",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "hide": {
+            "type": "string",
+            "description": "Dark hide colour",
+            "default": "#25231f"
+          },
+          "leather": {
+            "type": "string",
+            "description": "Collar leather colour",
+            "default": "#3b241c"
+          },
+          "metal": {
+            "type": "string",
+            "description": "Collar and spike metal colour",
+            "default": "#6f4d2b"
+          },
+          "eyes": {
+            "type": "string",
+            "description": "Eye colour",
+            "default": "#9b5428"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "creature.scarab",
+      "summary": "Build a low, wide carrion scarab with layered segmented shell plates, six bent legs, hooked forelimbs and mandibles. The joined multi-material mesh is readable from an isometric camera and ready for a custom rig.",
+      "tags": [
+        "creature",
+        "arthropod",
+        "game"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name",
+            "default": "carrion_scarab"
+          },
+          "length": {
+            "type": "number",
+            "description": "Mandible-to-abdomen length in metres",
+            "default": 1.55
+          },
+          "width": {
+            "type": "number",
+            "description": "Maximum shell width",
+            "default": 0.95
+          },
+          "height": {
+            "type": "number",
+            "description": "Maximum shell height",
+            "default": 0.62
+          },
+          "detail": {
+            "type": "integer",
+            "description": "Radial segment count, 6-12",
+            "default": 8
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World position",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "shell": {
+            "type": "string",
+            "description": "Aged shell colour",
+            "default": "#4e3925"
+          },
+          "edge": {
+            "type": "string",
+            "description": "Raised shell-edge colour",
+            "default": "#84603a"
+          },
+          "body": {
+            "type": "string",
+            "description": "Underside and leg colour",
+            "default": "#171715"
+          },
+          "eyes": {
+            "type": "string",
+            "description": "Eye colour",
+            "default": "#8d3f22"
           }
         },
         "additionalProperties": false

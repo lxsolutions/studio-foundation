@@ -168,12 +168,17 @@ def _preflight(meshes):
     for obj in meshes:
         name = obj.name
         scale = obj.scale
+        bone_attachment = (
+            obj.parent_type == "BONE"
+            and obj.parent is not None
+            and obj.parent.type == "ARMATURE"
+        )
         if any(abs(s - 1.0) > 1e-4 for s in scale):
             problems.append(
                 f"'{name}' has unapplied scale {[round(s, 3) for s in scale]} — the engine will "
                 "import it at the wrong size. Run object.transform apply=true."
             )
-        if any(abs(r) > 1e-4 for r in obj.rotation_euler):
+        if not bone_attachment and any(abs(r) > 1e-4 for r in obj.rotation_euler):
             warnings.append(
                 f"'{name}' has unapplied rotation; most engines handle this, but physics and "
                 "spawn alignment get confusing. Run object.transform apply=true."

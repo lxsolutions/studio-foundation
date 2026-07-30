@@ -20,7 +20,6 @@ from lib import finish as finish_lib
 from lib import mat as mat_lib
 from lib import mesh as mesh_lib
 from lib import scene as scene_lib
-from lib import uvs as uv_lib
 from mathutils import Matrix, Vector
 from registry import OpError, op
 
@@ -203,22 +202,262 @@ def char_humanoid(ctx, name, height, build, bulk, detail, location, skin, seed):
 
 
 @op(
+    "char.skeleton",
+    summary=(
+        "Build an anatomically readable bone-body on the same proportions as "
+        "char.humanoid. The joined rib cage, skull, long bones and dark sockets "
+        "remain compatible with char.outfit, char.rig and char.animate."
+    ),
+    params={
+        "name": ("str", "skeleton", "Object name"),
+        "height": ("num", 1.86, "Total height in metres"),
+        "build": ("enum:realistic|heroic|lithe", "lithe", "Bone proportions"),
+        "detail": ("int", 8, "Bone cross-section segments, 6-12"),
+        "location": ("vec3", [0.0, 0.0, 0.0], "World position"),
+        "bone": ("str", "#b8ad92", "Aged bone colour"),
+        "socket": ("str", "#171817", "Eye, nose and mouth cavity colour"),
+        "seed": ("int", 0, "Random seed"),
+    },
+    tags=["char", "creature", "undead"],
+)
+def char_skeleton(ctx, name, height, build, detail, location, bone, socket, seed):
+    ctx.reseed(seed)
+    joints, spec, head_unit = _skeleton(height, build)
+    sides = max(6, min(12, detail))
+    bone_bm = mesh_lib.new_bmesh()
+    socket_bm = mesh_lib.new_bmesh()
+
+    def absorb_primitive(target, primitive, matrix=None):
+        piece = mesh_lib.new_bmesh()
+        primitive(piece)
+        if matrix is not None:
+            bmesh_transform(piece, matrix)
+        _absorb(target, piece)
+
+    def limb(a, b, radius_a, radius_b=None, *, offset=(0.0, 0.0, 0.0)):
+        start = Vector(a) + Vector(offset)
+        end = Vector(b) + Vector(offset)
+        axis = end - start
+        if axis.length < 1e-5:
+            return
+        top = radius_a if radius_b is None else radius_b
+        matrix = (
+            Matrix.Translation(start)
+            @ axis.normalized().to_track_quat("Z", "Y").to_matrix().to_4x4()
+        )
+        absorb_primitive(
+            bone_bm,
+            lambda bm: mesh_lib.add_cylinder(
+                bm,
+                radius=radius_a,
+                radius_top=top,
+                depth=axis.length,
+                segments=sides,
+                center=(0.0, 0.0, axis.length * 0.5),
+            ),
+            matrix,
+        )
+
+    def blob(target, center, radius, scale=(1.0, 1.0, 1.0), subdivisions=1):
+        matrix = (
+            Matrix.Translation(Vector(center))
+            @ Matrix.Diagonal(Vector((*scale, 1.0)))
+        )
+        absorb_primitive(
+            target,
+            lambda bm: mesh_lib.add_icosphere(
+                bm, radius=radius, subdivisions=subdivisions
+            ),
+            matrix,
+        )
+
+    # Spine, sternum and collar establish the torso even before the ribs are
+    # visible. Bone cylinders are deliberately narrower than a living body's
+    # limbs so an RTS silhouette cannot be mistaken for a recoloured human.
+    limb(joints["hips"][0], joints["chest"][1], height * 0.019, height * 0.014)
+    sternum_a = (0.0, -height * 0.052, height * 0.585)
+    sternum_b = (0.0, -height * 0.058, height * 0.785)
+    limb(sternum_a, sternum_b, height * 0.012)
+    for _side, sign in (("l", 1.0), ("r", -1.0)):
+        collar_end = (
+            sign * height * spec["shoulder"] * 0.43,
+            -height * 0.012,
+            height * 0.79,
+        )
+        limb((0.0, 0.0, height * 0.775), collar_end, height * 0.014, height * 0.011)
+
+    # Five elliptical rib rings retain negative space. Full rings are cheaper
+    # and more legible at game distance than dozens of fragile individual arcs.
+    for index in range(5):
+        z = height * (0.61 + index * 0.037)
+        taper = 1.0 - abs(index - 2) * 0.085
+        matrix = (
+            Matrix.Translation(Vector((0.0, 0.0, z)))
+            @ Matrix.Diagonal(Vector((taper, 0.52, 1.0, 1.0)))
+        )
+        absorb_primitive(
+            bone_bm,
+            lambda bm, major=height * 0.112, minor=height * 0.0085: mesh_lib.add_torus(
+                bm,
+                major=major,
+                minor=minor,
+                major_segments=max(12, sides * 2),
+                minor_segments=5,
+            ),
+            matrix,
+        )
+
+    # Pelvic ring and sacrum.
+    absorb_primitive(
+        bone_bm,
+        lambda bm: mesh_lib.add_torus(
+            bm,
+            major=height * 0.075,
+            minor=height * 0.014,
+            major_segments=max(12, sides * 2),
+            minor_segments=6,
+        ),
+        Matrix.Translation(Vector((0.0, 0.0, height * 0.495)))
+        @ Matrix.Diagonal(Vector((1.28, 0.7, 1.0, 1.0))),
+    )
+    blob(bone_bm, (0.0, 0.0, height * 0.505), height * 0.035, (0.72, 0.5, 1.05))
+
+    for side, _sign in (("l", 1.0), ("r", -1.0)):
+        # Two long bones per major limb make the skeletal construction explicit.
+        for bone_name, radius, separation in (
+            (f"upper_arm_{side}", height * 0.013, height * 0.009),
+            (f"forearm_{side}", height * 0.010, height * 0.008),
+            (f"thigh_{side}", height * 0.016, height * 0.010),
+            (f"shin_{side}", height * 0.012, height * 0.009),
+        ):
+            a, b = joints[bone_name]
+            limb(a, b, radius, radius * 0.82, offset=(0.0, -separation, 0.0))
+            limb(a, b, radius * 0.82, radius * 0.7, offset=(0.0, separation, 0.0))
+            blob(bone_bm, a, radius * 1.65, (1.0, 0.86, 1.0))
+            blob(bone_bm, b, radius * 1.45, (1.0, 0.86, 1.0))
+
+        shoulder_a, shoulder_b = joints[f"shoulder_{side}"]
+        limb(shoulder_a, shoulder_b, height * 0.014, height * 0.012)
+        hand_a, hand_b = joints[f"hand_{side}"]
+        hand_center = Vector(hand_a).lerp(Vector(hand_b), 0.55)
+        blob(
+            bone_bm,
+            hand_center,
+            height * 0.026,
+            (0.64, 0.82, 1.18),
+        )
+        foot_a, foot_b = joints[f"foot_{side}"]
+        foot_center = Vector(foot_a).lerp(Vector(foot_b), 0.58)
+        blob(
+            bone_bm,
+            (foot_center.x, foot_center.y, height * 0.03),
+            height * 0.029,
+            (0.72, 1.6, 0.45),
+        )
+
+    # Low-poly skull, jaw and cheek bones. Dark inset meshes create actual eye
+    # and nasal cavities after export instead of painted dots.
+    head_center = Vector(joints["head"][0]).lerp(Vector(joints["head"][1]), 0.57)
+    skull_r = head_unit * 0.43
+    blob(bone_bm, head_center, skull_r, (0.83, 0.91, 1.0), subdivisions=2)
+    jaw_z = head_center.z - skull_r * 0.68
+    absorb_primitive(
+        bone_bm,
+        lambda bm: mesh_lib.add_box(
+            bm,
+            size=(skull_r * 1.18, skull_r * 0.78, skull_r * 0.42),
+            bevel=skull_r * 0.08,
+            segments=1,
+        ),
+        Matrix.Translation(Vector((0.0, -skull_r * 0.12, jaw_z))),
+    )
+    for sign in (-1.0, 1.0):
+        blob(
+            socket_bm,
+            (
+                sign * skull_r * 0.34,
+                head_center.y - skull_r * 0.78,
+                head_center.z + skull_r * 0.16,
+            ),
+            skull_r * 0.24,
+            (1.08, 0.34, 0.86),
+        )
+    blob(
+        socket_bm,
+        (0.0, head_center.y - skull_r * 0.84, head_center.z - skull_r * 0.12),
+        skull_r * 0.13,
+        (0.72, 0.3, 1.15),
+    )
+    absorb_primitive(
+        socket_bm,
+        lambda bm: mesh_lib.add_box(
+            bm,
+            size=(skull_r * 0.82, skull_r * 0.08, skull_r * 0.11),
+            bevel=skull_r * 0.015,
+            segments=1,
+        ),
+        Matrix.Translation(Vector((0.0, -skull_r * 0.54, jaw_z))),
+    )
+
+    mesh_lib.cleanup(bone_bm, merge_dist=height * 0.0008)
+    mesh_lib.cleanup(socket_bm, merge_dist=height * 0.0008)
+    bone_obj = mesh_lib.to_object(bone_bm, scene_lib.unique_name(name))
+    socket_obj = mesh_lib.to_object(socket_bm, scene_lib.unique_name(f"{name}_sockets"))
+    bone_obj.location = location
+    socket_obj.location = location
+    bone_mat = mat_lib.principled(
+        f"m_{bone_obj.name}_bone", color=bone, roughness=0.88, metallic=0.0
+    )
+    socket_mat = mat_lib.principled(
+        f"m_{bone_obj.name}_sockets", color=socket, roughness=1.0, metallic=0.0
+    )
+    finish_lib.finish(
+        ctx, bone_obj, material=bone_mat, uv="smart_packed", origin=None,
+        smooth=True, smooth_angle=48.0,
+    )
+    finish_lib.finish(
+        ctx, socket_obj, material=socket_mat, uv="smart_packed", origin=None,
+        smooth=True, smooth_angle=48.0,
+    )
+    merged = scene_lib.join([bone_obj, socket_obj], bone_obj.name)
+    scene_lib.set_origin(merged, "bottom")
+    scene_lib.apply_transforms(merged)
+    mesh_lib.shade_auto_smooth(merged, 50.0)
+    result = finish_lib.report(ctx, merged)
+    result["build"] = build
+    result["height_m"] = height
+    result["head_unit_m"] = round(head_unit, 4)
+    result["anatomy"] = "joined_bone_body"
+    ctx.note(
+        f"'{merged.name}' is an unrigged bone-body. Add char.outfit before "
+        "char.rig; use the same height and build for deterministic skinning."
+    )
+    finish_lib.budget_note(ctx, merged, 5000)
+    return result
+
+
+@op(
     "char.outfit",
     summary=(
         "Add a production-readable rigid outfit to an unrigged humanoid, then join it "
-        "into the body so char.rig skins every shell. Greek delver and hoplite styles "
-        "include cuirass, straps, pteruges, helmet, bracers and greaves."
+        "into the body so char.rig skins every shell. Greek delver, hoplite and "
+        "peltast armour include cuirass, straps, pteruges, helmets, bracers and "
+        "greaves; stalker and oracle add role-readable undead hoods, masks and robes."
     ),
     params={
         "name": ("str", None, "Unrigged humanoid mesh from char.humanoid"),
-        "style": ("enum:greek_delver|hoplite", "greek_delver", "Outfit silhouette"),
+        "style": (
+            "enum:greek_delver|hoplite|peltast|stalker|oracle",
+            "greek_delver",
+            "Outfit silhouette",
+        ),
         "cloth": ("str", "#262522", "Coarse tunic/linen colour"),
         "leather": ("str", "#38261c", "Straps, belt and boot-wrap colour"),
         "metal": ("str", "#71502d", "Aged bronze armour colour"),
         "accent": ("str", "#d18a32", "Small lamp or crest accent"),
         "detail": ("int", 10, "Radial segment count, 8-16"),
     },
-    tags=["char", "armour"],
+    tags=["char", "armour", "undead"],
 )
 def char_outfit(ctx, name, style, cloth, leather, metal, accent, detail):
     body = _get(name)
@@ -309,16 +548,18 @@ def char_outfit(ctx, name, style, cloth, leather, metal, accent, detail):
         bmesh_transform(bm, matrix)
         return finish_part(bm, label, material)
 
-    # Layered linen beneath the metal keeps the silhouette practical rather
-    # than turning the miner into a polished parade-statue.
+    # Layered linen beneath the metal keeps the silhouette practical. Oracle
+    # robes are longer and narrower; a hoplite is the only fully armoured torso.
+    torso_depth = height * (0.38 if style == "oracle" else 0.31)
+    torso_center = height * (0.63 if style == "oracle" else 0.665)
     cylinder(
         "cuirass",
         height * 0.128,
-        height * 0.31,
-        (0.0, 0.0, height * 0.665),
+        torso_depth,
+        (0.0, 0.0, torso_center),
         metal_mat if style == "hoplite" else cloth_mat,
-        scale=(1.02, 0.62, 1.0),
-        radius_top=height * 0.152,
+        scale=(0.96 if style == "oracle" else 1.02, 0.62, 1.0),
+        radius_top=height * (0.14 if style == "oracle" else 0.152),
     )
     cylinder(
         "belt",
@@ -329,11 +570,15 @@ def char_outfit(ctx, name, style, cloth, leather, metal, accent, detail):
         scale=(1.0, 0.58, 1.0),
     )
 
-    # Crossed load-bearing straps are the close-camera cue that this is a
-    # working delver. They also break up the uninterrupted barrel of a generated
-    # torso when seen from the RTS camera.
+    # Crossed straps identify the delver and stalker; the lighter peltast gets
+    # one baldric. The hoplite cuirass and oracle collar are intentionally clean.
     front_y = -height * 0.092
-    for index, angle in enumerate((-27.0, 27.0)):
+    strap_angles = {
+        "greek_delver": (-27.0, 27.0),
+        "stalker": (-31.0, 31.0),
+        "peltast": (-29.0,),
+    }.get(style, ())
+    for index, angle in enumerate(strap_angles):
         box(
             f"chest_strap_{index}",
             (height * 0.035, height * 0.018, height * 0.31),
@@ -342,40 +587,71 @@ def char_outfit(ctx, name, style, cloth, leather, metal, accent, detail):
             rotation=(0.0, angle, 0.0),
             bevel=height * 0.004,
         )
-    box(
-        "buckle",
-        (height * 0.09, height * 0.025, height * 0.07),
-        (0.0, -height * 0.101, height * 0.505),
-        metal_mat,
-        bevel=height * 0.006,
-    )
+    if style != "oracle":
+        box(
+            "buckle",
+            (height * 0.09, height * 0.025, height * 0.07),
+            (0.0, -height * 0.101, height * 0.505),
+            metal_mat,
+            bevel=height * 0.006,
+        )
+    else:
+        cylinder(
+            "ritual_collar",
+            height * 0.155,
+            height * 0.055,
+            (0.0, 0.0, height * 0.79),
+            metal_mat,
+            scale=(1.0, 0.64, 1.0),
+            radius_top=height * 0.138,
+        )
 
     # Separate skirt plates retain negative space while sharing the hips shell
     # after char.rig, so the legs can stride without dragging one solid cone.
-    plate_count = 12 if style == "hoplite" else 10
+    plate_count = {
+        "hoplite": 12,
+        "greek_delver": 10,
+        "peltast": 8,
+        "stalker": 10,
+        "oracle": 16,
+    }[style]
+    plate_length = height * (0.36 if style == "oracle" else 0.205)
+    plate_z = height * (0.315 if style == "oracle" else 0.405)
+    plate_radius_x = height * (0.13 if style == "oracle" else 0.142)
+    plate_radius_y = height * (0.075 if style == "oracle" else 0.082)
+    plate_material = (
+        metal_mat if style == "hoplite"
+        else cloth_mat if style in {"stalker", "oracle"}
+        else leather_mat
+    )
     for index in range(plate_count):
         angle = math.tau * index / plate_count
         box(
             f"pteruge_{index:02d}",
-            (height * 0.038, height * 0.018, height * 0.205),
+            (height * 0.038, height * 0.018, plate_length),
             (
-                math.cos(angle) * height * 0.142,
-                math.sin(angle) * height * 0.082,
-                height * 0.405,
+                math.cos(angle) * plate_radius_x,
+                math.sin(angle) * plate_radius_y,
+                plate_z,
             ),
-            metal_mat if style == "hoplite" else leather_mat,
+            plate_material,
             rotation=(0.0, 0.0, math.degrees(angle)),
             bevel=height * 0.003,
         )
 
-    # One shoulder guard makes the delver asymmetrical and work-worn. A hoplite
-    # receives the paired silhouette expected of battlefield armour.
-    shoulders = ("l", "r") if style == "hoplite" else ("l",)
+    # Asymmetry distinguishes a worker or light peltast from a line soldier.
+    shoulders = {
+        "hoplite": ("l", "r"),
+        "oracle": ("l", "r"),
+        "greek_delver": ("l",),
+        "peltast": ("l",),
+        "stalker": (),
+    }[style]
     for side in shoulders:
         sign = 1.0 if side == "l" else -1.0
         ellipsoid(
             f"pauldron_{side}",
-            height * 0.062,
+            height * (0.055 if style == "oracle" else 0.062),
             (sign * height * 0.142, 0.0, height * 0.785),
             (1.45, 0.88, 0.58),
             metal_mat,
@@ -387,19 +663,20 @@ def char_outfit(ctx, name, style, cloth, leather, metal, accent, detail):
             height * 0.034,
             height * 0.17,
             (sign * height * 0.123, 0.0, height * 0.575),
-            metal_mat,
+            leather_mat if style in {"stalker", "oracle"} else metal_mat,
             scale=(1.0, 0.78, 1.0),
             radius_top=height * 0.029,
         )
-        cylinder(
-            f"greave_{side}",
-            height * 0.052,
-            height * 0.35,
-            (sign * height * 0.072, -height * 0.004, height * 0.205),
-            metal_mat,
-            scale=(1.0, 0.72, 1.0),
-            radius_top=height * 0.043,
-        )
+        if style != "oracle":
+            cylinder(
+                f"greave_{side}",
+                height * 0.052,
+                height * 0.35,
+                (sign * height * 0.072, -height * 0.004, height * 0.205),
+                leather_mat if style == "stalker" else metal_mat,
+                scale=(1.0, 0.72, 1.0),
+                radius_top=height * 0.043,
+            )
         box(
             f"boot_wrap_{side}",
             (height * 0.105, height * 0.125, height * 0.055),
@@ -408,46 +685,112 @@ def char_outfit(ctx, name, style, cloth, leather, metal, accent, detail):
             bevel=height * 0.009,
         )
 
-    # Open-faced mining helmet: a shallow bronze cap and brow leave the lower
-    # face readable, while the lamp gives the hero one unmistakable gameplay
-    # landmark at both camera scales.
-    cylinder(
-        "helmet",
-        height * 0.117,
-        height * 0.095,
-        (0.0, 0.0, height * 0.91),
-        metal_mat,
-        scale=(0.92, 0.95, 1.0),
-        radius_top=height * 0.078,
-    )
-    box(
-        "helmet_brow",
-        (height * 0.205, height * 0.035, height * 0.035),
-        (0.0, -height * 0.092, height * 0.875),
-        metal_mat,
-        bevel=height * 0.005,
-    )
-    box(
-        "helmet_spine",
-        (height * 0.022, height * 0.18, height * 0.05),
-        (0.0, 0.0, height * 0.965),
-        dark_metal_mat,
-        bevel=height * 0.004,
-    )
-    box(
-        "lamp_cage",
-        (height * 0.068, height * 0.035, height * 0.075),
-        (0.0, -height * 0.113, height * 0.925),
-        dark_metal_mat,
-        bevel=height * 0.004,
-    )
-    box(
-        "lamp",
-        (height * 0.038, height * 0.02, height * 0.045),
-        (0.0, -height * 0.132, height * 0.925),
-        accent_mat,
-        bevel=height * 0.003,
-    )
+    if style in {"greek_delver", "hoplite", "peltast"}:
+        cylinder(
+            "helmet",
+            height * 0.117,
+            height * 0.095,
+            (0.0, 0.0, height * 0.91),
+            metal_mat,
+            scale=(0.92, 0.95, 1.0),
+            radius_top=height * 0.078,
+        )
+        box(
+            "helmet_brow",
+            (height * 0.205, height * 0.035, height * 0.035),
+            (0.0, -height * 0.092, height * 0.875),
+            metal_mat,
+            bevel=height * 0.005,
+        )
+        box(
+            "helmet_spine",
+            (height * 0.022, height * 0.18, height * 0.05),
+            (0.0, 0.0, height * 0.965),
+            dark_metal_mat,
+            bevel=height * 0.004,
+        )
+        if style == "greek_delver":
+            box(
+                "lamp_cage",
+                (height * 0.068, height * 0.035, height * 0.075),
+                (0.0, -height * 0.113, height * 0.925),
+                dark_metal_mat,
+                bevel=height * 0.004,
+            )
+            box(
+                "lamp",
+                (height * 0.038, height * 0.02, height * 0.045),
+                (0.0, -height * 0.132, height * 0.925),
+                accent_mat,
+                bevel=height * 0.003,
+            )
+        else:
+            crest_height = height * (0.19 if style == "hoplite" else 0.11)
+            box(
+                "helmet_crest",
+                (height * 0.035, height * 0.18, crest_height),
+                (0.0, height * 0.015, height * (1.015 if style == "hoplite" else 0.985)),
+                accent_mat,
+                bevel=height * 0.006,
+            )
+    elif style == "stalker":
+        cylinder(
+            "hood",
+            height * 0.145,
+            height * 0.255,
+            (0.0, height * 0.005, height * 0.895),
+            cloth_mat,
+            scale=(0.94, 0.83, 1.0),
+            radius_top=height * 0.075,
+        )
+        box(
+            "hood_shadow",
+            (height * 0.16, height * 0.025, height * 0.09),
+            (0.0, -height * 0.108, height * 0.89),
+            dark_metal_mat,
+            bevel=height * 0.008,
+        )
+        box(
+            "hood_tail",
+            (height * 0.15, height * 0.035, height * 0.28),
+            (0.0, height * 0.10, height * 0.76),
+            cloth_mat,
+            rotation=(12.0, 0.0, 0.0),
+            bevel=height * 0.012,
+        )
+    else:  # oracle
+        box(
+            "funerary_mask",
+            (height * 0.17, height * 0.07, height * 0.23),
+            (0.0, -height * 0.075, height * 0.91),
+            metal_mat,
+            bevel=height * 0.012,
+        )
+        cylinder(
+            "oracle_crown",
+            height * 0.105,
+            height * 0.22,
+            (0.0, 0.0, height * 1.045),
+            metal_mat,
+            scale=(0.92, 0.88, 1.0),
+            radius_top=height * 0.082,
+        )
+        for side, sign in (("l", 1.0), ("r", -1.0)):
+            box(
+                f"oracle_veil_{side}",
+                (height * 0.075, height * 0.025, height * 0.42),
+                (sign * height * 0.105, height * 0.035, height * 0.73),
+                cloth_mat,
+                rotation=(4.0, 0.0, sign * 5.0),
+                bevel=height * 0.007,
+            )
+        box(
+            "oracle_glow",
+            (height * 0.105, height * 0.018, height * 0.025),
+            (0.0, -height * 0.118, height * 0.93),
+            accent_mat,
+            bevel=height * 0.003,
+        )
 
     merged = scene_lib.join([body, *parts], body.name)
     scene_lib.set_origin(merged, "bottom")
@@ -1061,7 +1404,7 @@ def char_bake_pose(ctx, mesh, rig, keep_groups):
         removed = target.name
         scene_lib.delete(target)
 
-    moved = max(abs(a - b) for a, b in zip(before, after))
+    moved = max(abs(a - b) for a, b in zip(before, after, strict=False))
     return {
         "mesh": obj.name,
         "rig_removed": removed,

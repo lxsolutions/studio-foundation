@@ -1,6 +1,6 @@
 # bforge op reference
 
-110 operations.
+113 operations.
 
 ## `arch.*`
 
@@ -395,12 +395,12 @@ Proportioned humanoid blockout using classic figure-drawing head ratios (7.5 rea
 
 ### `char.outfit`
 
-Add a production-readable rigid outfit to an unrigged humanoid, then join it into the body so char.rig skins every shell. Greek delver and hoplite styles include cuirass, straps, pteruges, helmet, bracers and greaves.
+Add a production-readable rigid outfit to an unrigged humanoid, then join it into the body so char.rig skins every shell. Greek delver, hoplite and peltast armour include cuirass, straps, pteruges, helmets, bracers and greaves; stalker and oracle add role-readable undead hoods, masks and robes.
 
 | parameter | type | default | description |
 | --- | --- | --- | --- |
 | `name` | string | None | Unrigged humanoid mesh from char.humanoid |
-| `style` | greek_delver \| hoplite | 'greek_delver' | Outfit silhouette |
+| `style` | greek_delver \| hoplite \| peltast \| stalker \| oracle | 'greek_delver' | Outfit silhouette |
 | `cloth` | string | '#262522' | Coarse tunic/linen colour |
 | `leather` | string | '#38261c' | Straps, belt and boot-wrap colour |
 | `metal` | string | '#71502d' | Aged bronze armour colour |
@@ -428,6 +428,21 @@ Build a humanoid armature fitted to a mesh and skin it with distance-falloff wei
 | `build` | realistic \| heroic \| stylized \| chibi \| lithe | 'heroic' | Proportions the rig assumes — match char.humanoid |
 | `falloff` | number | 1.6 | Weight blend sharpness; higher is more rigid |
 | `armature_name` | string | '' | Armature object name (defaults to <mesh>_rig) |
+
+### `char.skeleton`
+
+Build an anatomically readable bone-body on the same proportions as char.humanoid. The joined rib cage, skull, long bones and dark sockets remain compatible with char.outfit, char.rig and char.animate.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `name` | string | 'skeleton' | Object name |
+| `height` | number | 1.86 | Total height in metres |
+| `build` | realistic \| heroic \| lithe | 'lithe' | Bone proportions |
+| `detail` | integer | 8 | Bone cross-section segments, 6-12 |
+| `location` | array | [0.0, 0.0, 0.0] | World position |
+| `bone` | string | '#b8ad92' | Aged bone colour |
+| `socket` | string | '#171817' | Eye, nose and mouth cavity colour |
+| `seed` | integer | 0 | Random seed |
 
 ## `check.*`
 
@@ -469,6 +484,42 @@ Score how readable an object's silhouette is from the standard game camera angle
 | --- | --- | --- | --- |
 | `name` | string | None | Object to test |
 | `samples` | integer | 64 | Rays per axis for the projected-area estimate |
+
+## `creature.*`
+
+### `creature.hound`
+
+Build a gaunt game-ready war hound with readable canine anatomy, bent legs, muzzle, ears, segmented tail and a separate bronze collar. The joined mesh can be exported static or bound to a custom quadruped rig.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `name` | string | 'war_hound' | Object name |
+| `length` | number | 1.75 | Nose-to-rump length in metres |
+| `shoulder_height` | number | 1.0 | Ground-to-shoulder height |
+| `bulk` | number | 1.0 | Torso and limb thickness multiplier |
+| `detail` | integer | 8 | Radial segment count, 6-12 |
+| `location` | array | [0.0, 0.0, 0.0] | World position |
+| `hide` | string | '#25231f' | Dark hide colour |
+| `leather` | string | '#3b241c' | Collar leather colour |
+| `metal` | string | '#6f4d2b' | Collar and spike metal colour |
+| `eyes` | string | '#9b5428' | Eye colour |
+
+### `creature.scarab`
+
+Build a low, wide carrion scarab with layered segmented shell plates, six bent legs, hooked forelimbs and mandibles. The joined multi-material mesh is readable from an isometric camera and ready for a custom rig.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `name` | string | 'carrion_scarab' | Object name |
+| `length` | number | 1.55 | Mandible-to-abdomen length in metres |
+| `width` | number | 0.95 | Maximum shell width |
+| `height` | number | 0.62 | Maximum shell height |
+| `detail` | integer | 8 | Radial segment count, 6-12 |
+| `location` | array | [0.0, 0.0, 0.0] | World position |
+| `shell` | string | '#4e3925' | Aged shell colour |
+| `edge` | string | '#84603a' | Raised shell-edge colour |
+| `body` | string | '#171715' | Underside and leg colour |
+| `eyes` | string | '#8d3f22' | Eye colour |
 
 ## `env.*`
 
