@@ -127,6 +127,52 @@ class Geometry(ForgeCase):
         second = self.forge.call("prop.rock", name="r", seed=2)
         self.assertNotEqual(first["bounds"], second["bounds"])
 
+    def test_rock_formations_are_grounded_distinct_and_deterministic(self):
+        results = {}
+        for formation in ("boulder", "slab", "outcrop", "scree"):
+            self.forge.call("session.reset")
+            results[formation] = self.forge.call(
+                "prop.rock",
+                name=formation,
+                seed=29,
+                formation=formation,
+                size=[1.8, 1.35, 1.05],
+                detail=2,
+                roughness=0.24,
+                strata=0.62,
+                angular=True,
+            )
+            self.assertEqual(results[formation]["formation"], formation)
+            self.assertAlmostEqual(results[formation]["bounds"]["min"][2], 0.0, places=3)
+
+        self.assertEqual(results["boulder"]["piece_count"], 1)
+        self.assertEqual(results["slab"]["piece_count"], 2)
+        self.assertEqual(results["outcrop"]["piece_count"], 3)
+        self.assertEqual(results["scree"]["piece_count"], 5)
+        self.assertLess(
+            results["slab"]["bounds"]["size"][2], results["boulder"]["bounds"]["size"][2]
+        )
+        self.assertGreater(results["slab"]["bounds"]["size"][2], 0.3)
+        self.assertGreater(results["outcrop"]["triangles"], results["boulder"]["triangles"])
+        self.assertGreater(results["scree"]["triangles"], results["outcrop"]["triangles"])
+        self.assertGreater(results["scree"]["bounds"]["size"][0], 1.2)
+        self.assertEqual(len({tuple(result["bounds"]["size"]) for result in results.values()}), 4)
+
+        self.forge.call("session.reset")
+        repeated = self.forge.call(
+            "prop.rock",
+            name="outcrop",
+            seed=29,
+            formation="outcrop",
+            size=[1.8, 1.35, 1.05],
+            detail=2,
+            roughness=0.24,
+            strata=0.62,
+            angular=True,
+        )
+        self.assertEqual(results["outcrop"]["triangles"], repeated["triangles"])
+        self.assertEqual(results["outcrop"]["bounds"], repeated["bounds"])
+
     def test_natural_tree_styles_are_deterministic_branch_readable_assets(self):
         olive = self.forge.call(
             "prop.tree",

@@ -386,11 +386,21 @@ def prop_sack(ctx, name, location, seed, height, radius, segments, slump, materi
 
 @op(
     "prop.rock",
-    summary="Irregular rock with a flat base so it sits on the ground instead of floating. ~200 tris at detail 2. The single most reused environment prop in any game.",
+    summary="Grounded natural rock authored as a boulder, bedded slab, multi-stone outcrop or scree cluster. Layered displacement and optional strata avoid the inflated-potato silhouette.",
     params=_params(
         size=("vec3", [1.0, 0.85, 0.7], "Bounding dimensions in metres"),
         detail=("int", 2, "Icosphere subdivisions: 1=80 tris, 2=320, 3=1280"),
         roughness=("num", 0.28, "Surface irregularity (0 = smooth boulder, 0.5 = jagged)"),
+        formation=(
+            "enum:boulder|slab|outcrop|scree",
+            "boulder",
+            "Geological silhouette: one mass, bedded shelf, exposed cluster or broken field stone",
+        ),
+        strata=(
+            "num",
+            0.35,
+            "Horizontal bedding strength from 0 (none) to 1 (strong limestone courses)",
+        ),
         flatten_base=("bool", True, "Cut a flat bottom so it beds into terrain"),
         angular=("bool", False, "Faceted/low-poly look instead of smooth"),
         material=("str", "rock", "Material preset"),
@@ -399,27 +409,114 @@ def prop_sack(ctx, name, location, seed, height, radius, segments, slump, materi
     tags=["prop", "nature"],
 )
 def prop_rock(
-    ctx, name, location, seed, size, detail, roughness, flatten_base, angular, material, color
+    ctx,
+    name,
+    location,
+    seed,
+    size,
+    detail,
+    roughness,
+    formation,
+    strata,
+    flatten_base,
+    angular,
+    material,
+    color,
 ):
     rng = ctx.reseed(seed)
     bm = mesh_lib.new_bmesh()
-    mesh_lib.add_icosphere(bm, radius=0.5, subdivisions=max(1, min(4, detail)))
-    bmesh.ops.transform(bm, matrix=Matrix.Diagonal(Vector(size)).to_4x4(), verts=bm.verts[:])
+    formation_specs = {
+        "boulder": [
+            ((1.0, 1.0, 1.0), (0.0, 0.0, 0.0), 0.0),
+        ],
+        "slab": [
+            ((1.08, 1.0, 0.62), (0.0, 0.0, 0.0), -4.0),
+            ((0.72, 0.78, 0.28), (-0.08, 0.03, 0.27), 7.0),
+        ],
+        "outcrop": [
+            ((0.86, 0.82, 0.9), (-0.16, 0.0, 0.0), -8.0),
+            ((0.62, 0.58, 0.62), (0.28, 0.12, -0.05), 18.0),
+            ((0.54, 0.52, 0.48), (-0.34, -0.18, -0.08), -24.0),
+        ],
+        "scree": [
+            ((0.52, 0.45, 0.38), (-0.32, -0.2, 0.0), -19.0),
+            ((0.45, 0.4, 0.34), (0.12, -0.24, -0.02), 27.0),
+            ((0.4, 0.36, 0.3), (0.34, 0.11, -0.04), -7.0),
+            ((0.34, 0.31, 0.27), (-0.05, 0.24, -0.06), 42.0),
+            ((0.28, 0.26, 0.22), (-0.42, 0.18, -0.07), 11.0),
+        ],
+    }
+    pieces = formation_specs[formation]
+    base_size = Vector(size)
+    subdivisions = max(1, min(4, detail))
+    bedding = max(0.0, min(1.0, strata))
 
-    # Layered displacement: broad lumps first, then fine chipping. One octave
-    # alone reads as a potato; two reads as stone.
-    for vert in bm.verts:
-        direction = vert.co.normalized() if vert.co.length > 1e-6 else Vector((0, 0, 1))
-        broad = math.sin(vert.co.x * 2.1 + seed) * math.cos(vert.co.y * 1.7 - seed)
-        fine = rng.uniform(-1.0, 1.0)
-        vert.co += direction * (broad * roughness * 0.35 + fine * roughness * 0.22) * min(size)
+    for piece_index, (scale_factors, offset_factors, rotation_deg) in enumerate(pieces):
+        faces = mesh_lib.add_icosphere(bm, radius=0.5, subdivisions=subdivisions)
+        # BMesh's vertex lookup table is lazily rebuilt. Diffing bm.verts
+        # before/after creation can therefore reselect older pieces and
+        # transform the whole formation repeatedly. Faces are the authoritative
+        # ownership boundary for the newly added icosphere.
+        verts = sorted(
+            {vert for face in faces for vert in face.verts},
+            key=lambda vert: (
+                round(vert.co.x, 7),
+                round(vert.co.y, 7),
+                round(vert.co.z, 7),
+            ),
+        )
+        phase = seed * 0.71 + piece_index * 1.93
 
-    if flatten_base:
-        zs = [v.co.z for v in bm.verts]
-        cut = min(zs) + (max(zs) - min(zs)) * 0.16
-        for vert in bm.verts:
-            if vert.co.z < cut:
-                vert.co.z = cut
+        # Work in unit-sphere space so a recipe's requested dimensions remain
+        # meaningful. Broad distortion breaks symmetry, fine chipping roughens
+        # the silhouette, and restrained z quantisation creates geological
+        # bedding without turning the asset into stacked boxes.
+        for vert in verts:
+            direction = vert.co.normalized() if vert.co.length > 1e-6 else Vector((0, 0, 1))
+            broad = math.sin(vert.co.x * 4.2 + phase) * math.cos(vert.co.y * 3.4 - phase)
+            fine = rng.uniform(-1.0, 1.0)
+            displacement = broad * roughness * 0.16 + fine * roughness * 0.12
+            vert.co += direction * displacement
+            if bedding > 0:
+                courses = 3.0 + bedding * 4.0
+                course_z = round(vert.co.z * courses) / courses
+                vert.co.z = vert.co.z * (1.0 - bedding * 0.14) + course_z * bedding * 0.14
+                ledge = math.sin((vert.co.z + 0.5) * courses * math.pi + phase)
+                lateral = 1.0 + ledge * bedding * 0.035
+                vert.co.x *= lateral
+                vert.co.y *= lateral
+
+        if flatten_base:
+            zs = [vert.co.z for vert in verts]
+            cut = min(zs) + (max(zs) - min(zs)) * (0.17 if formation != "scree" else 0.23)
+            for vert in verts:
+                if vert.co.z < cut:
+                    vert.co.z = cut
+
+        piece_size = Vector(
+            (
+                base_size.x * scale_factors[0],
+                base_size.y * scale_factors[1],
+                base_size.z * scale_factors[2],
+            )
+        )
+        offset = Vector(
+            (
+                base_size.x * offset_factors[0],
+                base_size.y * offset_factors[1],
+                base_size.z * offset_factors[2],
+            )
+        )
+        matrix = (
+            Matrix.Translation(offset)
+            @ Matrix.Rotation(math.radians(rotation_deg + rng.uniform(-4.0, 4.0)), 4, "Z")
+            # A 3-component diagonal converted to 4x4 retains a zero
+            # homogeneous term in mathutils. Premultiplying translation then
+            # silently moves every piece back to the origin. Explicit w=1
+            # keeps multi-stone formations spatially authored.
+            @ Matrix.Diagonal(Vector((piece_size.x, piece_size.y, piece_size.z, 1.0)))
+        )
+        bmesh.ops.transform(bm, matrix=matrix, verts=verts)
 
     mesh_lib.cleanup(bm, merge_dist=min(size) * 0.01)
     obj = mesh_lib.to_object(bm, _named(name, "rock"))
@@ -435,6 +532,9 @@ def prop_rock(
         smooth_angle=40.0,
     )
     finish_lib.budget_note(ctx, obj, 800)
+    result["formation"] = formation
+    result["piece_count"] = len(pieces)
+    result["strata"] = round(bedding, 3)
     return result
 
 

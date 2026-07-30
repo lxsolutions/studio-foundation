@@ -146,6 +146,29 @@ and zero warnings.
 
 ![Spike Mediterranean tree review sheet](../../docs/bforge/img/spike_tree_family_v4.png)
 
+`prop.rock` now authors geological formations instead of limiting every game
+rock to one displaced sphere. `formation` selects a grounded boulder, a
+two-piece bedded slab, a three-mass outcrop, or five-piece scree; `strata`
+controls visible sedimentary bedding without changing the deterministic seed.
+Spike uses the complete limestone family as lightweight art over its existing
+gameplay colliders.
+
+| formation | pieces | triangles | GLB |
+| --- | ---: | ---: | ---: |
+| boulder | 1 | 80 | 9 KB |
+| slab | 2 | 160 | 17 KB |
+| outcrop | 3 | 240 | 24 KB |
+| scree | 5 | 400 | 40 KB |
+
+The live Blender regression verifies grounded bounds, distinct formation
+silhouettes, stable vertex order and byte-identical regeneration. Building the
+family also caught two reusable pipeline defects: a homogeneous transform that
+scaled away per-piece translation, and seeded deformation that could reselect
+vertices from an earlier piece. Multi-view contact sheets made both failures
+visible before the assets reached the game.
+
+![Spike limestone formation review sheet](../../docs/bforge/img/spike_limestone_family_v1.png)
+
 ---
 
 ## Why this exists
@@ -380,7 +403,7 @@ already the review artifact.
 
 ```bash
 just bforge-test        # schema + MCP protocol (fast, no Blender)
-just bforge-test-live   # 42 live Blender integration tests
+just bforge-test-live   # 79 live Blender integration tests
 just bforge-gallery     # regenerate the visual review gallery
 ```
 

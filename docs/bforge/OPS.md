@@ -1394,7 +1394,7 @@ Classical column: base, tapered shaft, capital, optional fluting. ~600 tris. Ins
 
 ### `prop.rock`
 
-Irregular rock with a flat base so it sits on the ground instead of floating. ~200 tris at detail 2. The single most reused environment prop in any game.
+Grounded natural rock authored as a boulder, bedded slab, multi-stone outcrop or scree cluster. Layered displacement and optional strata avoid the inflated-potato silhouette.
 
 | parameter | type | default | description |
 | --- | --- | --- | --- |
@@ -1404,6 +1404,8 @@ Irregular rock with a flat base so it sits on the ground instead of floating. ~2
 | `size` | array | [1.0, 0.85, 0.7] | Bounding dimensions in metres |
 | `detail` | integer | 2 | Icosphere subdivisions: 1=80 tris, 2=320, 3=1280 |
 | `roughness` | number | 0.28 | Surface irregularity (0 = smooth boulder, 0.5 = jagged) |
+| `formation` | boulder \| slab \| outcrop \| scree | 'boulder' | Geological silhouette: one mass, bedded shelf, exposed cluster or broken field stone |
+| `strata` | number | 0.35 | Horizontal bedding strength from 0 (none) to 1 (strong limestone courses) |
 | `flatten_base` | boolean | True | Cut a flat bottom so it beds into terrain |
 | `angular` | boolean | False | Faceted/low-poly look instead of smooth |
 | `material` | string | 'rock' | Material preset |

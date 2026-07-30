@@ -6038,7 +6038,7 @@
     },
     {
       "name": "prop.rock",
-      "summary": "Irregular rock with a flat base so it sits on the ground instead of floating. ~200 tris at detail 2. The single most reused environment prop in any game.",
+      "summary": "Grounded natural rock authored as a boulder, bedded slab, multi-stone outcrop or scree cluster. Layered displacement and optional strata avoid the inflated-potato silhouette.",
       "tags": [
         "prop",
         "nature"
@@ -6095,6 +6095,22 @@
             "type": "number",
             "description": "Surface irregularity (0 = smooth boulder, 0.5 = jagged)",
             "default": 0.28
+          },
+          "formation": {
+            "type": "string",
+            "enum": [
+              "boulder",
+              "slab",
+              "outcrop",
+              "scree"
+            ],
+            "description": "Geological silhouette: one mass, bedded shelf, exposed cluster or broken field stone",
+            "default": "boulder"
+          },
+          "strata": {
+            "type": "number",
+            "description": "Horizontal bedding strength from 0 (none) to 1 (strong limestone courses)",
+            "default": 0.35
           },
           "flatten_base": {
             "type": "boolean",
