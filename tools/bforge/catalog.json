@@ -2667,6 +2667,16 @@
             "description": "What the asset was asked for \u2014 recorded in provenance",
             "default": ""
           },
+          "triangle_budget": {
+            "type": "integer",
+            "description": "Triangle budget recorded in metadata; 0 uses the measured export",
+            "default": 0
+          },
+          "material_budget": {
+            "type": "integer",
+            "description": "Material budget recorded in metadata; 0 uses the measured export",
+            "default": 0
+          },
           "contact_sheet": {
             "type": "boolean",
             "description": "Also render a review contact sheet",

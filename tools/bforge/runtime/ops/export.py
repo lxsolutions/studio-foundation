@@ -307,13 +307,15 @@ def export_meta(ctx, out, asset_id, category, license, creator, source, ai_tool,
         "engine": (f"enum:{'|'.join(PRESETS)}", "godot", "Target engine preset"),
         "category": ("enum:prop|character|environment|weapon|architecture|vfx|ui", "prop", "Asset category"),
         "ai_prompt": ("str", "", "What the asset was asked for — recorded in provenance"),
+        "triangle_budget": ("int", 0, "Triangle budget recorded in metadata; 0 uses the measured export"),
+        "material_budget": ("int", 0, "Material budget recorded in metadata; 0 uses the measured export"),
         "contact_sheet": ("bool", True, "Also render a review contact sheet"),
         "strict": ("bool", True, "Block export on problems that would corrupt the import"),
     },
     tags=["export", "io"],
 )
-def export_asset(ctx, asset_id, out_dir, objects, engine, category, ai_prompt, contact_sheet,
-                 strict):
+def export_asset(ctx, asset_id, out_dir, objects, engine, category, ai_prompt, triangle_budget,
+                 material_budget, contact_sheet, strict):
     from . import render as render_ops
 
     identifier = scene_lib.sanitize(asset_id)
@@ -321,9 +323,17 @@ def export_asset(ctx, asset_id, out_dir, objects, engine, category, ai_prompt, c
 
     blend = export_blend(ctx, f"{prefix}.blend", True, True)
     glb = export_gltf(ctx, f"{prefix}.glb", objects, engine, "glb", True, False, strict, None)
+    meshes = [obj for obj in scene_lib.mesh_objects()]
+    measured_materials = len({
+        material.name
+        for obj in meshes
+        for material in obj.data.materials
+        if material
+    })
     meta = export_meta(
         ctx, f"{prefix}.meta.json", identifier, category, "CC-BY-4.0", "bforge",
-        "procedural", "bforge", "", ai_prompt, 0, 2, "explicit", "auto",
+        "procedural", "bforge", "", ai_prompt, triangle_budget,
+        material_budget or max(measured_materials, 1), "explicit", "auto",
     )
     outputs = {"blend": blend, "glb": glb, "meta": meta}
     if contact_sheet:

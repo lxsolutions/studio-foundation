@@ -443,7 +443,7 @@ Measure an image instead of eyeballing it: luminance range, blown highlights, cr
 
 | parameter | type | default | description |
 | --- | --- | --- | --- |
-| `path` | string | None | PNG to analyse — a render, a contact sheet, or a baked texture |
+| `path` | string | None | PNG, JPEG or WebP to analyse — a render, sprite sheet, contact sheet, or baked texture |
 | `colors` | integer | 6 | How many dominant colours to report |
 | `background` | array | [0.05, 0.055, 0.065, 1.0] | Backdrop colour, excluded from subject stats |
 
@@ -607,6 +607,8 @@ One call: save the .blend master, export the GLB, write the .meta.json sidecar a
 | `engine` | godot \| unity \| unreal \| threejs \| raw | 'godot' | Target engine preset |
 | `category` | prop \| character \| environment \| weapon \| architecture \| vfx \| ui | 'prop' | Asset category |
 | `ai_prompt` | string | '' | What the asset was asked for — recorded in provenance |
+| `triangle_budget` | integer | 0 | Triangle budget recorded in metadata; 0 uses the measured export |
+| `material_budget` | integer | 0 | Material budget recorded in metadata; 0 uses the measured export |
 | `contact_sheet` | boolean | True | Also render a review contact sheet |
 | `strict` | boolean | True | Block export on problems that would corrupt the import |
 

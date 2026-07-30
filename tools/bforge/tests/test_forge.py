@@ -536,6 +536,13 @@ class Export(ForgeCase):
         )
         for kind in ("blend", "glb", "meta"):
             self.assertIn(kind, result["outputs"])
+        meta_path = Path(result["detail"]["meta"]["path"])
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        self.assertEqual(
+            meta["budgets"]["materials"],
+            len(meta["measured"]["materials"]),
+            "export.asset must not hard-code a budget that contradicts its measured asset",
+        )
 
 
 class Rendering(ForgeCase):
