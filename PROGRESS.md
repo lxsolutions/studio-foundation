@@ -1259,3 +1259,36 @@ rival.
 **Next:** measure the cost-reduced textured build, then the sealed blind A/B of
 untouched Spike against it. The contract's judge round is owed and has not been
 spent yet on this game.
+
+## R31 — the textures made half the world invisible, and the metrics called it mild
+
+Textured build measured: edge 33.48 / 30.19, dynamic range 167, banding gaps 47,
+script 25.81 ms. Read as numbers that is a small regression on range and banding.
+
+**Opening the frame showed the ground, the lake and every tree canopy were GONE** --
+floating trunks against flat sky. Half the world was not rendering, and the
+objective gate scored it 1 finding.
+
+Cause: `DynamicTexture.clone()` does not carry the drawn canvas. Every cloned map
+came back blank, and **a blank diffuse texture does not render as untextured, it
+renders the surface invisible.** Trunks survived only because their material name
+happens to match none of the seven surface classes, which is why the frame looked
+deliberately stylised rather than obviously broken.
+
+Cloning existed only to allow per-material tiling, which was never needed: tiling
+is a property of the surface CLASS. One shared texture per class with its scale
+set once is correct, cheaper, and cannot desynchronise.
+
+**The lesson is about the gate, not the bug.** `edgeEnergy` and `dynamicRange` are
+computed over whatever pixels arrive. A frame that loses its ground and gains more
+sky can hold its contrast statistics almost unchanged -- sky against trunk is a
+strong edge too. Every metric in this harness is a statistic over the image, and
+none of them know what the image was supposed to contain. Four rounds ago a blind
+judge caught a black prop the gate passed; this round a screenshot caught a
+missing world the gate passed. **The gate cannot be the last step, and looking is
+not optional.**
+
+Running total of instruments that reported confidently while being wrong, this
+session: the destructive getContext probe, judge reveal scoring 0% for a 50% deck,
+the geometry pass on an inert hook, vertex AO landing in COLOR_1, fps percentiles
+under vsync quantisation, and now a gate that shrugged at a vanished world.
