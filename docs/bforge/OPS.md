@@ -1,6 +1,6 @@
 # bforge op reference
 
-115 operations.
+116 operations.
 
 ## `arch.*`
 
@@ -420,12 +420,12 @@ Proportioned humanoid blockout using classic figure-drawing head ratios (7.5 rea
 
 ### `char.outfit`
 
-Add a production-readable rigid outfit to an unrigged humanoid, then join it into the body so char.rig skins every shell. Greek delver, hoplite and peltast armour include cuirass, straps, pteruges, helmets, bracers and greaves; strategos and warlock add boss-readable officer and ritual silhouettes; stalker and oracle add undead hoods, masks and robes.
+Add a production-readable rigid outfit to an unrigged humanoid, then join it into the body so char.rig skins every shell. Greek delver, hoplite and peltast armour include cuirass, straps, pteruges, helmets, bracers and greaves; toxotes and hypaspist provide RTS-readable archer and heavy-guard silhouettes; strategos and warlock add boss-readable officer and ritual silhouettes; stalker and oracle add undead hoods, masks and robes.
 
 | parameter | type | default | description |
 | --- | --- | --- | --- |
 | `name` | string | None | Unrigged humanoid mesh from char.humanoid |
-| `style` | greek_delver \| hoplite \| peltast \| strategos \| stalker \| oracle \| warlock | 'greek_delver' | Outfit silhouette |
+| `style` | greek_delver \| hoplite \| peltast \| toxotes \| hypaspist \| strategos \| stalker \| oracle \| warlock | 'greek_delver' | Outfit silhouette |
 | `cloth` | string | '#262522' | Coarse tunic/linen colour |
 | `leather` | string | '#38261c' | Straps, belt and boot-wrap colour |
 | `metal` | string | '#71502d' | Aged bronze armour colour |
@@ -1195,6 +1195,24 @@ Lathed barrel with a belly and iron bands. ~500 tris. Bands get their own materi
 | `material` | string | 'wood' | Barrel material preset |
 | `color` | string | '' | Override colour |
 | `open_top` | boolean | False | Hollow out the top (for water butts, planters) |
+
+### `prop.bow`
+
+Serious hand-ready recurved bow with tapered laminated limbs, wrapped grip, taut drawn string and optional nocked arrow. One joined three-material mesh with its pivot at the grip for direct bone attachment.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `name` | string | '' | Object name (defaults to the recipe name) |
+| `location` | array | [0.0, 0.0, 0.0] | World position in metres |
+| `seed` | integer | 0 | Random seed — same seed always gives the same asset |
+| `length` | number | 1.42 | Tip-to-tip height in metres |
+| `reflex` | number | 0.16 | Forward recurve at each tip |
+| `draw` | number | 0.24 | String draw behind the grip in metres |
+| `arrow` | boolean | True | Include a nocked arrow |
+| `wood_color` | string | '#4a3020' | Laminated limb and grip colour |
+| `bronze_color` | string | '#6f512d' | Tip, arrowhead and grip fitting colour |
+| `cord_color` | string | '#9b8f77' | Bowstring and fletching colour |
+| `uv_scale` | number | 2.0 | Box unwrap scale |
 
 ### `prop.chest`
 

@@ -1119,6 +1119,210 @@ def prop_weapon(ctx, name, location, seed, kind, length, blade_width, metal, gri
 
 
 @op(
+    "prop.bow",
+    summary=(
+        "Serious hand-ready recurved bow with tapered laminated limbs, wrapped grip, "
+        "taut drawn string and optional nocked arrow. One joined three-material mesh "
+        "with its pivot at the grip for direct bone attachment."
+    ),
+    params=_params(
+        length=("num", 1.42, "Tip-to-tip height in metres"),
+        reflex=("num", 0.16, "Forward recurve at each tip"),
+        draw=("num", 0.24, "String draw behind the grip in metres"),
+        arrow=("bool", True, "Include a nocked arrow"),
+        wood_color=("str", "#4a3020", "Laminated limb and grip colour"),
+        bronze_color=("str", "#6f512d", "Tip, arrowhead and grip fitting colour"),
+        cord_color=("str", "#9b8f77", "Bowstring and fletching colour"),
+        uv_scale=("num", 2.0, "Box unwrap scale"),
+    ),
+    tags=["prop", "weapon", "bow", "archery"],
+)
+def prop_bow(
+    ctx,
+    name,
+    location,
+    seed,
+    length,
+    reflex,
+    draw,
+    arrow,
+    wood_color,
+    bronze_color,
+    cord_color,
+    uv_scale,
+):
+    """Build a readable ancient bow around a grip-centred origin.
+
+    Local +Z is up the bow, local -Y is the firing direction and +Y is the
+    drawn string. This makes `char.attach` offsets predictable while preserving
+    the recurved silhouette from both an RTS camera and a shoulder close-up.
+    """
+    ctx.reseed(seed)
+    length = max(0.8, min(2.2, float(length)))
+    reflex = max(0.04, min(length * 0.24, float(reflex)))
+    draw = max(0.04, min(length * 0.28, float(draw)))
+    uv_scale = max(0.1, float(uv_scale))
+
+    materials = [
+        mat_lib.principled("m_bow_wood", wood_color, roughness=0.78),
+        mat_lib.principled("m_bow_bronze", bronze_color, roughness=0.38, metallic=0.76),
+        mat_lib.principled("m_bow_cord", cord_color, roughness=0.96),
+    ]
+    WOOD, BRONZE, CORD = range(len(materials))
+    bm = mesh_lib.new_bmesh()
+    parts = 0
+
+    def mark(faces, slot):
+        nonlocal parts
+        for face in faces:
+            face.material_index = slot
+        parts += 1
+        return faces
+
+    def limb_between(start, end, width, slot, thickness=0.026):
+        a, b = Vector(start), Vector(end)
+        axis = b - a
+        if axis.length < 1e-5:
+            return []
+        faces = mesh_lib.add_box(
+            bm,
+            size=(thickness, width, axis.length * 1.04),
+            bevel=min(thickness, width) * 0.2,
+        )
+        verts = list({vert for face in faces for vert in face.verts})
+        orient = axis.normalized().to_track_quat("Z", "Y").to_matrix().to_4x4()
+        bmesh.ops.transform(
+            bm,
+            matrix=Matrix.Translation((a + b) * 0.5) @ orient,
+            verts=verts,
+        )
+        return mark(faces, slot)
+
+    def between(start, end, radius, slot, segments=6):
+        a, b = Vector(start), Vector(end)
+        axis = b - a
+        if axis.length < 1e-5:
+            return []
+        faces = mesh_lib.add_cylinder(
+            bm,
+            radius=radius,
+            depth=axis.length,
+            segments=segments,
+        )
+        verts = list({vert for face in faces for vert in face.verts})
+        orient = axis.normalized().to_track_quat("Z", "Y").to_matrix().to_4x4()
+        bmesh.ops.transform(
+            bm,
+            matrix=Matrix.Translation((a + b) * 0.5) @ orient,
+            verts=verts,
+        )
+        return mark(faces, slot)
+
+    half = length * 0.5
+    grip_half = length * 0.075
+    tips = []
+    # Four tapered laminations per side create a continuous reflex/recurve
+    # profile without the toy-like straight rod silhouette.
+    for sign in (-1.0, 1.0):
+        points = [
+            Vector((0.0, 0.0, sign * grip_half)),
+            Vector((0.0, -reflex * 0.12, sign * length * 0.22)),
+            Vector((0.0, -reflex * 0.28, sign * length * 0.36)),
+            Vector((0.0, -reflex * 0.10, sign * length * 0.46)),
+            Vector((0.0, reflex, sign * half)),
+        ]
+        widths = (length * 0.042, length * 0.036, length * 0.028, length * 0.02)
+        for index in range(len(points) - 1):
+            limb_between(
+                points[index],
+                points[index + 1],
+                widths[index],
+                WOOD if index < 3 else BRONZE,
+                thickness=length * (0.018 if index < 2 else 0.014),
+            )
+        tips.append(points[-1])
+
+    # Wrapped grip with bronze collars.
+    grip_faces = mesh_lib.add_cylinder(
+        bm,
+        radius=length * 0.025,
+        depth=grip_half * 2.05,
+        segments=10,
+    )
+    mark(grip_faces, WOOD)
+    for z in (-grip_half, grip_half):
+        collar = mesh_lib.add_torus(
+            bm,
+            major=length * 0.027,
+            minor=length * 0.0045,
+            major_segments=12,
+            minor_segments=5,
+            center=(0.0, 0.0, z),
+        )
+        mark(collar, BRONZE)
+
+    # String converges behind the grip to show stored energy.
+    nock = Vector((0.0, draw, 0.0))
+    between(tips[0], nock, length * 0.004, CORD, 5)
+    between(nock, tips[1], length * 0.004, CORD, 5)
+
+    if arrow:
+        # Nocked arrow points along -Y, with a bronze head and pale fletching.
+        between((0.0, draw + length * 0.25, 0.0), (0.0, -length * 0.34, 0.0),
+                length * 0.006, WOOD, 7)
+        head = mesh_lib.add_cylinder(
+            bm,
+            radius=length * 0.018,
+            radius_top=0.0,
+            depth=length * 0.075,
+            segments=6,
+        )
+        head_verts = list({vert for face in head for vert in face.verts})
+        bmesh.ops.transform(
+            bm,
+            matrix=Matrix.Translation((0.0, -length * 0.38, 0.0))
+            @ Matrix.Rotation(math.pi * 0.5, 4, "X"),
+            verts=head_verts,
+        )
+        mark(head, BRONZE)
+        for sign in (-1.0, 1.0):
+            fletch = mesh_lib.add_box(
+                bm,
+                size=(length * 0.025, length * 0.10, length * 0.008),
+                bevel=length * 0.002,
+            )
+            verts = list({vert for face in fletch for vert in face.verts})
+            bmesh.ops.transform(
+                bm,
+                matrix=Matrix.Translation((sign * length * 0.014, draw + length * 0.18, 0.0))
+                @ Matrix.Rotation(sign * math.radians(12), 4, "Y"),
+                verts=verts,
+            )
+            mark(fletch, CORD)
+
+    mesh_lib.cleanup(bm, merge_dist=1e-5)
+    obj = mesh_lib.to_object(bm, _named(name, "recurve_bow"))
+    for material in materials:
+        obj.data.materials.append(material)
+    obj.location = location
+    obj["bforge_weapon"] = "bow"
+    obj["bforge_parts"] = parts
+    result = finish_lib.finish(
+        ctx,
+        obj,
+        material="",
+        uv="box",
+        uv_scale=uv_scale,
+        origin="center",
+        smooth=True,
+        smooth_angle=34.0,
+    )
+    result.update({"parts": parts, "arrow": bool(arrow)})
+    finish_lib.budget_note(ctx, obj, 1800)
+    return result
+
+
+@op(
     "prop.crossbow",
     summary=(
         "Serious game-ready crossbow with a shouldered stock, curved segmented prod, "

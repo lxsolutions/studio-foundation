@@ -620,6 +620,56 @@ class Characters(ForgeCase):
         )
         self.assertGreater(animated["keyframes"], 0)
 
+    def test_rts_archer_and_heavy_guard_are_distinct_riggable_outfits(self):
+        self.forge.call(
+            "char.humanoid",
+            name="toxotes",
+            height=1.82,
+            build="lithe",
+            detail=8,
+        )
+        archer = self.forge.call(
+            "char.outfit",
+            name="toxotes",
+            style="toxotes",
+            detail=9,
+        )
+        self.assertEqual(archer["style"], "toxotes")
+        self.assertGreaterEqual(archer["armour_parts"], 28)
+        self.assertIn("m_outfit_leather", archer["materials"])
+        archer_rig = self.forge.call(
+            "char.rig",
+            name="toxotes",
+            height=1.82,
+            build="lithe",
+        )
+        self.assertEqual(archer_rig["weighted_vertices"], archer["vertices"])
+
+        self.forge.call("session.reset")
+        self.forge.call(
+            "char.humanoid",
+            name="hypaspist",
+            height=1.94,
+            build="heroic",
+            detail=8,
+        )
+        guard = self.forge.call(
+            "char.outfit",
+            name="hypaspist",
+            style="hypaspist",
+            detail=10,
+        )
+        self.assertEqual(guard["style"], "hypaspist")
+        self.assertGreater(guard["triangles"], archer["triangles"])
+        self.assertGreater(guard["armour_parts"], archer["armour_parts"])
+        guard_rig = self.forge.call(
+            "char.rig",
+            name="hypaspist",
+            height=1.94,
+            build="heroic",
+        )
+        self.assertEqual(guard_rig["weighted_vertices"], guard["vertices"])
+
     def test_outfit_must_be_added_before_rigging(self):
         self.forge.call("char.humanoid", name="hero")
         self.forge.call("char.rig", name="hero")
@@ -882,6 +932,24 @@ class Export(ForgeCase):
             self.assertEqual(result["gearing"], style in ("daedalus", "aegis"))
             self.assertEqual(result["power_core"], style == "aegis")
             previous_tris = result["triangles"]
+
+    def test_recurve_bow_has_a_grip_pivot_string_and_nocked_arrow(self):
+        result = self.forge.call(
+            "prop.bow",
+            name="toxotes_bow",
+            length=1.42,
+            reflex=0.16,
+            draw=0.24,
+            arrow=True,
+            seed=19,
+        )
+        self.assertGreater(result["triangles"], 500)
+        self.assertLessEqual(result["triangles"], 1800)
+        self.assertEqual(len(result["materials"]), 3)
+        self.assertGreater(result["bounds"]["size"][2], 1.35)
+        self.assertGreater(result["bounds"]["size"][1], 0.45)
+        self.assertTrue(result["arrow"])
+        self.assertGreaterEqual(result["parts"], 14)
 
     def test_export_asset_writes_the_full_hand_off(self):
         self.forge.call("prop.barrel", name="barrel", seed=1)

@@ -1917,7 +1917,7 @@
     },
     {
       "name": "char.outfit",
-      "summary": "Add a production-readable rigid outfit to an unrigged humanoid, then join it into the body so char.rig skins every shell. Greek delver, hoplite and peltast armour include cuirass, straps, pteruges, helmets, bracers and greaves; strategos and warlock add boss-readable officer and ritual silhouettes; stalker and oracle add undead hoods, masks and robes.",
+      "summary": "Add a production-readable rigid outfit to an unrigged humanoid, then join it into the body so char.rig skins every shell. Greek delver, hoplite and peltast armour include cuirass, straps, pteruges, helmets, bracers and greaves; toxotes and hypaspist provide RTS-readable archer and heavy-guard silhouettes; strategos and warlock add boss-readable officer and ritual silhouettes; stalker and oracle add undead hoods, masks and robes.",
       "tags": [
         "char",
         "armour",
@@ -1938,6 +1938,8 @@
               "greek_delver",
               "hoplite",
               "peltast",
+              "toxotes",
+              "hypaspist",
               "strategos",
               "stalker",
               "oracle",
@@ -5085,6 +5087,88 @@
             "type": "boolean",
             "description": "Hollow out the top (for water butts, planters)",
             "default": false
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "prop.bow",
+      "summary": "Serious hand-ready recurved bow with tapered laminated limbs, wrapped grip, taut drawn string and optional nocked arrow. One joined three-material mesh with its pivot at the grip for direct bone attachment.",
+      "tags": [
+        "prop",
+        "weapon",
+        "bow",
+        "archery"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name (defaults to the recipe name)",
+            "default": ""
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World position in metres",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Random seed \u2014 same seed always gives the same asset",
+            "default": 0
+          },
+          "length": {
+            "type": "number",
+            "description": "Tip-to-tip height in metres",
+            "default": 1.42
+          },
+          "reflex": {
+            "type": "number",
+            "description": "Forward recurve at each tip",
+            "default": 0.16
+          },
+          "draw": {
+            "type": "number",
+            "description": "String draw behind the grip in metres",
+            "default": 0.24
+          },
+          "arrow": {
+            "type": "boolean",
+            "description": "Include a nocked arrow",
+            "default": true
+          },
+          "wood_color": {
+            "type": "string",
+            "description": "Laminated limb and grip colour",
+            "default": "#4a3020"
+          },
+          "bronze_color": {
+            "type": "string",
+            "description": "Tip, arrowhead and grip fitting colour",
+            "default": "#6f512d"
+          },
+          "cord_color": {
+            "type": "string",
+            "description": "Bowstring and fletching colour",
+            "default": "#9b8f77"
+          },
+          "uv_scale": {
+            "type": "number",
+            "description": "Box unwrap scale",
+            "default": 2.0
           }
         },
         "additionalProperties": false
