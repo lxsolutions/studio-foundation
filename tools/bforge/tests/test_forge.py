@@ -376,6 +376,27 @@ class ImportExisting(ForgeCase):
         imported = self.forge.call("session.import", path=exported["path"])
         self.assertEqual(imported["triangles"], source["triangles"])
 
+    def test_rig_import_ignores_blender_armature_display_helper(self):
+        source = self.forge.call(
+            "char.humanoid",
+            name="hero",
+            height=1.8,
+            build="realistic",
+        )
+        rig = self.forge.call("char.rig", name="hero", build="realistic")
+        self.forge.call(
+            "char.animate",
+            rig=rig["armature"],
+            clip="walk",
+            length=20,
+        )
+        exported = self.forge.call("export.gltf", out="rigged.glb", strict=False)
+        self.forge.call("session.reset")
+        imported = self.forge.call("session.import", path=exported["path"])
+        self.assertEqual(imported["meshes"], 1, imported["objects"])
+        self.assertEqual(imported["triangles"], source["triangles"])
+        self.assertNotIn("Icosphere", " ".join(imported["objects"]))
+
     def test_import_of_a_missing_file_is_a_clear_error(self):
         with self.assertRaises(ForgeError) as ctx:
             self.forge.call("session.import", path="does/not/exist.glb")
@@ -504,6 +525,43 @@ class Characters(ForgeCase):
         self.forge.call("session.reset")
         heroic = self.forge.call("char.humanoid", name="b", height=1.8, build="heroic")
         self.assertGreater(chibi["head_unit_m"], heroic["head_unit_m"])
+
+    def test_greek_outfit_is_riggable_multi_material_game_geometry(self):
+        body = self.forge.call(
+            "char.humanoid",
+            name="delver",
+            height=1.9,
+            build="realistic",
+            detail=8,
+        )
+        outfit = self.forge.call(
+            "char.outfit",
+            name="delver",
+            style="greek_delver",
+            detail=10,
+        )
+        self.assertGreater(outfit["triangles"], body["triangles"])
+        self.assertLess(outfit["triangles"], 8000)
+        self.assertGreaterEqual(outfit["armour_parts"], 20)
+        self.assertGreaterEqual(len(outfit["materials"]), 5)
+        self.assertAlmostEqual(outfit["bounds"]["min"][2], 0.0, places=3)
+
+        rig = self.forge.call("char.rig", name="delver", build="realistic")
+        self.assertEqual(rig["weighted_vertices"], outfit["vertices"])
+        animated = self.forge.call(
+            "char.animate",
+            rig=rig["armature"],
+            clip="walk",
+            length=20,
+        )
+        self.assertGreater(animated["keyframes"], 0)
+
+    def test_outfit_must_be_added_before_rigging(self):
+        self.forge.call("char.humanoid", name="hero")
+        self.forge.call("char.rig", name="hero")
+        with self.assertRaises(ForgeError) as ctx:
+            self.forge.call("char.outfit", name="hero")
+        self.assertIn("before char.rig", str(ctx.exception))
 
 
 class Validation(ForgeCase):

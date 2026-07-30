@@ -1796,6 +1796,60 @@
       }
     },
     {
+      "name": "char.outfit",
+      "summary": "Add a production-readable rigid outfit to an unrigged humanoid, then join it into the body so char.rig skins every shell. Greek delver and hoplite styles include cuirass, straps, pteruges, helmet, bracers and greaves.",
+      "tags": [
+        "char",
+        "armour"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Unrigged humanoid mesh from char.humanoid"
+          },
+          "style": {
+            "type": "string",
+            "enum": [
+              "greek_delver",
+              "hoplite"
+            ],
+            "description": "Outfit silhouette",
+            "default": "greek_delver"
+          },
+          "cloth": {
+            "type": "string",
+            "description": "Coarse tunic/linen colour",
+            "default": "#262522"
+          },
+          "leather": {
+            "type": "string",
+            "description": "Straps, belt and boot-wrap colour",
+            "default": "#38261c"
+          },
+          "metal": {
+            "type": "string",
+            "description": "Aged bronze armour colour",
+            "default": "#71502d"
+          },
+          "accent": {
+            "type": "string",
+            "description": "Small lamp or crest accent",
+            "default": "#d18a32"
+          },
+          "detail": {
+            "type": "integer",
+            "description": "Radial segment count, 8-16",
+            "default": 10
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "char.pose",
       "summary": "Set a static pose on a rig \u2014 T-pose, A-pose, sitting, or a custom per-bone rotation. Useful for reference renders and for fixing an import rest pose.",
       "tags": [

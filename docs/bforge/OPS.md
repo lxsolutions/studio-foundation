@@ -1,6 +1,6 @@
 # bforge op reference
 
-109 operations.
+110 operations.
 
 ## `arch.*`
 
@@ -392,6 +392,20 @@ Proportioned humanoid blockout using classic figure-drawing head ratios (7.5 rea
 | `location` | array | [0.0, 0.0, 0.0] | World position |
 | `skin` | string | '#c08a6a' | Body colour |
 | `seed` | integer | 0 | Random seed |
+
+### `char.outfit`
+
+Add a production-readable rigid outfit to an unrigged humanoid, then join it into the body so char.rig skins every shell. Greek delver and hoplite styles include cuirass, straps, pteruges, helmet, bracers and greaves.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `name` | string | None | Unrigged humanoid mesh from char.humanoid |
+| `style` | greek_delver \| hoplite | 'greek_delver' | Outfit silhouette |
+| `cloth` | string | '#262522' | Coarse tunic/linen colour |
+| `leather` | string | '#38261c' | Straps, belt and boot-wrap colour |
+| `metal` | string | '#71502d' | Aged bronze armour colour |
+| `accent` | string | '#d18a32' | Small lamp or crest accent |
+| `detail` | integer | 10 | Radial segment count, 8-16 |
 
 ### `char.pose`
 

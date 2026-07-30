@@ -202,6 +202,270 @@ def char_humanoid(ctx, name, height, build, bulk, detail, location, skin, seed):
     return result
 
 
+@op(
+    "char.outfit",
+    summary=(
+        "Add a production-readable rigid outfit to an unrigged humanoid, then join it "
+        "into the body so char.rig skins every shell. Greek delver and hoplite styles "
+        "include cuirass, straps, pteruges, helmet, bracers and greaves."
+    ),
+    params={
+        "name": ("str", None, "Unrigged humanoid mesh from char.humanoid"),
+        "style": ("enum:greek_delver|hoplite", "greek_delver", "Outfit silhouette"),
+        "cloth": ("str", "#262522", "Coarse tunic/linen colour"),
+        "leather": ("str", "#38261c", "Straps, belt and boot-wrap colour"),
+        "metal": ("str", "#71502d", "Aged bronze armour colour"),
+        "accent": ("str", "#d18a32", "Small lamp or crest accent"),
+        "detail": ("int", 10, "Radial segment count, 8-16"),
+    },
+    tags=["char", "armour"],
+)
+def char_outfit(ctx, name, style, cloth, leather, metal, accent, detail):
+    body = _get(name)
+    if body.type != "MESH":
+        raise OpError(f"'{name}' is a {body.type}, not a humanoid mesh")
+    if any(modifier.type == "ARMATURE" for modifier in body.modifiers):
+        raise OpError(
+            f"'{name}' is already rigged. Add char.outfit before char.rig so every "
+            "armour shell receives deterministic skin weights."
+        )
+
+    bounds = mesh_lib.bounds(body)
+    height = bounds["size"][2] or 1.8
+    sides = max(8, min(16, detail))
+    origin = body.location.copy()
+    parts = []
+
+    cloth_mat = mat_lib.principled(
+        "m_outfit_linen", color=cloth, roughness=0.94, metallic=0.0
+    )
+    leather_mat = mat_lib.principled(
+        "m_outfit_leather", color=leather, roughness=0.82, metallic=0.0
+    )
+    metal_mat = mat_lib.principled(
+        "m_outfit_bronze", color=metal, roughness=0.43, metallic=0.78
+    )
+    dark_metal_mat = mat_lib.principled(
+        "m_outfit_dark_metal", color="#17191a", roughness=0.54, metallic=0.72
+    )
+    accent_mat = mat_lib.principled(
+        "m_outfit_lamp", color=accent, roughness=0.4, metallic=0.15,
+        emission=0.7, emission_color=accent,
+    )
+
+    def finish_part(bm, label, material, *, smooth=False):
+        mesh_lib.cleanup(bm, merge_dist=height * 0.0004)
+        part = mesh_lib.to_object(bm, scene_lib.unique_name(f"{body.name}_{label}"))
+        part.location = origin
+        finish_lib.finish(
+            ctx,
+            part,
+            material=material,
+            uv="smart_packed",
+            origin=None,
+            smooth=smooth,
+            smooth_angle=48.0,
+        )
+        parts.append(part)
+        return part
+
+    def cylinder(label, radius, depth, center, material, *, scale=(1.0, 1.0, 1.0),
+                 radius_top=None, smooth=True):
+        bm = mesh_lib.new_bmesh()
+        mesh_lib.add_cylinder(
+            bm,
+            radius=radius,
+            radius_top=radius_top,
+            depth=depth,
+            segments=sides,
+        )
+        matrix = (
+            Matrix.Translation(Vector(center))
+            @ Matrix.Diagonal(Vector((*scale, 1.0)))
+        )
+        bmesh_transform(bm, matrix)
+        return finish_part(bm, label, material, smooth=smooth)
+
+    def ellipsoid(label, radius, center, scale, material):
+        bm = mesh_lib.new_bmesh()
+        mesh_lib.add_icosphere(bm, radius=radius, subdivisions=2)
+        matrix = (
+            Matrix.Translation(Vector(center))
+            @ Matrix.Diagonal(Vector((*scale, 1.0)))
+        )
+        bmesh_transform(bm, matrix)
+        return finish_part(bm, label, material, smooth=True)
+
+    def box(label, size, center, material, *, rotation=(0.0, 0.0, 0.0), bevel=0.0):
+        bm = mesh_lib.new_bmesh()
+        mesh_lib.add_box(bm, size=size, bevel=bevel, segments=1)
+        rx, ry, rz = (math.radians(value) for value in rotation)
+        matrix = (
+            Matrix.Translation(Vector(center))
+            @ Matrix.Rotation(rz, 4, "Z")
+            @ Matrix.Rotation(ry, 4, "Y")
+            @ Matrix.Rotation(rx, 4, "X")
+        )
+        bmesh_transform(bm, matrix)
+        return finish_part(bm, label, material)
+
+    # Layered linen beneath the metal keeps the silhouette practical rather
+    # than turning the miner into a polished parade-statue.
+    cylinder(
+        "cuirass",
+        height * 0.128,
+        height * 0.31,
+        (0.0, 0.0, height * 0.665),
+        metal_mat if style == "hoplite" else cloth_mat,
+        scale=(1.02, 0.62, 1.0),
+        radius_top=height * 0.152,
+    )
+    cylinder(
+        "belt",
+        height * 0.163,
+        height * 0.052,
+        (0.0, 0.0, height * 0.505),
+        leather_mat,
+        scale=(1.0, 0.58, 1.0),
+    )
+
+    # Crossed load-bearing straps are the close-camera cue that this is a
+    # working delver. They also break up the uninterrupted barrel of a generated
+    # torso when seen from the RTS camera.
+    front_y = -height * 0.092
+    for index, angle in enumerate((-27.0, 27.0)):
+        box(
+            f"chest_strap_{index}",
+            (height * 0.035, height * 0.018, height * 0.31),
+            (0.0, front_y, height * 0.68),
+            leather_mat,
+            rotation=(0.0, angle, 0.0),
+            bevel=height * 0.004,
+        )
+    box(
+        "buckle",
+        (height * 0.09, height * 0.025, height * 0.07),
+        (0.0, -height * 0.101, height * 0.505),
+        metal_mat,
+        bevel=height * 0.006,
+    )
+
+    # Separate skirt plates retain negative space while sharing the hips shell
+    # after char.rig, so the legs can stride without dragging one solid cone.
+    plate_count = 12 if style == "hoplite" else 10
+    for index in range(plate_count):
+        angle = math.tau * index / plate_count
+        box(
+            f"pteruge_{index:02d}",
+            (height * 0.038, height * 0.018, height * 0.205),
+            (
+                math.cos(angle) * height * 0.142,
+                math.sin(angle) * height * 0.082,
+                height * 0.405,
+            ),
+            metal_mat if style == "hoplite" else leather_mat,
+            rotation=(0.0, 0.0, math.degrees(angle)),
+            bevel=height * 0.003,
+        )
+
+    # One shoulder guard makes the delver asymmetrical and work-worn. A hoplite
+    # receives the paired silhouette expected of battlefield armour.
+    shoulders = ("l", "r") if style == "hoplite" else ("l",)
+    for side in shoulders:
+        sign = 1.0 if side == "l" else -1.0
+        ellipsoid(
+            f"pauldron_{side}",
+            height * 0.062,
+            (sign * height * 0.142, 0.0, height * 0.785),
+            (1.45, 0.88, 0.58),
+            metal_mat,
+        )
+
+    for side, sign in (("l", 1.0), ("r", -1.0)):
+        cylinder(
+            f"bracer_{side}",
+            height * 0.034,
+            height * 0.17,
+            (sign * height * 0.123, 0.0, height * 0.575),
+            metal_mat,
+            scale=(1.0, 0.78, 1.0),
+            radius_top=height * 0.029,
+        )
+        cylinder(
+            f"greave_{side}",
+            height * 0.052,
+            height * 0.35,
+            (sign * height * 0.072, -height * 0.004, height * 0.205),
+            metal_mat,
+            scale=(1.0, 0.72, 1.0),
+            radius_top=height * 0.043,
+        )
+        box(
+            f"boot_wrap_{side}",
+            (height * 0.105, height * 0.125, height * 0.055),
+            (sign * height * 0.072, -height * 0.018, height * 0.055),
+            leather_mat,
+            bevel=height * 0.009,
+        )
+
+    # Open-faced mining helmet: a shallow bronze cap and brow leave the lower
+    # face readable, while the lamp gives the hero one unmistakable gameplay
+    # landmark at both camera scales.
+    cylinder(
+        "helmet",
+        height * 0.117,
+        height * 0.095,
+        (0.0, 0.0, height * 0.91),
+        metal_mat,
+        scale=(0.92, 0.95, 1.0),
+        radius_top=height * 0.078,
+    )
+    box(
+        "helmet_brow",
+        (height * 0.205, height * 0.035, height * 0.035),
+        (0.0, -height * 0.092, height * 0.875),
+        metal_mat,
+        bevel=height * 0.005,
+    )
+    box(
+        "helmet_spine",
+        (height * 0.022, height * 0.18, height * 0.05),
+        (0.0, 0.0, height * 0.965),
+        dark_metal_mat,
+        bevel=height * 0.004,
+    )
+    box(
+        "lamp_cage",
+        (height * 0.068, height * 0.035, height * 0.075),
+        (0.0, -height * 0.113, height * 0.925),
+        dark_metal_mat,
+        bevel=height * 0.004,
+    )
+    box(
+        "lamp",
+        (height * 0.038, height * 0.02, height * 0.045),
+        (0.0, -height * 0.132, height * 0.925),
+        accent_mat,
+        bevel=height * 0.003,
+    )
+
+    merged = scene_lib.join([body, *parts], body.name)
+    scene_lib.set_origin(merged, "bottom")
+    scene_lib.apply_transforms(merged)
+    mesh_lib.shade_auto_smooth(merged, 52.0)
+    result = finish_lib.report(ctx, merged)
+    result["style"] = style
+    result["height_m"] = round(height, 4)
+    result["armour_parts"] = len(parts)
+    ctx.note(
+        f"'{merged.name}' now carries the {style} outfit. Run char.rig next; the "
+        "joined disconnected shells let the deterministic skinner assign helmet, "
+        "bracers and greaves to their nearest bones."
+    )
+    finish_lib.budget_note(ctx, merged, 8000)
+    return result
+
+
 def bmesh_transform(bm, matrix):
     import bmesh as bmesh_module
 
