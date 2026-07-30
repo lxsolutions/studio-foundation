@@ -260,6 +260,20 @@ def check_critique(ctx, objects, texture_size):
                 "loose_vertices": loose,
                 "boundary_edges": boundary,
                 "texel_density": density,
+                # Dimensions as the CONSUMER will see them, not as Blender holds
+                # them. glTF is Y-up and Blender is Z-up, so the exporter maps
+                # (x, y, z) -> (x, z, -y): the axis an author builds "forward"
+                # along in Blender arrives as UP in every engine. That cost two
+                # rounds on one asset here -- a crossbow authored along +Z loaded
+                # into the game standing on end -- and the trap was already
+                # written down. Reporting both frames means the author sees the
+                # answer instead of having to remember the rule.
+                "size_blender_xyz": [round(v, 4) for v in bounds["size"]],
+                "size_gltf_xyz": [
+                    round(bounds["size"][0], 4),
+                    round(bounds["size"][2], 4),
+                    round(bounds["size"][1], 4),
+                ],
                 "uv_overlap": uv_lib.overlap_estimate(obj) if uv_stats.get("has_uvs") else None,
                 "material_slots": len(mesh.materials),
                 "empty_material_slots": sum(1 for m in mesh.materials if m is None),
@@ -274,6 +288,25 @@ def check_critique(ctx, objects, texture_size):
                     "fix": f"gameready.optimize objects=['{obj.name}']",
                 }
             )
+        # Orientation sanity, reported as info rather than guessed at as an error.
+        # Plenty of props are legitimately tallest (a post, a tree, a tower), so
+        # this cannot be a failure -- but an object that is dramatically taller
+        # than it is deep or wide, IN GLTF SPACE, is worth a second look before it
+        # ships, because that is exactly what a mis-axised prop looks like.
+        gx, gy, gz = bounds["size"][0], bounds["size"][2], bounds["size"][1]
+        longest = max(gx, gy, gz)
+        if longest > 1e-6 and gy == longest and gy > 2.0 * max(gx, gz):
+            findings.append(
+                {
+                    "object": obj.name, "severity": "info", "issue": "tallest axis in glTF is UP",
+                    "detail": f"in glTF space this is {gx:.3f} wide, {gy:.3f} TALL, {gz:.3f} deep. "
+                              "Blender is Z-up and glTF is Y-up, so anything built 'forward' "
+                              "along Blender +Z arrives standing upright",
+                    "fix": f"if that is not intended, object.transform name='{obj.name}' "
+                           "rotation=[-90,0,0] before export makes Blender +Z read as glTF forward",
+                }
+            )
+
         if flipped:
             findings.append(
                 {

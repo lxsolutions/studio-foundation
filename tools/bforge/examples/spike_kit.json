@@ -345,6 +345,17 @@
   }
  },
  {
+  "op": "object.transform",
+  "args": {
+   "name": "spike_crossbow",
+   "rotation": [
+    -90,
+    0,
+    0
+   ]
+  }
+ },
+ {
   "op": "uv.unwrap",
   "args": {
    "object": "spike_crossbow",

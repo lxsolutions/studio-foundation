@@ -1438,3 +1438,28 @@ declare anything, which is the case that actually happened. Both are cheap.
 because guessing the sign and burning a ten-minute build I cannot then verify is
 how the last two rounds went wrong. The forge-side fix and a re-measure is the
 right order.
+
+## R36 — the tool now shows the author what the engine will see
+
+Two changes, both aimed at the class of mistake rather than the instance.
+
+**`check.critique` reports glTF-space dimensions, not just Blender's.** Every row
+now carries `size_blender_xyz` AND `size_gltf_xyz`, because the exporter maps
+(x, y, z) -> (x, z, -y) and an author reading Blender's numbers has to do that
+conversion in their head every time. On the reoriented crossbow it reads
+`w=0.603 h=0.262 d=0.965` -- unmistakably a crossbow. Before the fix the same asset
+would have read as 0.26 wide and 0.97 TALL.
+
+**Plus an info-severity orientation finding** when an object is more than twice as
+tall as it is wide or deep in glTF space. Info, not error, because plenty of props
+are legitimately tallest. Verified it does not false-positive: the forged tree
+(3.23 x 6.11 x 3.10 in glTF) is correctly NOT flagged, sitting just under the
+threshold, while the mis-axised crossbow would have been.
+
+**Recipe fixed at the forge, not at the call site.** `object.transform
+rotation=[-90,0,0]` before export sends Blender +Z to +Y, which the exporter then
+writes as glTF -Z. That makes the asset correct for every consumer instead of
+requiring each one to compensate. 56 steps, lint clean, forge clean.
+
+Committed the corrected recipe back to `examples/`, so the fixture now encodes the
+convention as well as the geometry.
