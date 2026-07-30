@@ -6,6 +6,7 @@
     bforge run prop.barrel height=1.2 seed=4 --render out.png
     bforge script recipe.json                 # batch of ops from a file
     bforge make crate_a --recipe prop.crate --param size=[1,1,1] --export
+    bforge audit game/assets/*.glb --render-dir audit
     bforge catalog --refresh                  # regenerate the committed catalog
     bforge schema --format openai > tools.json
 
@@ -18,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 import time
 from pathlib import Path
@@ -227,6 +229,77 @@ def cmd_make(args) -> int:
         forge.stop()
 
 
+def _audit_prefix(path: Path) -> str:
+    """A deterministic import prefix that is safe for Blender object names."""
+    clean = re.sub(r"[^a-z0-9_]+", "_", path.stem.lower()).strip("_")
+    return f"audit_{clean or 'asset'}"
+
+
+def cmd_audit(args) -> int:
+    """Import and inspect shipping assets without writing a temporary recipe."""
+    assets = [Path(value).expanduser().resolve() for value in args.assets]
+    missing = [str(path) for path in assets if not path.is_file()]
+    if missing:
+        print(json.dumps({"error": "asset not found", "paths": missing}, indent=2), file=sys.stderr)
+        return 1
+
+    allowed = {".glb", ".gltf", ".obj", ".fbx", ".blend"}
+    unsupported = [str(path) for path in assets if path.suffix.lower() not in allowed]
+    if unsupported:
+        print(
+            json.dumps({"error": "unsupported asset type", "paths": unsupported}, indent=2),
+            file=sys.stderr,
+        )
+        return 1
+
+    forge = _forge(args)
+    rows = []
+    failed = False
+    try:
+        forge.start()
+        for path in assets:
+            row: dict = {"asset": str(path), "bytes": path.stat().st_size}
+            try:
+                row["import"] = forge.call(
+                    "session.import",
+                    path=str(path),
+                    prefix=_audit_prefix(path),
+                    reset_first=True,
+                    _timeout=args.timeout,
+                )
+                row["info"] = forge.call("session.info", detail="full")
+                row["critique"] = forge.call(
+                    "check.critique",
+                    texture_size=args.texture_size,
+                    _timeout=args.timeout,
+                )
+                if args.render_dir:
+                    render_name = f"{Path(args.render_dir).as_posix().rstrip('/')}/{path.stem}-contact.png"
+                    row["render"] = forge.call(
+                        "render.contact_sheet",
+                        out=render_name,
+                        tile=args.tile,
+                        samples=args.samples,
+                        _timeout=max(args.timeout, 1200),
+                    )
+                errors = int(row["critique"].get("errors", 0))
+                warnings = int(row["critique"].get("warnings", 0))
+                row["status"] = {"errors": errors, "warnings": warnings}
+                failed = failed or errors > 0 or (args.fail_on == "warning" and warnings > 0)
+            except (ForgeError, DaemonError) as exc:
+                row["error"] = str(exc)
+                failed = True
+            rows.append(row)
+    except (ForgeError, DaemonError) as exc:
+        print(json.dumps({"error": str(exc)}, indent=2), file=sys.stderr)
+        return 1
+    finally:
+        forge.stop()
+
+    _emit({"assets": rows}, True)
+    return 1 if failed and args.fail_on != "never" else 0
+
+
 def cmd_catalog(args) -> int:
     if args.refresh:
         forge = _forge(args)
@@ -345,6 +418,28 @@ def build_parser() -> argparse.ArgumentParser:
     make.add_argument("--prompt", default="", help="Recorded in the asset's provenance")
     make.add_argument("--timeout", type=float, default=900)
     make.set_defaults(func=cmd_make)
+
+    audit = sub.add_parser(
+        "audit",
+        help="Import, measure and critique existing game assets; optionally render contact sheets",
+    )
+    audit.add_argument("assets", nargs="+", help=".glb/.gltf/.obj/.fbx/.blend files")
+    audit.add_argument(
+        "--render-dir",
+        default="",
+        help="Also write <asset>-contact.png sheets below this output directory",
+    )
+    audit.add_argument("--tile", type=int, default=300)
+    audit.add_argument("--samples", type=int, default=12)
+    audit.add_argument("--texture-size", type=int, default=1024)
+    audit.add_argument("--timeout", type=float, default=600)
+    audit.add_argument(
+        "--fail-on",
+        choices=["error", "warning", "never"],
+        default="error",
+        help="Exit nonzero on critique errors (default), warnings too, or never",
+    )
+    audit.set_defaults(func=cmd_audit)
 
     catalog = sub.add_parser("catalog", help="Show or regenerate the committed op catalog")
     catalog.add_argument("--refresh", action="store_true")

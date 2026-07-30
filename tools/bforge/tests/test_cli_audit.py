@@ -1,0 +1,95 @@
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from bforge import cli  # noqa: E402
+
+
+class FakeForge:
+    def __init__(self, *, errors: int = 0, warnings: int = 0):
+        self.errors = errors
+        self.warnings = warnings
+        self.calls: list[tuple[str, dict]] = []
+        self.started = False
+        self.stopped = False
+
+    def start(self):
+        self.started = True
+        return {}
+
+    def stop(self):
+        self.stopped = True
+
+    def call(self, op: str, **kwargs):
+        self.calls.append((op, kwargs))
+        if op == "session.import":
+            return {"objects": ["mesh"], "triangles": 12, "materials": ["stone"]}
+        if op == "session.info":
+            return {"objects": [{"name": "mesh", "triangles": 12}]}
+        if op == "check.critique":
+            return {
+                "errors": self.errors,
+                "warnings": self.warnings,
+                "findings": [],
+            }
+        if op == "render.contact_sheet":
+            return {"rel": kwargs["out"]}
+        raise AssertionError(f"unexpected op: {op}")
+
+
+def test_audit_imports_inspects_and_renders_each_asset(tmp_path, monkeypatch):
+    first = tmp_path / "Greek Tower.glb"
+    second = tmp_path / "wolf.obj"
+    first.write_bytes(b"glTF")
+    second.write_text("o wolf", encoding="utf-8")
+    fake = FakeForge()
+    monkeypatch.setattr(cli, "_forge", lambda _args: fake)
+
+    args = cli.build_parser().parse_args([
+        "audit",
+        str(first),
+        str(second),
+        "--render-dir",
+        "review",
+    ])
+
+    assert args.func(args) == 0
+    assert fake.started and fake.stopped
+    assert [op for op, _ in fake.calls] == [
+        "session.import", "session.info", "check.critique", "render.contact_sheet",
+        "session.import", "session.info", "check.critique", "render.contact_sheet",
+    ]
+    first_import = fake.calls[0][1]
+    assert first_import["reset_first"] is True
+    assert first_import["prefix"] == "audit_greek_tower"
+    assert fake.calls[3][1]["out"] == "review/Greek Tower-contact.png"
+
+
+def test_audit_exit_policy_is_ci_usable(tmp_path, monkeypatch):
+    asset = tmp_path / "tower.glb"
+    asset.write_bytes(b"glTF")
+
+    warning_forge = FakeForge(warnings=1)
+    monkeypatch.setattr(cli, "_forge", lambda _args: warning_forge)
+    warning_args = cli.build_parser().parse_args([
+        "audit", str(asset), "--fail-on", "warning",
+    ])
+    assert warning_args.func(warning_args) == 1
+
+    error_forge = FakeForge(errors=1)
+    monkeypatch.setattr(cli, "_forge", lambda _args: error_forge)
+    never_args = cli.build_parser().parse_args([
+        "audit", str(asset), "--fail-on", "never",
+    ])
+    assert never_args.func(never_args) == 0
+
+
+def test_audit_rejects_missing_assets_without_starting_blender(tmp_path, monkeypatch):
+    fake = FakeForge()
+    monkeypatch.setattr(cli, "_forge", lambda _args: fake)
+    args = cli.build_parser().parse_args(["audit", str(tmp_path / "missing.glb")])
+    assert args.func(args) == 1
+    assert not fake.started
