@@ -1215,3 +1215,47 @@ class a real albedo + normal + roughness map. Those generators are already writt
 and already measured -- 507 px/m through box UVs, macro variation to break the
 tile, all of it. That is studio-foundation work paying off in a second engine,
 which is the point of the toolset.
+
+## R30 — CORRECTION: the look pass costs 13.5 ms, not 1.5 ms
+
+**I reported the wrong baseline last round and it inverts the verdict.** The
+23.38 ms figure I called "Spike before any of my changes" was measured on a build
+that ALREADY had the look pass in it. The real baseline:
+
+| build | edge energy | script ms/frame |
+|---|---|---|
+| Spike, untouched | 23.33 | **11.45** |
+| + look pass | 30.42 | 24.91 |
+| + surface classes | 30.79 | 26.98 |
+
+So the look pass costs **~13.5 ms**, more than doubling frame cost, and took the
+game from comfortably 60 fps to a ~37 fps ceiling. The "+1.5 ms" I published was
+the delta between two builds that both already had it. The claim that Spike was
+"already CPU-bound before I touched it" was simply false -- it had 5 ms of headroom.
+
+This also means the earlier CSM shadow rejection was even more clear-cut than
+stated (11.45 -> 183 ms), and that the surface-class pass at +2 ms on an already
+blown budget was a worse trade than recorded.
+
+**Cost cuts applied, every setting to its cheap variant:**
+- GlowLayer blur kernel 40 -> 16. It re-renders every glowing mesh into its own
+  target and blurs it; the kernel is the dominant term and 16 still haloes a
+  brazier.
+- Bloom at quarter resolution instead of half (`bloomScale` 0.5 -> 0.25) and
+  kernel 48 -> 32. Bloom is low-frequency by definition, so the loss is invisible.
+- Sharpen OFF. A full-resolution pass of its own, buying little on art whose
+  edges are hard geometry rather than texture detail.
+- Dust 220 -> 110.
+
+**Also this round: Spike gets real textures.** `src/texgen.ts` ports the measured
+generators -- tiling value-noise albedo plus a central-difference normal map --
+with per-class tiling and character: ground at 60 repeats with grit, rock coarse
+and flecked with strong relief, timber and canvas streaked with weathering, water
+fine-rippled with a strong normal and no colour speckle, foliage colour-only
+because a normal map on a low-poly canopy blob just looks dented. One texture set
+per CLASS, not per material, because Spike creates a material per plot and per
+rival.
+
+**Next:** measure the cost-reduced textured build, then the sealed blind A/B of
+untouched Spike against it. The contract's judge round is owed and has not been
+spent yet on this game.
