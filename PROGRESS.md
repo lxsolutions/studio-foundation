@@ -1368,3 +1368,36 @@ three the numbers were fine and the picture was not.
 `instantiateModelsToScene()` and use its `rootNodes`, or match a name PREFIX and
 reparent the whole hierarchy. And the loader path should assert it found something
 instead of returning quietly, which is the same guard `gameready.vertex_ao` got.
+
+## R34 — a loader that fails loudly, and lint turns recipes into fixtures
+
+**Root cause of R33's silent no-op, fixed properly.** `src/forged.ts` resolves a
+forged asset out of a GLB by exact name OR prefix, across meshes AND transform
+nodes, and **throws** when it finds nothing, listing what the file actually
+contains. The old code did:
+
+    pack.meshes.find((m) => m.name === "spike_crossbow")
+
+which returns `undefined` for any multi-material asset, because one glTF primitive
+per material means Babylon creates `spike_crossbow_primitive0/1/2` and no Mesh with
+the bare name. `.find()` does not throw, so the `.catch()` never fired. **The
+material separation that made the asset worth forging is what broke the lookup.**
+The call site now logs loudly when the stand-in is used: a stand-in is fine, a
+stand-in nobody knows about is not.
+
+**bforge regression surface, all green:**
+
+    test_selectors                          OK
+    test_schema                             OK
+    test_mcp        self-check ok (5 tools, 110 ops)
+    lint spike_camp.json        ok: 40 steps
+    lint spike_kit.json         ok: 55 steps
+    lint spike_settlement.json  ok: 44 steps
+
+Committing the recipes as examples plus `bforge lint` gives something the toolset
+did not have: **asset recipes are now regression fixtures.** A parameter rename or
+a removed op in bforge breaks `lint` on three real recipes in CI, in milliseconds,
+without Blender. Previously the only way to discover that was to forge and fail.
+
+The MCP self-check reporting 110 ops also confirms the catalog and runtime agree
+again, which they did not two rounds ago.
