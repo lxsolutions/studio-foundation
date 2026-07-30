@@ -1119,6 +1119,355 @@ def prop_weapon(ctx, name, location, seed, kind, length, blade_width, metal, gri
 
 
 @op(
+    "prop.crossbow",
+    summary=(
+        "Serious game-ready crossbow with a shouldered stock, curved segmented prod, "
+        "taut three-part string, trigger guard, loaded bolt and integrated optic. "
+        "Mastery styles add magazines, Daedalus gearing and an Aegis power core "
+        "without changing the hand-ready pivot. One joined multi-material mesh."
+    ),
+    params=_params(
+        style=("enum:pilgrim|repeater|daedalus|aegis", "pilgrim", "Construction and mastery tier"),
+        length=("num", 1.18, "Stock length in metres"),
+        span=("num", 0.92, "Unstrung prod span in metres"),
+        scope=("bool", True, "Mount a compact tube optic and lens"),
+        wood_color=("str", "#493323", "Seasoned stock colour"),
+        bronze_color=("str", "#73512b", "Bronze fittings and prod colour"),
+        iron_color=("str", "#343a3c", "Iron rail, trigger and mechanism colour"),
+        cord_color=("str", "#9a8d72", "String and fletching colour"),
+        lens_color=("str", "#431514", "Dark optic or Aegis core colour"),
+        uv_scale=("num", 2.0, "Box unwrap scale"),
+    ),
+    tags=["prop", "weapon", "crossbow", "fps"],
+)
+def prop_crossbow(
+    ctx,
+    name,
+    location,
+    seed,
+    style,
+    length,
+    span,
+    scope,
+    wood_color,
+    bronze_color,
+    iron_color,
+    cord_color,
+    lens_color,
+    uv_scale,
+):
+    """Build a viewmodel-readable crossbow as one draw mesh.
+
+    Local +Z is the firing axis and local +Y is the top of the stock. The pivot
+    sits at the shoulder end, matching prop.weapon's hand-ready convention and
+    making the asset predictable in Babylon/Godot/Three without corrective
+    object transforms in Blender.
+    """
+    ctx.reseed(seed)
+    tier = {"pilgrim": 0, "repeater": 1, "daedalus": 2, "aegis": 3}[style]
+    length = max(0.82, min(1.65, float(length)))
+    span = max(length * 0.55, min(length * 1.08, float(span)))
+    uv_scale = max(0.1, float(uv_scale))
+
+    materials = [
+        mat_lib.principled("m_crossbow_wood", wood_color, roughness=0.82),
+        mat_lib.principled("m_crossbow_bronze", bronze_color, roughness=0.34, metallic=0.78),
+        mat_lib.principled("m_crossbow_iron", iron_color, roughness=0.3, metallic=0.88),
+        mat_lib.principled("m_crossbow_cord", cord_color, roughness=0.96),
+        mat_lib.principled(
+            "m_crossbow_lens",
+            lens_color,
+            roughness=0.18,
+            metallic=0.12,
+            emission=0.18 + tier * 0.12,
+            emission_color=lens_color,
+        ),
+    ]
+    WOOD, BRONZE, IRON, CORD, LENS = range(len(materials))
+    bm = mesh_lib.new_bmesh()
+    parts = 0
+
+    def mark(faces, slot):
+        nonlocal parts
+        for face in faces:
+            face.material_index = slot
+        parts += 1
+        return faces
+
+    def box(size, center, slot, bevel=0.008, rotation=None):
+        faces = mesh_lib.add_box(bm, size=size, bevel=bevel)
+        verts = list({vert for face in faces for vert in face.verts})
+        matrix = Matrix.Translation(Vector(center))
+        if rotation:
+            rx, ry, rz = rotation
+            matrix = (
+                matrix
+                @ Matrix.Rotation(rz, 4, "Z")
+                @ Matrix.Rotation(ry, 4, "Y")
+                @ Matrix.Rotation(rx, 4, "X")
+            )
+        bmesh.ops.transform(bm, matrix=matrix, verts=verts)
+        return mark(faces, slot)
+
+    def between(start, end, radius, slot, segments=8, top_scale=1.0):
+        a, b = Vector(start), Vector(end)
+        axis = b - a
+        if axis.length < 1e-5:
+            return []
+        faces = mesh_lib.add_cylinder(
+            bm,
+            radius=radius,
+            radius_top=max(0.002, radius * top_scale),
+            depth=axis.length,
+            segments=segments,
+        )
+        verts = list({vert for face in faces for vert in face.verts})
+        orient = axis.normalized().to_track_quat("Z", "Y").to_matrix().to_4x4()
+        bmesh.ops.transform(
+            bm,
+            matrix=Matrix.Translation((a + b) * 0.5) @ orient,
+            verts=verts,
+        )
+        return mark(faces, slot)
+
+    def torus(major, minor, center, slot, rotation=None, segments=16):
+        faces = mesh_lib.add_torus(
+            bm,
+            major=major,
+            minor=minor,
+            major_segments=segments,
+            minor_segments=6,
+        )
+        verts = list({vert for face in faces for vert in face.verts})
+        matrix = Matrix.Translation(Vector(center))
+        if rotation:
+            rx, ry, rz = rotation
+            matrix = (
+                matrix
+                @ Matrix.Rotation(rz, 4, "Z")
+                @ Matrix.Rotation(ry, 4, "Y")
+                @ Matrix.Rotation(rx, 4, "X")
+            )
+        bmesh.ops.transform(bm, matrix=matrix, verts=verts)
+        return mark(faces, slot)
+
+    def swept_stock(path, scales, slot):
+        """Append a shouldered octagonal stock with a grown-wood silhouette."""
+        profile = [
+            (-0.5, -0.30), (-0.30, -0.5), (0.30, -0.5), (0.5, -0.30),
+            (0.5, 0.30), (0.30, 0.5), (-0.30, 0.5), (-0.5, 0.30),
+        ]
+        return mark(
+            mesh_lib.sweep(
+                bm,
+                path,
+                profile,
+                scales=scales,
+                up=(0.0, 1.0, 0.0),
+            ),
+            slot,
+        )
+
+    stock_w = length * (0.092 + tier * 0.004)
+    stock_h = length * 0.105
+    prod_z = length * 0.72
+    latch_z = length * 0.47
+
+    # Shoulder stock: one continuous octagonal grown-wood form, tapered at the
+    # waist and swollen around the lock. The old stack of cuboids read as a
+    # wooden T in gameplay; this profile holds a weapon silhouette at distance.
+    swept_stock(
+        [
+            (0.0, -stock_h * 0.06, length * 0.015),
+            (0.0, -stock_h * 0.03, length * 0.17),
+            (0.0, -stock_h * 0.08, length * 0.31),
+            (0.0, 0.0, length * 0.50),
+            (0.0, stock_h * 0.05, length * 0.70),
+            (0.0, stock_h * 0.03, length * 0.91),
+            (0.0, 0.0, length * 0.99),
+        ],
+        [
+            (stock_w * 0.88, stock_h * 0.92),
+            (stock_w * 0.82, stock_h * 0.78),
+            (stock_w * 0.56, stock_h * 0.64),
+            (stock_w * 0.70, stock_h * 0.76),
+            (stock_w * 0.62, stock_h * 0.68),
+            (stock_w * 0.47, stock_h * 0.54),
+            (stock_w * 0.38, stock_h * 0.45),
+        ],
+        WOOD,
+    )
+    # Broad iron buttplate catches a rim light and gives the shoulder end a
+    # deliberate termination instead of a bare rectangular cap.
+    box((stock_w * 1.88, stock_h * 1.10, length * 0.028),
+        (0.0, -stock_h * 0.06, length * 0.018), IRON, stock_w * 0.12)
+    box((stock_w * 1.7, stock_h * 0.38, length * 0.19),
+        (0.0, stock_h * 0.63, length * 0.17), WOOD, stock_w * 0.08)
+    box((stock_w * 0.86, stock_h * 0.7, length * 0.24),
+        (0.0, -stock_h * 0.5, length * 0.25), WOOD, stock_w * 0.08,
+        rotation=(math.radians(-13), 0.0, 0.0))
+
+    # Bronze reinforcing furniture and an iron firing channel.
+    for z in (length * 0.27, length * 0.55, length * 0.69):
+        box((stock_w * 1.36, stock_h * 1.14, length * 0.025),
+            (0.0, 0.0, z), BRONZE, 0.004)
+    box((stock_w * 0.34, stock_h * 0.12, length * 0.65),
+        (0.0, stock_h * 0.58, length * 0.63), IRON, 0.004)
+    box((stock_w * 1.55, stock_h * 1.35, length * 0.12),
+        (0.0, 0.0, prod_z - length * 0.035), BRONZE, 0.012)
+
+    # Trigger and guard. The open ring catches highlights and instantly reads as
+    # a manufactured weapon rather than a wooden T shape.
+    between(
+        (-stock_w * 0.17, -stock_h * 0.46, length * 0.34),
+        (stock_w * 0.16, -stock_h * 0.72, length * 0.29),
+        stock_w * 0.038,
+        IRON,
+        6,
+    )
+    torus(
+        stock_w * 0.32,
+        stock_w * 0.045,
+        (0.0, -stock_h * 0.68, length * 0.30),
+        BRONZE,
+        rotation=(math.pi * 0.5, 0.0, 0.0),
+        segments=14,
+    )
+
+    # The prod is a shallow recurved arc made from three tapered segments per
+    # side. A straight rod says toy; this silhouette says stored energy.
+    tips = []
+    for side in (-1.0, 1.0):
+        root = Vector((side * stock_w * 0.5, 0.0, prod_z))
+        elbow = Vector((side * span * 0.28, 0.006, prod_z + length * 0.075))
+        outer = Vector((side * span * 0.46, 0.0, prod_z + length * 0.035))
+        tip = Vector((side * span * 0.5, -0.004, prod_z - length * 0.025))
+        between(root, elbow, stock_w * 0.145, BRONZE, 10, 0.84)
+        between(elbow, outer, stock_w * 0.118, BRONZE, 9, 0.76)
+        between(outer, tip, stock_w * 0.084, IRON, 8, 0.66)
+        torus(stock_w * 0.09, stock_w * 0.026, tip, IRON, segments=10)
+        tips.append(tip)
+
+    # Taut bowstring converges on the latch, visibly separating the mechanism
+    # from the prod even in a dark first-person frame.
+    latch = Vector((0.0, -stock_h * 0.04, latch_z))
+    between(tips[0], latch, stock_w * 0.021, CORD, 5)
+    between(latch, tips[1], stock_w * 0.021, CORD, 5)
+    between(tips[0], tips[1], stock_w * 0.013, CORD, 4)
+
+    # Loaded bolt, head and fletching.
+    bolt_y = stock_h * 0.69
+    between((0.0, bolt_y, length * 0.43), (0.0, bolt_y, length * 1.02),
+            stock_w * 0.026, IRON, 7, 0.72)
+    faces = mesh_lib.add_cylinder(
+        bm,
+        radius=stock_w * 0.065,
+        radius_top=0.0,
+        depth=length * 0.10,
+        segments=6,
+    )
+    head_verts = list({vert for face in faces for vert in face.verts})
+    bmesh.ops.transform(
+        bm,
+        matrix=Matrix.Translation(Vector((0.0, bolt_y, length * 1.06))),
+        verts=head_verts,
+    )
+    mark(faces, IRON)
+    for side in (-1.0, 1.0):
+        box((stock_w * 0.06, stock_w * 0.22, length * 0.095),
+            (side * stock_w * 0.055, bolt_y, length * 0.47), CORD, 0.002,
+            rotation=(0.0, 0.0, side * math.radians(16)))
+
+    # Compact integrated optic. It is proportioned to the weapon, unlike a
+    # screen-space cylinder bolted on after import.
+    if scope:
+        scope_y = stock_h * 1.43
+        scope_a, scope_b = length * 0.39, length * 0.68
+        box((stock_w * 0.54, stock_h * 0.18, scope_b - scope_a + length * 0.09),
+            (0.0, stock_h * 0.84, (scope_a + scope_b) * 0.5), IRON, 0.004)
+        between((0.0, scope_y, scope_a), (0.0, scope_y, scope_b),
+                stock_w * (0.20 + tier * 0.012), IRON, 12)
+        for z in (scope_a, scope_b):
+            torus(stock_w * (0.245 + tier * 0.012), stock_w * 0.048,
+                  (0.0, scope_y, z), BRONZE, segments=16)
+        faces = mesh_lib.add_cylinder(
+            bm,
+            radius=stock_w * (0.19 + tier * 0.01),
+            depth=stock_w * 0.025,
+            segments=14,
+            center=(0.0, scope_y, scope_b + stock_w * 0.012),
+        )
+        mark(faces, LENS)
+
+    # Mastery tiers change construction, not just paint.
+    if tier >= 1:
+        # Under-slung bolt cassette and visible spare shafts.
+        box((stock_w * 1.55, stock_h * 0.78, length * (0.22 + tier * 0.025)),
+            (0.0, -stock_h * 0.9, length * 0.57), IRON, 0.009)
+        spare_count = 3 if tier == 1 else 5
+        for index in range(spare_count):
+            x = (index - (spare_count - 1) * 0.5) * stock_w * 0.28
+            between((x, -stock_h * 1.32, length * 0.46),
+                    (x, -stock_h * 1.32, length * 0.66),
+                    stock_w * 0.018, CORD, 5)
+    if tier >= 2:
+        # Daedalus ratchet wheels on both sides and rigid side rails.
+        for side in (-1.0, 1.0):
+            gear_x = side * stock_w * 0.92
+            torus(stock_w * 0.26, stock_w * 0.055,
+                  (gear_x, 0.0, length * 0.58), BRONZE,
+                  rotation=(0.0, math.pi * 0.5, 0.0), segments=18)
+            between(
+                (side * stock_w * 0.72, 0.0, length * 0.43),
+                (side * stock_w * 0.72, 0.0, prod_z),
+                stock_w * 0.038,
+                IRON,
+                7,
+            )
+    if tier >= 3:
+        # Aegis power cores and a broader forward armour plate.
+        box((stock_w * 2.05, stock_h * 1.58, length * 0.10),
+            (0.0, 0.0, prod_z - length * 0.08), BRONZE, 0.016)
+        for side in (-1.0, 0.0, 1.0):
+            faces = mesh_lib.add_icosphere(
+                bm,
+                radius=stock_w * (0.12 if side else 0.16),
+                subdivisions=2,
+                center=(side * stock_w * 0.55, stock_h * 0.62, length * 0.61),
+            )
+            mark(faces, LENS)
+
+    mesh_lib.cleanup(bm, merge_dist=1e-5)
+    obj = mesh_lib.to_object(bm, _named(name, f"crossbow_{style}"))
+    for material in materials:
+        obj.data.materials.append(material)
+    obj.location = location
+    obj["bforge_weapon"] = "crossbow"
+    obj["bforge_crossbow_style"] = style
+    obj["bforge_parts"] = parts
+    result = finish_lib.finish(
+        ctx,
+        obj,
+        material="",
+        uv="box",
+        uv_scale=uv_scale,
+        origin="bottom",
+        smooth=True,
+        smooth_angle=38.0,
+    )
+    result.update({
+        "style": style,
+        "parts": parts,
+        "scope": bool(scope),
+        "magazine": tier >= 1,
+        "gearing": tier >= 2,
+        "power_core": tier >= 3,
+    })
+    finish_lib.budget_note(ctx, obj, 6500)
+    return result
+
+
+@op(
     "prop.banner",
     summary="Hanging banner or flag with a cloth wave. ~180 tris. Cheap way to add faction identity and colour to grey architecture.",
     params=_params(

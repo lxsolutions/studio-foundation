@@ -5262,6 +5262,104 @@
       }
     },
     {
+      "name": "prop.crossbow",
+      "summary": "Serious game-ready crossbow with a shouldered stock, curved segmented prod, taut three-part string, trigger guard, loaded bolt and integrated optic. Mastery styles add magazines, Daedalus gearing and an Aegis power core without changing the hand-ready pivot. One joined multi-material mesh.",
+      "tags": [
+        "prop",
+        "weapon",
+        "crossbow",
+        "fps"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name (defaults to the recipe name)",
+            "default": ""
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World position in metres",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Random seed \u2014 same seed always gives the same asset",
+            "default": 0
+          },
+          "style": {
+            "type": "string",
+            "enum": [
+              "pilgrim",
+              "repeater",
+              "daedalus",
+              "aegis"
+            ],
+            "description": "Construction and mastery tier",
+            "default": "pilgrim"
+          },
+          "length": {
+            "type": "number",
+            "description": "Stock length in metres",
+            "default": 1.18
+          },
+          "span": {
+            "type": "number",
+            "description": "Unstrung prod span in metres",
+            "default": 0.92
+          },
+          "scope": {
+            "type": "boolean",
+            "description": "Mount a compact tube optic and lens",
+            "default": true
+          },
+          "wood_color": {
+            "type": "string",
+            "description": "Seasoned stock colour",
+            "default": "#493323"
+          },
+          "bronze_color": {
+            "type": "string",
+            "description": "Bronze fittings and prod colour",
+            "default": "#73512b"
+          },
+          "iron_color": {
+            "type": "string",
+            "description": "Iron rail, trigger and mechanism colour",
+            "default": "#343a3c"
+          },
+          "cord_color": {
+            "type": "string",
+            "description": "String and fletching colour",
+            "default": "#9a8d72"
+          },
+          "lens_color": {
+            "type": "string",
+            "description": "Dark optic or Aegis core colour",
+            "default": "#431514"
+          },
+          "uv_scale": {
+            "type": "number",
+            "description": "Box unwrap scale",
+            "default": 2.0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "prop.crystal",
       "summary": "Crystal cluster: several tapered prisms fanned from a common base. ~300 tris. Emissive by default \u2014 reads as a light source and a landmark.",
       "tags": [

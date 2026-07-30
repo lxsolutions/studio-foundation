@@ -858,6 +858,31 @@ class Export(ForgeCase):
         self.assertEqual(meta["provenance"]["method"], "ai_generated")
         self.assertEqual(meta["provenance"]["ai"]["prompt"], "a wooden crate")
 
+    def test_crossbow_styles_add_real_construction_with_one_joined_mesh(self):
+        previous_tris = 0
+        for style in ("pilgrim", "repeater", "daedalus", "aegis"):
+            self.forge.call("session.reset")
+            result = self.forge.call(
+                "prop.crossbow",
+                name=f"crossbow_{style}",
+                style=style,
+                length=1.18,
+                span=0.92,
+                scope=True,
+                seed=17,
+            )
+            self.assertGreater(result["triangles"], 1600)
+            self.assertLessEqual(result["triangles"], 6500)
+            self.assertGreater(result["triangles"], previous_tris)
+            self.assertEqual(len(result["materials"]), 5)
+            self.assertGreater(result["bounds"]["size"][0], 0.85)
+            self.assertGreater(result["bounds"]["size"][2], 1.1)
+            self.assertTrue(result["scope"])
+            self.assertEqual(result["magazine"], style != "pilgrim")
+            self.assertEqual(result["gearing"], style in ("daedalus", "aegis"))
+            self.assertEqual(result["power_core"], style == "aegis")
+            previous_tris = result["triangles"]
+
     def test_export_asset_writes_the_full_hand_off(self):
         self.forge.call("prop.barrel", name="barrel", seed=1)
         result = self.forge.call(

@@ -1,6 +1,6 @@
 # bforge op reference
 
-114 operations.
+115 operations.
 
 ## `arch.*`
 
@@ -1230,6 +1230,26 @@ Wooden crate with a recessed-panel frame. ~350 tris. The frame is what makes it 
 | `material` | string | 'wood' | Material preset |
 | `color` | string | '' | Override colour |
 | `uv_scale` | number | 1.0 | Metres per UV tile |
+
+### `prop.crossbow`
+
+Serious game-ready crossbow with a shouldered stock, curved segmented prod, taut three-part string, trigger guard, loaded bolt and integrated optic. Mastery styles add magazines, Daedalus gearing and an Aegis power core without changing the hand-ready pivot. One joined multi-material mesh.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `name` | string | '' | Object name (defaults to the recipe name) |
+| `location` | array | [0.0, 0.0, 0.0] | World position in metres |
+| `seed` | integer | 0 | Random seed — same seed always gives the same asset |
+| `style` | pilgrim \| repeater \| daedalus \| aegis | 'pilgrim' | Construction and mastery tier |
+| `length` | number | 1.18 | Stock length in metres |
+| `span` | number | 0.92 | Unstrung prod span in metres |
+| `scope` | boolean | True | Mount a compact tube optic and lens |
+| `wood_color` | string | '#493323' | Seasoned stock colour |
+| `bronze_color` | string | '#73512b' | Bronze fittings and prod colour |
+| `iron_color` | string | '#343a3c' | Iron rail, trigger and mechanism colour |
+| `cord_color` | string | '#9a8d72' | String and fletching colour |
+| `lens_color` | string | '#431514' | Dark optic or Aegis core colour |
+| `uv_scale` | number | 2.0 | Box unwrap scale |
 
 ### `prop.crystal`
 
