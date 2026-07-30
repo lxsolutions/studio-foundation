@@ -315,6 +315,65 @@ class Architecture(ForgeCase):
         self.assertEqual(family["arrow"]["triangles"], repeated["triangles"])
         self.assertEqual(family["arrow"]["bounds"], repeated["bounds"])
 
+    def test_field_building_family_is_serious_distinct_and_deterministic(self):
+        expected = {
+            "farm": ("furrowed_olive_plot", 3.4, 3.4, 1.8),
+            "barracks": ("hoplite_training_hall", 3.2, 2.6, 2.8),
+            "wall": ("ashlar_parapet_segment", 2.4, 0.6, 2.2),
+            "waymarker": ("weathered_road_stele", 1.25, 1.1, 2.4),
+        }
+        family = {}
+        for style, (silhouette, width, depth, height) in expected.items():
+            self.forge.call("session.reset")
+            building = self.forge.call(
+                "arch.field_building",
+                name=f"greek_{style}",
+                style=style,
+                width=width,
+                depth=depth,
+                height=height,
+            )
+            family[style] = building
+            self.assertEqual(building["style"], style)
+            self.assertEqual(building["silhouette"], silhouette)
+            self.assertGreaterEqual(building["parts"], 10)
+            self.assertGreater(building["triangles"], 150)
+            self.assertLess(building["triangles"], 6_000)
+            self.assertAlmostEqual(
+                building["bounds"]["min"][2],
+                0.0,
+                places=3,
+                msg=f"{style} must sit on the ground",
+            )
+            self.assertEqual(
+                building["materials"],
+                [
+                    "m_field_stone",
+                    "m_field_foundation",
+                    "m_field_timber",
+                    "m_field_roof",
+                    "m_field_metal",
+                    "m_field_crop",
+                ],
+            )
+
+        self.assertGreater(family["farm"]["bounds"]["size"][0], 3.2)
+        self.assertGreater(family["barracks"]["bounds"]["size"][2], 2.4)
+        self.assertLess(family["wall"]["bounds"]["size"][1], 0.8)
+        self.assertGreater(family["waymarker"]["bounds"]["size"][2], 2.0)
+
+        self.forge.call("session.reset")
+        repeated = self.forge.call(
+            "arch.field_building",
+            name="greek_wall_repeat",
+            style="wall",
+            width=2.4,
+            depth=0.6,
+            height=2.2,
+        )
+        self.assertEqual(family["wall"]["triangles"], repeated["triangles"])
+        self.assertEqual(family["wall"]["bounds"], repeated["bounds"])
+
 
 class Transforms(ForgeCase):
     def test_apply_clears_rotation_and_scale(self):

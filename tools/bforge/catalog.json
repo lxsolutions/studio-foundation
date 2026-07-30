@@ -481,6 +481,109 @@
       }
     },
     {
+      "name": "arch.field_building",
+      "summary": "A browser-budget Greek settlement family for the structures surrounding a civic hall: a furrowed farmstead, hoplite barracks, modular ashlar wall, or weathered road stele. Variants share restrained limestone, timber, terracotta, bronze and crop materials while keeping silhouettes readable from an RTS camera.",
+      "tags": [
+        "build",
+        "architecture",
+        "rts",
+        "economy"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name",
+            "default": "field_building"
+          },
+          "style": {
+            "type": "string",
+            "enum": [
+              "farm",
+              "barracks",
+              "wall",
+              "waymarker"
+            ],
+            "description": "Settlement structure silhouette",
+            "default": "farm"
+          },
+          "width": {
+            "type": "number",
+            "description": "Overall footprint width in metres",
+            "default": 3.4
+          },
+          "depth": {
+            "type": "number",
+            "description": "Overall footprint depth in metres",
+            "default": 3.4
+          },
+          "height": {
+            "type": "number",
+            "description": "Authored visual height in metres",
+            "default": 2.2
+          },
+          "stone_color": {
+            "type": "string",
+            "description": "Primary weathered limestone",
+            "default": "#777064"
+          },
+          "foundation_color": {
+            "type": "string",
+            "description": "Podium, earth and shadow stone",
+            "default": "#403e3a"
+          },
+          "timber_color": {
+            "type": "string",
+            "description": "Posts, doors, racks and tools",
+            "default": "#2a1c14"
+          },
+          "roof_color": {
+            "type": "string",
+            "description": "Muted terracotta roof and painted details",
+            "default": "#552c24"
+          },
+          "metal_color": {
+            "type": "string",
+            "description": "Bronze and dark iron fittings",
+            "default": "#72502a"
+          },
+          "crop_color": {
+            "type": "string",
+            "description": "Olive, grain and restrained field growth",
+            "default": "#525632"
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World position",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "rotation": {
+            "type": "number",
+            "description": "Yaw in degrees",
+            "default": 0.0
+          },
+          "uv_scale": {
+            "type": "number",
+            "description": "Metres per UV tile",
+            "default": 0.7
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "arch.gateway",
       "summary": "A monumental arched gate \u2014 the triumphal entrance every Roman venue frames its far end with. One big central arch, optional flanking arches, an attic storey above.",
       "tags": [

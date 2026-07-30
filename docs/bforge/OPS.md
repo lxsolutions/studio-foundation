@@ -1,6 +1,6 @@
 # bforge op reference
 
-117 operations.
+118 operations.
 
 ## `arch.*`
 
@@ -104,6 +104,27 @@ A browser-budget classical Greek defense tower with one disciplined material set
 | `location` | array | [0.0, 0.0, 0.0] | World position |
 | `rotation` | number | 0.0 | Yaw in degrees |
 | `uv_scale` | number | 0.9 | Metres per UV tile |
+
+### `arch.field_building`
+
+A browser-budget Greek settlement family for the structures surrounding a civic hall: a furrowed farmstead, hoplite barracks, modular ashlar wall, or weathered road stele. Variants share restrained limestone, timber, terracotta, bronze and crop materials while keeping silhouettes readable from an RTS camera.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `name` | string | 'field_building' | Object name |
+| `style` | farm \| barracks \| wall \| waymarker | 'farm' | Settlement structure silhouette |
+| `width` | number | 3.4 | Overall footprint width in metres |
+| `depth` | number | 3.4 | Overall footprint depth in metres |
+| `height` | number | 2.2 | Authored visual height in metres |
+| `stone_color` | string | '#777064' | Primary weathered limestone |
+| `foundation_color` | string | '#403e3a' | Podium, earth and shadow stone |
+| `timber_color` | string | '#2a1c14' | Posts, doors, racks and tools |
+| `roof_color` | string | '#552c24' | Muted terracotta roof and painted details |
+| `metal_color` | string | '#72502a' | Bronze and dark iron fittings |
+| `crop_color` | string | '#525632' | Olive, grain and restrained field growth |
+| `location` | array | [0.0, 0.0, 0.0] | World position |
+| `rotation` | number | 0.0 | Yaw in degrees |
+| `uv_scale` | number | 0.7 | Metres per UV tile |
 
 ### `arch.gateway`
 
