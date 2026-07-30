@@ -1341,3 +1341,30 @@ noise-displaced terrain. It samples `landAt(x, z)` now.
 build was still running at the end of this round, so it is committed unverified.
 Cost is still 28.84 ms/frame against an 11.45 ms baseline, and until that comes
 down the judge's own named gap cannot be paid for.
+
+## R33 — the crossbow swap silently did nothing, and only the screenshot said so
+
+Measured after the swap: script 18.27 ms (down from 28.84), throughput 50.5 fps,
+edge 34.89 / 30.57. Every number improved.
+
+**The frame still shows the OLD primitive crossbow.** The swap no-ops.
+
+Cause: `spike_crossbow` exports as THREE glTF primitives, one per material, so
+Babylon's loader creates a parent node with `spike_crossbow_primitive0/1/2`
+children and no Mesh named exactly `spike_crossbow`. The `.find()` returns
+undefined, the guard returns early, and the `.catch()` never fires because nothing
+threw. **The multi-material win is exactly what broke the lookup.**
+
+Note also that the 28.84 -> 18.27 ms improvement cannot be attributed to this
+change, because this change did nothing. It is either run-to-run variance on a
+shared GPU host or an effect of the rebuild. Not claimed.
+
+Third time this exact shape has appeared this session: an operation reports
+success, every metric agrees, and the artifact is wrong -- vertex AO into COLOR_1,
+the blank cloned textures, and now a viewmodel swap that found no mesh. In all
+three the numbers were fine and the picture was not.
+
+**Fix for next round:** resolve GLB roots properly rather than by leaf-mesh name --
+`instantiateModelsToScene()` and use its `rootNodes`, or match a name PREFIX and
+reparent the whole hierarchy. And the loader path should assert it found something
+instead of returning quietly, which is the same guard `gameready.vertex_ao` got.
