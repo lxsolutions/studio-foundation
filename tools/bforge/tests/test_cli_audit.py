@@ -46,6 +46,14 @@ class FakeForge:
                 "warnings": self.warnings,
                 "findings": [],
             }
+        if op == "check.image":
+            return {
+                "size": [1200, 1200],
+                "subject_coverage": 0.42,
+                "luma": {"contrast": 0.61},
+                "findings": ["sprite highlights are clipped"] if self.warnings else [],
+                "ok": not self.warnings,
+            }
         if op == "render.contact_sheet":
             return {"rel": kwargs["out"]}
         raise AssertionError(f"unexpected op: {op}")
@@ -104,6 +112,35 @@ def test_audit_rejects_missing_assets_without_starting_blender(tmp_path, monkeyp
     args = cli.build_parser().parse_args(["audit", str(tmp_path / "missing.glb")])
     assert args.func(args) == 1
     assert not fake.started
+
+
+def test_audit_measures_shipping_raster_without_importing_a_scene(tmp_path, monkeypatch, capsys):
+    sprite = tmp_path / "greek-miner.webp"
+    sprite.write_bytes(b"RIFF")
+    fake = FakeForge()
+    monkeypatch.setattr(cli, "_forge", lambda _args: fake)
+    args = cli.build_parser().parse_args(["audit", str(sprite), "--render-dir", "review"])
+
+    assert args.func(args) == 0
+    result = json.loads(capsys.readouterr().out)
+    row = result["assets"][0]
+    assert row["kind"] == "image"
+    assert row["image"]["size"] == [1200, 1200]
+    assert row["status"] == {"errors": 0, "warnings": 0}
+    assert [op for op, _ in fake.calls] == ["check.image"]
+    assert fake.calls[0][1]["path"] == str(sprite.resolve())
+
+
+def test_raster_findings_follow_audit_warning_policy(tmp_path, monkeypatch):
+    sprite = tmp_path / "pickaxe.png"
+    sprite.write_bytes(b"PNG")
+    fake = FakeForge(warnings=1)
+    monkeypatch.setattr(cli, "_forge", lambda _args: fake)
+    args = cli.build_parser().parse_args([
+        "audit", str(sprite), "--fail-on", "warning",
+    ])
+
+    assert args.func(args) == 1
 
 
 def test_audit_progression_report_compares_ordered_asset_family(tmp_path, monkeypatch, capsys):

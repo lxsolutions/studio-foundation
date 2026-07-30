@@ -217,6 +217,19 @@ material changes in argument order. With `--fail-on warning`, a flat complexity
 ladder or a greater-than-1.5x scale mismatch becomes CI-actionable. The default
 single-asset JSON stays unchanged when the flag is omitted.
 
+Shipping raster art can go through the same read-only audit command. PNG, JPEG,
+and WebP files are measured with `check.image` instead of being imported as
+Blender scenes:
+
+```sh
+bforge audit miner-walk.png mine-terrain.webp --fail-on warning
+```
+
+Each image row reports dimensions, subject coverage, displayed and linear
+luminance, crushed/blown pixels, saturation, dominant colours, and actionable
+findings. `--render-dir` only applies to imported 3D assets; raster files are
+already the review artifact.
+
 ---
 
 ## What it can make

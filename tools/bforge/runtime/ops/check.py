@@ -351,7 +351,7 @@ def check_critique(ctx, objects, texture_size):
     "check.image",
     summary="Measure an image instead of eyeballing it: luminance range, blown highlights, crushed blacks, contrast, saturation, dominant colours and subject coverage. Reading a render is slow and cannot tell 'the asset is wrong' from 'the render is over-lit'. These numbers can, in a fraction of the time.",
     params={
-        "path": ("path", None, "PNG to analyse — a render, a contact sheet, or a baked texture"),
+        "path": ("path", None, "PNG, JPEG or WebP to analyse — a render, sprite sheet, contact sheet, or baked texture"),
         "colors": ("int", 6, "How many dominant colours to report"),
         "background": ("color", [0.05, 0.055, 0.065, 1.0], "Backdrop colour, excluded from subject stats"),
     },

@@ -311,7 +311,9 @@ def cmd_audit(args) -> int:
         print(json.dumps({"error": "asset not found", "paths": missing}, indent=2), file=sys.stderr)
         return 1
 
-    allowed = {".glb", ".gltf", ".obj", ".fbx", ".blend"}
+    model_types = {".glb", ".gltf", ".obj", ".fbx", ".blend"}
+    image_types = {".png", ".jpg", ".jpeg", ".webp"}
+    allowed = model_types | image_types
     unsupported = [str(path) for path in assets if path.suffix.lower() not in allowed]
     if unsupported:
         print(
@@ -328,30 +330,41 @@ def cmd_audit(args) -> int:
         for path in assets:
             row: dict = {"asset": str(path), "bytes": path.stat().st_size}
             try:
-                row["import"] = forge.call(
-                    "session.import",
-                    path=str(path),
-                    prefix=_audit_prefix(path),
-                    reset_first=True,
-                    _timeout=args.timeout,
-                )
-                row["info"] = forge.call("session.info", detail="full")
-                row["critique"] = forge.call(
-                    "check.critique",
-                    texture_size=args.texture_size,
-                    _timeout=args.timeout,
-                )
-                if args.render_dir:
-                    render_name = f"{Path(args.render_dir).as_posix().rstrip('/')}/{path.stem}-contact.png"
-                    row["render"] = forge.call(
-                        "render.contact_sheet",
-                        out=render_name,
-                        tile=args.tile,
-                        samples=args.samples,
-                        _timeout=max(args.timeout, 1200),
+                if path.suffix.lower() in image_types:
+                    row["kind"] = "image"
+                    row["image"] = forge.call(
+                        "check.image",
+                        path=str(path),
+                        colors=6,
+                        _timeout=args.timeout,
                     )
-                errors = int(row["critique"].get("errors", 0))
-                warnings = int(row["critique"].get("warnings", 0))
+                    errors = 0
+                    warnings = len(row["image"].get("findings", []))
+                else:
+                    row["import"] = forge.call(
+                        "session.import",
+                        path=str(path),
+                        prefix=_audit_prefix(path),
+                        reset_first=True,
+                        _timeout=args.timeout,
+                    )
+                    row["info"] = forge.call("session.info", detail="full")
+                    row["critique"] = forge.call(
+                        "check.critique",
+                        texture_size=args.texture_size,
+                        _timeout=args.timeout,
+                    )
+                    if args.render_dir:
+                        render_name = f"{Path(args.render_dir).as_posix().rstrip('/')}/{path.stem}-contact.png"
+                        row["render"] = forge.call(
+                            "render.contact_sheet",
+                            out=render_name,
+                            tile=args.tile,
+                            samples=args.samples,
+                            _timeout=max(args.timeout, 1200),
+                        )
+                    errors = int(row["critique"].get("errors", 0))
+                    warnings = int(row["critique"].get("warnings", 0))
                 row["status"] = {"errors": errors, "warnings": warnings}
                 failed = failed or errors > 0 or (args.fail_on == "warning" and warnings > 0)
             except (ForgeError, DaemonError) as exc:
@@ -497,7 +510,11 @@ def build_parser() -> argparse.ArgumentParser:
         "audit",
         help="Import, measure and critique existing game assets; optionally render contact sheets",
     )
-    audit.add_argument("assets", nargs="+", help=".glb/.gltf/.obj/.fbx/.blend files")
+    audit.add_argument(
+        "assets",
+        nargs="+",
+        help=".glb/.gltf/.obj/.fbx/.blend models or .png/.jpg/.webp images",
+    )
     audit.add_argument(
         "--render-dir",
         default="",

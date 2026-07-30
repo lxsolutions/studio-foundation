@@ -1958,7 +1958,7 @@
         "properties": {
           "path": {
             "type": "string",
-            "description": "PNG to analyse \u2014 a render, a contact sheet, or a baked texture"
+            "description": "PNG, JPEG or WebP to analyse \u2014 a render, sprite sheet, contact sheet, or baked texture"
           },
           "colors": {
             "type": "integer",
