@@ -1,6 +1,6 @@
 # bforge op reference
 
-113 operations.
+114 operations.
 
 ## `arch.*`
 
@@ -33,6 +33,31 @@ A wall of repeating arched bays following a path — THE Roman building block. S
 | `cornice` | number | 0.6 | Top band height in metres |
 | `cornice_jut` | number | 0.35 | How far the cornice projects past the wall |
 | `engaged_columns` | boolean | True | Half-columns on the piers — the Colosseum's storey articulation |
+
+### `arch.civic_hall`
+
+A complete classical town centre in one joined, material-disciplined asset: stepped masonry masses, pedimented portico, tiled gable roofs, buttresses, windows and faction banner. The greek_mine style adds an arched shaft mouth and working timber headframe/hoist, making an RTS civic centre that is also credible at first-person distance.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `name` | string | 'civic_hall' | Object name |
+| `style` | greek_mine \| greek_polis | 'greek_mine' | Architecture programme |
+| `width` | number | 10.4 | Overall facade width in metres |
+| `depth` | number | 8.4 | Overall building depth in metres |
+| `height` | number | 6.8 | Height to the upper roof eaves |
+| `columns` | integer | 6 | Doric columns across the front portico |
+| `tile_rows` | integer | 7 | Raised tile bands across each major roof |
+| `mine_portal` | boolean | True | Add an arched mine mouth through the facade |
+| `hoist` | boolean | True | Add the timber headframe, wheel, spokes, axle and rope |
+| `stone_color` | string | '#817765' | Primary weathered masonry |
+| `foundation_color` | string | '#4c4841' | Podium, courses and buttress stone |
+| `roof_color` | string | '#552c24' | Dark terracotta tile |
+| `timber_color` | string | '#2b1d16' | Mine framing and doors |
+| `metal_color` | string | '#61441f' | Bronze/iron fittings |
+| `cloth_color` | string | '#4a2024' | Faction banner |
+| `location` | array | [0.0, 0.0, 0.0] | World position |
+| `rotation` | number | 0.0 | Yaw in degrees |
+| `uv_scale` | number | 1.4 | Metres per UV tile |
 
 ### `arch.colonnade`
 

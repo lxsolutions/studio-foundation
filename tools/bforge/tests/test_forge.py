@@ -195,6 +195,70 @@ class Geometry(ForgeCase):
         self.assertAlmostEqual(result["triangles"], one["triangles"] * 4)
 
 
+class Architecture(ForgeCase):
+    def test_civic_hall_is_a_deterministic_material_disciplined_mine_town_centre(self):
+        first = self.forge.call(
+            "arch.civic_hall",
+            name="laurion",
+            style="greek_mine",
+            width=10.4,
+            depth=8.4,
+            height=6.8,
+            columns=6,
+            tile_rows=7,
+        )
+        self.assertEqual(first["style"], "greek_mine")
+        self.assertTrue(first["mine_portal"])
+        self.assertTrue(first["hoist"])
+        self.assertEqual(first["columns"], 6)
+        self.assertEqual(first["tile_rows"], 7)
+        self.assertGreaterEqual(first["parts"], 90)
+        self.assertGreater(first["portal_width"], 2.0)
+        self.assertGreater(first["triangles"], 3_000)
+        self.assertLess(first["triangles"], 18_000)
+        self.assertEqual(
+            first["materials"],
+            [
+                "m_civic_stone",
+                "m_civic_foundation",
+                "m_civic_roof",
+                "m_civic_timber",
+                "m_civic_metal",
+                "m_civic_cloth",
+                "m_civic_void",
+            ],
+        )
+        self.assertAlmostEqual(first["bounds"]["min"][2], 0.0, places=3)
+        self.assertGreater(first["bounds"]["size"][0], 10.0)
+        self.assertGreater(first["bounds"]["size"][1], 8.0)
+
+        self.forge.call("session.reset")
+        repeated = self.forge.call(
+            "arch.civic_hall",
+            name="laurion",
+            style="greek_mine",
+            width=10.4,
+            depth=8.4,
+            height=6.8,
+            columns=6,
+            tile_rows=7,
+        )
+        self.assertEqual(first["triangles"], repeated["triangles"])
+        self.assertEqual(first["bounds"], repeated["bounds"])
+
+    def test_polis_style_removes_mine_only_parts(self):
+        polis = self.forge.call(
+            "arch.civic_hall",
+            name="polis",
+            style="greek_polis",
+        )
+        self.assertEqual(polis["style"], "greek_polis")
+        self.assertFalse(polis["mine_portal"])
+        self.assertFalse(polis["hoist"])
+        self.assertEqual(polis["portal_width"], 0.0)
+        self.assertLess(polis["parts"], 110)
+
+
 class Transforms(ForgeCase):
     def test_apply_clears_rotation_and_scale(self):
         self.forge.call("build.box", name="b", size=[1, 1, 1])

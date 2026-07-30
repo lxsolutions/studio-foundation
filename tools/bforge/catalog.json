@@ -143,6 +143,126 @@
       }
     },
     {
+      "name": "arch.civic_hall",
+      "summary": "A complete classical town centre in one joined, material-disciplined asset: stepped masonry masses, pedimented portico, tiled gable roofs, buttresses, windows and faction banner. The greek_mine style adds an arched shaft mouth and working timber headframe/hoist, making an RTS civic centre that is also credible at first-person distance.",
+      "tags": [
+        "build",
+        "architecture",
+        "rts"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name",
+            "default": "civic_hall"
+          },
+          "style": {
+            "type": "string",
+            "enum": [
+              "greek_mine",
+              "greek_polis"
+            ],
+            "description": "Architecture programme",
+            "default": "greek_mine"
+          },
+          "width": {
+            "type": "number",
+            "description": "Overall facade width in metres",
+            "default": 10.4
+          },
+          "depth": {
+            "type": "number",
+            "description": "Overall building depth in metres",
+            "default": 8.4
+          },
+          "height": {
+            "type": "number",
+            "description": "Height to the upper roof eaves",
+            "default": 6.8
+          },
+          "columns": {
+            "type": "integer",
+            "description": "Doric columns across the front portico",
+            "default": 6
+          },
+          "tile_rows": {
+            "type": "integer",
+            "description": "Raised tile bands across each major roof",
+            "default": 7
+          },
+          "mine_portal": {
+            "type": "boolean",
+            "description": "Add an arched mine mouth through the facade",
+            "default": true
+          },
+          "hoist": {
+            "type": "boolean",
+            "description": "Add the timber headframe, wheel, spokes, axle and rope",
+            "default": true
+          },
+          "stone_color": {
+            "type": "string",
+            "description": "Primary weathered masonry",
+            "default": "#817765"
+          },
+          "foundation_color": {
+            "type": "string",
+            "description": "Podium, courses and buttress stone",
+            "default": "#4c4841"
+          },
+          "roof_color": {
+            "type": "string",
+            "description": "Dark terracotta tile",
+            "default": "#552c24"
+          },
+          "timber_color": {
+            "type": "string",
+            "description": "Mine framing and doors",
+            "default": "#2b1d16"
+          },
+          "metal_color": {
+            "type": "string",
+            "description": "Bronze/iron fittings",
+            "default": "#61441f"
+          },
+          "cloth_color": {
+            "type": "string",
+            "description": "Faction banner",
+            "default": "#4a2024"
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World position",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "rotation": {
+            "type": "number",
+            "description": "Yaw in degrees",
+            "default": 0.0
+          },
+          "uv_scale": {
+            "type": "number",
+            "description": "Metres per UV tile",
+            "default": 1.4
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "arch.colonnade",
       "summary": "A ring or run of free-standing columns with an entablature \u2014 temple fronts, stadium rims, forum porticos. Cheaper than an arcade and the right silhouette for a top storey.",
       "tags": [

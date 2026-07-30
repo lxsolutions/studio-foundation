@@ -15,6 +15,7 @@ import math
 
 import bmesh
 from lib import finish as finish_lib
+from lib import mat as mat_lib
 from lib import mesh as mesh_lib
 from lib import scene as scene_lib
 from mathutils import Matrix, Vector
@@ -305,7 +306,6 @@ def arch_gateway(ctx, name, width, height, thickness, side_arches, attic, vousso
     body_h = height - attic
     main_w = width * (0.42 if side_arches else 0.60)
     spring = body_h * 0.46
-    rise = main_w * 0.5
 
     def opening(centre_x, open_w, spring_z, segments):
         arch_rise = open_w * 0.5
@@ -383,4 +383,453 @@ def arch_gateway(ctx, name, width, height, thickness, side_arches, attic, vousso
         origin="world", smooth=False,
     )
     result["opening_width"] = round(main_w, 2)
+    return result
+
+
+@op(
+    "arch.civic_hall",
+    summary=(
+        "A complete classical town centre in one joined, material-disciplined asset: "
+        "stepped masonry masses, pedimented portico, tiled gable roofs, buttresses, "
+        "windows and faction banner. The greek_mine style adds an arched shaft mouth "
+        "and working timber headframe/hoist, making an RTS civic centre that is also "
+        "credible at first-person distance."
+    ),
+    params={
+        "name": ("str", "civic_hall", "Object name"),
+        "style": ("enum:greek_mine|greek_polis", "greek_mine", "Architecture programme"),
+        "width": ("num", 10.4, "Overall facade width in metres"),
+        "depth": ("num", 8.4, "Overall building depth in metres"),
+        "height": ("num", 6.8, "Height to the upper roof eaves"),
+        "columns": ("int", 6, "Doric columns across the front portico"),
+        "tile_rows": ("int", 7, "Raised tile bands across each major roof"),
+        "mine_portal": ("bool", True, "Add an arched mine mouth through the facade"),
+        "hoist": ("bool", True, "Add the timber headframe, wheel, spokes, axle and rope"),
+        "stone_color": ("str", "#817765", "Primary weathered masonry"),
+        "foundation_color": ("str", "#4c4841", "Podium, courses and buttress stone"),
+        "roof_color": ("str", "#552c24", "Dark terracotta tile"),
+        "timber_color": ("str", "#2b1d16", "Mine framing and doors"),
+        "metal_color": ("str", "#61441f", "Bronze/iron fittings"),
+        "cloth_color": ("str", "#4a2024", "Faction banner"),
+        "location": ("vec3", [0.0, 0.0, 0.0], "World position"),
+        "rotation": ("num", 0.0, "Yaw in degrees"),
+        "uv_scale": ("num", 1.4, "Metres per UV tile"),
+    },
+    tags=["build", "architecture", "rts"],
+)
+def arch_civic_hall(
+    ctx,
+    name,
+    style,
+    width,
+    depth,
+    height,
+    columns,
+    tile_rows,
+    mine_portal,
+    hoist,
+    stone_color,
+    foundation_color,
+    roof_color,
+    timber_color,
+    metal_color,
+    cloth_color,
+    location,
+    rotation,
+    uv_scale,
+):
+    width = max(6.0, float(width))
+    depth = max(5.0, float(depth))
+    height = max(4.5, float(height))
+    columns = max(4, min(10, int(columns)))
+    if columns % 2:
+        columns += 1
+    tile_rows = max(0, min(12, int(tile_rows)))
+    if style == "greek_polis":
+        mine_portal = False
+        hoist = False
+
+    # One mesh and seven shared slots. The old production recipe made every
+    # differently-coloured primitive create another material, reaching 17 draw
+    # materials before the building even had real roof or facade articulation.
+    materials = [
+        mat_lib.principled("m_civic_stone", stone_color, roughness=0.88),
+        mat_lib.principled("m_civic_foundation", foundation_color, roughness=0.94),
+        mat_lib.principled("m_civic_roof", roof_color, roughness=0.9),
+        mat_lib.principled("m_civic_timber", timber_color, roughness=0.82),
+        mat_lib.principled("m_civic_metal", metal_color, roughness=0.38, metallic=0.82),
+        mat_lib.principled("m_civic_cloth", cloth_color, roughness=0.97),
+        mat_lib.principled("m_civic_void", "#050607", roughness=1.0),
+    ]
+    STONE, FOUNDATION, ROOF, TIMBER, METAL, CLOTH, VOID = range(len(materials))
+    bm = mesh_lib.new_bmesh()
+    parts = 0
+
+    def mark(faces, slot):
+        nonlocal parts
+        for face in faces:
+            face.material_index = slot
+        parts += 1
+        return faces
+
+    def box(size, center, slot, bevel=0.025):
+        return mark(mesh_lib.add_box(bm, size=size, center=center, bevel=bevel), slot)
+
+    def rotated_box(size, center, slot, rotation_y=0.0, bevel=0.015):
+        faces = mesh_lib.add_box(bm, size=size, center=(0.0, 0.0, 0.0), bevel=bevel)
+        verts = list({vert for face in faces for vert in face.verts})
+        matrix = Matrix.Translation(Vector(center))
+        if rotation_y:
+            matrix = matrix @ Matrix.Rotation(rotation_y, 4, "Y")
+        bmesh.ops.transform(bm, matrix=matrix, verts=verts)
+        return mark(faces, slot)
+
+    def oriented_cylinder(radius, depth_value, segments, center, slot, rotation_x=0.0):
+        faces = mesh_lib.add_cylinder(
+            bm,
+            radius=radius,
+            depth=depth_value,
+            segments=segments,
+            center=(0.0, 0.0, 0.0),
+        )
+        verts = list({vert for face in faces for vert in face.verts})
+        matrix = Matrix.Translation(Vector(center))
+        if rotation_x:
+            matrix = matrix @ Matrix.Rotation(rotation_x, 4, "X")
+        bmesh.ops.transform(bm, matrix=matrix, verts=verts)
+        return mark(faces, slot)
+
+    def gable_prism(span, prism_depth, base_z, rise, center_x, center_y, slot):
+        nonlocal parts
+        hx, hy = span * 0.5, prism_depth * 0.5
+        verts = [
+            bm.verts.new((center_x - hx, center_y - hy, base_z)),
+            bm.verts.new((center_x + hx, center_y - hy, base_z)),
+            bm.verts.new((center_x, center_y - hy, base_z + rise)),
+            bm.verts.new((center_x - hx, center_y + hy, base_z)),
+            bm.verts.new((center_x + hx, center_y + hy, base_z)),
+            bm.verts.new((center_x, center_y + hy, base_z + rise)),
+        ]
+        faces = [
+            bm.faces.new((verts[0], verts[2], verts[1])),
+            bm.faces.new((verts[3], verts[4], verts[5])),
+            bm.faces.new((verts[0], verts[3], verts[5], verts[2])),
+            bm.faces.new((verts[2], verts[5], verts[4], verts[1])),
+            bm.faces.new((verts[0], verts[1], verts[4], verts[3])),
+        ]
+        for face in faces:
+            face.material_index = slot
+        parts += 1
+        return faces
+
+    def tile_bands(span, roof_depth, base_z, rise, center_x, center_y, rows):
+        if rows <= 0:
+            return
+        half = span * 0.5
+        slope = math.atan2(rise, half)
+        length = math.hypot(half, rise) + 0.08
+        for row in range(rows):
+            y = center_y - roof_depth * 0.46 + roof_depth * 0.92 * row / max(1, rows - 1)
+            rotated_box(
+                (length, 0.055, 0.055),
+                (center_x - span * 0.25, y, base_z + rise * 0.5 + 0.055),
+                ROOF,
+                rotation_y=-slope,
+                bevel=0.008,
+            )
+            rotated_box(
+                (length, 0.055, 0.055),
+                (center_x + span * 0.25, y, base_z + rise * 0.5 + 0.055),
+                ROOF,
+                rotation_y=slope,
+                bevel=0.008,
+            )
+        box(
+            (0.13, roof_depth * 1.04, 0.14),
+            (center_x, center_y, base_z + rise + 0.045),
+            ROOF,
+            bevel=0.025,
+        )
+
+    # --- stepped civic massing -------------------------------------------------
+    podium_z = 0.24
+    box((width, depth, 0.48), (0.0, 0.0, podium_z), FOUNDATION, bevel=0.08)
+    for step in range(3):
+        step_width = width * (0.76 + step * 0.06)
+        step_depth = 0.48 + step * 0.22
+        box(
+            (step_width, step_depth, 0.17),
+            (0.0, -depth * 0.5 - 0.18 - step * 0.18, 0.16 + step * 0.13),
+            FOUNDATION,
+            bevel=0.025,
+        )
+
+    body_base = 0.48
+    hall_h = height * 0.58
+    wing_h = height * 0.43
+    hall_w = width * 0.62
+    hall_d = depth * 0.72
+    box((hall_w, hall_d, hall_h), (0.0, depth * 0.055, body_base + hall_h * 0.5), STONE, 0.055)
+    wing_w = width * 0.23
+    wing_d = depth * 0.62
+    for sign in (-1.0, 1.0):
+        x = sign * width * 0.385
+        box((wing_w, wing_d, wing_h), (x, depth * 0.02, body_base + wing_h * 0.5), STONE, 0.045)
+        # Heavy corner buttresses produce an RTS-readable footprint without
+        # turning the hall into a castle.
+        for y in (-depth * 0.31, depth * 0.29):
+            box(
+                (width * 0.075, depth * 0.115, wing_h * 0.92),
+                (sign * width * 0.47, y, body_base + wing_h * 0.46),
+                FOUNDATION,
+                0.035,
+            )
+
+    tower_w = width * 0.36
+    tower_d = depth * 0.43
+    tower_h = height * 0.86
+    box(
+        (tower_w, tower_d, tower_h - hall_h * 0.42),
+        (0.0, depth * 0.16, body_base + hall_h * 0.42 + (tower_h - hall_h * 0.42) * 0.5),
+        STONE,
+        0.045,
+    )
+    # Continuous string courses break the giant wall slabs at both camera
+    # scales and share the darker foundation material.
+    for z in (body_base + hall_h * 0.33, body_base + hall_h * 0.69):
+        box((width * 0.96, depth * 0.73, 0.13), (0.0, depth * 0.04, z), FOUNDATION, 0.02)
+
+    # --- roofs and readable terracotta tile rhythm ----------------------------
+    hall_roof_z = body_base + hall_h
+    hall_roof_w = hall_w * 1.1
+    hall_roof_d = hall_d * 1.12
+    hall_rise = height * 0.17
+    gable_prism(hall_roof_w, hall_roof_d, hall_roof_z, hall_rise, 0.0, depth * 0.055, ROOF)
+    tile_bands(hall_roof_w, hall_roof_d, hall_roof_z, hall_rise, 0.0, depth * 0.055, tile_rows)
+
+    for sign in (-1.0, 1.0):
+        x = sign * width * 0.385
+        roof_w = wing_w * 1.18
+        roof_d = wing_d * 1.12
+        roof_z = body_base + wing_h
+        rise = height * 0.105
+        gable_prism(roof_w, roof_d, roof_z, rise, x, depth * 0.02, ROOF)
+        tile_bands(roof_w, roof_d, roof_z, rise, x, depth * 0.02, max(3, tile_rows - 2))
+
+    tower_roof_z = body_base + tower_h
+    tower_roof_w = tower_w * 1.14
+    tower_roof_d = tower_d * 1.16
+    tower_rise = height * 0.13
+    gable_prism(tower_roof_w, tower_roof_d, tower_roof_z, tower_rise, 0.0, depth * 0.16, ROOF)
+    tile_bands(
+        tower_roof_w,
+        tower_roof_d,
+        tower_roof_z,
+        tower_rise,
+        0.0,
+        depth * 0.16,
+        max(4, tile_rows - 1),
+    )
+
+    # --- Doric portico and pediment -------------------------------------------
+    facade_y = -depth * 0.5 - 0.34
+    column_h = height * 0.39
+    column_r = width * 0.025
+    column_span = width * 0.82
+    for index in range(columns):
+        x = -column_span * 0.5 + column_span * index / max(1, columns - 1)
+        box((column_r * 2.7, column_r * 2.7, 0.16), (x, facade_y, body_base + 0.08), STONE, 0.015)
+        faces = mesh_lib.add_cylinder(
+            bm,
+            radius=column_r,
+            radius_top=column_r * 0.84,
+            depth=column_h,
+            segments=12,
+            center=(x, facade_y, body_base + 0.16 + column_h * 0.5),
+            bevel=0.015,
+        )
+        mark(faces, STONE)
+        box(
+            (column_r * 2.55, column_r * 2.55, 0.19),
+            (x, facade_y, body_base + column_h + 0.205),
+            STONE,
+            0.018,
+        )
+
+    entablature_z = body_base + column_h + 0.36
+    box((width * 0.94, 0.72, 0.42), (0.0, facade_y, entablature_z), STONE, 0.035)
+    box((width, 0.82, 0.16), (0.0, facade_y, entablature_z + 0.29), FOUNDATION, 0.025)
+    pediment_base = entablature_z + 0.37
+    gable_prism(width * 0.91, 0.52, pediment_base, height * 0.13, 0.0, facade_y, STONE)
+    # Oxblood tympanum inset: faction identity without a bright toy-like banner.
+    gable_prism(width * 0.47, 0.055, pediment_base + 0.12, height * 0.065, 0.0, facade_y - 0.29, CLOTH)
+
+    # --- mine mouth, windows and working hoist --------------------------------
+    portal_width = width * 0.225
+    portal_radius = portal_width * 0.5
+    portal_base = body_base + 0.08
+    portal_spring = portal_base + height * 0.245
+    portal_y = facade_y - 0.42
+    if mine_portal:
+        box(
+            (portal_width, 0.10, portal_spring - portal_base),
+            (0.0, portal_y, portal_base + (portal_spring - portal_base) * 0.5),
+            VOID,
+            0.01,
+        )
+        oriented_cylinder(
+            portal_radius,
+            0.11,
+            24,
+            (0.0, portal_y, portal_spring),
+            VOID,
+            rotation_x=math.pi * 0.5,
+        )
+        jamb_w = width * 0.038
+        for sign in (-1.0, 1.0):
+            box(
+                (jamb_w, 0.58, portal_spring - portal_base + 0.22),
+                (sign * (portal_radius + jamb_w * 0.5), portal_y + 0.06,
+                 portal_base + (portal_spring - portal_base) * 0.5),
+                FOUNDATION,
+                0.022,
+            )
+        for index in range(11):
+            a0 = math.pi * index / 11
+            a1 = math.pi * (index + 1) / 11
+            mid = (a0 + a1) * 0.5
+            ring = portal_radius + jamb_w * 0.48
+            x = -math.cos(mid) * ring
+            z = portal_spring + math.sin(mid) * ring
+            span = portal_radius * (a1 - a0) * 1.22 + jamb_w * 0.32
+            rotated_box(
+                (span, 0.62, jamb_w * 0.92),
+                (x, portal_y + 0.06, z),
+                FOUNDATION,
+                rotation_y=mid - math.pi * 0.5,
+                bevel=0.012,
+            )
+        # Substantial timber lintel and doors sit inside the stone arch.
+        box((portal_width * 0.96, 0.16, 0.18), (0.0, portal_y - 0.08, portal_spring), TIMBER, 0.018)
+        for sign in (-1.0, 1.0):
+            box(
+                (0.16, 0.16, portal_spring - portal_base),
+                (sign * portal_width * 0.42, portal_y - 0.08,
+                 portal_base + (portal_spring - portal_base) * 0.5),
+                TIMBER,
+                0.018,
+            )
+
+    # Deep-set windows and bronze lintels turn blank wall into a civic facade.
+    for sign in (-1.0, 1.0):
+        x = sign * width * 0.29
+        box((width * 0.075, 0.08, height * 0.145), (x, portal_y + 0.32, body_base + height * 0.32), VOID, 0.015)
+        box((width * 0.095, 0.11, 0.10), (x, portal_y + 0.27, body_base + height * 0.405), METAL, 0.012)
+    for sign in (-1.0, 0.0, 1.0):
+        box(
+            (width * 0.035, 0.07, height * 0.12),
+            (sign * tower_w * 0.27, -tower_d * 0.5 + depth * 0.16 - 0.045,
+             body_base + height * 0.68),
+            VOID,
+            0.01,
+        )
+
+    if hoist:
+        wheel_x = width * 0.36
+        wheel_y = portal_y - 0.62
+        wheel_z = body_base + height * 0.33
+        frame_h = height * 0.48
+        frame_span = width * 0.155
+        for sign in (-1.0, 1.0):
+            rotated_box(
+                (0.23, 0.27, frame_h),
+                (wheel_x + sign * frame_span * 0.5, wheel_y + 0.18,
+                 body_base + frame_h * 0.5),
+                TIMBER,
+                rotation_y=math.radians(-sign * 7.0),
+                bevel=0.018,
+            )
+        box((frame_span * 1.35, 0.32, 0.24), (wheel_x, wheel_y + 0.18, body_base + frame_h), TIMBER, 0.022)
+
+        wheel_faces = mesh_lib.add_torus(
+            bm,
+            major=width * 0.068,
+            minor=width * 0.009,
+            major_segments=24,
+            minor_segments=7,
+            center=(0.0, 0.0, 0.0),
+        )
+        wheel_verts = list({vert for face in wheel_faces for vert in face.verts})
+        bmesh.ops.transform(
+            bm,
+            matrix=Matrix.Translation((wheel_x, wheel_y, wheel_z))
+            @ Matrix.Rotation(math.pi * 0.5, 4, "X"),
+            verts=wheel_verts,
+        )
+        mark(wheel_faces, METAL)
+        for spoke in range(8):
+            rotated_box(
+                (width * 0.125, 0.055, 0.055),
+                (wheel_x, wheel_y, wheel_z),
+                METAL,
+                rotation_y=spoke * math.pi / 4,
+                bevel=0.006,
+            )
+        oriented_cylinder(
+            width * 0.025,
+            0.52,
+            12,
+            (wheel_x, wheel_y, wheel_z),
+            METAL,
+            rotation_x=math.pi * 0.5,
+        )
+        box(
+            (0.055, 0.055, wheel_z - portal_base),
+            (wheel_x, wheel_y, portal_base + (wheel_z - portal_base) * 0.5),
+            TIMBER,
+            0.006,
+        )
+
+    # Upper civic banner completes the mine-town identity. Loose ore piles are
+    # deliberately omitted: the game already owns mineable boulders, and baked
+    # decorative rocks at the portal read as collision blockers in first person.
+    box(
+        (tower_w * 0.34, 0.055, height * 0.25),
+        (0.0, -tower_d * 0.5 + depth * 0.16 - 0.09, body_base + height * 0.66),
+        CLOTH,
+        0.012,
+    )
+    box(
+        (tower_w * 0.40, 0.085, 0.10),
+        (0.0, -tower_d * 0.5 + depth * 0.16 - 0.11, body_base + height * 0.80),
+        METAL,
+        0.01,
+    )
+    mesh_lib.cleanup(bm, merge_dist=1e-4)
+    obj = mesh_lib.to_object(bm, scene_lib.unique_name(name))
+    for material in materials:
+        obj.data.materials.append(material)
+    obj.location = location
+    obj.rotation_euler = (0.0, 0.0, math.radians(rotation))
+    obj["bforge_architecture"] = style
+    obj["bforge_parts"] = parts
+    result = finish_lib.finish(
+        ctx,
+        obj,
+        material="",
+        uv="box",
+        uv_scale=max(0.1, uv_scale),
+        origin="world",
+        smooth=False,
+    )
+    result.update({
+        "style": style,
+        "parts": parts,
+        "columns": columns,
+        "tile_rows": tile_rows,
+        "mine_portal": bool(mine_portal),
+        "hoist": bool(hoist),
+        "portal_width": round(portal_width, 3) if mine_portal else 0.0,
+    })
+    finish_lib.budget_note(ctx, obj, 18_000)
     return result
