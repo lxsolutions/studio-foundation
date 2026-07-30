@@ -1292,3 +1292,52 @@ Running total of instruments that reported confidently while being wrong, this
 session: the destructive getContext probe, judge reveal scoring 0% for a 50% deck,
 the geometry pass on an inert hook, vertex AO landing in COLOR_1, fps percentiles
 under vsync quantisation, and now a gate that shrugged at a vanished world.
+
+## R32 — JUDGE 2W/0L (100%); three assets forged; the linter paid for itself immediately
+
+**Sealed blind A/B, untouched Spike vs the textured build: 2W / 0L — 100% —
+AT_OR_ABOVE_REFERENCE.** Fresh agent, brief sha d53d9b8446398a1c, before/after
+rather than cross-style. It named the additions without knowing them:
+
+> "darkens every trunk base and boulder underside ... grain plus scattered debris
+> on the ground plane and a vertical sky gradient, so objects sit in the world
+> instead of on top of it"
+
+Its named remaining gap: **no directional cast shadows anywhere** -- exactly the
+thing measured as unaffordable (11.45 -> 183 ms as CSM).
+
+**Owner feedback arrived and matched the judge.** The owner called the crossbow
+"shitty and cartoony"; the judge had independently called the same asset
+"placeholder-grade: one flat matte brown across both stock and limb with no wood,
+metal or cord separation ... a flat navy bar for the string that stops short of the
+limb tip in mid-air". Two independent observers, same asset, same complaint.
+
+**Forged, all lint-clean and AO-baked into COLOR_0:**
+
+| asset | tris | materials | AO occluded |
+|---|---|---|---|
+| spike_crossbow | 2192 | m_wood, m_iron, m_cloth | 67% |
+| spike_tree | 304 | m_wood, m_leaf | 67% |
+| spike_settlement | 1344 | wood + iron | 77% |
+
+The crossbow is a tapered stock with cheek rest, angled grip, rail, swept iron
+riser, stirrup, trigger and a real two-part string -- and crucially three separate
+materials, which a box-per-part viewmodel cannot carry.
+
+**`bforge lint` earned its keep on its first real use.** The kit recipe was written,
+linted, and returned twelve problems in one instant pass: three unknown ops and
+nine bad parameter names across four ops. Serial discovery would have cost twelve
+Blender boots. The settlement recipe after that linted clean and then forged clean
+first try, 44/44 steps, 0 inverted normals.
+
+It also caught a second bug class: the committed catalog was STALE, missing the
+vertex-AO op added the round before, so every schema consumer including MCP was
+advertising an op list that did not match the runtime. Refreshed to 110 ops.
+
+**Fixed:** the forged tent floated because it was placed at y = 0 on
+noise-displaced terrain. It samples `landAt(x, z)` now.
+
+**Open, and stated rather than glossed:** the crossbow swap typechecks but its
+build was still running at the end of this round, so it is committed unverified.
+Cost is still 28.84 ms/frame against an 11.45 ms baseline, and until that comes
+down the judge's own named gap cannot be paid for.
