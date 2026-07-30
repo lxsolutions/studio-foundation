@@ -380,6 +380,279 @@ def prop_sack(ctx, name, location, seed, height, radius, segments, slump, materi
 
 
 # ---------------------------------------------------------------------------
+# valuables and equipment
+# ---------------------------------------------------------------------------
+
+
+@op(
+    "prop.relic",
+    summary="Grounded game-loot relic as a Greek medallion, signet ring, or votive idol. Separate aged metal, trim, and inset materials remain readable at pickup scale. ~300-700 tris.",
+    params=_params(
+        form=(
+            "enum:medallion|ring|idol",
+            "medallion",
+            "Loot silhouette: hanging seal, gemstone signet, or small temple votive",
+        ),
+        motif=(
+            "enum:rosette|lambda|plain",
+            "rosette",
+            "Raised face mark for medallions; ignored by ring and idol forms",
+        ),
+        size=("num", 0.42, "Overall height in metres"),
+        material=("str", "bronze", "Primary aged-metal material preset"),
+        trim_material=("str", "gold", "Raised rim and detail material preset"),
+        gem_material=("str", "crystal", "Inset stone material preset"),
+        color=("str", "", "Override primary metal colour"),
+        gem_color=("str", "crystal_violet", "Inset stone colour"),
+    ),
+    tags=["prop", "loot", "equipment"],
+)
+def prop_relic(
+    ctx,
+    name,
+    location,
+    seed,
+    form,
+    motif,
+    size,
+    material,
+    trim_material,
+    gem_material,
+    color,
+    gem_color,
+):
+    """Build small valuables with a silhouette strong enough for ground loot."""
+
+    rng = ctx.reseed(seed)
+    base_name = _named(name, "relic")
+    size = max(0.12, size)
+    parts = []
+
+    def vertical_cylinder(label, radius, depth, segments, centre_z, preset, tint=None):
+        bm = mesh_lib.new_bmesh()
+        mesh_lib.add_cylinder(
+            bm,
+            radius=radius,
+            depth=depth,
+            segments=segments,
+            center=(0.0, 0.0, 0.0),
+            cap=True,
+        )
+        bmesh.ops.transform(
+            bm,
+            matrix=Matrix.Rotation(math.pi * 0.5, 4, "X"),
+            verts=list(bm.verts),
+        )
+        bmesh.ops.translate(bm, vec=Vector((0.0, 0.0, centre_z)), verts=list(bm.verts))
+        obj = mesh_lib.to_object(bm, f"{base_name}_{label}")
+        finish_lib.finish(
+            ctx,
+            obj,
+            material=preset,
+            color=tint or None,
+            uv="cylinder",
+            # Geometry is already authored around its assembly position. A
+            # per-part centre origin would recenter every piece at (0,0,0)
+            # before the join, collapsing bails and face relief into the coin.
+            origin=None,
+            smooth=True,
+            smooth_angle=42.0,
+        )
+        parts.append(obj)
+        return obj
+
+    def vertical_torus(label, major, minor, segments, centre_z, preset, tint=None):
+        bm = mesh_lib.new_bmesh()
+        mesh_lib.add_torus(
+            bm,
+            major=major,
+            minor=minor,
+            major_segments=segments,
+            minor_segments=6,
+        )
+        bmesh.ops.transform(
+            bm,
+            matrix=Matrix.Rotation(math.pi * 0.5, 4, "X"),
+            verts=list(bm.verts),
+        )
+        bmesh.ops.translate(bm, vec=Vector((0.0, 0.0, centre_z)), verts=list(bm.verts))
+        obj = mesh_lib.to_object(bm, f"{base_name}_{label}")
+        finish_lib.finish(
+            ctx,
+            obj,
+            material=preset,
+            color=tint or None,
+            uv="smart_packed",
+            origin=None,
+            smooth=True,
+            smooth_angle=48.0,
+        )
+        parts.append(obj)
+        return obj
+
+    def front_bar(label, length, width, angle, offset, centre_z, preset):
+        bm = mesh_lib.new_bmesh()
+        mesh_lib.add_box(
+            bm,
+            size=(length, size * 0.025, width),
+            center=(offset, 0.0, 0.0),
+            bevel=size * 0.006,
+            segments=1,
+        )
+        bmesh.ops.transform(
+            bm,
+            matrix=Matrix.Rotation(angle, 4, "Y"),
+            verts=list(bm.verts),
+        )
+        # The contact-sheet front camera sits on -Y. Put relief on that
+        # authored face explicitly instead of depending on two-sided overlap.
+        bmesh.ops.translate(
+            bm,
+            vec=Vector((0.0, -size * 0.061, centre_z)),
+            verts=list(bm.verts),
+        )
+        obj = mesh_lib.to_object(bm, f"{base_name}_{label}")
+        finish_lib.finish(
+            ctx,
+            obj,
+            material=preset,
+            uv="box",
+            origin=None,
+            smooth=False,
+        )
+        parts.append(obj)
+        return obj
+
+    if form == "medallion":
+        radius = size * 0.40
+        centre_z = radius + size * 0.025
+        vertical_cylinder(
+            "seal", radius, size * 0.095, 24, centre_z, material, color
+        )
+        vertical_torus(
+            "rim", radius * 0.96, size * 0.04, 24, centre_z, trim_material
+        )
+        if motif == "rosette":
+            for ray in range(8):
+                front_bar(
+                    f"ray{ray}",
+                    radius * 0.24,
+                    radius * 0.065,
+                    ray * math.tau / 8,
+                    radius * 0.55,
+                    centre_z,
+                    trim_material,
+                )
+        elif motif == "lambda":
+            front_bar(
+                "lambda_left",
+                radius * 0.72,
+                radius * 0.085,
+                math.radians(57),
+                radius * 0.05,
+                centre_z - radius * 0.03,
+                trim_material,
+            )
+            front_bar(
+                "lambda_right",
+                radius * 0.72,
+                radius * 0.085,
+                math.radians(123),
+                radius * 0.05,
+                centre_z - radius * 0.03,
+                trim_material,
+            )
+        vertical_cylinder(
+            "stone",
+            radius * (0.24 + rng.uniform(-0.025, 0.025)),
+            size * 0.125,
+            6,
+            centre_z,
+            gem_material,
+            gem_color,
+        )
+        vertical_torus(
+            "bail", size * 0.105, size * 0.024, 12, centre_z + radius * 1.18, trim_material
+        )
+    elif form == "ring":
+        ring_centre = size * 0.34
+        vertical_torus(
+            "band", size * 0.27, size * 0.055, 20, ring_centre, material, color
+        )
+        vertical_cylinder(
+            "bezel", size * 0.14, size * 0.12, 8, size * 0.63, trim_material
+        )
+        vertical_cylinder(
+            "stone", size * 0.095, size * 0.145, 6, size * 0.63, gem_material, gem_color
+        )
+    else:
+        # A votive is deliberately architectural rather than humanoid: at
+        # pickup scale a tiny statue becomes visual noise, while a stepped
+        # temple token still reads from the tactical camera.
+        base_bm = mesh_lib.new_bmesh()
+        mesh_lib.add_box(
+            base_bm,
+            size=(size * 0.52, size * 0.28, size * 0.12),
+            center=(0.0, 0.0, size * 0.06),
+            bevel=size * 0.018,
+            segments=2,
+        )
+        mesh_lib.add_cylinder(
+            base_bm,
+            radius=size * 0.18,
+            radius_top=size * 0.12,
+            depth=size * 0.58,
+            segments=8,
+            center=(0.0, 0.0, size * 0.39),
+            cap=True,
+        )
+        body = mesh_lib.to_object(base_bm, f"{base_name}_votive")
+        finish_lib.finish(
+            ctx,
+            body,
+            material=material,
+            color=color or None,
+            uv="smart_packed",
+            origin=None,
+            smooth=False,
+        )
+        parts.append(body)
+        crown_bm = mesh_lib.new_bmesh()
+        mesh_lib.add_box(
+            crown_bm,
+            size=(size * 0.40, size * 0.25, size * 0.10),
+            center=(0.0, 0.0, size * 0.73),
+            bevel=size * 0.015,
+            segments=2,
+        )
+        crown = mesh_lib.to_object(crown_bm, f"{base_name}_crown")
+        finish_lib.finish(
+            ctx,
+            crown,
+            material=trim_material,
+            uv="box",
+            origin=None,
+            smooth=False,
+        )
+        parts.append(crown)
+        vertical_cylinder(
+            "stone", size * 0.09, size * 0.15, 6, size * 0.46, gem_material, gem_color
+        )
+
+    relic = scene_lib.join(parts, base_name)
+    scene_lib.set_origin(relic, "bottom")
+    relic.location = location
+    scene_lib.apply_transforms(relic)
+    result = finish_lib.report(ctx, relic)
+    finish_lib.budget_note(ctx, relic, 1200)
+    result["form"] = form
+    result["motif"] = motif if form == "medallion" else "none"
+    result["part_count"] = len(parts)
+    result["pickup_scale"] = round(size, 3)
+    return result
+
+
+# ---------------------------------------------------------------------------
 # natural
 # ---------------------------------------------------------------------------
 

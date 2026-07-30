@@ -169,6 +169,23 @@ visible before the assets reached the game.
 
 ![Spike limestone formation review sheet](../../docs/bforge/img/spike_limestone_family_v1.png)
 
+`prop.relic` turns rare game drops into authored equipment instead of emissive
+cubes. `form` selects a hanging medallion, gemstone signet, or stepped votive;
+medallions can carry a raised solar rosette, lambda, or plain face. Each form
+keeps primary metal, trim, and inset stone in separate material slots so rarity
+can be recoloured without rebuilding the mesh.
+
+Spike's first production relic is an 896-triangle, 52 KB Laurion medallion with
+a grounded pivot, bronze body, gold relief, violet stone, and a silhouette that
+survives both Hero and Commander cameras. Contact-sheet review caught a reusable
+assembly mistake before export: applying a centre origin to every sub-part
+recentred the bail and relief inside the coin. The recipe now preserves authored
+part coordinates until the final joined pickup receives its bottom pivot.
+
+The live Blender regression builds all three forms, verifies distinct grounded
+bounds and three-material output, enforces the prop triangle budget, and proves
+deterministic regeneration.
+
 ---
 
 ## Why this exists

@@ -6037,6 +6037,97 @@
       }
     },
     {
+      "name": "prop.relic",
+      "summary": "Grounded game-loot relic as a Greek medallion, signet ring, or votive idol. Separate aged metal, trim, and inset materials remain readable at pickup scale. ~300-700 tris.",
+      "tags": [
+        "prop",
+        "loot",
+        "equipment"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name (defaults to the recipe name)",
+            "default": ""
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World position in metres",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Random seed \u2014 same seed always gives the same asset",
+            "default": 0
+          },
+          "form": {
+            "type": "string",
+            "enum": [
+              "medallion",
+              "ring",
+              "idol"
+            ],
+            "description": "Loot silhouette: hanging seal, gemstone signet, or small temple votive",
+            "default": "medallion"
+          },
+          "motif": {
+            "type": "string",
+            "enum": [
+              "rosette",
+              "lambda",
+              "plain"
+            ],
+            "description": "Raised face mark for medallions; ignored by ring and idol forms",
+            "default": "rosette"
+          },
+          "size": {
+            "type": "number",
+            "description": "Overall height in metres",
+            "default": 0.42
+          },
+          "material": {
+            "type": "string",
+            "description": "Primary aged-metal material preset",
+            "default": "bronze"
+          },
+          "trim_material": {
+            "type": "string",
+            "description": "Raised rim and detail material preset",
+            "default": "gold"
+          },
+          "gem_material": {
+            "type": "string",
+            "description": "Inset stone material preset",
+            "default": "crystal"
+          },
+          "color": {
+            "type": "string",
+            "description": "Override primary metal colour",
+            "default": ""
+          },
+          "gem_color": {
+            "type": "string",
+            "description": "Inset stone colour",
+            "default": "crystal_violet"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "prop.rock",
       "summary": "Grounded natural rock authored as a boulder, bedded slab, multi-stone outcrop or scree cluster. Layered displacement and optional strata avoid the inflated-potato silhouette.",
       "tags": [

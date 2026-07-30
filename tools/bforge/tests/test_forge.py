@@ -173,6 +173,41 @@ class Geometry(ForgeCase):
         self.assertEqual(results["outcrop"]["triangles"], repeated["triangles"])
         self.assertEqual(results["outcrop"]["bounds"], repeated["bounds"])
 
+    def test_relic_forms_are_grounded_multi_material_pickups(self):
+        results = {}
+        for form in ("medallion", "ring", "idol"):
+            self.forge.call("session.reset")
+            results[form] = self.forge.call(
+                "prop.relic",
+                name=form,
+                form=form,
+                motif="rosette",
+                size=0.42,
+                seed=37,
+            )
+            self.assertEqual(results[form]["form"], form)
+            self.assertAlmostEqual(results[form]["bounds"]["min"][2], 0.0, places=3)
+            self.assertGreaterEqual(len(results[form]["materials"]), 3)
+            self.assertGreaterEqual(results[form]["part_count"], 3)
+            self.assertLess(results[form]["triangles"], 1200)
+
+        self.assertEqual(len({tuple(result["bounds"]["size"]) for result in results.values()}), 3)
+        self.assertGreater(results["medallion"]["bounds"]["size"][2], results["ring"]["bounds"]["size"][2])
+        self.assertGreater(results["idol"]["bounds"]["size"][1], results["medallion"]["bounds"]["size"][1])
+
+        self.forge.call("session.reset")
+        repeated = self.forge.call(
+            "prop.relic",
+            name="medallion",
+            form="medallion",
+            motif="rosette",
+            size=0.42,
+            seed=37,
+        )
+        self.assertEqual(results["medallion"]["triangles"], repeated["triangles"])
+        self.assertEqual(results["medallion"]["bounds"], repeated["bounds"])
+        self.assertEqual(results["medallion"]["motif"], "rosette")
+
     def test_natural_tree_styles_are_deterministic_branch_readable_assets(self):
         olive = self.forge.call(
             "prop.tree",
