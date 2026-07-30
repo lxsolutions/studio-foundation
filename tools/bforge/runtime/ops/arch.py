@@ -1391,14 +1391,15 @@ def arch_defense_tower(
     "arch.field_building",
     summary=(
         "A browser-budget Greek settlement family for the structures surrounding a civic "
-        "hall: a furrowed farmstead, hoplite barracks, modular ashlar wall, or weathered "
-        "road stele. Variants share restrained limestone, timber, terracotta, bronze and "
-        "crop materials while keeping silhouettes readable from an RTS camera."
+        "hall: a furrowed farmstead, strategos campaign tent, hoplite barracks, modular "
+        "ashlar wall, or weathered road stele. Variants share restrained limestone, "
+        "timber, cloth, terracotta, bronze and crop materials while keeping silhouettes "
+        "readable from an RTS camera."
     ),
     params={
         "name": ("str", "field_building", "Object name"),
         "style": (
-            "enum:farm|barracks|wall|waymarker",
+            "enum:farm|camp|barracks|wall|waymarker",
             "farm",
             "Settlement structure silhouette",
         ),
@@ -1630,6 +1631,176 @@ def arch_field_building(
                     vertex.co.z = tip[2] + (vertex.co.z - tip[2]) * 0.58
                 mark(crown_faces, CROP)
         silhouette = "furrowed_olive_plot"
+
+    elif style == "camp":
+        # A strategos' campaign tent: a real ridge-and-eave timber frame under
+        # separate weathered cloth planes, with split entrance flaps, guy ropes,
+        # pegs, a command shield and spear bundle. The silhouette remains a
+        # grounded low shelter instead of the three-sided cone/party hat that
+        # survived in Spike's old unversioned camp pack.
+        floor_h = height * 0.045
+        eave_z = height * 0.54
+        ridge_z = height * 0.91
+        box(
+            (width * 0.96, depth * 0.90, floor_h),
+            (0.0, 0.0, floor_h * 0.5),
+            FOUNDATION,
+            0.035,
+        )
+
+        # Four eave posts and two ridge standards expose enough frame to read
+        # as field construction instead of a solid cloth pyramid.
+        for sx in (-1.0, 1.0):
+            for sy in (-1.0, 1.0):
+                beam(
+                    (
+                        sx * width * 0.43,
+                        sy * depth * 0.40,
+                        floor_h,
+                    ),
+                    (
+                        sx * width * 0.43,
+                        sy * depth * 0.40,
+                        eave_z,
+                    ),
+                    width * 0.018,
+                    TIMBER,
+                )
+            beam(
+                (sx * width * 0.43, 0.0, floor_h),
+                (sx * width * 0.43, 0.0, ridge_z),
+                width * 0.021,
+                TIMBER,
+            )
+        beam(
+            (-width * 0.52, 0.0, ridge_z),
+            (width * 0.52, 0.0, ridge_z),
+            width * 0.020,
+            TIMBER,
+        )
+        for sy in (-1.0, 1.0):
+            beam(
+                (-width * 0.48, sy * depth * 0.42, eave_z),
+                (width * 0.48, sy * depth * 0.42, eave_z),
+                width * 0.016,
+                TIMBER,
+            )
+
+        # Two pitched cloth panels meet at the ridge. Thin volume rather than a
+        # one-sided plane keeps them glTF-safe and readable from first person.
+        rise = ridge_z - eave_z
+        run = depth * 0.48
+        roof_slope = math.hypot(run, rise)
+        roof_pitch = math.atan2(rise, run)
+        for sy in (-1.0, 1.0):
+            box(
+                (width * 1.08, roof_slope, height * 0.030),
+                (0.0, sy * depth * 0.24, (eave_z + ridge_z) * 0.5),
+                ROOF,
+                0.012,
+                (-sy * roof_pitch, 0.0, 0.0),
+            )
+
+        # Back curtain and side skirts give the shelter weight. The front stays
+        # open around two folded flaps so it has a legible entrance.
+        cloth_h = eave_z - floor_h
+        box(
+            (width * 0.92, depth * 0.025, cloth_h),
+            (0.0, depth * 0.405, floor_h + cloth_h * 0.5),
+            ROOF,
+            0.010,
+        )
+        for sx in (-1.0, 1.0):
+            box(
+                (width * 0.025, depth * 0.76, cloth_h * 0.90),
+                (
+                    sx * width * 0.445,
+                    depth * 0.02,
+                    floor_h + cloth_h * 0.45,
+                ),
+                ROOF,
+                0.010,
+            )
+        flap_w = width * 0.29
+        for sx in (-1.0, 1.0):
+            box(
+                (flap_w, depth * 0.024, cloth_h * 0.92),
+                (
+                    sx * width * 0.305,
+                    -depth * 0.408,
+                    floor_h + cloth_h * 0.46,
+                ),
+                ROOF,
+                0.010,
+                (0.0, math.radians(-sx * 9.0), 0.0),
+            )
+        cylinder(
+            width * 0.035,
+            width * 0.34,
+            (0.0, -depth * 0.43, eave_z * 0.92),
+            ROOF,
+            9,
+            axis="x",
+        )
+
+        # Ropes, iron pegs and command kit identify a working military camp at
+        # RTS distance without resorting to flags, glowing banners or giant
+        # cartoon supplies.
+        for sx in (-1.0, 1.0):
+            rope_top = (sx * width * 0.50, 0.0, ridge_z * 0.98)
+            rope_foot = (sx * width * 0.66, 0.0, floor_h * 0.25)
+            beam(rope_top, rope_foot, width * 0.006, TIMBER, 5)
+            cylinder(
+                width * 0.018,
+                height * 0.16,
+                (rope_foot[0], rope_foot[1], height * 0.095),
+                METAL,
+                6,
+            )
+        for sy in (-1.0, 1.0):
+            for sx in (-1.0, 1.0):
+                rope_top = (sx * width * 0.44, sy * depth * 0.40, eave_z)
+                rope_foot = (
+                    sx * width * 0.52,
+                    sy * depth * 0.57,
+                    floor_h * 0.25,
+                )
+                beam(rope_top, rope_foot, width * 0.005, TIMBER, 5)
+                cylinder(
+                    width * 0.014,
+                    height * 0.13,
+                    (rope_foot[0], rope_foot[1], height * 0.080),
+                    METAL,
+                    6,
+                )
+        cylinder(
+            width * 0.105,
+            depth * 0.040,
+            (width * 0.29, -depth * 0.435, eave_z * 0.56),
+            METAL,
+            16,
+            axis="y",
+        )
+        for index, sx in enumerate((-0.34, -0.29, -0.24)):
+            beam(
+                (sx * width, -depth * 0.46, floor_h),
+                (
+                    (sx - 0.025) * width,
+                    -depth * 0.46,
+                    eave_z + height * (0.13 + index * 0.018),
+                ),
+                width * 0.010,
+                TIMBER,
+                6,
+            )
+        box(
+            (width * 0.28, depth * 0.23, height * 0.18),
+            (width * 0.28, depth * 0.25, floor_h + height * 0.09),
+            TIMBER,
+            0.018,
+            (0.0, 0.0, math.radians(-4.0)),
+        )
+        silhouette = "strategos_campaign_tent"
 
     elif style == "barracks":
         # A low hoplite hall: masonry cella, real front portico, terracotta

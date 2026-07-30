@@ -428,6 +428,7 @@ class Architecture(ForgeCase):
     def test_field_building_family_is_serious_distinct_and_deterministic(self):
         expected = {
             "farm": ("furrowed_olive_plot", 3.4, 3.4, 1.8),
+            "camp": ("strategos_campaign_tent", 3.8, 3.0, 2.7),
             "barracks": ("hoplite_training_hall", 3.2, 2.6, 2.8),
             "wall": ("ashlar_parapet_segment", 2.4, 0.6, 2.2),
             "waymarker": ("weathered_road_stele", 1.25, 1.1, 2.4),
@@ -468,6 +469,9 @@ class Architecture(ForgeCase):
             )
 
         self.assertGreater(family["farm"]["bounds"]["size"][0], 3.2)
+        self.assertGreater(family["camp"]["bounds"]["size"][0], 4.3)
+        self.assertGreater(family["camp"]["bounds"]["size"][1], 3.3)
+        self.assertGreater(family["camp"]["bounds"]["size"][2], 2.3)
         self.assertGreater(family["barracks"]["bounds"]["size"][2], 2.4)
         self.assertLess(family["wall"]["bounds"]["size"][1], 0.8)
         self.assertGreater(family["waymarker"]["bounds"]["size"][2], 2.0)

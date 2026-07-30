@@ -482,7 +482,7 @@
     },
     {
       "name": "arch.field_building",
-      "summary": "A browser-budget Greek settlement family for the structures surrounding a civic hall: a furrowed farmstead, hoplite barracks, modular ashlar wall, or weathered road stele. Variants share restrained limestone, timber, terracotta, bronze and crop materials while keeping silhouettes readable from an RTS camera.",
+      "summary": "A browser-budget Greek settlement family for the structures surrounding a civic hall: a furrowed farmstead, strategos campaign tent, hoplite barracks, modular ashlar wall, or weathered road stele. Variants share restrained limestone, timber, cloth, terracotta, bronze and crop materials while keeping silhouettes readable from an RTS camera.",
       "tags": [
         "build",
         "architecture",
@@ -503,6 +503,7 @@
             "type": "string",
             "enum": [
               "farm",
+              "camp",
               "barracks",
               "wall",
               "waymarker"

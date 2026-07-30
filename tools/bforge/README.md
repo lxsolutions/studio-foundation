@@ -95,15 +95,17 @@ The three replaced runtime GLBs occupied 6.4 MB; the generated family occupies
 ![Spike Greek ballista review sheet](../../docs/bforge/img/spike_ballista.png)
 
 `arch.field_building` applies that same family discipline to the structures
-between the towers. Farm, barracks, wall and road-stele variants share one
-restrained limestone/terracotta/timber/bronze palette while preserving distinct
-economy, military, fortification and navigation silhouettes. Every model is
-ground-origin authored, stays below 3,000 triangles, and can ride on an engine's
-cheap gameplay collider without coupling art to simulation.
+between the towers. Farm, campaign-tent, barracks, wall and road-stele variants
+share one restrained limestone/terracotta/oxblood-cloth/timber/bronze palette
+while preserving distinct economy, expedition, military, fortification and
+navigation silhouettes. Every model is ground-origin authored, stays below
+3,000 triangles, and can ride on an engine's cheap gameplay collider without
+coupling art to simulation.
 
 | variant | triangles | GLB | tallest extent |
 | --- | ---: | ---: | ---: |
 | farmstead | 2,648 | 215 KB | 1.47 m |
+| strategos campaign tent | 2,044 | 156 KB | 2.53 m |
 | hoplite barracks | 2,112 | 162 KB | 2.83 m |
 | ashlar wall | 2,808 | 234 KB | 2.08 m |
 | road stele | 632 | 57 KB | 2.06 m |
