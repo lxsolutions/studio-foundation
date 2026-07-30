@@ -798,6 +798,11 @@
             "type": "integer",
             "description": "Subdivision passes before panelling \u2014 more cuts, finer greeble",
             "default": 1
+          },
+          "panel_size": {
+            "type": "number",
+            "description": "Target panel size in metres. Refines big faces and leaves small ones alone, so one call suits a 16 m wall and a 0.4 m crate lid. Overrides `cuts`; 0 = use `cuts`.",
+            "default": 0.0
           }
         },
         "additionalProperties": false
@@ -3234,6 +3239,51 @@
             "type": "boolean",
             "description": "Report cost after KTX2/Basis transcoding (~8:1) instead of raw RGBA. Only set this once the cook step actually compresses, or the number is fiction",
             "default": false
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "gameready.vertex_ao",
+      "summary": "Bake ambient occlusion into VERTEX COLOURS. Costs nothing at runtime \u2014 no texture, no extra pass, no shadow map \u2014 and it is what makes an object read as sitting on the ground rather than pasted in front of it. The cheapest contact-shadow cue there is, and the right one for low-poly assets where vertices are already dense relative to detail. Exports as COLOR_0 in glTF; enable vertex colours on the material in-engine (Babylon useVertexColors, three vertexColors, Godot vertex_color_use_as_albedo).",
+      "tags": [
+        "gameready",
+        "material"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object to bake into"
+          },
+          "samples": {
+            "type": "integer",
+            "description": "Hemisphere rays per vertex. 32 is clean; 64 for hero assets",
+            "default": 32
+          },
+          "distance": {
+            "type": "number",
+            "description": "Occlusion search radius in metres. Roughly the scale of the crevices you want to darken",
+            "default": 0.6
+          },
+          "strength": {
+            "type": "number",
+            "description": "How dark full occlusion goes, 0..1",
+            "default": 0.8
+          },
+          "floor": {
+            "type": "number",
+            "description": "Darkest value a vertex may reach. Stops creases going to pure black",
+            "default": 0.25
+          },
+          "self_only": {
+            "type": "boolean",
+            "description": "Occlude against this object only. False also tests every other mesh in the scene",
+            "default": true
           }
         },
         "additionalProperties": false
