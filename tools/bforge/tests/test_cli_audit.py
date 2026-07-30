@@ -150,3 +150,14 @@ def test_progression_warning_can_fail_ci(tmp_path, monkeypatch):
         "--progression-report", "--fail-on", "warning",
     ])
     assert args.func(args) == 1
+
+
+def test_progression_report_tolerates_importers_without_bounds():
+    report = cli._progression_report([
+        {"asset": "first.obj", "info": {"total_triangles": 10, "objects": []}},
+        {"asset": "second.obj", "info": {"total_triangles": 20, "objects": []}},
+    ])
+    assert report["strictly_increasing_triangles"] is True
+    assert report["max_extent_ratio"] is None
+    assert report["warnings"] == 0
+    assert "unavailable" in report["findings"][0]["detail"]

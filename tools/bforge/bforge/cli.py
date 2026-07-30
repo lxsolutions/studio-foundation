@@ -286,10 +286,11 @@ def _progression_report(rows: list[dict]) -> dict:
             "fix": "normalize scale before export or document an intentional size-class change",
         })
     if not findings:
+        scale_detail = f"{scale_ratio:.2f}x" if scale_ratio is not None else "unavailable"
         findings.append({
             "severity": "info",
             "issue": "ordered progression is structurally readable",
-            "detail": f"triangle counts rise {triangles}; max-extent ratio is {scale_ratio:.2f}x",
+            "detail": f"triangle counts rise {triangles}; max-extent ratio is {scale_detail}",
             "fix": "confirm silhouette and material changes in the contact sheets",
         })
     return {
