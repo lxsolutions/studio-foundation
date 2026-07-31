@@ -618,6 +618,34 @@ class Sweep(ForgeCase):
 
 
 class Materials(ForgeCase):
+    def test_tileable_surface_can_omit_unused_browser_channels(self):
+        self.forge.call(
+            "build.plane",
+            name="terrain_swatch",
+            size=[2.0, 2.0],
+            uv="box",
+            uv_scale=2.0,
+        )
+        result = self.forge.call(
+            "material.tileable",
+            object="terrain_swatch",
+            base_color="#8f7651",
+            roughness=0.9,
+            detail_scale=7.0,
+            dirt=0.28,
+            bump=0.45,
+            size=64,
+            samples=1,
+            maps=["base_color", "normal"],
+            stem="terrain_swatch",
+            reuse=False,
+            seed=41,
+        )
+        self.assertEqual(set(result["maps"]), {"base_color", "normal"})
+        self.assertNotIn("roughness", result["maps"])
+        self.assertEqual(result["periodic_mapping"], "symmetric_4d")
+        self.assertTrue(result["gltf_safe"])
+
     def test_same_preset_with_different_colours_stays_different(self):
         """Regression: a name-keyed material cache silently returned the FIRST
         colour for every later request, so a whole scene came out one shade."""

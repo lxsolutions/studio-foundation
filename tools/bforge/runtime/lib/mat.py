@@ -43,21 +43,21 @@ PALETTE = {
 
 # Physically sane starting points, so an agent asking for "metal" gets metal.
 PRESETS = {
-    "stone":   {"color": "stone_grey", "roughness": 0.85, "metallic": 0.0},
-    "rock":    {"color": "stone_warm", "roughness": 0.92, "metallic": 0.0},
-    "wood":    {"color": "wood_oak", "roughness": 0.70, "metallic": 0.0},
-    "metal":   {"color": "iron", "roughness": 0.38, "metallic": 1.0},
-    "iron":    {"color": "iron", "roughness": 0.45, "metallic": 1.0},
-    "bronze":  {"color": "bronze", "roughness": 0.35, "metallic": 1.0},
-    "gold":    {"color": "gold", "roughness": 0.22, "metallic": 1.0},
-    "cloth":   {"color": "cloth_red", "roughness": 0.95, "metallic": 0.0},
-    "leaf":    {"color": "leaf_green", "roughness": 0.75, "metallic": 0.0},
-    "sand":    {"color": "sand", "roughness": 1.00, "metallic": 0.0},
-    "ice":     {"color": "ice_blue", "roughness": 0.12, "metallic": 0.0},
+    "stone": {"color": "stone_grey", "roughness": 0.85, "metallic": 0.0},
+    "rock": {"color": "stone_warm", "roughness": 0.92, "metallic": 0.0},
+    "wood": {"color": "wood_oak", "roughness": 0.70, "metallic": 0.0},
+    "metal": {"color": "iron", "roughness": 0.38, "metallic": 1.0},
+    "iron": {"color": "iron", "roughness": 0.45, "metallic": 1.0},
+    "bronze": {"color": "bronze", "roughness": 0.35, "metallic": 1.0},
+    "gold": {"color": "gold", "roughness": 0.22, "metallic": 1.0},
+    "cloth": {"color": "cloth_red", "roughness": 0.95, "metallic": 0.0},
+    "leaf": {"color": "leaf_green", "roughness": 0.75, "metallic": 0.0},
+    "sand": {"color": "sand", "roughness": 1.00, "metallic": 0.0},
+    "ice": {"color": "ice_blue", "roughness": 0.12, "metallic": 0.0},
     "crystal": {"color": "crystal_violet", "roughness": 0.08, "metallic": 0.0, "emission": 0.35},
     "emissive": {"color": "ember", "roughness": 0.5, "metallic": 0.0, "emission": 3.0},
-    "bone":    {"color": "bone", "roughness": 0.68, "metallic": 0.0},
-    "rubber":  {"color": "rubber_black", "roughness": 0.92, "metallic": 0.0},
+    "bone": {"color": "bone", "roughness": 0.68, "metallic": 0.0},
+    "rubber": {"color": "rubber_black", "roughness": 0.92, "metallic": 0.0},
 }
 
 
@@ -118,8 +118,10 @@ def principled(
     rgba_requested = resolve_color(color)
     wanted = (
         tuple(round(c, 4) for c in rgba_requested),
-        round(float(roughness), 4), round(float(metallic), 4),
-        round(float(emission), 4), round(float(alpha), 4),
+        round(float(roughness), 4),
+        round(float(metallic), 4),
+        round(float(emission), 4),
+        round(float(alpha), 4),
     )
     existing = bpy.data.materials.get(name)
     if existing is not None:
@@ -152,7 +154,9 @@ def principled(
         _set(bsdf, "Emission Color", resolve_color(emission_color or color))
         _set(bsdf, "Emission Strength", float(emission))
     if alpha < 1.0:
-        material.blend_method = "BLEND" if hasattr(material, "blend_method") else material.blend_method
+        material.blend_method = (
+            "BLEND" if hasattr(material, "blend_method") else material.blend_method
+        )
     material["bforge_preset"] = name
     return material
 
@@ -193,8 +197,11 @@ def _describes(material):
     if not isinstance(base, tuple):
         base = (base, base, base, 1.0)
     return (
-        base, value("Roughness"), value("Metallic"),
-        value("Emission Strength"), value("Alpha", 1.0),
+        base,
+        value("Roughness"),
+        value("Metallic"),
+        value("Emission Strength"),
+        value("Alpha", 1.0),
     )
 
 
@@ -237,8 +244,17 @@ def assign_to_faces(obj, material, face_indices):
 # ---------------------------------------------------------------------------
 
 
-def procedural(name: str, kind: str, color_a, color_b, scale=5.0, detail=2.0, roughness=0.7,
-               metallic=0.0, distortion=0.0):
+def procedural(
+    name: str,
+    kind: str,
+    color_a,
+    color_b,
+    scale=5.0,
+    detail=2.0,
+    roughness=0.7,
+    metallic=0.0,
+    distortion=0.0,
+):
     """Build a noise/voronoi/gradient-driven Principled material.
 
     Kinds: noise (rock, dirt), voronoi (cracked stone, scales, crystal),
@@ -285,8 +301,7 @@ def procedural(name: str, kind: str, color_a, color_b, scale=5.0, detail=2.0, ro
         factor = tex.outputs["Fac"]
     else:
         raise ValueError(
-            f"unknown procedural kind '{kind}' "
-            "(noise | voronoi | wave | gradient | checker)"
+            f"unknown procedural kind '{kind}' (noise | voronoi | wave | gradient | checker)"
         )
     tex.location = (-520, 0)
     links.new(mapping.outputs["Vector"], tex.inputs["Vector"])
@@ -303,10 +318,16 @@ def procedural(name: str, kind: str, color_a, color_b, scale=5.0, detail=2.0, ro
     rough_ramp = nodes.new("ShaderNodeValToRGB")
     rough_ramp.location = (-300, -260)
     rough_ramp.color_ramp.elements[0].color = (
-        max(0.0, roughness - 0.18), max(0.0, roughness - 0.18), max(0.0, roughness - 0.18), 1.0
+        max(0.0, roughness - 0.18),
+        max(0.0, roughness - 0.18),
+        max(0.0, roughness - 0.18),
+        1.0,
     )
     rough_ramp.color_ramp.elements[1].color = (
-        min(1.0, roughness + 0.18), min(1.0, roughness + 0.18), min(1.0, roughness + 0.18), 1.0
+        min(1.0, roughness + 0.18),
+        min(1.0, roughness + 0.18),
+        min(1.0, roughness + 0.18),
+        1.0,
     )
     links.new(factor, rough_ramp.inputs["Fac"])
     links.new(rough_ramp.outputs["Color"], bsdf.inputs["Roughness"])
@@ -529,13 +550,14 @@ def layered_pbr(
     return material
 
 
-def _torus_coords(tree, tiles=1.0):
-    """UV -> a point on a torus, so 3D noise sampled there tiles seamlessly.
+def _periodic_4d_coords(tree, tiles=1.0):
+    """UV -> two unit circles, so 4D noise tiles seamlessly and isotropically.
 
     Blender's noise textures are not periodic, so baking one straight to a map
-    leaves a visible seam wherever it repeats. Wrapping UV around a torus makes
-    the sample point return to itself at u=1 and v=1 by construction, which
-    makes the baked result tile perfectly in both axes.
+    leaves a visible seam wherever it repeats. Mapping U and V to independent
+    unit circles makes the sample point return to itself at every whole turn.
+    Unlike a 3D torus, the two axes have identical radius and frequency, so a
+    soil or stone material does not acquire a wood-grain direction.
 
     This is what lets a 725 m stadium be textured from one 1k map. Baking a
     unique map for a building that size gives roughly 3 px/m, which is no
@@ -573,41 +595,26 @@ def _torus_coords(tree, tiles=1.0):
     sin_u, cos_u = angle(split.outputs["X"], 220)
     sin_v, cos_v = angle(split.outputs["Y"], -220)
 
-    # radius = 1 + 0.25*cos(v): a fat torus, so both axes get similar feature
-    # sizes instead of one being visibly stretched.
-    ring = nodes.new("ShaderNodeMath")
-    ring.operation = "MULTIPLY_ADD"
-    ring.location = (-1400, -220)
-    ring.inputs[1].default_value = 0.25
-    ring.inputs[2].default_value = 1.0
-    links.new(cos_v.outputs[0], ring.inputs[0])
-
-    def planar(trig, offset_y):
-        product = nodes.new("ShaderNodeMath")
-        product.operation = "MULTIPLY"
-        product.location = (-1240, offset_y)
-        links.new(ring.outputs[0], product.inputs[0])
-        links.new(trig.outputs[0], product.inputs[1])
-        return product
-
-    x_axis = planar(cos_u, 120)
-    y_axis = planar(sin_u, -40)
-    z_axis = nodes.new("ShaderNodeMath")
-    z_axis.operation = "MULTIPLY"
-    z_axis.location = (-1240, -340)
-    z_axis.inputs[1].default_value = 0.25
-    links.new(sin_v.outputs[0], z_axis.inputs[0])
-
     combine = nodes.new("ShaderNodeCombineXYZ")
-    combine.location = (-1080, 0)
-    links.new(x_axis.outputs[0], combine.inputs["X"])
-    links.new(y_axis.outputs[0], combine.inputs["Y"])
-    links.new(z_axis.outputs[0], combine.inputs["Z"])
-    return combine.outputs["Vector"]
+    combine.location = (-1240, 0)
+    links.new(cos_u.outputs[0], combine.inputs["X"])
+    links.new(sin_u.outputs[0], combine.inputs["Y"])
+    links.new(cos_v.outputs[0], combine.inputs["Z"])
+    return combine.outputs["Vector"], sin_v.outputs[0]
 
 
-def tileable_pbr(name, base_color, roughness=0.78, metallic=0.0, detail_scale=6.0,
-                 dirt_color="#2b2118", dirt=0.35, bump=0.4, tiles=1.0, seed=0):
+def tileable_pbr(
+    name,
+    base_color,
+    roughness=0.78,
+    metallic=0.0,
+    detail_scale=6.0,
+    dirt_color="#2b2118",
+    dirt=0.35,
+    bump=0.4,
+    tiles=1.0,
+    seed=0,
+):
     """A seamless surface for tiling onto architecture.
 
     Deliberately excludes the curvature and ambient-occlusion layers that
@@ -623,17 +630,22 @@ def tileable_pbr(name, base_color, roughness=0.78, metallic=0.0, detail_scale=6.
     bsdf = nodes.get("Principled BSDF")
     base_rgba = resolve_color(base_color)
     dirt_rgba = resolve_color(dirt_color)
-    coords = _torus_coords(tree, tiles)
+    coords, periodic_w = _periodic_4d_coords(tree, tiles)
 
     def noise(scale, detail, offset_y, w):
         node = nodes.new("ShaderNodeTexNoise")
         node.location = (-900, offset_y)
-        node.noise_dimensions = "3D"
+        node.noise_dimensions = "4D"
         _set(node, "Scale", scale)
         _set(node, "Detail", detail)
         _set(node, "Roughness", 0.6)
-        _set(node, "W", float(w))
         links.new(coords, node.inputs["Vector"])
+        seed_offset = nodes.new("ShaderNodeMath")
+        seed_offset.operation = "ADD"
+        seed_offset.location = (-1080, offset_y - 90)
+        seed_offset.inputs[1].default_value = float(w)
+        links.new(periodic_w, seed_offset.inputs[0])
+        links.new(seed_offset.outputs[0], node.inputs["W"])
         return node
 
     coarse = noise(detail_scale, 6.0, -100, seed)
@@ -710,6 +722,7 @@ def tileable_pbr(name, base_color, roughness=0.78, metallic=0.0, detail_scale=6.
     links.new(relief.outputs["Normal"], bsdf.inputs["Normal"])
 
     material["bforge_procedural"] = "tileable_pbr"
+    material["bforge_periodic_mapping"] = "symmetric_4d"
     return material
 
 
@@ -721,14 +734,15 @@ def _darken(rgba, amount):
     return tuple(max(0.0, c * (1.0 - amount)) for c in rgba[:3]) + (rgba[3],)
 
 
-def bake_tileable_set(material, out_dir, stem, size=1024, samples=16,
-                      maps=("base_color", "normal", "roughness")):
+def bake_tileable_set(
+    material, out_dir, stem, size=1024, samples=16, maps=("base_color", "normal", "roughness")
+):
     """Bake a tileable material to seamless maps off a throwaway flat plane.
 
     A plane with exact 0..1 UVs and no curvature means the bake captures the
     material and nothing about any particular mesh — which is the whole point
     of a tiling texture. Margin is 0: a margin bleeds edge pixels outward and
-    would break the seam the torus mapping just guaranteed.
+    would break the seam the periodic mapping just guaranteed.
     """
     scene = bpy.context.scene
     previous_engine = scene.render.engine
@@ -765,8 +779,12 @@ def bake_tileable_set(material, out_dir, stem, size=1024, samples=16,
                 continue
             bake_type, is_data = PBR_PASSES[map_name]
             image = bpy.data.images.new(
-                f"{stem}_{map_name}", width=size, height=size,
-                alpha=False, float_buffer=False, is_data=is_data,
+                f"{stem}_{map_name}",
+                width=size,
+                height=size,
+                alpha=False,
+                float_buffer=False,
+                is_data=is_data,
             )
             node = material.node_tree.nodes.new("ShaderNodeTexImage")
             node.image = image
@@ -843,8 +861,15 @@ PBR_PASSES = {
 }
 
 
-def bake_pbr_set(obj, out_dir, stem, size=1024, samples=24, margin=10,
-                 maps=("base_color", "normal", "roughness", "ao")):
+def bake_pbr_set(
+    obj,
+    out_dir,
+    stem,
+    size=1024,
+    samples=24,
+    margin=10,
+    maps=("base_color", "normal", "roughness", "ao"),
+):
     """Bake a procedural material into a glTF-shippable PBR map set.
 
     Returns {map_name: (image, path)}. The material is rewired afterwards by
@@ -875,8 +900,12 @@ def bake_pbr_set(obj, out_dir, stem, size=1024, samples=24, margin=10,
                 continue
             bake_type, is_data = PBR_PASSES[map_name]
             image = bpy.data.images.new(
-                f"{stem}_{map_name}", width=size, height=size,
-                alpha=False, float_buffer=False, is_data=is_data,
+                f"{stem}_{map_name}",
+                width=size,
+                height=size,
+                alpha=False,
+                float_buffer=False,
+                is_data=is_data,
             )
             targets = []
             for material in obj.data.materials:
@@ -956,9 +985,23 @@ def wire_pbr_set(obj, produced):
 def is_gltf_safe(material) -> tuple[bool, list[str]]:
     """Mirror of the repo asset validator's allowlist, checked before export."""
     allowed = {
-        "BSDF_PRINCIPLED", "TEX_IMAGE", "NORMAL_MAP", "UVMAP", "OUTPUT_MATERIAL",
-        "MIX", "MIX_RGB", "SEPARATE_COLOR", "COMBINE_COLOR", "MAPPING", "TEX_COORD",
-        "VERTEX_COLOR", "ATTRIBUTE", "VALUE", "RGB", "FRAME", "REROUTE",
+        "BSDF_PRINCIPLED",
+        "TEX_IMAGE",
+        "NORMAL_MAP",
+        "UVMAP",
+        "OUTPUT_MATERIAL",
+        "MIX",
+        "MIX_RGB",
+        "SEPARATE_COLOR",
+        "COMBINE_COLOR",
+        "MAPPING",
+        "TEX_COORD",
+        "VERTEX_COLOR",
+        "ATTRIBUTE",
+        "VALUE",
+        "RGB",
+        "FRAME",
+        "REROUTE",
     }
     if not material.use_nodes:
         return True, []
@@ -1004,8 +1047,12 @@ def bake_material(obj, out_path, size=1024, pass_name="base_color", samples=16, 
 
     is_data = pass_name in ("normal", "roughness")
     image = bpy.data.images.new(
-        f"{obj.name}_{pass_name}", width=size, height=size,
-        alpha=False, float_buffer=False, is_data=is_data,
+        f"{obj.name}_{pass_name}",
+        width=size,
+        height=size,
+        alpha=False,
+        float_buffer=False,
+        is_data=is_data,
     )
 
     targets = []
@@ -1058,8 +1105,12 @@ def rewire_baked(obj, image, pass_name="base_color"):
         bsdf = next((n for n in tree.nodes if n.type == "BSDF_PRINCIPLED"), None)
         if bsdf is None:
             continue
-        for node in [n for n in tree.nodes if n.type not in
-                     ("BSDF_PRINCIPLED", "OUTPUT_MATERIAL", "TEX_IMAGE", "NORMAL_MAP", "UVMAP")]:
+        for node in [
+            n
+            for n in tree.nodes
+            if n.type
+            not in ("BSDF_PRINCIPLED", "OUTPUT_MATERIAL", "TEX_IMAGE", "NORMAL_MAP", "UVMAP")
+        ]:
             tree.nodes.remove(node)
         tex = next((n for n in tree.nodes if n.type == "TEX_IMAGE" and n.image == image), None)
         if tex is None:
@@ -1087,8 +1138,16 @@ DETAIL_PASSES = {
 
 
 def bake_detail(
-    low_obj, high_objs, out_path, *, pass_name="normal", size=2048, samples=32,
-    cage_extrusion=0.02, max_ray_distance=0.05, margin=8,
+    low_obj,
+    high_objs,
+    out_path,
+    *,
+    pass_name="normal",
+    size=2048,
+    samples=32,
+    cage_extrusion=0.02,
+    max_ray_distance=0.05,
+    margin=8,
 ):
     """Bake detail from high-poly `high_objs` onto low-poly `low_obj` (selected-to-active).
 
@@ -1120,8 +1179,12 @@ def bake_detail(
 
     bake_type, is_data = DETAIL_PASSES[pass_name]
     image = bpy.data.images.new(
-        f"{low_obj.name}_{pass_name}_detail", width=size, height=size,
-        alpha=False, float_buffer=False, is_data=is_data,
+        f"{low_obj.name}_{pass_name}_detail",
+        width=size,
+        height=size,
+        alpha=False,
+        float_buffer=False,
+        is_data=is_data,
     )
 
     targets = []
@@ -1214,9 +1277,13 @@ def attach_baked_map(obj, image, pass_name="normal"):
         tex.location = (-700, -200)
         if pass_name == "normal":
             normal_map = next(
-                (n for n in tree.nodes if n.type == "NORMAL_MAP"
-                 and n.inputs["Color"].is_linked
-                 and n.inputs["Color"].links[0].from_node is tex),
+                (
+                    n
+                    for n in tree.nodes
+                    if n.type == "NORMAL_MAP"
+                    and n.inputs["Color"].is_linked
+                    and n.inputs["Color"].links[0].from_node is tex
+                ),
                 None,
             )
             if normal_map is None:

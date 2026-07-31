@@ -1094,7 +1094,7 @@ Create and assign a PBR material. Prefer a preset name (stone, wood, metal, gold
 
 ### `material.tileable`
 
-Bake a SEAMLESS PBR texture set and apply it repeating across a surface. This is how architecture gets textured: a unique bake for a 725 m stadium works out to ~3 px/m, which is no texture at all, whereas one 1k tiling map gives real surface detail everywhere. Noise is sampled through a torus mapping so it tiles perfectly with no visible seam.
+Bake a SEAMLESS PBR texture set and apply it repeating across a surface. This is how architecture gets textured: a unique bake for a 725 m stadium works out to ~3 px/m, which is no texture at all, whereas one 1k tiling map gives real surface detail everywhere. Noise uses a symmetric periodic 4D mapping so it tiles perfectly without directional stretching or a visible seam.
 
 | parameter | type | default | description |
 | --- | --- | --- | --- |
@@ -1110,6 +1110,7 @@ Bake a SEAMLESS PBR texture set and apply it repeating across a surface. This is
 | `uv_scale` | number | 0.0 | Metres per UV tile for box projection; 0 keeps existing UVs |
 | `size` | integer | 1024 | Texture resolution |
 | `samples` | integer | 16 | Cycles samples for the bake |
+| `maps` | array | ['base_color', 'normal', 'roughness'] | Which maps to bake; omit unused channels to keep browser payloads lean |
 | `stem` | string | '' | Filename stem (defaults to the object name) |
 | `out_dir` | string | 'textures' | Directory for the PNGs |
 | `reuse` | boolean | True | If this stem was already baked, assign the existing material instead of baking again. Bake once, apply to every stone surface in a building — same texture, one set of maps, one draw call |

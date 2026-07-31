@@ -1,4 +1,4 @@
-﻿"""Material ops: PBR presets, procedural graphs, and baking to glTF-safe textures."""
+"""Material ops: PBR presets, procedural graphs, and baking to glTF-safe textures."""
 
 from __future__ import annotations
 
@@ -16,7 +16,11 @@ from registry import OpError, op
         "object": ("str", None, "Object to assign to"),
         "preset": ("str", "stone", "Material preset; see meta.palette for the list"),
         "name": ("str", "", "Material name (defaults to m_<preset>)"),
-        "color": ("colorref", "", "Override colour: palette name, #rrggbb, or a linear [r,g,b] triple"),
+        "color": (
+            "colorref",
+            "",
+            "Override colour: palette name, #rrggbb, or a linear [r,g,b] triple",
+        ),
         "roughness": ("num", -1.0, "Override roughness 0..1; -1 keeps the preset value"),
         "metallic": ("num", -1.0, "Override metallic 0..1; -1 keeps the preset value"),
         "emission": ("num", -1.0, "Emission strength; -1 keeps the preset value"),
@@ -55,7 +59,11 @@ def material_set(ctx, object, preset, name, color, roughness, metallic, emission
     summary="Build a noise/voronoi/wave/gradient material. Gives surfaces real variation instead of flat colour — but it must be baked (material.bake) before it can export to glTF.",
     params={
         "object": ("str", None, "Object to assign to"),
-        "kind": ("enum:noise|voronoi|wave|gradient|checker", "noise", "Pattern type: noise=rock/dirt, voronoi=cracked stone/scales, wave=wood grain/strata, gradient=vertical fade, checker=UV debug"),
+        "kind": (
+            "enum:noise|voronoi|wave|gradient|checker",
+            "noise",
+            "Pattern type: noise=rock/dirt, voronoi=cracked stone/scales, wave=wood grain/strata, gradient=vertical fade, checker=UV debug",
+        ),
         "name": ("str", "", "Material name"),
         "color_a": ("str", "stone_grey", "Low colour: palette name or #rrggbb"),
         "color_b": ("str", "stone_warm", "High colour: palette name or #rrggbb"),
@@ -67,14 +75,21 @@ def material_set(ctx, object, preset, name, color, roughness, metallic, emission
     },
     tags=["material"],
 )
-def material_procedural(ctx, object, kind, name, color_a, color_b, scale, detail, roughness,
-                        metallic, distortion):
+def material_procedural(
+    ctx, object, kind, name, color_a, color_b, scale, detail, roughness, metallic, distortion
+):
     obj = _get(object)
     try:
         material = mat_lib.procedural(
             name or f"m_{kind}_{scene_lib.sanitize(obj.name)}",
-            kind, color_a, color_b, scale=scale, detail=detail,
-            roughness=roughness, metallic=metallic, distortion=distortion,
+            kind,
+            color_a,
+            color_b,
+            scale=scale,
+            detail=detail,
+            roughness=roughness,
+            metallic=metallic,
+            distortion=distortion,
         )
     except ValueError as exc:
         raise OpError(str(exc)) from exc
@@ -97,7 +112,11 @@ def material_procedural(ctx, object, kind, name, color_a, color_b, scale, detail
         "metallic": ("num", 0.0, "Metallic 0..1"),
         "detail_scale": ("num", 14.0, "Micro-detail frequency — higher is finer grain"),
         "grain": ("num", 0.55, "How strongly the noise tints the albedo"),
-        "edge_wear": ("num", 0.55, "Abrasion on convex edges (0..1). Real objects are worn where they stick out"),
+        "edge_wear": (
+            "num",
+            0.55,
+            "Abrasion on convex edges (0..1). Real objects are worn where they stick out",
+        ),
         "edge_color": ("colorref", "", "Colour of worn edges; defaults to a lighter base"),
         "cavity_dirt": ("num", 0.5, "Grime settled in crevices (0..1)"),
         "dirt_color": ("colorref", "#2b2118", "Colour of the grime"),
@@ -107,18 +126,39 @@ def material_procedural(ctx, object, kind, name, color_a, color_b, scale, detail
     },
     tags=["material", "pbr"],
 )
-def material_pbr(ctx, object, base_color, roughness, metallic, detail_scale, grain, edge_wear,
-                 edge_color, cavity_dirt, dirt_color, bump, name, seed):
+def material_pbr(
+    ctx,
+    object,
+    base_color,
+    roughness,
+    metallic,
+    detail_scale,
+    grain,
+    edge_wear,
+    edge_color,
+    cavity_dirt,
+    dirt_color,
+    bump,
+    name,
+    seed,
+):
     obj = _get(object)
     if obj.type != "MESH":
         raise OpError(f"'{object}' is a {obj.type}, not a mesh")
     try:
         material = mat_lib.layered_pbr(
             name or f"m_pbr_{scene_lib.sanitize(obj.name)}",
-            base_color, roughness=roughness, metallic=metallic,
-            detail_scale=detail_scale, grain=grain, edge_wear=edge_wear,
-            edge_color=edge_color or None, cavity_dirt=cavity_dirt,
-            dirt_color=dirt_color, bump=bump, seed=seed,
+            base_color,
+            roughness=roughness,
+            metallic=metallic,
+            detail_scale=detail_scale,
+            grain=grain,
+            edge_wear=edge_wear,
+            edge_color=edge_color or None,
+            cavity_dirt=cavity_dirt,
+            dirt_color=dirt_color,
+            bump=bump,
+            seed=seed,
         )
     except ValueError as exc:
         raise OpError(str(exc)) from exc
@@ -128,13 +168,17 @@ def material_pbr(ctx, object, base_color, roughness, metallic, detail_scale, gra
         f"'{material.name}' is a Cycles layer stack and cannot export as-is. Run "
         f"material.bake_pbr object='{obj.name}' to turn it into real PBR maps."
     )
-    return {"object": obj.name, "material": material.name, "gltf_safe": False,
-            "layers": ["base", "micro-detail", "edge wear", "cavity dirt"]}
+    return {
+        "object": obj.name,
+        "material": material.name,
+        "gltf_safe": False,
+        "layers": ["base", "micro-detail", "edge wear", "cavity dirt"],
+    }
 
 
 @op(
     "material.tileable",
-    summary="Bake a SEAMLESS PBR texture set and apply it repeating across a surface. This is how architecture gets textured: a unique bake for a 725 m stadium works out to ~3 px/m, which is no texture at all, whereas one 1k tiling map gives real surface detail everywhere. Noise is sampled through a torus mapping so it tiles perfectly with no visible seam.",
+    summary="Bake a SEAMLESS PBR texture set and apply it repeating across a surface. This is how architecture gets textured: a unique bake for a 725 m stadium works out to ~3 px/m, which is no texture at all, whereas one 1k tiling map gives real surface detail everywhere. Noise uses a symmetric periodic 4D mapping so it tiles perfectly without directional stretching or a visible seam.",
     params={
         "object": ("str", None, "Object to texture"),
         "base_color": ("colorref", "stone_grey", "Base albedo"),
@@ -148,16 +192,42 @@ def material_pbr(ctx, object, base_color, roughness, metallic, detail_scale, gra
         "uv_scale": ("num", 0.0, "Metres per UV tile for box projection; 0 keeps existing UVs"),
         "size": ("int", 1024, "Texture resolution"),
         "samples": ("int", 16, "Cycles samples for the bake"),
+        "maps": (
+            "str[]",
+            ["base_color", "normal", "roughness"],
+            "Which maps to bake; omit unused channels to keep browser payloads lean",
+        ),
         "stem": ("str", "", "Filename stem (defaults to the object name)"),
         "out_dir": ("path", "textures", "Directory for the PNGs"),
-        "reuse": ("bool", True, "If this stem was already baked, assign the existing material instead of baking again. Bake once, apply to every stone surface in a building — same texture, one set of maps, one draw call"),
+        "reuse": (
+            "bool",
+            True,
+            "If this stem was already baked, assign the existing material instead of baking again. Bake once, apply to every stone surface in a building — same texture, one set of maps, one draw call",
+        ),
         "seed": ("int", 0, "Random seed"),
     },
     tags=["material", "bake", "pbr"],
 )
-def material_tileable(ctx, object, base_color, roughness, metallic, detail_scale, dirt,
-                      dirt_color, bump, tiles, uv_scale, size, samples, stem, out_dir,
-                      reuse, seed):
+def material_tileable(
+    ctx,
+    object,
+    base_color,
+    roughness,
+    metallic,
+    detail_scale,
+    dirt,
+    dirt_color,
+    bump,
+    tiles,
+    uv_scale,
+    size,
+    samples,
+    maps,
+    stem,
+    out_dir,
+    reuse,
+    seed,
+):
     obj = _get(object)
     if obj.type != "MESH":
         raise OpError(f"'{object}' is a {obj.type}, not a mesh")
@@ -169,8 +239,13 @@ def material_tileable(ctx, object, base_color, roughness, metallic, detail_scale
         obj.data.materials.clear()
         mat_lib.assign(obj, existing)
         return {
-            "object": obj.name, "material": existing.name, "reused": True,
-            "tiles": tiles, "uv_scale": uv_scale or None, "gltf_safe": True,
+            "object": obj.name,
+            "material": existing.name,
+            "reused": True,
+            "tiles": tiles,
+            "uv_scale": uv_scale or None,
+            "periodic_mapping": "symmetric_4d",
+            "gltf_safe": True,
         }
 
     if uv_scale > 0.0:
@@ -186,13 +261,25 @@ def material_tileable(ctx, object, base_color, roughness, metallic, detail_scale
 
     label = scene_lib.sanitize(stem or obj.name)
     source = mat_lib.tileable_pbr(
-        f"m_tileable_{label}", base_color, roughness=roughness, metallic=metallic,
-        detail_scale=detail_scale, dirt_color=dirt_color, dirt=dirt, bump=bump, seed=seed,
+        f"m_tileable_{label}",
+        base_color,
+        roughness=roughness,
+        metallic=metallic,
+        detail_scale=detail_scale,
+        dirt_color=dirt_color,
+        dirt=dirt,
+        bump=bump,
+        seed=seed,
     )
     directory = ctx.out_path(f"{out_dir}/{label}.png", ".png").parent
     try:
         produced = mat_lib.bake_tileable_set(
-            source, str(directory), label, size=size, samples=samples,
+            source,
+            str(directory),
+            label,
+            size=size,
+            samples=samples,
+            maps=tuple(maps),
         )
     except (RuntimeError, ValueError) as exc:
         raise OpError(f"tileable bake failed: {exc}") from exc
@@ -200,6 +287,7 @@ def material_tileable(ctx, object, base_color, roughness, metallic, detail_scale
         raise OpError("no maps were baked")
 
     applied = mat_lib.tiled_material(f"m_{label}", produced, tiles=tiles)
+    periodic_mapping = source.get("bforge_periodic_mapping", "unknown")
     obj.data.materials.clear()
     mat_lib.assign(obj, applied)
     bpy.data.materials.remove(source)
@@ -212,6 +300,7 @@ def material_tileable(ctx, object, base_color, roughness, metallic, detail_scale
         "tiles": tiles,
         "uv_scale": uv_scale or None,
         "reused": False,
+        "periodic_mapping": periodic_mapping,
         "gltf_safe": True,
     }
 
@@ -252,7 +341,12 @@ def material_bake_pbr(ctx, object, stem, out_dir, size, samples, maps, unwrap, m
     directory = ctx.out_path(f"{out_dir}/{label}.png", ".png").parent
     try:
         produced = mat_lib.bake_pbr_set(
-            obj, str(directory), label, size=size, samples=samples, margin=margin,
+            obj,
+            str(directory),
+            label,
+            size=size,
+            samples=samples,
+            margin=margin,
             maps=tuple(maps),
         )
     except (RuntimeError, ValueError) as exc:
@@ -276,7 +370,11 @@ def material_bake_pbr(ctx, object, stem, out_dir, size, samples, maps, unwrap, m
     summary="Bake procedural shading down to an image texture and rewire the material to use it. This is what makes procedural materials shippable.",
     params={
         "object": ("str", None, "Object to bake"),
-        "pass_name": ("enum:base_color|normal|roughness|ao|emit|combined", "base_color", "Which channel to bake"),
+        "pass_name": (
+            "enum:base_color|normal|roughness|ao|emit|combined",
+            "base_color",
+            "Which channel to bake",
+        ),
         "size": ("int", 1024, "Texture resolution in pixels"),
         "samples": ("int", 16, "Cycles samples; 16 is plenty for base colour, raise for AO"),
         "out": ("path", "", "PNG output path (defaults to textures/<object>_<pass>.png)"),
@@ -300,9 +398,7 @@ def material_bake(ctx, object, pass_name, size, samples, out, unwrap, rewire):
         )
     target = ctx.out_path(out or f"textures/{obj.name}_{pass_name}.png", ".png")
     try:
-        result = mat_lib.bake_material(
-            obj, target, size=size, pass_name=pass_name, samples=samples
-        )
+        result = mat_lib.bake_material(obj, target, size=size, pass_name=pass_name, samples=samples)
     except ValueError as exc:
         raise OpError(str(exc)) from exc
     rewired = []
@@ -364,8 +460,13 @@ def material_bake_detail(
     target = ctx.out_path(out or f"textures/{low_obj.name}_{pass_name}_detail.png", ".png")
     try:
         result = mat_lib.bake_detail(
-            low_obj, high_objs, target, pass_name=pass_name, size=size,
-            samples=samples, cage_extrusion=cage_extrusion,
+            low_obj,
+            high_objs,
+            target,
+            pass_name=pass_name,
+            size=size,
+            samples=samples,
+            cage_extrusion=cage_extrusion,
             max_ray_distance=max_ray_distance,
         )
     except ValueError as exc:
@@ -391,7 +492,11 @@ def material_bake_detail(
     "material.consolidate",
     summary="Merge materials that render identically into one shared material. Composing a scene from many prop recipes leaves a pile of near-duplicate materials, and every distinct material is a draw call — this collapses them without changing how anything looks.",
     params={
-        "tolerance": ("num", 0.02, "How close two materials' colour/roughness/metallic must be to count as the same"),
+        "tolerance": (
+            "num",
+            0.02,
+            "How close two materials' colour/roughness/metallic must be to count as the same",
+        ),
         "objects": ("str[]", [], "Limit to these objects (empty = whole scene)"),
         "dry_run": ("bool", False, "Report what would merge without changing anything"),
     },
@@ -399,7 +504,8 @@ def material_bake_detail(
 )
 def material_consolidate(ctx, tolerance, objects, dry_run):
     targets = (
-        [_get(n) for n in objects] if objects
+        [_get(n) for n in objects]
+        if objects
         else [o for o in bpy.context.scene.objects if o.type == "MESH"]
     )
     if not targets:
@@ -448,9 +554,7 @@ def material_consolidate(ctx, tolerance, objects, dry_run):
             if leftover is not None and leftover.users == 0:
                 bpy.data.materials.remove(leftover)
 
-    remaining = sorted(
-        {m.name for o in targets for m in o.data.materials if m is not None}
-    )
+    remaining = sorted({m.name for o in targets for m in o.data.materials if m is not None})
     return {
         "merged": merges,
         "materials_before": len(used),
@@ -466,15 +570,23 @@ def _appearance(material):
     if not material.use_nodes:
         return ("flat", tuple(round(c, 4) for c in material.diffuse_color))
     tree = material.node_tree
-    if any(n.type not in
-           ("BSDF_PRINCIPLED", "OUTPUT_MATERIAL", "FRAME", "REROUTE") for n in tree.nodes):
+    if any(
+        n.type not in ("BSDF_PRINCIPLED", "OUTPUT_MATERIAL", "FRAME", "REROUTE") for n in tree.nodes
+    ):
         return None  # textured or procedural: appearance is not just its sockets
     bsdf = next((n for n in tree.nodes if n.type == "BSDF_PRINCIPLED"), None)
     if bsdf is None:
         return None
     values = []
-    for socket_name in ("Base Color", "Roughness", "Metallic", "Alpha",
-                        "Emission Color", "Emission Strength", "IOR"):
+    for socket_name in (
+        "Base Color",
+        "Roughness",
+        "Metallic",
+        "Alpha",
+        "Emission Color",
+        "Emission Strength",
+        "IOR",
+    ):
         socket = bsdf.inputs.get(socket_name)
         if socket is None:
             values.append(0.0)
@@ -530,16 +642,25 @@ def material_list(ctx):
         "object": ("str", None, "Object name"),
         "preset": ("str", "gold", "Material preset for the selected faces"),
         "select": ("enum:up|down|sides|top_band|bottom_band", "up", "Face selection rule"),
-        "band_min": ("num", 0.0, "top_band/bottom_band: lower bound as a fraction of height. Bands select by face CENTER, so a thin band needs real face rows at that height - one tall quad (e.g. a column shaft) has its centre near the middle and a thin band elsewhere matches nothing"),
+        "band_min": (
+            "num",
+            0.0,
+            "top_band/bottom_band: lower bound as a fraction of height. Bands select by face CENTER, so a thin band needs real face rows at that height - one tall quad (e.g. a column shaft) has its centre near the middle and a thin band elsewhere matches nothing",
+        ),
         "band_max": ("num", 1.0, "top_band/bottom_band: upper bound as a fraction of height"),
         "color": ("str", "", "Override colour"),
         "roughness": ("num", -1.0, "Override roughness 0..1; -1 keeps the preset value"),
-        "metallic": ("num", -1.0, "Override metallic 0..1; -1 keeps the preset value. Metals read black without something bright to reflect - painted trim (metallic ~0.15) survives dark environments"),
+        "metallic": (
+            "num",
+            -1.0,
+            "Override metallic 0..1; -1 keeps the preset value. Metals read black without something bright to reflect - painted trim (metallic ~0.15) survives dark environments",
+        ),
     },
     tags=["material"],
 )
-def material_face_assign(ctx, object, preset, select, band_min, band_max, color, roughness,
-                         metallic):
+def material_face_assign(
+    ctx, object, preset, select, band_min, band_max, color, roughness, metallic
+):
     obj = _get(object)
     mesh = obj.data
     zs = [v.co.z for v in mesh.vertices] or [0.0]

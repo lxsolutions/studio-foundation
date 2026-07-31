@@ -4799,7 +4799,7 @@
     },
     {
       "name": "material.tileable",
-      "summary": "Bake a SEAMLESS PBR texture set and apply it repeating across a surface. This is how architecture gets textured: a unique bake for a 725 m stadium works out to ~3 px/m, which is no texture at all, whereas one 1k tiling map gives real surface detail everywhere. Noise is sampled through a torus mapping so it tiles perfectly with no visible seam.",
+      "summary": "Bake a SEAMLESS PBR texture set and apply it repeating across a surface. This is how architecture gets textured: a unique bake for a 725 m stadium works out to ~3 px/m, which is no texture at all, whereas one 1k tiling map gives real surface detail everywhere. Noise uses a symmetric periodic 4D mapping so it tiles perfectly without directional stretching or a visible seam.",
       "tags": [
         "material",
         "bake",
@@ -4892,6 +4892,18 @@
             "type": "integer",
             "description": "Cycles samples for the bake",
             "default": 16
+          },
+          "maps": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Which maps to bake; omit unused channels to keep browser payloads lean",
+            "default": [
+              "base_color",
+              "normal",
+              "roughness"
+            ]
           },
           "stem": {
             "type": "string",
