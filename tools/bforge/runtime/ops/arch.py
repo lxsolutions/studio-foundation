@@ -1391,15 +1391,16 @@ def arch_defense_tower(
     "arch.field_building",
     summary=(
         "A browser-budget Greek settlement family for the structures surrounding a civic "
-        "hall: a furrowed farmstead, strategos campaign tent, hoplite barracks, modular "
-        "ashlar wall, or weathered road stele. Variants share restrained limestone, "
+        "hall: a furrowed farmstead, strategos campaign tent, hoplite barracks, delver "
+        "household, mining emporium, survey lattice, modular ashlar wall, or weathered "
+        "road stele. Variants share restrained limestone, "
         "timber, cloth, terracotta, bronze and crop materials while keeping silhouettes "
         "readable from an RTS camera."
     ),
     params={
         "name": ("str", "field_building", "Object name"),
         "style": (
-            "enum:farm|camp|barracks|wall|waymarker",
+            "enum:farm|camp|barracks|house|emporium|lattice|wall|waymarker",
             "farm",
             "Settlement structure silhouette",
         ),
@@ -1894,6 +1895,151 @@ def arch_field_building(
             )
         silhouette = "hoplite_training_hall"
 
+    elif style == "house":
+        # A compact courtyard dwelling for delvers: heavy limestone cella,
+        # recessed timber entrance, shaded porch and a low tiled gable. Fine
+        # roof ribs and domestic props keep it readable in FPS without turning
+        # the RTS silhouette into a bright toy cottage.
+        podium_h = height * 0.065
+        wall_h = height * 0.53
+        wall_t = max(0.12, min(width, depth) * 0.055)
+        box((width * 1.03, depth * 1.02, podium_h), (0.0, 0.0, podium_h * 0.5), FOUNDATION, 0.035)
+        wall_z = podium_h + wall_h * 0.5
+        box((width * 0.84, wall_t, wall_h), (0.0, depth * 0.40, wall_z), STONE, 0.018)
+        for sx in (-1.0, 1.0):
+            box((wall_t, depth * 0.82, wall_h), (sx * width * 0.42, 0.0, wall_z), STONE, 0.018)
+            box((width * 0.25, wall_t, wall_h), (sx * width * 0.295, -depth * 0.40, wall_z), STONE, 0.018)
+        door_w = width * 0.19
+        door_h = wall_h * 0.73
+        box((door_w, wall_t * 0.82, door_h), (0.0, -depth * 0.405, podium_h + door_h * 0.5), TIMBER, 0.014)
+        box((door_w * 1.18, wall_t * 1.18, height * 0.055), (0.0, -depth * 0.415, podium_h + door_h), FOUNDATION, 0.012)
+        for sx in (-1.0, 1.0):
+            box((width * 0.075, wall_t * 0.45, wall_h * 0.26), (sx * width * 0.285, -depth * 0.431, podium_h + wall_h * 0.57), FOUNDATION, 0.008)
+        porch_y = -depth * 0.52
+        column_h = wall_h * 0.76
+        for sx in (-1.0, 1.0):
+            cylinder(width * 0.035, column_h, (sx * width * 0.25, porch_y, podium_h + column_h * 0.5), STONE, 10, radius_top=width * 0.029)
+        box((width * 0.62, wall_t, height * 0.07), (0.0, porch_y, podium_h + column_h), FOUNDATION, 0.015)
+        roof_base = podium_h + wall_h
+        rise = height * 0.19
+        run = depth * 0.49
+        roof_slope = math.hypot(run, rise)
+        pitch = math.atan2(rise, run)
+        for sy in (-1.0, 1.0):
+            box((width * 1.02, roof_slope, height * 0.048), (0.0, sy * depth * 0.245, roof_base + rise * 0.5), ROOF, 0.012, (-sy * pitch, 0.0, 0.0))
+        # Raised battens suggest courses of weathered clay tile at low cost.
+        for sy in range(-3, 4):
+            y = sy * depth * 0.12
+            z = roof_base + rise * (1.0 - abs(y) / max(run, 0.001)) + height * 0.018
+            box((width * 1.025, height * 0.025, height * 0.026), (0.0, y, z), FOUNDATION, 0.006)
+        chimney_h = height * 0.27
+        box((width * 0.12, depth * 0.11, chimney_h), (width * 0.27, depth * 0.12, roof_base + chimney_h * 0.54), FOUNDATION, 0.012)
+        box((width * 0.15, depth * 0.14, height * 0.045), (width * 0.27, depth * 0.12, roof_base + chimney_h), STONE, 0.01)
+        box((width * 0.35, depth * 0.09, height * 0.13), (-width * 0.18, -depth * 0.60, podium_h + height * 0.065), TIMBER, 0.012)
+        for sx in (-0.34, 0.34):
+            cylinder(width * 0.038, height * 0.21, (sx * width, -depth * 0.58, podium_h + height * 0.105), ROOF, 10, radius_top=width * 0.027)
+        silhouette = "courtyard_delver_house_tile_bands"
+
+    elif style == "emporium":
+        # A sober mining stoa: shadowed merchandise bay, stone colonnade,
+        # timber counter and bronze scale under a restrained tiled roof.
+        podium_h = height * 0.075
+        wall_h = height * 0.48
+        wall_t = max(0.12, min(width, depth) * 0.055)
+        box((width * 1.04, depth * 1.04, podium_h), (0.0, 0.0, podium_h * 0.5), FOUNDATION, 0.04)
+        wall_z = podium_h + wall_h * 0.5
+        box((width * 0.90, wall_t, wall_h), (0.0, depth * 0.40, wall_z), STONE, 0.018)
+        for sx in (-1.0, 1.0):
+            box((wall_t, depth * 0.80, wall_h), (sx * width * 0.45, 0.0, wall_z), STONE, 0.018)
+        # Deep, nearly black recess behind the open trade counter.
+        box((width * 0.76, wall_t * 0.7, wall_h * 0.68), (0.0, depth * 0.35, podium_h + wall_h * 0.42), FOUNDATION, 0.008)
+        column_h = wall_h * 0.94
+        col_y = -depth * 0.42
+        for sx in (-0.39, -0.13, 0.13, 0.39):
+            cylinder(width * 0.026, column_h, (sx * width, col_y, podium_h + column_h * 0.5), STONE, 10, radius_top=width * 0.022)
+        box((width * 0.91, wall_t, height * 0.065), (0.0, col_y, podium_h + column_h), FOUNDATION, 0.014)
+        counter_z = podium_h + wall_h * 0.28
+        box((width * 0.70, depth * 0.12, height * 0.10), (0.0, -depth * 0.23, counter_z), TIMBER, 0.018)
+        # A dark oxblood awning reads as fabric, not a giant saturated sign.
+        awning_pitch = math.radians(12.0)
+        box((width * 0.78, depth * 0.36, height * 0.032), (0.0, -depth * 0.28, podium_h + wall_h * 0.73), ROOF, 0.01, (awning_pitch, 0.0, 0.0))
+        roof_base = podium_h + wall_h
+        rise = height * 0.17
+        run = depth * 0.50
+        roof_slope = math.hypot(run, rise)
+        pitch = math.atan2(rise, run)
+        for sy in (-1.0, 1.0):
+            box((width * 1.04, roof_slope, height * 0.046), (0.0, sy * depth * 0.25, roof_base + rise * 0.5), ROOF, 0.012, (-sy * pitch, 0.0, 0.0))
+        for sy in range(-3, 4):
+            y = sy * depth * 0.12
+            z = roof_base + rise * (1.0 - abs(y) / max(run, 0.001)) + height * 0.017
+            box((width * 1.045, height * 0.023, height * 0.024), (0.0, y, z), FOUNDATION, 0.006)
+        # Amphorae, ore basket and a simple bronze balance advertise trade.
+        for sx in (-0.34, -0.25, 0.31):
+            cylinder(width * 0.035, height * 0.20, (sx * width, -depth * 0.56, podium_h + height * 0.10), ROOF if sx < 0 else FOUNDATION, 10, radius_top=width * 0.024)
+        scale_x = width * 0.20
+        scale_z = counter_z + height * 0.25
+        beam((scale_x, -depth * 0.24, counter_z), (scale_x, -depth * 0.24, scale_z), width * 0.010, METAL, 7)
+        beam((scale_x - width * 0.11, -depth * 0.24, scale_z), (scale_x + width * 0.11, -depth * 0.24, scale_z), width * 0.008, METAL, 7)
+        for sx in (-1.0, 1.0):
+            beam((scale_x + sx * width * 0.09, -depth * 0.24, scale_z), (scale_x + sx * width * 0.09, -depth * 0.24, scale_z - height * 0.10), width * 0.004, METAL, 5)
+            cylinder(width * 0.035, height * 0.012, (scale_x + sx * width * 0.09, -depth * 0.24, scale_z - height * 0.11), METAL, 10)
+        silhouette = "shadowed_stoa_mining_emporium"
+
+    elif style == "lattice":
+        # A recognisable prospecting headframe rather than a loop and cone:
+        # four raked legs, X bracing, service deck, ladder, drum, rope and a
+        # genuinely open spoked sheave. The narrow vertical silhouette marks
+        # a mine entrance in both RTS and first-person views.
+        foot_x = width * 0.38
+        foot_y = depth * 0.34
+        deck_z = height * 0.61
+        crown_z = height * 0.92
+        for sx in (-1.0, 1.0):
+            for sy in (-1.0, 1.0):
+                box((width * 0.18, depth * 0.16, height * 0.075), (sx * foot_x, sy * foot_y, height * 0.0375), FOUNDATION, 0.025)
+                beam((sx * foot_x, sy * foot_y, height * 0.07), (sx * width * 0.19, sy * depth * 0.17, deck_z), width * 0.032, TIMBER, 7)
+        # Cross braces on both broad faces and both sides.
+        for sy in (-1.0, 1.0):
+            beam((-foot_x, sy * foot_y, height * 0.14), (width * 0.19, sy * depth * 0.17, deck_z * 0.93), width * 0.018, TIMBER, 7)
+            beam((foot_x, sy * foot_y, height * 0.14), (-width * 0.19, sy * depth * 0.17, deck_z * 0.93), width * 0.018, TIMBER, 7)
+        for sx in (-1.0, 1.0):
+            beam((sx * foot_x, -foot_y, height * 0.15), (sx * width * 0.19, depth * 0.17, deck_z * 0.91), width * 0.015, TIMBER, 7)
+            beam((sx * foot_x, foot_y, height * 0.15), (sx * width * 0.19, -depth * 0.17, deck_z * 0.91), width * 0.015, TIMBER, 7)
+        box((width * 0.58, depth * 0.52, height * 0.055), (0.0, 0.0, deck_z), TIMBER, 0.014)
+        for sx in (-1.0, 1.0):
+            beam((sx * width * 0.23, -depth * 0.20, deck_z), (sx * width * 0.14, -depth * 0.12, crown_z), width * 0.026, TIMBER, 7)
+            beam((sx * width * 0.23, depth * 0.20, deck_z), (sx * width * 0.14, depth * 0.12, crown_z), width * 0.026, TIMBER, 7)
+        beam((-width * 0.20, 0.0, crown_z), (width * 0.20, 0.0, crown_z), width * 0.025, TIMBER, 7)
+        # Open bronze sheave assembled from rim segments and spokes.
+        wheel_center = Vector((0.0, -depth * 0.025, height * 0.80))
+        wheel_radius = width * 0.18
+        rim_segments = 14
+        for index in range(rim_segments):
+            a0 = math.tau * index / rim_segments
+            a1 = math.tau * (index + 1) / rim_segments
+            p0 = wheel_center + Vector((math.cos(a0) * wheel_radius, 0.0, math.sin(a0) * wheel_radius))
+            p1 = wheel_center + Vector((math.cos(a1) * wheel_radius, 0.0, math.sin(a1) * wheel_radius))
+            beam(p0, p1, width * 0.012, METAL, 7)
+        for index in range(8):
+            angle = math.tau * index / 8
+            rim = wheel_center + Vector((math.cos(angle) * wheel_radius, 0.0, math.sin(angle) * wheel_radius))
+            beam(wheel_center, rim, width * 0.007, METAL, 6)
+        cylinder(width * 0.032, depth * 0.28, wheel_center, METAL, 10, axis="y")
+        # Hoist line and plumb weight descend through the deck opening.
+        beam((0.0, -depth * 0.03, height * 0.80), (0.0, -depth * 0.03, height * 0.15), width * 0.005, METAL, 5)
+        cylinder(width * 0.035, height * 0.10, (0.0, -depth * 0.03, height * 0.10), METAL, 7, radius_top=width * 0.012)
+        # Ladder and low winding drum make the structure functional.
+        ladder_x = -width * 0.30
+        for sx in (-1.0, 1.0):
+            beam((ladder_x + sx * width * 0.035, -depth * 0.24, height * 0.08), (ladder_x + sx * width * 0.035, -depth * 0.15, deck_z), width * 0.009, TIMBER, 6)
+        for rung in range(7):
+            z = height * (0.13 + rung * 0.065)
+            beam((ladder_x - width * 0.035, -depth * 0.225 + rung * depth * 0.014, z), (ladder_x + width * 0.035, -depth * 0.225 + rung * depth * 0.014, z), width * 0.006, TIMBER, 5)
+        cylinder(width * 0.11, depth * 0.36, (width * 0.31, depth * 0.24, height * 0.17), TIMBER, 12, axis="y")
+        cylinder(width * 0.125, depth * 0.035, (width * 0.31, depth * 0.05, height * 0.17), METAL, 12, axis="y")
+        cylinder(width * 0.125, depth * 0.035, (width * 0.31, depth * 0.43, height * 0.17), METAL, 12, axis="y")
+        silhouette = "cross_braced_prospector_headframe"
     elif style == "wall":
         # Individually blocked courses and end pilasters give a modular wall
         # enough real construction detail at first-person distance without
@@ -1950,7 +2096,7 @@ def arch_field_building(
             )
         silhouette = "ashlar_parapet_segment"
 
-    else:
+    elif style == "waymarker":
         # A road stele rather than a pristine white column: dark rubble plinth,
         # tapered limestone marker, bronze inscription panel and chipped cap.
         # It can be scattered as an archaeological landmark without looking
@@ -2019,6 +2165,9 @@ def arch_field_building(
             6,
         )
         silhouette = "weathered_road_stele"
+
+    else:
+        raise ValueError(f"unsupported field-building style: {style}")
 
     mesh_lib.cleanup(bm, merge_dist=1e-4)
     obj = mesh_lib.to_object(bm, scene_lib.unique_name(name))

@@ -439,6 +439,9 @@ class Architecture(ForgeCase):
             "farm": ("furrowed_olive_plot", 3.4, 3.4, 1.8),
             "camp": ("strategos_campaign_tent", 3.8, 3.0, 2.7),
             "barracks": ("hoplite_training_hall", 3.2, 2.6, 2.8),
+            "house": ("courtyard_delver_house_tile_bands", 3.8, 3.2, 3.2),
+            "emporium": ("shadowed_stoa_mining_emporium", 4.4, 3.2, 3.3),
+            "lattice": ("cross_braced_prospector_headframe", 2.5, 2.5, 5.8),
             "wall": ("ashlar_parapet_segment", 2.4, 0.6, 2.2),
             "waymarker": ("weathered_road_stele", 1.25, 1.1, 2.4),
         }
@@ -482,6 +485,13 @@ class Architecture(ForgeCase):
         self.assertGreater(family["camp"]["bounds"]["size"][1], 3.3)
         self.assertGreater(family["camp"]["bounds"]["size"][2], 2.3)
         self.assertGreater(family["barracks"]["bounds"]["size"][2], 2.4)
+        self.assertGreater(family["house"]["bounds"]["size"][0], 3.7)
+        self.assertGreater(family["house"]["bounds"]["size"][2], 2.8)
+        self.assertGreater(family["emporium"]["bounds"]["size"][0], 4.3)
+        self.assertGreater(family["emporium"]["bounds"]["size"][2], 2.4)
+        self.assertGreater(family["lattice"]["bounds"]["size"][2], 5.2)
+        self.assertGreater(family["lattice"]["bounds"]["size"][2], family["lattice"]["bounds"]["size"][0] * 1.8)
+        self.assertEqual(len({item["silhouette"] for item in family.values()}), len(family))
         self.assertLess(family["wall"]["bounds"]["size"][1], 0.8)
         self.assertGreater(family["waymarker"]["bounds"]["size"][2], 2.0)
 
