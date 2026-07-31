@@ -43,6 +43,22 @@ triangle spend), UV checker (stretch and texel density).
 
 ### In the studio's own games
 
+**Spike's Mining Settlement** exposed an asset-level clarity problem that code
+could not solve: the earlier civic hall ended at its facade, so its mine read as
+a dark doorway with a hoist wheel parked beside it. arch.civic_hall now has an
+optional mine_yard programme that centers the headframe over a scalable portal
+and carries the industrial story into the world with a stone loading apron,
+retaining cheeks, metal rails, timber sleepers and a four-wheel ore cart.
+
+The v4 Town Centre is still one joined, seven-material mesh. Its source
+generator produces 17,232 triangles; Spike's authored WebGL LOD is 7,926
+triangles in a 757 KB GLB, passing the 8,000-triangle environment budget while
+preserving the mine-yard silhouette from the RTS and first-person cameras.
+greek_polis and existing recipes remain byte-stable because mine_yard defaults
+off.
+
+![Spike Laurion Mining Settlement v4 review sheet](../../docs/bforge/img/spike_settlement_v4.png)
+
 **The Chariot Club** shipped a `colosseum_track.glb` that was a flat oval slab:
 1,038 objects, 25,796 triangles, 12 materials, no UVs anywhere, and no building
 around the racing surface. `session.import` + `check.critique` found that in one

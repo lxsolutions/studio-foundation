@@ -36,7 +36,7 @@ A wall of repeating arched bays following a path — THE Roman building block. S
 
 ### `arch.civic_hall`
 
-A complete classical town centre in one joined, material-disciplined asset: stepped masonry masses, pedimented portico, tiled gable roofs, buttresses, windows and faction banner. The greek_mine style adds an arched shaft mouth and working timber headframe/hoist, making an RTS civic centre that is also credible at first-person distance.
+A complete classical town centre in one joined, material-disciplined asset: stepped masonry masses, pedimented portico, tiled gable roofs, buttresses, windows and faction banner. The greek_mine style adds an arched shaft mouth and working timber headframe/hoist, making an RTS civic centre that is also credible at first-person distance. Optional mine_yard geometry extends the shaft into a stone loading apron, rails, sleepers and a loaded ore cart.
 
 | parameter | type | default | description |
 | --- | --- | --- | --- |
@@ -49,6 +49,10 @@ A complete classical town centre in one joined, material-disciplined asset: step
 | `tile_rows` | integer | 7 | Raised tile bands across each major roof |
 | `mine_portal` | boolean | True | Add an arched mine mouth through the facade |
 | `hoist` | boolean | True | Add the timber headframe, wheel, spokes, axle and rope |
+| `mine_yard` | boolean | False | Extend the mine into a working forecourt with apron, rails and sleepers |
+| `portal_scale` | number | 1.0 | Mine-mouth width multiplier (0.85-1.55) |
+| `rail_length` | number | 4.8 | Mine-yard rail length beyond the portal in metres |
+| `ore_cart` | boolean | True | Place a timber-and-metal ore cart on mine-yard rails |
 | `stone_color` | string | '#817765' | Primary weathered masonry |
 | `foundation_color` | string | '#4c4841' | Podium, courses and buttress stone |
 | `roof_color` | string | '#552c24' | Dark terracotta tile |

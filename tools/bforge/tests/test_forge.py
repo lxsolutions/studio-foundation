@@ -334,6 +334,8 @@ class Architecture(ForgeCase):
         self.assertEqual(first["style"], "greek_mine")
         self.assertTrue(first["mine_portal"])
         self.assertTrue(first["hoist"])
+        self.assertFalse(first["mine_yard"])
+        self.assertFalse(first["ore_cart"])
         self.assertEqual(first["columns"], 6)
         self.assertEqual(first["tile_rows"], 7)
         self.assertGreaterEqual(first["parts"], 90)
@@ -370,6 +372,40 @@ class Architecture(ForgeCase):
         self.assertEqual(first["triangles"], repeated["triangles"])
         self.assertEqual(first["bounds"], repeated["bounds"])
 
+    def test_civic_hall_mine_yard_extends_the_working_silhouette(self):
+        plain = self.forge.call(
+            "arch.civic_hall",
+            name="plain_mine",
+            style="greek_mine",
+            width=10.4,
+            depth=8.4,
+            height=6.8,
+        )
+        self.forge.call("session.reset")
+        yard = self.forge.call(
+            "arch.civic_hall",
+            name="working_mine",
+            style="greek_mine",
+            width=10.4,
+            depth=8.4,
+            height=6.8,
+            mine_yard=True,
+            portal_scale=1.28,
+            rail_length=4.8,
+            ore_cart=True,
+        )
+        self.assertTrue(yard["mine_yard"])
+        self.assertTrue(yard["ore_cart"])
+        self.assertEqual(yard["rail_length"], 4.8)
+        self.assertEqual(yard["portal_scale"], 1.28)
+        self.assertGreater(yard["portal_width"], plain["portal_width"] * 1.25)
+        self.assertGreater(yard["parts"], plain["parts"] + 20)
+        self.assertGreater(yard["bounds"]["size"][1], plain["bounds"]["size"][1] + 3.5)
+        self.assertGreater(yard["triangles"], plain["triangles"])
+        self.assertLess(yard["triangles"], 18_000)
+        self.assertEqual(yard["materials"], plain["materials"])
+        self.assertAlmostEqual(yard["bounds"]["min"][2], 0.0, places=3)
+
     def test_polis_style_removes_mine_only_parts(self):
         polis = self.forge.call(
             "arch.civic_hall",
@@ -379,6 +415,8 @@ class Architecture(ForgeCase):
         self.assertEqual(polis["style"], "greek_polis")
         self.assertFalse(polis["mine_portal"])
         self.assertFalse(polis["hoist"])
+        self.assertFalse(polis["mine_yard"])
+        self.assertFalse(polis["ore_cart"])
         self.assertEqual(polis["portal_width"], 0.0)
         self.assertLess(polis["parts"], 110)
 

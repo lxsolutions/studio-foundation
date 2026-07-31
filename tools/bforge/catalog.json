@@ -144,7 +144,7 @@
     },
     {
       "name": "arch.civic_hall",
-      "summary": "A complete classical town centre in one joined, material-disciplined asset: stepped masonry masses, pedimented portico, tiled gable roofs, buttresses, windows and faction banner. The greek_mine style adds an arched shaft mouth and working timber headframe/hoist, making an RTS civic centre that is also credible at first-person distance.",
+      "summary": "A complete classical town centre in one joined, material-disciplined asset: stepped masonry masses, pedimented portico, tiled gable roofs, buttresses, windows and faction banner. The greek_mine style adds an arched shaft mouth and working timber headframe/hoist, making an RTS civic centre that is also credible at first-person distance. Optional mine_yard geometry extends the shaft into a stone loading apron, rails, sleepers and a loaded ore cart.",
       "tags": [
         "build",
         "architecture",
@@ -202,6 +202,26 @@
           "hoist": {
             "type": "boolean",
             "description": "Add the timber headframe, wheel, spokes, axle and rope",
+            "default": true
+          },
+          "mine_yard": {
+            "type": "boolean",
+            "description": "Extend the mine into a working forecourt with apron, rails and sleepers",
+            "default": false
+          },
+          "portal_scale": {
+            "type": "number",
+            "description": "Mine-mouth width multiplier (0.85-1.55)",
+            "default": 1.0
+          },
+          "rail_length": {
+            "type": "number",
+            "description": "Mine-yard rail length beyond the portal in metres",
+            "default": 4.8
+          },
+          "ore_cart": {
+            "type": "boolean",
+            "description": "Place a timber-and-metal ore cart on mine-yard rails",
             "default": true
           },
           "stone_color": {

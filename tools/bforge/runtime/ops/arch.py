@@ -503,7 +503,8 @@ def arch_gateway(
         "stepped masonry masses, pedimented portico, tiled gable roofs, buttresses, "
         "windows and faction banner. The greek_mine style adds an arched shaft mouth "
         "and working timber headframe/hoist, making an RTS civic centre that is also "
-        "credible at first-person distance."
+        "credible at first-person distance. Optional mine_yard geometry extends the "
+        "shaft into a stone loading apron, rails, sleepers and a loaded ore cart."
     ),
     params={
         "name": ("str", "civic_hall", "Object name"),
@@ -515,6 +516,14 @@ def arch_gateway(
         "tile_rows": ("int", 7, "Raised tile bands across each major roof"),
         "mine_portal": ("bool", True, "Add an arched mine mouth through the facade"),
         "hoist": ("bool", True, "Add the timber headframe, wheel, spokes, axle and rope"),
+        "mine_yard": (
+            "bool",
+            False,
+            "Extend the mine into a working forecourt with apron, rails and sleepers",
+        ),
+        "portal_scale": ("num", 1.0, "Mine-mouth width multiplier (0.85-1.55)"),
+        "rail_length": ("num", 4.8, "Mine-yard rail length beyond the portal in metres"),
+        "ore_cart": ("bool", True, "Place a timber-and-metal ore cart on mine-yard rails"),
         "stone_color": ("str", "#817765", "Primary weathered masonry"),
         "foundation_color": ("str", "#4c4841", "Podium, courses and buttress stone"),
         "roof_color": ("str", "#552c24", "Dark terracotta tile"),
@@ -538,6 +547,10 @@ def arch_civic_hall(
     tile_rows,
     mine_portal,
     hoist,
+    mine_yard,
+    portal_scale,
+    rail_length,
+    ore_cart,
     stone_color,
     foundation_color,
     roof_color,
@@ -555,9 +568,16 @@ def arch_civic_hall(
     if columns % 2:
         columns += 1
     tile_rows = max(0, min(12, int(tile_rows)))
+    portal_scale = max(0.85, min(1.55, float(portal_scale)))
+    rail_length = max(2.5, min(7.0, float(rail_length)))
     if style == "greek_polis":
         mine_portal = False
         hoist = False
+        mine_yard = False
+        ore_cart = False
+    if not mine_portal:
+        mine_yard = False
+        ore_cart = False
 
     # One mesh and seven shared slots. The old production recipe made every
     # differently-coloured primitive create another material, reaching 17 draw
@@ -594,7 +614,15 @@ def arch_civic_hall(
         bmesh.ops.transform(bm, matrix=matrix, verts=verts)
         return mark(faces, slot)
 
-    def oriented_cylinder(radius, depth_value, segments, center, slot, rotation_x=0.0):
+    def oriented_cylinder(
+        radius,
+        depth_value,
+        segments,
+        center,
+        slot,
+        rotation_x=0.0,
+        rotation_y=0.0,
+    ):
         faces = mesh_lib.add_cylinder(
             bm,
             radius=radius,
@@ -606,6 +634,8 @@ def arch_civic_hall(
         matrix = Matrix.Translation(Vector(center))
         if rotation_x:
             matrix = matrix @ Matrix.Rotation(rotation_x, 4, "X")
+        if rotation_y:
+            matrix = matrix @ Matrix.Rotation(rotation_y, 4, "Y")
         bmesh.ops.transform(bm, matrix=matrix, verts=verts)
         return mark(faces, slot)
 
@@ -777,7 +807,7 @@ def arch_civic_hall(
     )
 
     # --- mine mouth, windows and working hoist --------------------------------
-    portal_width = width * 0.225
+    portal_width = width * 0.225 * portal_scale
     portal_radius = portal_width * 0.5
     portal_base = body_base + 0.08
     portal_spring = portal_base + height * 0.245
@@ -866,11 +896,11 @@ def arch_civic_hall(
         )
 
     if hoist:
-        wheel_x = width * 0.36
+        wheel_x = 0.0 if mine_yard else width * 0.36
         wheel_y = portal_y - 0.62
         wheel_z = body_base + height * 0.33
         frame_h = height * 0.48
-        frame_span = width * 0.155
+        frame_span = width * (0.34 if mine_yard else 0.155)
         for sign in (-1.0, 1.0):
             rotated_box(
                 (0.23, 0.27, frame_h),
@@ -925,6 +955,107 @@ def arch_civic_hall(
             0.006,
         )
 
+    # --- working mine yard ----------------------------------------------------
+    # The portal used to stop at the facade, so the mine read as a dark door
+    # with an unrelated wheel beside it. This optional programme carries the
+    # operation out into the world: a stone loading apron, track emerging from
+    # the shaft, transverse sleepers and a cart. It is deliberately geometry,
+    # not a texture decal, because these are the silhouettes that survive an
+    # RTS camera and explain the building from first-person height.
+    if mine_yard:
+        yard_start_y = portal_y - 0.10
+        yard_center_y = yard_start_y - rail_length * 0.5
+        gauge = min(portal_width * 0.42, 1.10)
+        apron_length = min(2.35, rail_length * 0.52)
+        box(
+            (portal_width * 1.72, apron_length, 0.22),
+            (0.0, yard_start_y - apron_length * 0.5, 0.12),
+            FOUNDATION,
+            0.025,
+        )
+        # Low cheek walls frame the portal and make the forecourt part of the
+        # architecture without becoming invisible gameplay blockers.
+        for sign in (-1.0, 1.0):
+            box(
+                (0.28, apron_length * 0.92, 0.62),
+                (
+                    sign * portal_width * 0.78,
+                    yard_start_y - apron_length * 0.48,
+                    0.31,
+                ),
+                FOUNDATION,
+                0.018,
+            )
+            box(
+                (0.09, rail_length, 0.13),
+                (sign * gauge * 0.5, yard_center_y, 0.25),
+                METAL,
+                0.004,
+            )
+
+        sleeper_count = max(5, int(rail_length / 0.52) + 1)
+        for index in range(sleeper_count):
+            y = yard_start_y - rail_length * index / max(1, sleeper_count - 1)
+            box((gauge + 0.72, 0.16, 0.11), (0.0, y, 0.145), TIMBER, 0.004)
+
+        if ore_cart:
+            cart_y = yard_start_y - rail_length * 0.68
+            cart_w = gauge + 0.48
+            cart_d = min(1.45, rail_length * 0.31)
+            wheel_radius = 0.255
+            # Chassis and flared hopper. Four separate side panels keep the
+            # cart readable after LOD while using the hall's existing slots.
+            box((cart_w * 0.86, cart_d, 0.18), (0.0, cart_y, 0.36), TIMBER, 0.018)
+            for sign in (-1.0, 1.0):
+                rotated_box(
+                    (0.13, cart_d * 0.96, 0.58),
+                    (sign * cart_w * 0.47, cart_y, 0.69),
+                    FOUNDATION,
+                    rotation_y=math.radians(sign * 10.0),
+                    bevel=0.012,
+                )
+            for sign in (-1.0, 1.0):
+                box(
+                    (cart_w * 0.92, 0.13, 0.58),
+                    (0.0, cart_y + sign * cart_d * 0.47, 0.69),
+                    FOUNDATION,
+                    0.012,
+                )
+            for x_sign in (-1.0, 1.0):
+                for y_sign in (-1.0, 1.0):
+                    oriented_cylinder(
+                        wheel_radius,
+                        0.14,
+                        12,
+                        (
+                            x_sign * cart_w * 0.52,
+                            cart_y + y_sign * cart_d * 0.34,
+                            wheel_radius + 0.13,
+                        ),
+                        METAL,
+                        rotation_y=math.pi * 0.5,
+                    )
+            oriented_cylinder(
+                0.075,
+                cart_w * 1.12,
+                10,
+                (0.0, cart_y, wheel_radius + 0.13),
+                METAL,
+                rotation_y=math.pi * 0.5,
+            )
+            # A few angular ore blocks break the empty-bin silhouette without
+            # introducing loose scenery or another material slot.
+            for index, (x, y, scale) in enumerate(
+                ((-0.32, -0.22, 0.28), (0.12, -0.16, 0.34), (0.31, 0.18, 0.25), (-0.08, 0.23, 0.30))
+            ):
+                rotated_box(
+                    (scale, scale * 0.82, scale * 0.64),
+                    (x, cart_y + y, 1.02 + index * 0.012),
+                    FOUNDATION,
+                    rotation_y=math.radians(11.0 + index * 17.0),
+                    bevel=0.018,
+                )
+
     # Upper civic banner completes the mine-town identity. Loose ore piles are
     # deliberately omitted: the game already owns mineable boulders, and baked
     # decorative rocks at the portal read as collision blockers in first person.
@@ -965,6 +1096,10 @@ def arch_civic_hall(
             "tile_rows": tile_rows,
             "mine_portal": bool(mine_portal),
             "hoist": bool(hoist),
+            "mine_yard": bool(mine_yard),
+            "portal_scale": round(portal_scale, 3),
+            "rail_length": round(rail_length, 3) if mine_yard else 0.0,
+            "ore_cart": bool(ore_cart and mine_yard),
             "portal_width": round(portal_width, 3) if mine_portal else 0.0,
         }
     )
