@@ -622,6 +622,42 @@ class Rendering(ForgeCase):
         )
         self.assertEqual(result["periodicity"]["method"], "windowed_cell_fft")
 
+    def test_sprite_audit_measures_alpha_padding_and_clipping(self):
+        centred = Path(TEMP.name) / "centred-sprite.png"
+        _write_rgba_png(
+            centred,
+            64,
+            64,
+            lambda x, y: (126, 83, 52, 255)
+            if 16 <= x < 48 and 8 <= y < 56 else (0, 0, 0, 0),
+        )
+        result = self.forge.call(
+            "check.sprite",
+            path=str(centred),
+            min_coverage=0.08,
+            max_coverage=0.82,
+            edge_guard=2,
+        )
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["padding"], {"left": 16, "right": 16, "top": 8, "bottom": 8})
+        self.assertAlmostEqual(result["subject_coverage"], 0.375)
+
+        clipped = Path(TEMP.name) / "clipped-sprite.png"
+        _write_rgba_png(
+            clipped,
+            64,
+            64,
+            lambda x, y: (126, 83, 52, 255)
+            if x < 32 and 8 <= y < 56 else (0, 0, 0, 0),
+        )
+        result = self.forge.call("check.sprite", path=str(clipped), edge_guard=2)
+        self.assertFalse(result["ok"])
+        self.assertIn(
+            "sprite touches crop edge",
+            {finding["issue"] for finding in result["findings"]},
+        )
+        self.assertEqual(result["padding"]["left"], 0)
+
     def test_render_of_an_empty_scene_is_a_clear_error(self):
         with self.assertRaises(ForgeError) as ctx:
             self.forge.call("render.view", out="empty.png", resolution=64, samples=1)

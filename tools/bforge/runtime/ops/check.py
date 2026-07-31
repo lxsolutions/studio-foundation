@@ -499,6 +499,118 @@ def check_image(ctx, path, colors, background):
 
 
 @op(
+    "check.sprite",
+    summary="Audit a transparent character or item sprite for real alpha, subject coverage, edge clipping, padding and silhouette density. Use it before a generated portrait becomes a billboard, HUD card or runtime impostor.",
+    params={
+        "path": ("path", None, "Transparent PNG sprite or portrait to analyse"),
+        "min_coverage": ("num", 0.08, "Minimum visible-pixel share before the subject is considered too small"),
+        "max_coverage": ("num", 0.82, "Maximum visible-pixel share before the subject is considered over-cropped"),
+        "edge_guard": ("int", 2, "Minimum transparent pixel padding required on every image edge"),
+    },
+    tags=["check", "inspect", "sprite"],
+    mutates=False,
+)
+def check_sprite(ctx, path, min_coverage, max_coverage, edge_guard):
+    """Measure whether generated cutout art is actually safe to ship as a sprite.
+
+    A beautiful character render can still turn into a rectangle in game because
+    its background is opaque, or lose a weapon and feet because the subject meets
+    the crop. Those failures are properties of the delivered PNG, not the Blender
+    scene, so validate the payload directly.
+    """
+    try:
+        import numpy
+    except ImportError as exc:  # pragma: no cover - Blender bundles numpy
+        raise OpError("numpy unavailable in this Blender build") from exc
+
+    target = ctx.resolve(path)
+    if not target.is_file():
+        target = ctx.out_path(path, ".png")
+    if not target.is_file():
+        raise OpError(f"no image at {target}")
+
+    image = bpy.data.images.load(str(target))
+    try:
+        width, height = image.size
+        rgba = numpy.array(image.pixels[:], dtype=numpy.float32).reshape((height, width, 4))
+    finally:
+        bpy.data.images.remove(image)
+
+    alpha = rgba[:, :, 3]
+    visible = alpha > 0.05
+    coverage = float(visible.mean())
+    if coverage < 1e-5:
+        raise OpError(f"{target.name} has no visible subject in its alpha channel")
+
+    rows, columns = numpy.where(visible)
+    left = int(columns.min())
+    right = int(width - 1 - columns.max())
+    bottom = int(rows.min())
+    top = int(height - 1 - rows.max())
+    padding = {"left": left, "right": right, "top": top, "bottom": bottom}
+    bbox_width = int(columns.max() - columns.min() + 1)
+    bbox_height = int(rows.max() - rows.min() + 1)
+    bbox_fill = float(visible.sum() / max(1, bbox_width * bbox_height))
+    transparent_share = float((alpha < 0.01).mean())
+    soft_alpha_share = float(((alpha > 0.05) & (alpha < 0.95)).sum() / visible.sum())
+
+    minimum = max(0.0, min(0.95, float(min_coverage)))
+    maximum = max(minimum, min(1.0, float(max_coverage)))
+    guard = max(0, min(min(width, height) // 4, int(edge_guard)))
+    findings = []
+    if transparent_share < 0.02:
+        findings.append({
+            "severity": "error",
+            "issue": "opaque sprite background",
+            "detail": f"only {transparent_share:.1%} of pixels are transparent",
+            "fix": "render or export RGBA with Film Transparent; a billboard must not ship its backdrop",
+        })
+    if coverage < minimum:
+        findings.append({
+            "severity": "warn",
+            "issue": "sprite subject too small",
+            "detail": f"visible subject covers {coverage:.1%}; minimum is {minimum:.1%}",
+            "fix": "tighten the camera or crop while retaining the edge guard",
+        })
+    if coverage > maximum:
+        findings.append({
+            "severity": "warn",
+            "issue": "sprite subject overfills frame",
+            "detail": f"visible subject covers {coverage:.1%}; maximum is {maximum:.1%}",
+            "fix": "increase render padding so weapons, feet and motion do not clip",
+        })
+    clipped = [edge for edge, pixels in padding.items() if pixels < guard]
+    if clipped:
+        findings.append({
+            "severity": "error",
+            "issue": "sprite touches crop edge",
+            "detail": f"{', '.join(clipped)} padding is below the {guard}px edge guard",
+            "fix": "reframe with transparent padding on every named edge",
+        })
+    if bbox_fill < 0.08:
+        findings.append({
+            "severity": "warn",
+            "issue": "sparse sprite silhouette",
+            "detail": f"visible pixels fill only {bbox_fill:.1%} of the subject bounds",
+            "fix": "remove detached noise or reframe disconnected parts into a readable gameplay silhouette",
+        })
+
+    return {
+        "path": str(target),
+        "size": [width, height],
+        "subject_coverage": round(coverage, 4),
+        "transparent_share": round(transparent_share, 4),
+        "soft_alpha_share": round(soft_alpha_share, 4),
+        "bounds": [left, bottom, bbox_width, bbox_height],
+        "padding": padding,
+        "bbox_fill": round(bbox_fill, 4),
+        "findings": findings,
+        "errors": sum(1 for finding in findings if finding["severity"] == "error"),
+        "warnings": sum(1 for finding in findings if finding["severity"] == "warn"),
+        "ok": not findings,
+    }
+
+@op(
     "check.environment",
     summary="Audit a gameplay environment image for palette separation, contrast, local surface detail and suspiciously periodic texture bands. Use it on FPS, isometric or RTS captures before approving terrain and water presentation.",
     params={

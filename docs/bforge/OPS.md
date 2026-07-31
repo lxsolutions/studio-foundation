@@ -1,6 +1,6 @@
 # bforge op reference
 
-111 operations.
+112 operations.
 
 ## `arch.*`
 
@@ -465,6 +465,17 @@ Score how readable an object's silhouette is from the standard game camera angle
 | --- | --- | --- | --- |
 | `name` | string | None | Object to test |
 | `samples` | integer | 64 | Rays per axis for the projected-area estimate |
+
+### `check.sprite`
+
+Audit a transparent character or item sprite for real alpha, subject coverage, edge clipping, padding and silhouette density. Use it before a generated portrait becomes a billboard, HUD card or runtime impostor.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `path` | string | None | Transparent PNG sprite or portrait to analyse |
+| `min_coverage` | number | 0.08 | Minimum visible-pixel share before the subject is considered too small |
+| `max_coverage` | number | 0.82 | Maximum visible-pixel share before the subject is considered over-cropped |
+| `edge_guard` | integer | 2 | Minimum transparent pixel padding required on every image edge |
 
 ## `env.*`
 

@@ -2041,6 +2041,42 @@
       }
     },
     {
+      "name": "check.sprite",
+      "summary": "Audit a transparent character or item sprite for real alpha, subject coverage, edge clipping, padding and silhouette density. Use it before a generated portrait becomes a billboard, HUD card or runtime impostor.",
+      "tags": [
+        "check",
+        "inspect",
+        "sprite"
+      ],
+      "mutates": false,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Transparent PNG sprite or portrait to analyse"
+          },
+          "min_coverage": {
+            "type": "number",
+            "description": "Minimum visible-pixel share before the subject is considered too small",
+            "default": 0.08
+          },
+          "max_coverage": {
+            "type": "number",
+            "description": "Maximum visible-pixel share before the subject is considered over-cropped",
+            "default": 0.82
+          },
+          "edge_guard": {
+            "type": "integer",
+            "description": "Minimum transparent pixel padding required on every image edge",
+            "default": 2
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "env.amphitheatre",
       "summary": "A complete Roman venue in one call: raked cavea, podium, arched arcade storey, statued attic colonnade, vomitoria stair wedges, velarium masts, hanging banners and gateways. This is the difference between a stone bowl and the Colosseum \u2014 arches and vertical rhythm. Use shape='oval' for a circus/hippodrome, 'circle' for an amphitheatre.",
       "tags": [
