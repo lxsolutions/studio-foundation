@@ -744,6 +744,7 @@ class ExplicitCamera(ForgeCase):
             resolution=128,
             samples=2,
             transparent=True,
+            padding=0.8,
             _timeout=600,
         )
         png = Path(result["path"]).read_bytes()
@@ -752,6 +753,10 @@ class ExplicitCamera(ForgeCase):
         # output .png is not enough: game UI cards need a real alpha channel.
         self.assertEqual(png[25], 6)
         self.assertTrue(result["transparent"])
+        self.assertEqual(result["padding"], 0.8)
+        self.assertNotIn("error", result["analysis"])
+        self.assertIn("subject_coverage", result["analysis"])
+        self.assertIn("findings", result["analysis"])
         analysis = self.forge.call(
             "check.image",
             path=result["path"],
@@ -1268,6 +1273,53 @@ class Export(ForgeCase):
             len(meta["measured"]["materials"]),
             "export.asset must not hard-code a budget that contradicts its measured asset",
         )
+
+class Naval(ForgeCase):
+    def test_aegean_dock_has_a_shore_axis_and_working_harbour_silhouette(self):
+        result = self.forge.call(
+            "arch.dock", name="laurion_dock", width=7.5, depth=8.5, height=2.5
+        )
+        self.assertEqual(result["silhouette"], "stone_quay_timber_pier_crane")
+        self.assertEqual(result["shore_axis"], "positive_y_land_negative_y_water")
+        self.assertGreater(result["triangles"], 1000)
+        self.assertLessEqual(result["triangles"], 12_000)
+        self.assertEqual(len(result["materials"]), 5)
+        self.assertGreater(result["bounds"]["size"][0], 7.0)
+        self.assertGreater(result["bounds"]["size"][1], 8.0)
+        self.assertGreater(result["bounds"]["size"][2], 2.0)
+        self.assertGreaterEqual(result["parts"], 35)
+
+    def test_fishing_boat_and_war_galley_are_distinct_gameplay_silhouettes(self):
+        fishing = self.forge.call(
+            "prop.ancient_ship", name="fishing_boat", style="fishing",
+            length=5.8, beam=2.0, height=2.8,
+        )
+        self.assertEqual(fishing["style"], "fishing")
+        self.assertEqual(fishing["silhouette"], "working_fishing_boat_net_amphorae")
+        self.assertEqual(fishing["forward_axis"], "negative_y")
+        self.assertEqual(len(fishing["materials"]), 5)
+        self.assertGreater(fishing["triangles"], 300)
+        self.assertLessEqual(fishing["triangles"], 10_000)
+        self.assertGreater(fishing["bounds"]["size"][1], 5.4)
+
+        self.forge.call("session.reset")
+        galley = self.forge.call(
+            "prop.ancient_ship", name="war_galley", style="galley",
+            length=8.8, beam=2.5, height=4.2,
+        )
+        self.assertEqual(galley["style"], "galley")
+        self.assertEqual(galley["silhouette"], "banked_oar_galley_bronze_ram")
+        self.assertGreater(galley["parts"], fishing["parts"])
+        self.assertGreater(galley["triangles"], fishing["triangles"])
+        self.assertGreater(galley["bounds"]["size"][1], 10.0)
+        self.assertLessEqual(galley["triangles"], 10_000)
+
+    def test_ancient_ship_generation_is_deterministic(self):
+        first = self.forge.call("prop.ancient_ship", name="ship", style="galley")
+        self.forge.call("session.reset")
+        second = self.forge.call("prop.ancient_ship", name="ship", style="galley")
+        self.assertEqual(first["triangles"], second["triangles"])
+        self.assertEqual(first["bounds"], second["bounds"])
 
 
 class Rendering(ForgeCase):

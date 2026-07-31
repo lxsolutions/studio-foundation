@@ -1,6 +1,6 @@
 # bforge op reference
 
-119 operations.
+121 operations.
 
 ## `arch.*`
 
@@ -104,6 +104,25 @@ A browser-budget classical Greek defense tower with one disciplined material set
 | `location` | array | [0.0, 0.0, 0.0] | World position |
 | `rotation` | number | 0.0 | Yaw in degrees |
 | `uv_scale` | number | 0.9 | Metres per UV tile |
+
+### `arch.dock`
+
+A serious Aegean working harbour: stepped limestone quay, timber pier, waterline piles, bollards, cargo and a bronze-hooped loading crane. The landward apron and waterward pier read from RTS and first-person cameras.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `name` | string | 'aegean_dock' | Object name |
+| `width` | number | 7.5 | Shore-parallel width in metres |
+| `depth` | number | 8.5 | Land-to-water depth in metres |
+| `height` | number | 2.5 | Highest crane point in metres |
+| `stone_color` | string | '#777064' | Weathered limestone quay |
+| `foundation_color` | string | '#3b3935' | Wet foundation and shadow stone |
+| `timber_color` | string | '#332117' | Pier, crane and cargo timber |
+| `metal_color` | string | '#6f512e' | Bronze hoops, chain and fittings |
+| `cloth_color` | string | '#4b2522' | Restrained painted harbour marker |
+| `location` | array | [0.0, 0.0, 0.0] | World position |
+| `rotation` | number | 0.0 | Yaw in degrees; pier points toward -Y |
+| `uv_scale` | number | 0.75 | Metres per UV tile |
 
 ### `arch.field_building`
 
@@ -1208,6 +1227,25 @@ Move, rotate or scale an object. Rotation is in degrees.
 
 ## `prop.*`
 
+### `prop.ancient_ship`
+
+A browser-budget ancient Greek fishing boat or war galley with a curved multi-chine hull, readable bow, oars, mast and restrained fittings. Fishing boats carry nets and amphorae; galleys carry oar banks, shields and a ram.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `name` | string | 'ancient_ship' | Object name |
+| `style` | fishing \| galley | 'fishing' | Naval unit silhouette |
+| `length` | number | 5.8 | Bow-to-stern length in metres |
+| `beam` | number | 2.0 | Maximum hull width in metres |
+| `height` | number | 2.8 | Keel-to-masthead height in metres |
+| `hull_color` | string | '#3b2117' | Dark caulked hull planks |
+| `wood_color` | string | '#6a4a2d' | Deck, mast and oars |
+| `metal_color` | string | '#755431' | Bronze ram and fittings |
+| `cloth_color` | string | '#5a2a25' | Muted sail or net bundle |
+| `location` | array | [0.0, 0.0, 0.0] | World position |
+| `rotation` | number | 0.0 | Yaw in degrees; bow points toward -Y |
+| `uv_scale` | number | 0.55 | Metres per UV tile |
+
 ### `prop.banner`
 
 Hanging banner or flag with a cloth wave. ~180 tris. Cheap way to add faction identity and colour to grey architecture.
@@ -1592,6 +1630,7 @@ Render one framed view of the scene or of specific objects. The camera and a thr
 | `ortho` | boolean | False | Orthographic projection (right for front/side/top reference) |
 | `world_light` | number | 0.32 | Ambient dome strength. Higher fills shadows but piles white specular sheen onto every surface, which washes out saturated albedo |
 | `transparent` | boolean | False | Render the world as transparent RGBA for UI cards, inventory icons and compositing |
+| `padding` | number | 1.0 | Auto-frame multiplier: values above 1 add border; values below 1 make the subject fill more of the frame |
 
 ## `rig.*`
 

@@ -256,7 +256,22 @@ def _analyse(ctx, path):
     from .check import check_image
 
     try:
-        report = check_image(ctx, path=str(path), colors=4, background=[0.05, 0.055, 0.065, 1.0])
+        # Direct op-to-op calls do not pass through the registry's default
+        # argument injection. Keep this explicit so adding a new check.image
+        # gate cannot silently turn every successful render analysis into an
+        # "missing positional arguments" diagnostic.
+        report = check_image(
+            ctx,
+            path=str(path),
+            colors=4,
+            background=[0.05, 0.055, 0.065, 1.0],
+            require_alpha=False,
+            require_clear_corners=False,
+            require_square=False,
+            minimum_size=0,
+            minimum_coverage=0.04,
+            maximum_coverage=1.0,
+        )
     except Exception as exc:  # noqa: BLE001 — diagnostics must never fail a render
         return {"error": str(exc)}
     return {
@@ -313,6 +328,11 @@ def _hide_others(keep):
             False,
             "Render the world as transparent RGBA for UI cards, inventory icons and compositing",
         ),
+        "padding": (
+            "num",
+            1.0,
+            "Auto-frame multiplier: values above 1 add border; values below 1 make the subject fill more of the frame",
+        ),
     },
     tags=["render"],
 )
@@ -327,13 +347,16 @@ def render_view(
     ortho,
     world_light,
     transparent,
+    padding,
 ):
+    if padding <= 0:
+        raise OpError("padding must be greater than zero")
     targets = _targets(objects)
     hidden = _hide_others(targets) if objects else []
     centre, radius = _bounding_sphere(targets)
     _setup_world(world_light)
     lights = _setup_lights(centre, radius)
-    camera = _setup_camera(centre, radius, view, ortho)
+    camera = _setup_camera(centre, radius, view, ortho, margin=1.28 * padding)
     used = _configure_engine(engine, samples, resolution, transparent)
     path = ctx.out_path(out, ".png")
     try:
@@ -349,6 +372,7 @@ def render_view(
         "engine": used,
         "resolution": resolution,
         "transparent": transparent,
+        "padding": padding,
         "subject_radius_m": round(radius, 4),
         "analysis": _analyse(ctx, path),
     }
@@ -377,6 +401,7 @@ def render_view(
             False,
             "Render the world as transparent RGBA for UI cards, inventory icons and compositing",
         ),
+
     },
     tags=["render"],
 )

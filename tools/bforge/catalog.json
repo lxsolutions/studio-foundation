@@ -481,6 +481,94 @@
       }
     },
     {
+      "name": "arch.dock",
+      "summary": "A serious Aegean working harbour: stepped limestone quay, timber pier, waterline piles, bollards, cargo and a bronze-hooped loading crane. The landward apron and waterward pier read from RTS and first-person cameras.",
+      "tags": [
+        "build",
+        "architecture",
+        "naval",
+        "rts",
+        "economy"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name",
+            "default": "aegean_dock"
+          },
+          "width": {
+            "type": "number",
+            "description": "Shore-parallel width in metres",
+            "default": 7.5
+          },
+          "depth": {
+            "type": "number",
+            "description": "Land-to-water depth in metres",
+            "default": 8.5
+          },
+          "height": {
+            "type": "number",
+            "description": "Highest crane point in metres",
+            "default": 2.5
+          },
+          "stone_color": {
+            "type": "string",
+            "description": "Weathered limestone quay",
+            "default": "#777064"
+          },
+          "foundation_color": {
+            "type": "string",
+            "description": "Wet foundation and shadow stone",
+            "default": "#3b3935"
+          },
+          "timber_color": {
+            "type": "string",
+            "description": "Pier, crane and cargo timber",
+            "default": "#332117"
+          },
+          "metal_color": {
+            "type": "string",
+            "description": "Bronze hoops, chain and fittings",
+            "default": "#6f512e"
+          },
+          "cloth_color": {
+            "type": "string",
+            "description": "Restrained painted harbour marker",
+            "default": "#4b2522"
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World position",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "rotation": {
+            "type": "number",
+            "description": "Yaw in degrees; pier points toward -Y",
+            "default": 0.0
+          },
+          "uv_scale": {
+            "type": "number",
+            "description": "Metres per UV tile",
+            "default": 0.75
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "arch.field_building",
       "summary": "A browser-budget Greek settlement family for the structures surrounding a civic hall: a furrowed farmstead, strategos campaign tent, hoplite barracks, modular ashlar wall, or weathered road stele. Variants share restrained limestone, timber, cloth, terracotta, bronze and crop materials while keeping silhouettes readable from an RTS camera.",
       "tags": [
@@ -5162,6 +5250,97 @@
       }
     },
     {
+      "name": "prop.ancient_ship",
+      "summary": "A browser-budget ancient Greek fishing boat or war galley with a curved multi-chine hull, readable bow, oars, mast and restrained fittings. Fishing boats carry nets and amphorae; galleys carry oar banks, shields and a ram.",
+      "tags": [
+        "prop",
+        "vehicle",
+        "naval",
+        "rts"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name",
+            "default": "ancient_ship"
+          },
+          "style": {
+            "type": "string",
+            "enum": [
+              "fishing",
+              "galley"
+            ],
+            "description": "Naval unit silhouette",
+            "default": "fishing"
+          },
+          "length": {
+            "type": "number",
+            "description": "Bow-to-stern length in metres",
+            "default": 5.8
+          },
+          "beam": {
+            "type": "number",
+            "description": "Maximum hull width in metres",
+            "default": 2.0
+          },
+          "height": {
+            "type": "number",
+            "description": "Keel-to-masthead height in metres",
+            "default": 2.8
+          },
+          "hull_color": {
+            "type": "string",
+            "description": "Dark caulked hull planks",
+            "default": "#3b2117"
+          },
+          "wood_color": {
+            "type": "string",
+            "description": "Deck, mast and oars",
+            "default": "#6a4a2d"
+          },
+          "metal_color": {
+            "type": "string",
+            "description": "Bronze ram and fittings",
+            "default": "#755431"
+          },
+          "cloth_color": {
+            "type": "string",
+            "description": "Muted sail or net bundle",
+            "default": "#5a2a25"
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World position",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "rotation": {
+            "type": "number",
+            "description": "Yaw in degrees; bow points toward -Y",
+            "default": 0.0
+          },
+          "uv_scale": {
+            "type": "number",
+            "description": "Metres per UV tile",
+            "default": 0.55
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "prop.banner",
       "summary": "Hanging banner or flag with a cloth wave. ~180 tris. Cheap way to add faction identity and colour to grey architecture.",
       "tags": [
@@ -7044,6 +7223,11 @@
             "type": "boolean",
             "description": "Render the world as transparent RGBA for UI cards, inventory icons and compositing",
             "default": false
+          },
+          "padding": {
+            "type": "number",
+            "description": "Auto-frame multiplier: values above 1 add border; values below 1 make the subject fill more of the frame",
+            "default": 1.0
           }
         },
         "additionalProperties": false

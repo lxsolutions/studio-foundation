@@ -27,6 +27,7 @@ from . import arch  # noqa: F401
 from . import material  # noqa: F401
 from . import uv  # noqa: F401
 from . import prop  # noqa: F401
+from . import naval  # noqa: F401
 from . import kit  # noqa: F401
 from . import env  # noqa: F401
 from . import char  # noqa: F401

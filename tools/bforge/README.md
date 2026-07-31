@@ -112,6 +112,24 @@ coupling art to simulation.
 
 ![Spike Greek field-building review sheet](../../docs/bforge/img/spike_field_barracks.png)
 
+`arch.dock` and `prop.ancient_ship` extend the same deterministic family into
+water gameplay. A dock has an explicit shore axis, with stepped stone apron on
+land and timber pier toward water; both ship variants expose a negative-Y
+forward axis so simulation code never guesses from their bounds. The fishing
+boat carries nets and amphorae while the longer galley adds fourteen oars,
+shields and a bronze ram. All three remain single-mesh, five-material browser
+assets and strict-export without warnings.
+
+| naval asset | triangles | GLB | gameplay read |
+| --- | ---: | ---: | --- |
+| Aegean Dock | 5,444 | 424 KB | stone quay, pier, crane |
+| Fishing Boat | 1,314 | 106 KB | sail, nets, amphorae |
+| War Galley | 2,088 | 157 KB | oar banks, shields, ram |
+
+![Spike Aegean dock review sheet](../../docs/bforge/img/spike_aegean_dock.png)
+
+![Spike war galley review sheet](../../docs/bforge/img/spike_war_galley.png)
+
 Spike's delver exposed a different pipeline failure: a nominally
 "realistic" humanoid could still be a tube-limbed mannequin, and the active
 Death action could make its automatic review sheet look collapsed. The
@@ -245,7 +263,7 @@ tools/bforge/
     daemon.py          JSON-line RPC loop
     registry.py        @op decorator: types, coercion, schema generation
     lib/               mesh, uvs, materials, scene-graph, finishing pass
-    ops/               the 117 operations, grouped by namespace
+    ops/               the 121 operations, grouped by namespace
   catalog.json       committed op snapshot (so tools/list needs no Blender)
   tests/             unit + live-integration + visual gallery
 ```
@@ -396,6 +414,7 @@ forge.call(
     out="crossbow-card.png",
     resolution=512,
     transparent=True,
+    padding=0.8,  # tighter card framing; >1 adds border
 )
 ```
 
