@@ -1262,10 +1262,11 @@ class Export(ForgeCase):
     def test_export_asset_writes_the_full_hand_off(self):
         self.forge.call("prop.barrel", name="barrel", seed=1)
         result = self.forge.call(
-            "export.asset", asset_id="barrel_a", contact_sheet=False, _timeout=600
+            "export.asset", asset_id="barrel_a", contact_sheet=False, draco=True, _timeout=600
         )
         for kind in ("blend", "glb", "meta"):
             self.assertIn(kind, result["outputs"])
+        self.assertTrue(result["detail"]["glb"]["draco"])
         meta_path = Path(result["detail"]["meta"]["path"])
         meta = json.loads(meta_path.read_text(encoding="utf-8"))
         self.assertEqual(
@@ -1289,7 +1290,7 @@ class Naval(ForgeCase):
         self.assertGreater(result["bounds"]["size"][2], 2.0)
         self.assertGreaterEqual(result["parts"], 35)
 
-    def test_fishing_boat_and_war_galley_are_distinct_gameplay_silhouettes(self):
+    def test_fishing_boat_war_galley_and_raider_are_distinct_gameplay_silhouettes(self):
         fishing = self.forge.call(
             "prop.ancient_ship", name="fishing_boat", style="fishing",
             length=5.8, beam=2.0, height=2.8,
@@ -1313,6 +1314,19 @@ class Naval(ForgeCase):
         self.assertGreater(galley["triangles"], fishing["triangles"])
         self.assertGreater(galley["bounds"]["size"][1], 10.0)
         self.assertLessEqual(galley["triangles"], 10_000)
+
+        self.forge.call("session.reset")
+        raider = self.forge.call(
+            "prop.ancient_ship", name="raider_galley", style="raider",
+            length=9.2, beam=2.65, height=4.35,
+        )
+        self.assertEqual(raider["style"], "raider")
+        self.assertEqual(
+            raider["silhouette"], "raider_galley_boarding_spurs_war_standard"
+        )
+        self.assertGreater(raider["parts"], galley["parts"])
+        self.assertGreater(raider["triangles"], galley["triangles"])
+        self.assertLessEqual(raider["triangles"], 10_000)
 
     def test_ancient_ship_generation_is_deterministic(self):
         first = self.forge.call("prop.ancient_ship", name="ship", style="galley")

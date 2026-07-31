@@ -33,6 +33,12 @@ CASES = [
     ("prop.furniture", {"name": "table", "kind": "table", "seed": 13}),
     ("prop.weapon", {"name": "sword", "kind": "sword", "seed": 14}),
     ("prop.banner", {"name": "banner", "seed": 15}),
+    (
+        "prop.ancient_ship",
+        {"name": "raider_galley", "style": "raider", "length": 9.2, "beam": 2.65,
+         "height": 4.35, "hull_color": "#171313", "wood_color": "#3a2921",
+         "metal_color": "#5b4637", "cloth_color": "#48171a"},
+    ),
     ("prop.debris", {"name": "debris", "count": 10, "seed": 16}),
     ("kit.room", {"name": "room", "size": [2, 2], "roof": False, "seed": 17}),
     (

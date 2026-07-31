@@ -3406,6 +3406,11 @@
             "description": "Also render a review contact sheet",
             "default": true
           },
+          "draco": {
+            "type": "boolean",
+            "description": "Compress the GLB mesh payload with Draco for supported browser and engine runtimes",
+            "default": false
+          },
           "strict": {
             "type": "boolean",
             "description": "Block export on problems that would corrupt the import",
@@ -5251,7 +5256,7 @@
     },
     {
       "name": "prop.ancient_ship",
-      "summary": "A browser-budget ancient Greek fishing boat or war galley with a curved multi-chine hull, readable bow, oars, mast and restrained fittings. Fishing boats carry nets and amphorae; galleys carry oar banks, shields and a ram.",
+      "summary": "A browser-budget ancient Greek fishing boat, war galley or raider galley with a curved multi-chine hull, readable bow, oars, mast and restrained fittings. Fishing boats carry nets and amphorae; galleys carry oar banks, shields and a ram; raiders add a raised fighting rail, boarding spurs and a stern war standard.",
       "tags": [
         "prop",
         "vehicle",
@@ -5272,7 +5277,8 @@
             "type": "string",
             "enum": [
               "fishing",
-              "galley"
+              "galley",
+              "raider"
             ],
             "description": "Naval unit silhouette",
             "default": "fishing"

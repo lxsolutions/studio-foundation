@@ -130,6 +130,7 @@ def export_gltf(ctx, out, objects, engine, format, animations, draco, strict, re
         "meshes": len(meshes),
         "triangles": sum(mesh_lib.tri_count(o) for o in meshes),
         "animations": [a.name for a in bpy.data.actions] if animations else [],
+        "draco": draco,
         "renamed": dict(rename or {}),
         "warnings": warnings,
     }
@@ -364,19 +365,20 @@ def export_meta(ctx, out, asset_id, category, license, creator, source, ai_tool,
         "triangle_budget": ("int", 0, "Triangle budget recorded in metadata; 0 uses the measured export"),
         "material_budget": ("int", 0, "Material budget recorded in metadata; 0 uses the measured export"),
         "contact_sheet": ("bool", True, "Also render a review contact sheet"),
+        "draco": ("bool", False, "Compress the GLB mesh payload with Draco for supported browser and engine runtimes"),
         "strict": ("bool", True, "Block export on problems that would corrupt the import"),
     },
     tags=["export", "io"],
 )
 def export_asset(ctx, asset_id, out_dir, objects, engine, category, ai_prompt, triangle_budget,
-                 material_budget, contact_sheet, strict):
+                 material_budget, contact_sheet, draco, strict):
     from . import render as render_ops
 
     identifier = scene_lib.sanitize(asset_id)
     prefix = f"{out_dir.rstrip('/')}/{identifier}" if out_dir else identifier
 
     blend = export_blend(ctx, f"{prefix}.blend", True, True)
-    glb = export_gltf(ctx, f"{prefix}.glb", objects, engine, "glb", True, False, strict, None)
+    glb = export_gltf(ctx, f"{prefix}.glb", objects, engine, "glb", True, draco, strict, None)
     meshes = [obj for obj in scene_lib.mesh_objects()]
     measured_materials = len({
         material.name

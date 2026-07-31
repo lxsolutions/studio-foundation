@@ -214,13 +214,14 @@ def arch_dock(ctx, name, width, depth, height, stone_color, foundation_color,
 @op(
     "prop.ancient_ship",
     summary=(
-        "A browser-budget ancient Greek fishing boat or war galley with a curved "
+        "A browser-budget ancient Greek fishing boat, war galley or raider galley with a curved "
         "multi-chine hull, readable bow, oars, mast and restrained fittings. Fishing "
-        "boats carry nets and amphorae; galleys carry oar banks, shields and a ram."
+        "boats carry nets and amphorae; galleys carry oar banks, shields and a ram; "
+        "raiders add a raised fighting rail, boarding spurs and a stern war standard."
     ),
     params={
         "name": ("str", "ancient_ship", "Object name"),
-        "style": ("enum:fishing|galley", "fishing", "Naval unit silhouette"),
+        "style": ("enum:fishing|galley|raider", "fishing", "Naval unit silhouette"),
         "length": ("num", 5.8, "Bow-to-stern length in metres"),
         "beam": ("num", 2.0, "Maximum hull width in metres"),
         "height": ("num", 2.8, "Keel-to-masthead height in metres"),
@@ -250,7 +251,8 @@ def prop_ancient_ship(ctx, name, style, length, beam, height, hull_color, wood_c
     bm = mesh_lib.new_bmesh()
     build = _Builder(bm)
 
-    station_count = 7 if style == "galley" else 6
+    warship = style in ("galley", "raider")
+    station_count = 7 if warship else 6
     sections = []
     for index in range(station_count):
         u = index / (station_count - 1)
@@ -275,9 +277,9 @@ def prop_ancient_ship(ctx, name, style, length, beam, height, hull_color, wood_c
     build.mark(hull_faces, HULL)
 
     deck_z = height * 0.285
-    deck_length = length * (0.72 if style == "fishing" else 0.79)
+    deck_length = length * (0.79 if warship else 0.72)
     deck_beam = beam * 0.66
-    plank_count = 7 if style == "galley" else 5
+    plank_count = 7 if warship else 5
     for index in range(plank_count):
         y = -deck_length * 0.5 + deck_length * (index + 0.5) / plank_count
         build.box((deck_beam, deck_length / plank_count * 0.88, height * 0.022),
@@ -287,14 +289,14 @@ def prop_ancient_ship(ctx, name, style, length, beam, height, hull_color, wood_c
                    (side * beam * 0.43, length * 0.37, deck_z + height * 0.06),
                    beam * 0.025, METAL, 8)
 
-    mast_y = length * (0.02 if style == "galley" else 0.08)
-    mast_top = height * (0.94 if style == "galley" else 0.84)
+    mast_y = length * (0.02 if warship else 0.08)
+    mast_top = height * (0.94 if warship else 0.84)
     build.beam((0.0, mast_y, deck_z), (0.0, mast_y, mast_top), beam * 0.035, DECK, 10)
-    yard_z = mast_top * (0.78 if style == "galley" else 0.72)
-    yard_half = beam * (0.84 if style == "galley" else 0.63)
+    yard_z = mast_top * (0.78 if warship else 0.72)
+    yard_half = beam * (0.84 if warship else 0.63)
     build.beam((-yard_half, mast_y, yard_z), (yard_half, mast_y, yard_z), beam * 0.020, DECK, 8)
-    sail_h = height * (0.43 if style == "galley" else 0.31)
-    sail_w = yard_half * (1.72 if style == "galley" else 1.50)
+    sail_h = height * (0.43 if warship else 0.31)
+    sail_w = yard_half * (1.72 if warship else 1.50)
     build.box((sail_w, height * 0.018, sail_h),
               (0.0, mast_y + height * 0.015, yard_z - sail_h * 0.52),
               CLOTH, 0.005, (0.0, math.radians(-4.0), 0.0))
@@ -303,7 +305,7 @@ def prop_ancient_ship(ctx, name, style, length, beam, height, hull_color, wood_c
                    (side * beam * 0.40, length * 0.30, deck_z + height * 0.05),
                    beam * 0.006, METAL, 5)
 
-    if style == "galley":
+    if warship:
         for index in range(7):
             y = -length * 0.30 + length * 0.60 * index / 6
             for side in (-1.0, 1.0):
@@ -319,7 +321,33 @@ def prop_ancient_ship(ctx, name, style, length, beam, height, hull_color, wood_c
         build.cylinder(beam * 0.075, length * 0.18,
                        (0.0, -length * 0.66, height * 0.13), METAL, 8,
                        axis="y", radius_top=0.0)
-        silhouette = "banked_oar_galley_bronze_ram"
+        if style == "raider":
+            rail_z = deck_z + height * 0.19
+            for side in (-1.0, 1.0):
+                build.beam(
+                    (side * beam * 0.48, -length * 0.30, rail_z),
+                    (side * beam * 0.48, length * 0.32, rail_z),
+                    beam * 0.026, METAL, 8,
+                )
+                build.beam(
+                    (side * beam * 0.34, -length * 0.36, deck_z + height * 0.05),
+                    (side * beam * 0.76, -length * 0.49, deck_z + height * 0.12),
+                    beam * 0.022, METAL, 7,
+                )
+            standard_y = length * 0.34
+            standard_top = deck_z + height * 0.44
+            build.beam(
+                (0.0, standard_y, deck_z), (0.0, standard_y, standard_top),
+                beam * 0.024, DECK, 8,
+            )
+            build.box(
+                (beam * 0.46, height * 0.018, height * 0.20),
+                (0.0, standard_y + height * 0.012, standard_top - height * 0.12),
+                CLOTH, 0.004,
+            )
+            silhouette = "raider_galley_boarding_spurs_war_standard"
+        else:
+            silhouette = "banked_oar_galley_bronze_ram"
     else:
         for side in (-1.0, 1.0):
             build.beam((side * beam * 0.23, length * 0.08, deck_z + height * 0.03),

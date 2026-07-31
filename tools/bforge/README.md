@@ -114,17 +114,20 @@ coupling art to simulation.
 
 `arch.dock` and `prop.ancient_ship` extend the same deterministic family into
 water gameplay. A dock has an explicit shore axis, with stepped stone apron on
-land and timber pier toward water; both ship variants expose a negative-Y
+land and timber pier toward water; all three ship variants expose a negative-Y
 forward axis so simulation code never guesses from their bounds. The fishing
 boat carries nets and amphorae while the longer galley adds fourteen oars,
-shields and a bronze ram. All three remain single-mesh, five-material browser
-assets and strict-export without warnings.
+shields and a bronze ram. The raider variant adds a raised fighting rail,
+boarding spurs and a stern war standard so hostile fleets read immediately
+without depending on colour alone. Every variant remains a single-mesh,
+five-material browser asset and strict-exports without warnings.
 
 | naval asset | triangles | GLB | gameplay read |
 | --- | ---: | ---: | --- |
 | Aegean Dock | 5,444 | 424 KB | stone quay, pier, crane |
 | Fishing Boat | 1,314 | 106 KB | sail, nets, amphorae |
 | War Galley | 2,088 | 157 KB | oar banks, shields, ram |
+| Raider Galley | 2,328 | 33 KB Draco | fighting rail, boarding spurs, war standard |
 
 ![Spike Aegean dock review sheet](../../docs/bforge/img/spike_aegean_dock.png)
 

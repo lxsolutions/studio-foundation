@@ -766,6 +766,7 @@ One call: save the .blend master, export the GLB, write the .meta.json sidecar a
 | `triangle_budget` | integer | 0 | Triangle budget recorded in metadata; 0 uses the measured export |
 | `material_budget` | integer | 0 | Material budget recorded in metadata; 0 uses the measured export |
 | `contact_sheet` | boolean | True | Also render a review contact sheet |
+| `draco` | boolean | False | Compress the GLB mesh payload with Draco for supported browser and engine runtimes |
 | `strict` | boolean | True | Block export on problems that would corrupt the import |
 
 ### `export.blend`
@@ -1229,12 +1230,12 @@ Move, rotate or scale an object. Rotation is in degrees.
 
 ### `prop.ancient_ship`
 
-A browser-budget ancient Greek fishing boat or war galley with a curved multi-chine hull, readable bow, oars, mast and restrained fittings. Fishing boats carry nets and amphorae; galleys carry oar banks, shields and a ram.
+A browser-budget ancient Greek fishing boat, war galley or raider galley with a curved multi-chine hull, readable bow, oars, mast and restrained fittings. Fishing boats carry nets and amphorae; galleys carry oar banks, shields and a ram; raiders add a raised fighting rail, boarding spurs and a stern war standard.
 
 | parameter | type | default | description |
 | --- | --- | --- | --- |
 | `name` | string | 'ancient_ship' | Object name |
-| `style` | fishing \| galley | 'fishing' | Naval unit silhouette |
+| `style` | fishing \| galley \| raider | 'fishing' | Naval unit silhouette |
 | `length` | number | 5.8 | Bow-to-stern length in metres |
 | `beam` | number | 2.0 | Maximum hull width in metres |
 | `height` | number | 2.8 | Keel-to-masthead height in metres |
