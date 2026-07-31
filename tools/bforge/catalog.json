@@ -2605,6 +2605,92 @@
       }
     },
     {
+      "name": "check.sprite",
+      "summary": "Audit every cell of a sprite atlas instead of approving only the sheet as a whole: alpha, coverage, cell-edge clipping, baseline drift, scale consistency and chroma-key residue. These are the defects that make a detailed run cycle glide, hop or bleed into the next frame in game.",
+      "tags": [
+        "check",
+        "inspect",
+        "sprite"
+      ],
+      "mutates": false,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "RGBA sprite sheet to analyse"
+          },
+          "columns": {
+            "type": "integer",
+            "description": "Number of equal atlas columns",
+            "default": 1
+          },
+          "rows": {
+            "type": "integer",
+            "description": "Number of equal atlas rows",
+            "default": 1
+          },
+          "require_alpha": {
+            "type": "boolean",
+            "description": "Fail when the atlas has no transparency",
+            "default": true
+          },
+          "minimum_coverage": {
+            "type": "number",
+            "description": "Minimum visible coverage in every cell",
+            "default": 0.08
+          },
+          "maximum_coverage": {
+            "type": "number",
+            "description": "Maximum visible coverage in every cell",
+            "default": 0.8
+          },
+          "maximum_baseline_drift": {
+            "type": "number",
+            "description": "Maximum normalized difference between cell subject baselines",
+            "default": 0.04
+          },
+          "maximum_height_variation": {
+            "type": "number",
+            "description": "Maximum subject-height span divided by mean subject height",
+            "default": 0.12
+          },
+          "edge_padding": {
+            "type": "number",
+            "description": "Required transparent padding at each cell edge, normalized to its short side",
+            "default": 0.01
+          },
+          "forbidden_color": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 4,
+            "description": "Chroma-key colour that must not remain in visible pixels",
+            "default": [
+              1.0,
+              0.0,
+              1.0,
+              1.0
+            ]
+          },
+          "color_tolerance": {
+            "type": "number",
+            "description": "Maximum RGB distance counted as forbidden-colour residue",
+            "default": 0.16
+          },
+          "max_forbidden_share": {
+            "type": "number",
+            "description": "Maximum visible-pixel share allowed near the forbidden colour",
+            "default": 0.002
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "creature.hound",
       "summary": "Build a gaunt game-ready war hound with readable canine anatomy, bent legs, muzzle, ears, segmented tail and a separate bronze collar. The joined mesh can be exported static or bound to a custom quadruped rig.",
       "tags": [

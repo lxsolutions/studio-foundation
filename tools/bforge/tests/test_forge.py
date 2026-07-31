@@ -16,6 +16,7 @@ import struct
 import sys
 import tempfile
 import unittest
+import zlib
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -24,6 +25,40 @@ from bforge.client import DaemonError, Forge, ForgeError, find_blender  # noqa: 
 
 FORGE: Forge | None = None
 TEMP: tempfile.TemporaryDirectory | None = None
+
+
+def _write_test_sprite(path: Path, *, drifting=False, chroma=False):
+    width, height = 64, 24
+    pixels = bytearray(width * height * 4)
+    for frame in range(4):
+        top = 3 + (3 if drifting and frame == 3 else 0)
+        bottom = 21
+        for y in range(top, bottom):
+            for x in range(frame * 16 + 4, frame * 16 + 12):
+                offset = (y * width + x) * 4
+                pixels[offset : offset + 4] = bytes((122, 84, 48, 255))
+    if chroma:
+        offset = (8 * width + 8) * 4
+        pixels[offset : offset + 4] = bytes((255, 0, 255, 255))
+
+    raw = b"".join(
+        b"\x00" + bytes(pixels[y * width * 4 : (y + 1) * width * 4]) for y in range(height)
+    )
+
+    def chunk(name, payload):
+        return (
+            struct.pack(">I", len(payload))
+            + name
+            + payload
+            + struct.pack(">I", zlib.crc32(name + payload) & 0xFFFFFFFF)
+        )
+
+    path.write_bytes(
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0))
+        + chunk(b"IDAT", zlib.compress(raw))
+        + chunk(b"IEND", b"")
+    )
 
 
 def setUpModule():
@@ -854,6 +889,49 @@ class ExplicitCamera(ForgeCase):
         self.assertTrue(analysis["alpha"]["has_transparency"])
         self.assertTrue(analysis["alpha"]["corners_clear"])
         self.assertGreater(analysis["alpha"]["transparent_fraction"], 0.01)
+
+    def test_sprite_sheet_checks_each_frame_for_grounding_and_chroma_residue(self):
+        clean = Path(TEMP.name) / "clean_run.png"
+        _write_test_sprite(clean)
+        result = self.forge.call(
+            "check.sprite",
+            path=str(clean),
+            columns=4,
+            rows=1,
+            minimum_coverage=0.05,
+            maximum_coverage=0.5,
+            maximum_baseline_drift=0.02,
+            maximum_height_variation=0.05,
+            edge_padding=0.02,
+            color_tolerance=0.08,
+            max_forbidden_share=0.0,
+        )
+        self.assertTrue(result["ok"], result["findings"])
+        self.assertEqual(result["errors"], 0)
+        self.assertEqual(result["warnings"], 0)
+        self.assertEqual(len(result["cells"]), 4)
+        self.assertLessEqual(result["baseline_drift"], 0.02)
+
+        flawed = Path(TEMP.name) / "flawed_run.png"
+        _write_test_sprite(flawed, drifting=True, chroma=True)
+        flawed_result = self.forge.call(
+            "check.sprite",
+            path=str(flawed),
+            columns=4,
+            rows=1,
+            maximum_baseline_drift=0.02,
+            max_forbidden_share=0.0,
+        )
+        self.assertGreater(flawed_result["errors"], 0)
+        self.assertGreater(flawed_result["warnings"], 0)
+        self.assertIn(
+            "chroma-key residue",
+            {finding["issue"] for finding in flawed_result["findings"]},
+        )
+        self.assertIn(
+            "baseline drift",
+            {finding["issue"] for finding in flawed_result["findings"]},
+        )
 
 
 class UVs(ForgeCase):

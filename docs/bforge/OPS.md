@@ -1,6 +1,6 @@
 # bforge op reference
 
-121 operations.
+122 operations.
 
 ## `arch.*`
 
@@ -579,6 +579,25 @@ Score how readable an object's silhouette is from the standard game camera angle
 | --- | --- | --- | --- |
 | `name` | string | None | Object to test |
 | `samples` | integer | 64 | Rays per axis for the projected-area estimate |
+
+### `check.sprite`
+
+Audit every cell of a sprite atlas instead of approving only the sheet as a whole: alpha, coverage, cell-edge clipping, baseline drift, scale consistency and chroma-key residue. These are the defects that make a detailed run cycle glide, hop or bleed into the next frame in game.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `path` | string | None | RGBA sprite sheet to analyse |
+| `columns` | integer | 1 | Number of equal atlas columns |
+| `rows` | integer | 1 | Number of equal atlas rows |
+| `require_alpha` | boolean | True | Fail when the atlas has no transparency |
+| `minimum_coverage` | number | 0.08 | Minimum visible coverage in every cell |
+| `maximum_coverage` | number | 0.8 | Maximum visible coverage in every cell |
+| `maximum_baseline_drift` | number | 0.04 | Maximum normalized difference between cell subject baselines |
+| `maximum_height_variation` | number | 0.12 | Maximum subject-height span divided by mean subject height |
+| `edge_padding` | number | 0.01 | Required transparent padding at each cell edge, normalized to its short side |
+| `forbidden_color` | array | [1.0, 0.0, 1.0, 1.0] | Chroma-key colour that must not remain in visible pixels |
+| `color_tolerance` | number | 0.16 | Maximum RGB distance counted as forbidden-colour residue |
+| `max_forbidden_share` | number | 0.002 | Maximum visible-pixel share allowed near the forbidden colour |
 
 ## `creature.*`
 

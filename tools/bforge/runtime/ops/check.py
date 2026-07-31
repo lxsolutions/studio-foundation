@@ -22,9 +22,21 @@ from registry import OpError, op
 
 NAME_RE = re.compile(r"^[a-z][a-z0-9_]*(-col|-convcol|_lod[0-9])?$")
 ALLOWED_NODES = {
-    "BSDF_PRINCIPLED", "TEX_IMAGE", "NORMAL_MAP", "UVMAP", "OUTPUT_MATERIAL",
-    "MIX", "MIX_RGB", "SEPARATE_COLOR", "COMBINE_COLOR", "MAPPING", "TEX_COORD",
-    "VERTEX_COLOR", "ATTRIBUTE", "VALUE", "RGB",
+    "BSDF_PRINCIPLED",
+    "TEX_IMAGE",
+    "NORMAL_MAP",
+    "UVMAP",
+    "OUTPUT_MATERIAL",
+    "MIX",
+    "MIX_RGB",
+    "SEPARATE_COLOR",
+    "COMBINE_COLOR",
+    "MAPPING",
+    "TEX_COORD",
+    "VERTEX_COLOR",
+    "ATTRIBUTE",
+    "VALUE",
+    "RGB",
 }
 
 
@@ -55,9 +67,7 @@ def check_asset(ctx, triangle_budget, material_budget, require_collision, requir
     )
 
     all_meshes = scene_lib.mesh_objects()
-    render_meshes = [
-        o for o in all_meshes if "-col" not in o.name and "-convcol" not in o.name
-    ]
+    render_meshes = [o for o in all_meshes if "-col" not in o.name and "-convcol" not in o.name]
 
     for obj in bpy.context.scene.objects:
         record(
@@ -69,17 +79,14 @@ def check_asset(ctx, triangle_budget, material_budget, require_collision, requir
 
     for obj in all_meshes:
         bone_attachment = (
-            obj.parent_type == "BONE"
-            and obj.parent is not None
-            and obj.parent.type == "ARMATURE"
+            obj.parent_type == "BONE" and obj.parent is not None and obj.parent.type == "ARMATURE"
         )
         # A bone-attached prop necessarily carries a local rotation/offset: that
         # is how a vertical spear is aligned to a hand bone. Applying it after
         # parenting destroys the authored attachment. Scale must still be clean.
-        clean = (
-            bone_attachment
-            or all(abs(a) < 1e-5 for a in obj.rotation_euler)
-        ) and all(abs(s - 1.0) < 1e-5 for s in obj.scale)
+        clean = (bone_attachment or all(abs(a) < 1e-5 for a in obj.rotation_euler)) and all(
+            abs(s - 1.0) < 1e-5 for s in obj.scale
+        )
         record(
             f"transforms:{obj.name}",
             clean,
@@ -109,8 +116,7 @@ def check_asset(ctx, triangle_budget, material_budget, require_collision, requir
     record(
         "materials",
         len(material_names) <= material_budget,
-        f"{len(material_names)} materials exceeds budget {material_budget} "
-        "— run gameready.atlas",
+        f"{len(material_names)} materials exceeds budget {material_budget} — run gameready.atlas",
     )
 
     triangles = sum(mesh_lib.tri_count(o) for o in render_meshes)
@@ -174,8 +180,7 @@ def check_asset(ctx, triangle_budget, material_budget, require_collision, requir
         record(
             f"shader:{material.name}",
             not offenders,
-            f"'{material.name}' uses nodes glTF cannot export: {offenders} "
-            "— run material.bake",
+            f"'{material.name}' uses nodes glTF cannot export: {offenders} — run material.bake",
         )
 
     errors = [c for c in checks if c["level"] == "error"]
@@ -270,7 +275,9 @@ def check_critique(ctx, objects, texture_size):
         if degenerate:
             findings.append(
                 {
-                    "object": obj.name, "severity": "error", "issue": "degenerate faces",
+                    "object": obj.name,
+                    "severity": "error",
+                    "issue": "degenerate faces",
                     "detail": f"{degenerate} zero-area faces will render as artefacts",
                     "fix": f"gameready.optimize objects=['{obj.name}']",
                 }
@@ -278,34 +285,42 @@ def check_critique(ctx, objects, texture_size):
         if non_manifold:
             findings.append(
                 {
-                    "object": obj.name, "severity": "warn", "issue": "non-manifold edges",
+                    "object": obj.name,
+                    "severity": "warn",
+                    "issue": "non-manifold edges",
                     "detail": f"{non_manifold} edges shared by more than two faces — breaks "
-                              "boolean ops, physics cooking and normal baking",
+                    "boolean ops, physics cooking and normal baking",
                     "fix": f"build.cleanup name='{obj.name}' merge_distance=0.001",
                 }
             )
         if loose:
             findings.append(
                 {
-                    "object": obj.name, "severity": "warn", "issue": "loose vertices",
+                    "object": obj.name,
+                    "severity": "warn",
+                    "issue": "loose vertices",
                     "detail": f"{loose} vertices belong to no face; they inflate the vertex "
-                              "buffer for nothing",
+                    "buffer for nothing",
                     "fix": f"gameready.optimize objects=['{obj.name}']",
                 }
             )
         if ngons:
             findings.append(
                 {
-                    "object": obj.name, "severity": "info", "issue": "n-gons",
+                    "object": obj.name,
+                    "severity": "info",
+                    "issue": "n-gons",
                     "detail": f"{ngons} faces with more than 4 sides; engines triangulate these "
-                              "unpredictably, which can flip shading",
+                    "unpredictably, which can flip shading",
                     "fix": f"gameready.optimize objects=['{obj.name}'] triangulate=true",
                 }
             )
         if not uv_stats.get("has_uvs"):
             findings.append(
                 {
-                    "object": obj.name, "severity": "error", "issue": "no UVs",
+                    "object": obj.name,
+                    "severity": "error",
+                    "issue": "no UVs",
                     "detail": "textures cannot be applied",
                     "fix": f"uv.unwrap object='{obj.name}' style='smart_packed'",
                 }
@@ -313,9 +328,11 @@ def check_critique(ctx, objects, texture_size):
         elif uv_stats.get("coverage", 0) < 0.25 and uv_stats.get("faces_outside_0_1", 0) == 0:
             findings.append(
                 {
-                    "object": obj.name, "severity": "warn", "issue": "low UV coverage",
+                    "object": obj.name,
+                    "severity": "warn",
+                    "issue": "low UV coverage",
                     "detail": f"islands fill only {uv_stats['coverage']:.0%} of the texture; "
-                              "most texture memory is wasted on empty space",
+                    "most texture memory is wasted on empty space",
                     "fix": f"uv.pack object='{obj.name}' margin=0.01",
                 }
             )
@@ -324,10 +341,11 @@ def check_critique(ctx, objects, texture_size):
             if smallest > 0 and largest / smallest > 4000:
                 findings.append(
                     {
-                        "object": obj.name, "severity": "info",
+                        "object": obj.name,
+                        "severity": "info",
                         "issue": "uneven face density",
                         "detail": f"largest face is {largest / smallest:,.0f}x the smallest — "
-                                  "detail is concentrated somewhere that may not need it",
+                        "detail is concentrated somewhere that may not need it",
                         "fix": "check the wireframe panel of render.contact_sheet",
                     }
                 )
@@ -335,25 +353,23 @@ def check_critique(ctx, objects, texture_size):
         if empty_slots:
             findings.append(
                 {
-                    "object": obj.name, "severity": "warn", "issue": "empty material slots",
+                    "object": obj.name,
+                    "severity": "warn",
+                    "issue": "empty material slots",
                     "detail": f"{empty_slots} slots with no material export as default grey",
                     "fix": f"material.set object='{obj.name}'",
                 }
             )
-        if (
-            obj.get("bforge_asset_kind") == "rock"
-            and not image_materials
-            and not layered_materials
-        ):
+        if obj.get("bforge_asset_kind") == "rock" and not image_materials and not layered_materials:
             findings.append(
                 {
                     "object": obj.name,
                     "severity": "warn",
                     "issue": "flat natural rock surface",
                     "detail": "the geological silhouette has only a constant material; at FPS "
-                              "distance it will read as faceted blockout geometry rather than stone",
+                    "distance it will read as faceted blockout geometry rather than stone",
                     "fix": f"material.pbr object='{obj.name}' base_color='stone_warm' "
-                           f"roughness=0.9; material.bake_pbr object='{obj.name}'",
+                    f"roughness=0.9; material.bake_pbr object='{obj.name}'",
                 }
             )
 
@@ -365,14 +381,15 @@ def check_critique(ctx, objects, texture_size):
             worst_high = max(densities, key=lambda item: item[1])
             findings.append(
                 {
-                    "object": f"{worst_low[0]} vs {worst_high[0]}", "severity": "warn",
+                    "object": f"{worst_low[0]} vs {worst_high[0]}",
+                    "severity": "warn",
                     "issue": "inconsistent texel density",
                     "detail": f"'{worst_low[0]}' is {low:.0f} px/m but '{worst_high[0]}' is "
-                              f"{high:.0f} px/m ({high / low:.1f}x). Side by side, one will look "
-                              "blurry or noisy against the other — this is the most common "
-                              "reason a set of individually-fine assets looks wrong together",
+                    f"{high:.0f} px/m ({high / low:.1f}x). Side by side, one will look "
+                    "blurry or noisy against the other — this is the most common "
+                    "reason a set of individually-fine assets looks wrong together",
                     "fix": "re-run uv.unwrap style='box' with the SAME scale on both, "
-                           "or uv.pack to equalise",
+                    "or uv.pack to equalise",
                 }
             )
 
@@ -392,15 +409,43 @@ def check_critique(ctx, objects, texture_size):
     "check.image",
     summary="Measure an image instead of eyeballing it: luminance range, blown highlights, crushed blacks, contrast, saturation, dominant colours and subject coverage. Reading a render is slow and cannot tell 'the asset is wrong' from 'the render is over-lit'. These numbers can, in a fraction of the time.",
     params={
-        "path": ("path", None, "PNG, JPEG or WebP to analyse — a render, sprite sheet, contact sheet, or baked texture"),
+        "path": (
+            "path",
+            None,
+            "PNG, JPEG or WebP to analyse — a render, sprite sheet, contact sheet, or baked texture",
+        ),
         "colors": ("int", 6, "How many dominant colours to report"),
-        "background": ("color", [0.05, 0.055, 0.065, 1.0], "Backdrop colour, excluded from subject stats"),
-        "require_alpha": ("bool", False, "Fail when the image has no meaningful transparent pixels"),
-        "require_clear_corners": ("bool", False, "Fail when the four corners are not transparent; useful for UI icons and cutouts"),
+        "background": (
+            "color",
+            [0.05, 0.055, 0.065, 1.0],
+            "Backdrop colour, excluded from subject stats",
+        ),
+        "require_alpha": (
+            "bool",
+            False,
+            "Fail when the image has no meaningful transparent pixels",
+        ),
+        "require_clear_corners": (
+            "bool",
+            False,
+            "Fail when the four corners are not transparent; useful for UI icons and cutouts",
+        ),
         "require_square": ("bool", False, "Fail when width and height differ"),
-        "minimum_size": ("int", 0, "Fail when either image dimension is below this many pixels (0 disables)"),
-        "minimum_coverage": ("num", 0.04, "Minimum fraction of the frame occupied by the visible subject"),
-        "maximum_coverage": ("num", 1.0, "Maximum fraction of the frame occupied by the visible subject"),
+        "minimum_size": (
+            "int",
+            0,
+            "Fail when either image dimension is below this many pixels (0 disables)",
+        ),
+        "minimum_coverage": (
+            "num",
+            0.04,
+            "Minimum fraction of the frame occupied by the visible subject",
+        ),
+        "maximum_coverage": (
+            "num",
+            1.0,
+            "Maximum fraction of the frame occupied by the visible subject",
+        ),
     },
     tags=["check", "inspect"],
     mutates=False,
@@ -420,10 +465,7 @@ def check_image(
     if minimum_size < 0:
         raise OpError("minimum_size must be zero or greater")
     if not 0 <= minimum_coverage <= maximum_coverage <= 1:
-        raise OpError(
-            "coverage bounds must satisfy 0 <= minimum_coverage <= "
-            "maximum_coverage <= 1"
-        )
+        raise OpError("coverage bounds must satisfy 0 <= minimum_coverage <= maximum_coverage <= 1")
     try:
         import numpy
     except ImportError as exc:  # pragma: no cover - Blender bundles numpy
@@ -449,10 +491,14 @@ def check_image(
     luma = rgb @ numpy.array([0.2126, 0.7152, 0.0722], dtype=numpy.float32)
 
     corner = min(8, width // 8, height // 8) or 1
-    corner_alpha = numpy.concatenate([
-        alpha[:corner, :corner].reshape(-1), alpha[:corner, -corner:].reshape(-1),
-        alpha[-corner:, :corner].reshape(-1), alpha[-corner:, -corner:].reshape(-1),
-    ])
+    corner_alpha = numpy.concatenate(
+        [
+            alpha[:corner, :corner].reshape(-1),
+            alpha[:corner, -corner:].reshape(-1),
+            alpha[-corner:, :corner].reshape(-1),
+            alpha[-corner:, -corner:].reshape(-1),
+        ]
+    )
     transparent_fraction = float((alpha <= 0.01).mean())
     partial_fraction = float(((alpha > 0.01) & (alpha < 0.99)).mean())
     has_transparency = transparent_fraction > 1e-4 or partial_fraction > 1e-4
@@ -468,10 +514,14 @@ def check_image(
         # Sample the actual corners rather than trusting a nominal backdrop
         # colour: the world is lit and tone-mapped like everything else, so the
         # rendered background rarely matches the value originally assigned.
-        corners = numpy.concatenate([
-            rgb[:corner, :corner].reshape(-1, 3), rgb[:corner, -corner:].reshape(-1, 3),
-            rgb[-corner:, :corner].reshape(-1, 3), rgb[-corner:, -corner:].reshape(-1, 3),
-        ])
+        corners = numpy.concatenate(
+            [
+                rgb[:corner, :corner].reshape(-1, 3),
+                rgb[:corner, -corner:].reshape(-1, 3),
+                rgb[-corner:, :corner].reshape(-1, 3),
+                rgb[-corner:, -corner:].reshape(-1, 3),
+            ]
+        )
         backdrop = numpy.median(corners, axis=0)
         if float(numpy.std(corners)) > 0.05:
             backdrop = numpy.array(background[:3], dtype=numpy.float32)
@@ -539,14 +589,17 @@ def check_image(
         bucket = ((key // 64) / 8.0, ((key // 8) % 8) / 8.0, (key % 8) / 8.0)
         members = subject_rgb[keys == key]
         mean = members.mean(axis=0)
-        dominant.append({
-            "linear": [round(float(c), 4) for c in mean],
-            "hex": "#" + "".join(
-                f"{max(0, min(255, round(_linear_to_srgb(float(c)) * 255))):02x}" for c in mean
-            ),
-            "share": round(float(counts[index]) / len(keys), 4),
-            "_bucket": [round(b, 3) for b in bucket],
-        })
+        dominant.append(
+            {
+                "linear": [round(float(c), 4) for c in mean],
+                "hex": "#"
+                + "".join(
+                    f"{max(0, min(255, round(_linear_to_srgb(float(c)) * 255))):02x}" for c in mean
+                ),
+                "share": round(float(counts[index]) / len(keys), 4),
+                "_bucket": [round(b, 3) for b in bucket],
+            }
+        )
 
     findings = list(validation_findings)
     if blown > 0.08:
@@ -558,9 +611,7 @@ def check_image(
     if crushed > 0.12:
         findings.append(f"{crushed:.0%} of the subject is crushed to black — add fill light.")
     if peak - floor < 0.12:
-        findings.append(
-            f"contrast is flat (luma {floor:.2f}..{peak:.2f}); the form will not read."
-        )
+        findings.append(f"contrast is flat (luma {floor:.2f}..{peak:.2f}); the form will not read.")
     if saturation < 0.06:
         findings.append(
             f"near-monochrome (mean saturation {saturation:.2f}) — if colour was expected, "
@@ -602,7 +653,8 @@ def check_image(
         # comparison against a requested colour.
         "mean_color": {
             "linear": [round(float(c), 4) for c in subject_rgb.mean(axis=0)],
-            "hex": "#" + "".join(
+            "hex": "#"
+            + "".join(
                 f"{max(0, min(255, round(_linear_to_srgb(float(c)) * 255))):02x}"
                 for c in subject_rgb.mean(axis=0)
             ),
@@ -613,10 +665,274 @@ def check_image(
     }
 
 
+@op(
+    "check.sprite",
+    summary=(
+        "Audit every cell of a sprite atlas instead of approving only the sheet as a "
+        "whole: alpha, coverage, cell-edge clipping, baseline drift, scale consistency "
+        "and chroma-key residue. These are the defects that make a detailed run cycle "
+        "glide, hop or bleed into the next frame in game."
+    ),
+    params={
+        "path": ("path", None, "RGBA sprite sheet to analyse"),
+        "columns": ("int", 1, "Number of equal atlas columns"),
+        "rows": ("int", 1, "Number of equal atlas rows"),
+        "require_alpha": ("bool", True, "Fail when the atlas has no transparency"),
+        "minimum_coverage": ("num", 0.08, "Minimum visible coverage in every cell"),
+        "maximum_coverage": ("num", 0.8, "Maximum visible coverage in every cell"),
+        "maximum_baseline_drift": (
+            "num",
+            0.04,
+            "Maximum normalized difference between cell subject baselines",
+        ),
+        "maximum_height_variation": (
+            "num",
+            0.12,
+            "Maximum subject-height span divided by mean subject height",
+        ),
+        "edge_padding": (
+            "num",
+            0.01,
+            "Required transparent padding at each cell edge, normalized to its short side",
+        ),
+        "forbidden_color": (
+            "color",
+            [1.0, 0.0, 1.0, 1.0],
+            "Chroma-key colour that must not remain in visible pixels",
+        ),
+        "color_tolerance": (
+            "num",
+            0.16,
+            "Maximum RGB distance counted as forbidden-colour residue",
+        ),
+        "max_forbidden_share": (
+            "num",
+            0.002,
+            "Maximum visible-pixel share allowed near the forbidden colour",
+        ),
+    },
+    tags=["check", "inspect", "sprite"],
+    mutates=False,
+)
+def check_sprite(
+    ctx,
+    path,
+    columns,
+    rows,
+    require_alpha,
+    minimum_coverage,
+    maximum_coverage,
+    maximum_baseline_drift,
+    maximum_height_variation,
+    edge_padding,
+    forbidden_color,
+    color_tolerance,
+    max_forbidden_share,
+):
+    columns = int(columns)
+    rows = int(rows)
+    if columns < 1 or rows < 1:
+        raise OpError("columns and rows must both be at least one")
+    if not 0 <= minimum_coverage <= maximum_coverage <= 1:
+        raise OpError("coverage bounds must satisfy 0 <= minimum_coverage <= maximum_coverage <= 1")
+    for label, value in (
+        ("maximum_baseline_drift", maximum_baseline_drift),
+        ("maximum_height_variation", maximum_height_variation),
+        ("edge_padding", edge_padding),
+        ("color_tolerance", color_tolerance),
+        ("max_forbidden_share", max_forbidden_share),
+    ):
+        if float(value) < 0:
+            raise OpError(f"{label} must be zero or greater")
+    if max_forbidden_share > 1:
+        raise OpError("max_forbidden_share cannot exceed one")
+
+    try:
+        import numpy
+    except ImportError as exc:  # pragma: no cover - Blender bundles numpy
+        raise OpError("numpy unavailable in this Blender build") from exc
+
+    target = ctx.resolve(path)
+    if not target.is_file():
+        target = ctx.out_path(path, ".png")
+    if not target.is_file():
+        raise OpError(f"no sprite sheet at {target}")
+
+    image = bpy.data.images.load(str(target))
+    try:
+        width, height = image.size
+        data = numpy.array(image.pixels[:], dtype=numpy.float32).reshape((height, width, 4))
+    finally:
+        bpy.data.images.remove(image)
+
+    findings = []
+
+    def record(severity, issue, detail):
+        findings.append({"severity": severity, "issue": issue, "detail": detail})
+
+    if width < columns or height < rows:
+        raise OpError(f"{width}x{height} image cannot contain a {columns}x{rows} sprite grid")
+    if width % columns or height % rows:
+        record(
+            "warn",
+            "fractional atlas cells",
+            f"{width}x{height} is not evenly divisible by {columns}x{rows}; linear sampling "
+            "can pull pixels from the neighbouring frame",
+        )
+
+    alpha = data[:, :, 3]
+    has_transparency = bool(numpy.any(alpha <= 0.01))
+    if require_alpha and not has_transparency:
+        record(
+            "error",
+            "missing alpha",
+            "the sprite sheet is fully opaque; ship an RGBA cutout before runtime atlasing",
+        )
+
+    forbidden = numpy.array(forbidden_color[:3], dtype=numpy.float32)
+    cells = []
+    baselines = []
+    heights = []
+    for row in range(rows):
+        y0 = round(height * row / rows)
+        y1 = round(height * (row + 1) / rows)
+        for column in range(columns):
+            x0 = round(width * column / columns)
+            x1 = round(width * (column + 1) / columns)
+            cell = data[y0:y1, x0:x1]
+            cell_alpha = cell[:, :, 3]
+            if has_transparency:
+                subject = cell_alpha > 0.01
+            else:
+                cell_rgb = cell[:, :, :3]
+                corners = numpy.array(
+                    [cell_rgb[0, 0], cell_rgb[0, -1], cell_rgb[-1, 0], cell_rgb[-1, -1]]
+                )
+                backdrop = numpy.median(corners, axis=0)
+                subject = numpy.linalg.norm(cell_rgb - backdrop, axis=2) > 0.06
+
+            index = row * columns + column
+            coverage = float(subject.mean())
+            if not numpy.any(subject):
+                record("error", "empty sprite cell", f"cell {index} has no visible subject")
+                cells.append(
+                    {
+                        "index": index,
+                        "row": row,
+                        "column": column,
+                        "coverage": 0.0,
+                        "bounds": None,
+                        "baseline": None,
+                        "height": 0.0,
+                        "edge_contacts": ["all"],
+                        "forbidden_color_share": 0.0,
+                    }
+                )
+                continue
+
+            ys, xs = numpy.nonzero(subject)
+            cell_height, cell_width = subject.shape
+            left = int(xs.min())
+            right = int(xs.max()) + 1
+            bottom = int(ys.min())
+            top = int(ys.max()) + 1
+            baseline = top / cell_height
+            subject_height = (top - bottom) / cell_height
+            baselines.append(baseline)
+            heights.append(subject_height)
+
+            padding = max(1, round(min(cell_width, cell_height) * edge_padding))
+            edge_contacts = []
+            if left < padding:
+                edge_contacts.append("left")
+            if right > cell_width - padding:
+                edge_contacts.append("right")
+            if bottom < padding:
+                edge_contacts.append("bottom")
+            if top > cell_height - padding:
+                edge_contacts.append("top")
+            if edge_contacts:
+                record(
+                    "warn",
+                    "cell-edge contact",
+                    f"cell {index} touches {', '.join(edge_contacts)}; add transparent padding "
+                    "or inset runtime UVs to prevent frame bleed",
+                )
+
+            subject_rgb = cell[:, :, :3][subject]
+            near_forbidden = numpy.linalg.norm(subject_rgb - forbidden, axis=1) <= color_tolerance
+            forbidden_share = float(near_forbidden.mean())
+            if forbidden_share > max_forbidden_share:
+                record(
+                    "error",
+                    "chroma-key residue",
+                    f"cell {index} has {forbidden_share:.2%} forbidden-colour pixels, above "
+                    f"the {max_forbidden_share:.2%} allowance",
+                )
+            if coverage < minimum_coverage or coverage > maximum_coverage:
+                record(
+                    "error",
+                    "cell coverage outside bounds",
+                    f"cell {index} covers {coverage:.1%}; required range is "
+                    f"{minimum_coverage:.1%}..{maximum_coverage:.1%}",
+                )
+
+            cells.append(
+                {
+                    "index": index,
+                    "row": row,
+                    "column": column,
+                    "coverage": round(coverage, 4),
+                    "bounds": [
+                        round(left / cell_width, 4),
+                        round(bottom / cell_height, 4),
+                        round(right / cell_width, 4),
+                        round(top / cell_height, 4),
+                    ],
+                    "baseline": round(baseline, 4),
+                    "height": round(subject_height, 4),
+                    "edge_contacts": edge_contacts,
+                    "forbidden_color_share": round(forbidden_share, 6),
+                }
+            )
+
+    baseline_drift = max(baselines) - min(baselines) if baselines else 0.0
+    mean_height = float(numpy.mean(heights)) if heights else 0.0
+    height_variation = (max(heights) - min(heights)) / mean_height if mean_height > 1e-6 else 0.0
+    if baseline_drift > maximum_baseline_drift:
+        record(
+            "warn",
+            "baseline drift",
+            f"frame baselines span {baseline_drift:.3f}, above the "
+            f"{maximum_baseline_drift:.3f} limit; feet will slide or hop without anchors",
+        )
+    if height_variation > maximum_height_variation:
+        record(
+            "warn",
+            "subject scale variation",
+            f"frame subject heights vary by {height_variation:.1%}, above the "
+            f"{maximum_height_variation:.1%} limit",
+        )
+
+    errors = sum(1 for finding in findings if finding["severity"] == "error")
+    warnings = sum(1 for finding in findings if finding["severity"] == "warn")
+    return {
+        "path": str(target),
+        "size": [width, height],
+        "grid": {"columns": columns, "rows": rows, "cells": columns * rows},
+        "has_transparency": has_transparency,
+        "cells": cells,
+        "baseline_drift": round(baseline_drift, 4),
+        "height_variation": round(height_variation, 4),
+        "findings": findings,
+        "errors": errors,
+        "warnings": warnings,
+        "ok": errors == 0 and warnings == 0,
+    }
+
+
 def _srgb_to_linear_array(numpy, values):
-    return numpy.where(
-        values <= 0.04045, values / 12.92, ((values + 0.055) / 1.055) ** 2.4
-    )
+    return numpy.where(values <= 0.04045, values / 12.92, ((values + 0.055) / 1.055) ** 2.4)
 
 
 def _linear_to_srgb(value):
