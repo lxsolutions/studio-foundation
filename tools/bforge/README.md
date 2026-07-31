@@ -130,7 +130,7 @@ tools/bforge/
     daemon.py          JSON-line RPC loop
     registry.py        @op decorator: types, coercion, schema generation
     lib/               mesh, uvs, materials, scene-graph, finishing pass
-    ops/               the ~89 operations, grouped by namespace
+    ops/               the 111 operations, grouped by namespace
   catalog.json       committed op snapshot (so tools/list needs no Blender)
   tests/             unit + live-integration + visual gallery
 ```
@@ -165,7 +165,7 @@ in this repo's `.mcp.json`:
 ```
 
 Five tools by default — `bforge_ops`, `bforge_describe`, `bforge_run`,
-`bforge_run_batch`, `bforge_session` — because 89 individual MCP tools swamps
+`bforge_run_batch`, `bforge_session` — because 111 individual MCP tools swamps
 most clients' tool lists. `bforge_run_batch` builds a whole asset in one round
 trip. Pass `--tools full` to expose every op as its own MCP tool instead.
 
@@ -208,7 +208,7 @@ wrong" that no metric shows.
 
 ## What it can make
 
-89 ops across 13 namespaces. Full reference: [`docs/bforge/OPS.md`](../../docs/bforge/OPS.md).
+111 ops across 13 namespaces. Full reference: [`docs/bforge/OPS.md`](../../docs/bforge/OPS.md).
 
 - **`prop.*`** — crate, barrel, chest, sack, rock, crystal, tree, pillar, torch,
   fence, furniture, weapon, banner, debris

@@ -16,6 +16,7 @@ import struct
 import sys
 import tempfile
 import unittest
+import zlib
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -24,6 +25,31 @@ from bforge.client import DaemonError, Forge, ForgeError, find_blender  # noqa: 
 
 FORGE: Forge | None = None
 TEMP: tempfile.TemporaryDirectory | None = None
+
+
+def _write_rgba_png(path: Path, width: int, height: int, pixel):
+    """Write a tiny fixture without adding Pillow to the stdlib-only toolchain."""
+    rows = []
+    for y in range(height):
+        row = bytearray([0])
+        for x in range(width):
+            row.extend(pixel(x, y))
+        rows.append(bytes(row))
+
+    def chunk(kind: bytes, payload: bytes) -> bytes:
+        return (
+            struct.pack(">I", len(payload))
+            + kind
+            + payload
+            + struct.pack(">I", zlib.crc32(kind + payload) & 0xFFFFFFFF)
+        )
+
+    path.write_bytes(
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0))
+        + chunk(b"IDAT", zlib.compress(b"".join(rows), 9))
+        + chunk(b"IEND", b"")
+    )
 
 
 def setUpModule():
@@ -579,6 +605,22 @@ class Rendering(ForgeCase):
         self.assertEqual(result["panels"], ["hero", "front", "wireframe", "checker"])
         self.assertEqual(result["layout"], "2x2")
         self.assertTrue(Path(result["path"]).is_file())
+
+    def test_environment_audit_finds_dominant_repeating_bands(self):
+        fixture = Path(TEMP.name) / "striped-water.png"
+        _write_rgba_png(
+            fixture,
+            96,
+            64,
+            lambda x, _y: (18, 58, 73, 255) if (x // 4) % 2 else (72, 161, 183, 255),
+        )
+        result = self.forge.call("check.environment", path=str(fixture), grid=4, ui_margin=0.0)
+        self.assertGreater(result["periodicity"]["p90_peak_share"], 0.34)
+        self.assertIn(
+            "dominant periodic texture pattern",
+            {finding["issue"] for finding in result["findings"]},
+        )
+        self.assertEqual(result["periodicity"]["method"], "windowed_cell_fft")
 
     def test_render_of_an_empty_scene_is_a_clear_error(self):
         with self.assertRaises(ForgeError) as ctx:

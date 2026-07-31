@@ -498,6 +498,164 @@ def check_image(ctx, path, colors, background):
     }
 
 
+@op(
+    "check.environment",
+    summary="Audit a gameplay environment image for palette separation, contrast, local surface detail and suspiciously periodic texture bands. Use it on FPS, isometric or RTS captures before approving terrain and water presentation.",
+    params={
+        "path": ("path", None, "PNG gameplay or environment capture to analyse"),
+        "grid": ("int", 6, "Spatial cells per image axis used to measure regional palette separation"),
+        "ui_margin": ("num", 0.1, "Fraction cropped from each edge so HUD chrome does not dominate world metrics"),
+    },
+    tags=["check", "inspect", "environment"],
+    mutates=False,
+)
+def check_environment(ctx, path, grid, ui_margin):
+    """Measure whether an environment reads as a world instead of one tiled board.
+
+    Asset validation can prove that a tree has UVs and a water texture is
+    tileable while missing the two failures players notice first: every biome
+    has collapsed into one muddy colour, or one periodic normal dominates a
+    whole lake. This audit works on the composed gameplay image where those
+    failures actually become visible.
+    """
+    try:
+        import numpy
+    except ImportError as exc:  # pragma: no cover - Blender bundles numpy
+        raise OpError("numpy unavailable in this Blender build") from exc
+
+    target = ctx.resolve(path)
+    if not target.is_file():
+        target = ctx.out_path(path, ".png")
+    if not target.is_file():
+        raise OpError(f"no image at {target}")
+
+    image = bpy.data.images.load(str(target))
+    try:
+        width, height = image.size
+        rgba = numpy.array(image.pixels[:], dtype=numpy.float32).reshape((height, width, 4))
+    finally:
+        bpy.data.images.remove(image)
+
+    margin = max(0.0, min(0.35, float(ui_margin)))
+    left = min(width - 1, int(width * margin))
+    right = max(left + 1, width - left)
+    top = min(height - 1, int(height * margin))
+    bottom = max(top + 1, height - top)
+    rgb = rgba[top:bottom, left:right, :3]
+    if rgb.size == 0:
+        raise OpError("ui_margin cropped the entire image")
+
+    # Keep the FFT cheap and deterministic on 4K captures. Nearest sampling is
+    # intentional: interpolation can blur away the repeated bars being tested.
+    step_y = max(1, rgb.shape[0] // 256)
+    step_x = max(1, rgb.shape[1] // 256)
+    sample = rgb[::step_y, ::step_x]
+    luma = sample @ numpy.array([0.2126, 0.7152, 0.0722], dtype=numpy.float32)
+    luma_p5 = float(numpy.percentile(luma, 5))
+    luma_p95 = float(numpy.percentile(luma, 95))
+    contrast = luma_p95 - luma_p5
+
+    maxc = sample.max(axis=2)
+    minc = sample.min(axis=2)
+    saturation = float(numpy.mean((maxc - minc) / numpy.maximum(maxc, 1e-5)))
+    dx = numpy.abs(numpy.diff(luma, axis=1))
+    dy = numpy.abs(numpy.diff(luma, axis=0))
+    local_detail = float((dx.mean() + dy.mean()) * 0.5)
+
+    cells = max(2, min(12, int(grid)))
+    regional = []
+    for row in numpy.array_split(sample, cells, axis=0):
+        for cell in numpy.array_split(row, cells, axis=1):
+            if cell.size:
+                regional.append(cell.reshape(-1, 3).mean(axis=0))
+    palette_span = 0.0
+    for index, colour in enumerate(regional):
+        for other in regional[index + 1:]:
+            palette_span = max(palette_span, float(numpy.linalg.norm(colour - other)))
+
+    # Repetition is local: a striped lake may occupy one sixth of an RTS frame.
+    # One FFT over the whole capture diluted exactly that failure and sometimes
+    # scored a large command-circle arc instead. Measure each palette cell and
+    # use the 90th percentile, while retaining the worst cell for diagnosis.
+    periodic_cells = []
+    for row_index, row in enumerate(numpy.array_split(luma, cells, axis=0)):
+        for column_index, cell in enumerate(numpy.array_split(row, cells, axis=1)):
+            if min(cell.shape) < 8 or float(cell.var()) < 1e-5:
+                continue
+            centred = cell - float(cell.mean())
+            window = numpy.outer(numpy.hanning(cell.shape[0]), numpy.hanning(cell.shape[1]))
+            spectrum = numpy.abs(numpy.fft.rfft2(centred * window)) ** 2
+            frequencies_y = numpy.abs(numpy.fft.fftfreq(cell.shape[0]))[:, None]
+            frequencies_x = numpy.fft.rfftfreq(cell.shape[1])[None, :]
+            spectrum[(frequencies_y < 2 / cell.shape[0])
+                     & (frequencies_x < 2 / cell.shape[1])] = 0
+            total_power = float(spectrum.sum())
+            if total_power <= 1e-12:
+                continue
+            periodic_cells.append({
+                "row": row_index,
+                "column": column_index,
+                "share": float(spectrum.max() / total_power),
+            })
+    shares = [entry["share"] for entry in periodic_cells]
+    periodic_peak = float(numpy.percentile(shares, 90)) if shares else 0.0
+    worst_periodic = max(periodic_cells, key=lambda entry: entry["share"], default=None)
+
+    findings = []
+    if contrast < 0.16:
+        findings.append({
+            "severity": "warn", "issue": "flat environment contrast",
+            "detail": f"displayed luma spans only {contrast:.3f} between p5 and p95",
+            "fix": "separate sun, fill and material values before adding post-process contrast",
+        })
+    if saturation < 0.08:
+        findings.append({
+            "severity": "warn", "issue": "near-monochrome environment",
+            "detail": f"mean saturation is {saturation:.3f}",
+            "fix": "restore restrained material hue separation; do not solve it with global saturation",
+        })
+    if palette_span < 0.12:
+        findings.append({
+            "severity": "warn", "issue": "weak regional palette separation",
+            "detail": f"the furthest regional mean colours differ by only {palette_span:.3f}",
+            "fix": "give gameplay biomes distinct ground families or broad vertex/splat tinting",
+        })
+    if local_detail < 0.012:
+        findings.append({
+            "severity": "warn", "issue": "featureless environment surfaces",
+            "detail": f"mean neighbouring-pixel change is only {local_detail:.4f}",
+            "fix": "add material-scale albedo/normal detail instead of increasing geometry everywhere",
+        })
+    if periodic_peak > 0.34:
+        findings.append({
+            "severity": "warn", "issue": "dominant periodic texture pattern",
+            "detail": f"one spatial frequency holds {periodic_peak:.1%} of measured image energy",
+            "fix": "mix differently directed tileable frequencies, domain-warp them, or lower normal strength",
+        })
+
+    return {
+        "path": str(target),
+        "size": [width, height],
+        "crop": [left, top, right, bottom],
+        "luma": {"p5": round(luma_p5, 4), "p95": round(luma_p95, 4),
+                 "contrast": round(contrast, 4)},
+        "mean_saturation": round(saturation, 4),
+        "regional_palette_span": round(palette_span, 4),
+        "local_detail": round(local_detail, 5),
+        "periodicity": {
+            "p90_peak_share": round(periodic_peak, 4),
+            "worst_cell": (
+                {**worst_periodic, "share": round(worst_periodic["share"], 4)}
+                if worst_periodic else None
+            ),
+            "method": "windowed_cell_fft",
+        },
+        "findings": findings,
+        "warnings": len(findings),
+        "ok": not findings,
+    }
+
+
 def _srgb_to_linear_array(numpy, values):
     return numpy.where(
         values <= 0.04045, values / 12.92, ((values + 0.055) / 1.055) ** 2.4

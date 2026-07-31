@@ -1945,6 +1945,37 @@
       }
     },
     {
+      "name": "check.environment",
+      "summary": "Audit a gameplay environment image for palette separation, contrast, local surface detail and suspiciously periodic texture bands. Use it on FPS, isometric or RTS captures before approving terrain and water presentation.",
+      "tags": [
+        "check",
+        "inspect",
+        "environment"
+      ],
+      "mutates": false,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "PNG gameplay or environment capture to analyse"
+          },
+          "grid": {
+            "type": "integer",
+            "description": "Spatial cells per image axis used to measure regional palette separation",
+            "default": 6
+          },
+          "ui_margin": {
+            "type": "number",
+            "description": "Fraction cropped from each edge so HUD chrome does not dominate world metrics",
+            "default": 0.1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "check.image",
       "summary": "Measure an image instead of eyeballing it: luminance range, blown highlights, crushed blacks, contrast, saturation, dominant colours and subject coverage. Reading a render is slow and cannot tell 'the asset is wrong' from 'the render is over-lit'. These numbers can, in a fraction of the time.",
       "tags": [

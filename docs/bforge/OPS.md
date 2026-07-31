@@ -1,6 +1,6 @@
 # bforge op reference
 
-110 operations.
+111 operations.
 
 ## `arch.*`
 
@@ -436,6 +436,16 @@ Quality critique with specific, actionable findings: triangle-density hot spots,
 | --- | --- | --- | --- |
 | `objects` | array | [] | Objects to critique (empty = every mesh) |
 | `texture_size` | integer | 1024 | Texture resolution the texel-density figures assume |
+
+### `check.environment`
+
+Audit a gameplay environment image for palette separation, contrast, local surface detail and suspiciously periodic texture bands. Use it on FPS, isometric or RTS captures before approving terrain and water presentation.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `path` | string | None | PNG gameplay or environment capture to analyse |
+| `grid` | integer | 6 | Spatial cells per image axis used to measure regional palette separation |
+| `ui_margin` | number | 0.1 | Fraction cropped from each edge so HUD chrome does not dominate world metrics |
 
 ### `check.image`
 
