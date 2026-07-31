@@ -112,6 +112,7 @@ test-python:
     uv run --project tools python -m unittest discover -s tools/asset-pipeline/tests -p "test_*.py" -v
     uv run --project tools python -m unittest discover -s tools/provenance/tests -p "test_*.py" -v
     uv run --project tools python -m unittest discover -s tools/verification/tests -p "test_*.py" -v
+    uv run --project tools python -m unittest discover -s tools/screenshots/tests -p "test_*.py" -v
 
 # Cross-language protocol golden-fixture checks (Rust side runs in test-rust too)
 test-protocol:
