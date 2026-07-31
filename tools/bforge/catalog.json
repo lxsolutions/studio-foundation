@@ -2071,6 +2071,31 @@
             "type": "integer",
             "description": "Minimum transparent pixel padding required on every image edge",
             "default": 2
+          },
+          "forbidden_color": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 4,
+            "description": "Optional chroma-key or spill colour; alpha 0 disables this check",
+            "default": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "color_tolerance": {
+            "type": "number",
+            "description": "Linear-RGB distance considered residual forbidden colour",
+            "default": 0.12
+          },
+          "max_forbidden_share": {
+            "type": "number",
+            "description": "Maximum visible-pixel share allowed near the forbidden colour",
+            "default": 0.002
           }
         },
         "additionalProperties": false

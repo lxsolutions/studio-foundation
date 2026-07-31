@@ -506,11 +506,15 @@ def check_image(ctx, path, colors, background):
         "min_coverage": ("num", 0.08, "Minimum visible-pixel share before the subject is considered too small"),
         "max_coverage": ("num", 0.82, "Maximum visible-pixel share before the subject is considered over-cropped"),
         "edge_guard": ("int", 2, "Minimum transparent pixel padding required on every image edge"),
+        "forbidden_color": ("color", [0.0, 0.0, 0.0, 0.0], "Optional chroma-key or spill colour; alpha 0 disables this check"),
+        "color_tolerance": ("num", 0.12, "Linear-RGB distance considered residual forbidden colour"),
+        "max_forbidden_share": ("num", 0.002, "Maximum visible-pixel share allowed near the forbidden colour"),
     },
     tags=["check", "inspect", "sprite"],
     mutates=False,
 )
-def check_sprite(ctx, path, min_coverage, max_coverage, edge_guard):
+def check_sprite(ctx, path, min_coverage, max_coverage, edge_guard,
+                 forbidden_color, color_tolerance, max_forbidden_share):
     """Measure whether generated cutout art is actually safe to ship as a sprite.
 
     A beautiful character render can still turn into a rectangle in game because
@@ -553,11 +557,26 @@ def check_sprite(ctx, path, min_coverage, max_coverage, edge_guard):
     bbox_fill = float(visible.sum() / max(1, bbox_width * bbox_height))
     transparent_share = float((alpha < 0.01).mean())
     soft_alpha_share = float(((alpha > 0.05) & (alpha < 0.95)).sum() / visible.sum())
+    forbidden_share = 0.0
+    forbidden_enabled = len(forbidden_color) >= 4 and float(forbidden_color[3]) > 0.0
+    if forbidden_enabled:
+        key = numpy.array(forbidden_color[:3], dtype=numpy.float32)
+        tolerance = max(0.0, min(1.732, float(color_tolerance)))
+        distance = numpy.linalg.norm(rgba[:, :, :3] - key, axis=2)
+        forbidden_share = float(((distance <= tolerance) & visible).sum() / visible.sum())
 
     minimum = max(0.0, min(0.95, float(min_coverage)))
     maximum = max(minimum, min(1.0, float(max_coverage)))
     guard = max(0, min(min(width, height) // 4, int(edge_guard)))
     findings = []
+    forbidden_limit = max(0.0, min(1.0, float(max_forbidden_share)))
+    if forbidden_enabled and forbidden_share > forbidden_limit:
+        findings.append({
+            "severity": "error",
+            "issue": "forbidden color spill",
+            "detail": f"{forbidden_share:.2%} of visible pixels remain within the forbidden colour tolerance; maximum is {forbidden_limit:.2%}",
+            "fix": "despill or contract the matte, then inspect fine edges against a contrasting background",
+        })
     if transparent_share < 0.02:
         findings.append({
             "severity": "error",
@@ -601,6 +620,7 @@ def check_sprite(ctx, path, min_coverage, max_coverage, edge_guard):
         "subject_coverage": round(coverage, 4),
         "transparent_share": round(transparent_share, 4),
         "soft_alpha_share": round(soft_alpha_share, 4),
+        "forbidden_color_share": round(forbidden_share, 6) if forbidden_enabled else None,
         "bounds": [left, bottom, bbox_width, bbox_height],
         "padding": padding,
         "bbox_fill": round(bbox_fill, 4),

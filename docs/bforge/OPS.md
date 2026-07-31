@@ -476,6 +476,9 @@ Audit a transparent character or item sprite for real alpha, subject coverage, e
 | `min_coverage` | number | 0.08 | Minimum visible-pixel share before the subject is considered too small |
 | `max_coverage` | number | 0.82 | Maximum visible-pixel share before the subject is considered over-cropped |
 | `edge_guard` | integer | 2 | Minimum transparent pixel padding required on every image edge |
+| `forbidden_color` | array | [0.0, 0.0, 0.0, 0.0] | Optional chroma-key or spill colour; alpha 0 disables this check |
+| `color_tolerance` | number | 0.12 | Linear-RGB distance considered residual forbidden colour |
+| `max_forbidden_share` | number | 0.002 | Maximum visible-pixel share allowed near the forbidden colour |
 
 ## `env.*`
 

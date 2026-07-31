@@ -658,6 +658,28 @@ class Rendering(ForgeCase):
         )
         self.assertEqual(result["padding"]["left"], 0)
 
+        spilled = Path(TEMP.name) / "spilled-sprite.png"
+        _write_rgba_png(
+            spilled,
+            64,
+            64,
+            lambda x, y: (255, 0, 255, 255)
+            if 16 <= x < 48 and 8 <= y < 56 else (0, 0, 0, 0),
+        )
+        result = self.forge.call(
+            "check.sprite",
+            path=str(spilled),
+            forbidden_color=[1.0, 0.0, 1.0, 1.0],
+            color_tolerance=0.08,
+            max_forbidden_share=0.002,
+        )
+        self.assertFalse(result["ok"])
+        self.assertGreater(result["forbidden_color_share"], 0.99)
+        self.assertIn(
+            "forbidden color spill",
+            {finding["issue"] for finding in result["findings"]},
+        )
+
     def test_render_of_an_empty_scene_is_a_clear_error(self):
         with self.assertRaises(ForgeError) as ctx:
             self.forge.call("render.view", out="empty.png", resolution=64, samples=1)
