@@ -836,6 +836,9 @@ def prop_rock(
     mesh_lib.cleanup(bm, merge_dist=min(size) * 0.01)
     obj = mesh_lib.to_object(bm, _named(name, "rock"))
     obj.location = location
+    # Keep semantic intent on the master asset. Geometry alone cannot tell a
+    # later audit whether a faceted mesh is deliberate or skipped its PBR pass.
+    obj["bforge_asset_kind"] = "rock"
     result = finish_lib.finish(
         ctx,
         obj,
@@ -848,6 +851,7 @@ def prop_rock(
     )
     finish_lib.budget_note(ctx, obj, 800)
     result["formation"] = formation
+    result["asset_kind"] = "rock"
     result["piece_count"] = len(pieces)
     result["strata"] = round(bedding, 3)
     result["bedding_courses"] = 3 + int(round(bedding * 5.0))

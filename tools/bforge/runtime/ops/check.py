@@ -193,7 +193,7 @@ def check_asset(ctx, triangle_budget, material_budget, require_collision, requir
 
 @op(
     "check.critique",
-    summary="Quality critique with specific, actionable findings: triangle-density hot spots, degenerate and n-gon faces, UV stretch, texel-density mismatch between objects, non-manifold edges, unused material slots. Pair it with render.contact_sheet — numbers plus eyes.",
+    summary="Quality critique with specific, actionable findings: topology and UV faults, texel-density drift, unused slots, and natural rock that never received a textured or layered surface. Pair it with render.contact_sheet — numbers plus eyes.",
     params={
         "objects": ("str[]", [], "Objects to critique (empty = every mesh)"),
         "texture_size": ("int", 1024, "Texture resolution the texel-density figures assume"),
@@ -233,6 +233,20 @@ def check_critique(ctx, objects, texture_size):
         density = uv_stats.get("texel_density_px_per_m", 0.0)
         if density > 0:
             densities.append((obj.name, density))
+        materials = [material for material in mesh.materials if material is not None]
+        image_materials = sum(
+            1
+            for material in materials
+            if material.use_nodes
+            and material.node_tree
+            and any(
+                node.type == "TEX_IMAGE" and getattr(node, "image", None) is not None
+                for node in material.node_tree.nodes
+            )
+        )
+        layered_materials = sum(
+            1 for material in materials if bool(material.get("bforge_procedural"))
+        )
 
         rows.append(
             {
@@ -248,6 +262,8 @@ def check_critique(ctx, objects, texture_size):
                 "uv_overlap": uv_lib.overlap_estimate(obj) if uv_stats.get("has_uvs") else None,
                 "material_slots": len(mesh.materials),
                 "empty_material_slots": sum(1 for m in mesh.materials if m is None),
+                "image_materials": image_materials,
+                "layered_materials": layered_materials,
             }
         )
 
@@ -322,6 +338,22 @@ def check_critique(ctx, objects, texture_size):
                     "object": obj.name, "severity": "warn", "issue": "empty material slots",
                     "detail": f"{empty_slots} slots with no material export as default grey",
                     "fix": f"material.set object='{obj.name}'",
+                }
+            )
+        if (
+            obj.get("bforge_asset_kind") == "rock"
+            and not image_materials
+            and not layered_materials
+        ):
+            findings.append(
+                {
+                    "object": obj.name,
+                    "severity": "warn",
+                    "issue": "flat natural rock surface",
+                    "detail": "the geological silhouette has only a constant material; at FPS "
+                              "distance it will read as faceted blockout geometry rather than stone",
+                    "fix": f"material.pbr object='{obj.name}' base_color='stone_warm' "
+                           f"roughness=0.9; material.bake_pbr object='{obj.name}'",
                 }
             )
 

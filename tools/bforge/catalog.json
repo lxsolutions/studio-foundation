@@ -2462,7 +2462,7 @@
     },
     {
       "name": "check.critique",
-      "summary": "Quality critique with specific, actionable findings: triangle-density hot spots, degenerate and n-gon faces, UV stretch, texel-density mismatch between objects, non-manifold edges, unused material slots. Pair it with render.contact_sheet \u2014 numbers plus eyes.",
+      "summary": "Quality critique with specific, actionable findings: topology and UV faults, texel-density drift, unused slots, and natural rock that never received a textured or layered surface. Pair it with render.contact_sheet \u2014 numbers plus eyes.",
       "tags": [
         "check",
         "inspect"

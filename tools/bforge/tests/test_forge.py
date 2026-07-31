@@ -143,6 +143,7 @@ class Geometry(ForgeCase):
                 angular=True,
             )
             self.assertEqual(results[formation]["formation"], formation)
+            self.assertEqual(results[formation]["asset_kind"], "rock")
             self.assertAlmostEqual(results[formation]["bounds"]["min"][2], 0.0, places=3)
             self.assertEqual(results[formation]["bedding_courses"], 6)
 
@@ -201,8 +202,12 @@ class Geometry(ForgeCase):
             self.assertLess(results[form]["triangles"], 1200)
 
         self.assertEqual(len({tuple(result["bounds"]["size"]) for result in results.values()}), 3)
-        self.assertGreater(results["medallion"]["bounds"]["size"][2], results["ring"]["bounds"]["size"][2])
-        self.assertGreater(results["idol"]["bounds"]["size"][1], results["medallion"]["bounds"]["size"][1])
+        self.assertGreater(
+            results["medallion"]["bounds"]["size"][2], results["ring"]["bounds"]["size"][2]
+        )
+        self.assertGreater(
+            results["idol"]["bounds"]["size"][1], results["medallion"]["bounds"]["size"][1]
+        )
 
         self.forge.call("session.reset")
         repeated = self.forge.call(
@@ -490,7 +495,9 @@ class Architecture(ForgeCase):
         self.assertGreater(family["emporium"]["bounds"]["size"][0], 4.3)
         self.assertGreater(family["emporium"]["bounds"]["size"][2], 2.4)
         self.assertGreater(family["lattice"]["bounds"]["size"][2], 5.2)
-        self.assertGreater(family["lattice"]["bounds"]["size"][2], family["lattice"]["bounds"]["size"][0] * 1.8)
+        self.assertGreater(
+            family["lattice"]["bounds"]["size"][2], family["lattice"]["bounds"]["size"][0] * 1.8
+        )
         self.assertEqual(len({item["silhouette"] for item in family.values()}), len(family))
         self.assertLess(family["wall"]["bounds"]["size"][1], 0.8)
         self.assertGreater(family["waymarker"]["bounds"]["size"][2], 2.0)
@@ -1135,6 +1142,33 @@ class Validation(ForgeCase):
         report = self.forge.call("check.critique")
         self.assertEqual(report["errors"], 0, f"unexpected errors: {report['findings']}")
 
+    def test_critique_flags_a_natural_rock_that_skipped_surface_authoring(self):
+        self.forge.call("prop.rock", name="limestone", seed=17, detail=2)
+        report = self.forge.call("check.critique", objects=["limestone"])
+        finding = next(
+            item for item in report["findings"] if item["issue"] == "flat natural rock surface"
+        )
+        self.assertEqual(finding["severity"], "warn")
+        self.assertIn("material.pbr", finding["fix"])
+        self.assertIn("material.bake_pbr", finding["fix"])
+        row = report["objects"][0]
+        self.assertEqual(row["image_materials"], 0)
+        self.assertEqual(row["layered_materials"], 0)
+
+        self.forge.call(
+            "material.pbr",
+            object="limestone",
+            base_color="#8a8171",
+            roughness=0.9,
+            seed=17,
+        )
+        layered = self.forge.call("check.critique", objects=["limestone"])
+        self.assertNotIn(
+            "flat natural rock surface",
+            {item["issue"] for item in layered["findings"]},
+        )
+        self.assertEqual(layered["objects"][0]["layered_materials"], 1)
+
     def test_silhouette_scoring_distinguishes_a_box_from_a_tree(self):
         self.forge.call("build.box", name="boxy", size=[1, 1, 1], bevel=0.0)
         boxy = self.forge.call("check.silhouette", name="boxy", samples=24)
@@ -1285,11 +1319,10 @@ class Export(ForgeCase):
             "export.asset must not hard-code a budget that contradicts its measured asset",
         )
 
+
 class Naval(ForgeCase):
     def test_aegean_dock_has_a_shore_axis_and_working_harbour_silhouette(self):
-        result = self.forge.call(
-            "arch.dock", name="laurion_dock", width=7.5, depth=8.5, height=2.5
-        )
+        result = self.forge.call("arch.dock", name="laurion_dock", width=7.5, depth=8.5, height=2.5)
         self.assertEqual(result["silhouette"], "stone_quay_timber_pier_crane")
         self.assertEqual(result["shore_axis"], "positive_y_land_negative_y_water")
         self.assertGreater(result["triangles"], 1000)
@@ -1302,8 +1335,12 @@ class Naval(ForgeCase):
 
     def test_fishing_boat_war_galley_and_raider_are_distinct_gameplay_silhouettes(self):
         fishing = self.forge.call(
-            "prop.ancient_ship", name="fishing_boat", style="fishing",
-            length=5.8, beam=2.0, height=2.8,
+            "prop.ancient_ship",
+            name="fishing_boat",
+            style="fishing",
+            length=5.8,
+            beam=2.0,
+            height=2.8,
         )
         self.assertEqual(fishing["style"], "fishing")
         self.assertEqual(fishing["silhouette"], "working_fishing_boat_net_amphorae")
@@ -1315,8 +1352,12 @@ class Naval(ForgeCase):
 
         self.forge.call("session.reset")
         galley = self.forge.call(
-            "prop.ancient_ship", name="war_galley", style="galley",
-            length=8.8, beam=2.5, height=4.2,
+            "prop.ancient_ship",
+            name="war_galley",
+            style="galley",
+            length=8.8,
+            beam=2.5,
+            height=4.2,
         )
         self.assertEqual(galley["style"], "galley")
         self.assertEqual(galley["silhouette"], "banked_oar_galley_bronze_ram")
@@ -1327,13 +1368,15 @@ class Naval(ForgeCase):
 
         self.forge.call("session.reset")
         raider = self.forge.call(
-            "prop.ancient_ship", name="raider_galley", style="raider",
-            length=9.2, beam=2.65, height=4.35,
+            "prop.ancient_ship",
+            name="raider_galley",
+            style="raider",
+            length=9.2,
+            beam=2.65,
+            height=4.35,
         )
         self.assertEqual(raider["style"], "raider")
-        self.assertEqual(
-            raider["silhouette"], "raider_galley_boarding_spurs_war_standard"
-        )
+        self.assertEqual(raider["silhouette"], "raider_galley_boarding_spurs_war_standard")
         self.assertGreater(raider["parts"], galley["parts"])
         self.assertGreater(raider["triangles"], galley["triangles"])
         self.assertLessEqual(raider["triangles"], 10_000)

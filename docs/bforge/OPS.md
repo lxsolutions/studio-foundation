@@ -126,12 +126,12 @@ A serious Aegean working harbour: stepped limestone quay, timber pier, waterline
 
 ### `arch.field_building`
 
-A browser-budget Greek settlement family for the structures surrounding a civic hall: a furrowed farmstead, strategos campaign tent, hoplite barracks, modular ashlar wall, or weathered road stele. Variants share restrained limestone, timber, cloth, terracotta, bronze and crop materials while keeping silhouettes readable from an RTS camera.
+A browser-budget Greek settlement family for the structures surrounding a civic hall: a furrowed farmstead, strategos campaign tent, hoplite barracks, delver household, mining emporium, survey lattice, modular ashlar wall, or weathered road stele. Variants share restrained limestone, timber, cloth, terracotta, bronze and crop materials while keeping silhouettes readable from an RTS camera.
 
 | parameter | type | default | description |
 | --- | --- | --- | --- |
 | `name` | string | 'field_building' | Object name |
-| `style` | farm \| camp \| barracks \| wall \| waymarker | 'farm' | Settlement structure silhouette |
+| `style` | farm \| camp \| barracks \| house \| emporium \| lattice \| wall \| waymarker | 'farm' | Settlement structure silhouette |
 | `width` | number | 3.4 | Overall footprint width in metres |
 | `depth` | number | 3.4 | Overall footprint depth in metres |
 | `height` | number | 2.2 | Authored visual height in metres |
@@ -544,7 +544,7 @@ Run the studio's ADR 0006 asset rules against the open scene: naming, units, app
 
 ### `check.critique`
 
-Quality critique with specific, actionable findings: triangle-density hot spots, degenerate and n-gon faces, UV stretch, texel-density mismatch between objects, non-manifold edges, unused material slots. Pair it with render.contact_sheet — numbers plus eyes.
+Quality critique with specific, actionable findings: topology and UV faults, texel-density drift, unused slots, and natural rock that never received a textured or layered surface. Pair it with render.contact_sheet — numbers plus eyes.
 
 | parameter | type | default | description |
 | --- | --- | --- | --- |
