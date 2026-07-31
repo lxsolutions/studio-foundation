@@ -1,6 +1,6 @@
 # bforge op reference
 
-109 operations.
+110 operations.
 
 ## `arch.*`
 
@@ -1376,6 +1376,22 @@ Render an orbit of frames around the subject. Use when a single angle cannot set
 | `samples` | integer | 16 | Render samples |
 | `elevation` | number | 22.0 | Camera elevation in degrees |
 | `engine` | auto \| cycles \| eevee | 'auto' | Render engine |
+
+### `render.ui_card`
+
+Render a clean transparent-background game UI card from an asset. Auto-framing, alpha output and subject-coverage measurement make icon batches consistent without hand-tuning cameras.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `out` | string | 'ui_card.png' | Transparent PNG output path |
+| `objects` | array | [] | Objects to frame and show (empty = whole scene) |
+| `view` | hero \| front \| back \| left \| right \| top \| low | 'hero' | Camera angle |
+| `resolution` | integer | 512 | Square card resolution in pixels |
+| `samples` | integer | 24 | Render samples |
+| `engine` | auto \| cycles \| eevee | 'auto' | Render engine |
+| `ortho` | boolean | False | Use orthographic projection |
+| `world_light` | number | 0.4 | Ambient dome strength used to light the transparent subject |
+| `padding` | number | 1.16 | Framing margin; 1.0 is tight and larger values add breathing room |
 
 ### `render.view`
 

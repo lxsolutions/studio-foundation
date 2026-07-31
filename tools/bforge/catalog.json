@@ -6018,6 +6018,84 @@
       }
     },
     {
+      "name": "render.ui_card",
+      "summary": "Render a clean transparent-background game UI card from an asset. Auto-framing, alpha output and subject-coverage measurement make icon batches consistent without hand-tuning cameras.",
+      "tags": [
+        "render",
+        "ui"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "out": {
+            "type": "string",
+            "description": "Transparent PNG output path",
+            "default": "ui_card.png"
+          },
+          "objects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Objects to frame and show (empty = whole scene)",
+            "default": []
+          },
+          "view": {
+            "type": "string",
+            "enum": [
+              "hero",
+              "front",
+              "back",
+              "left",
+              "right",
+              "top",
+              "low"
+            ],
+            "description": "Camera angle",
+            "default": "hero"
+          },
+          "resolution": {
+            "type": "integer",
+            "description": "Square card resolution in pixels",
+            "default": 512
+          },
+          "samples": {
+            "type": "integer",
+            "description": "Render samples",
+            "default": 24
+          },
+          "engine": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "cycles",
+              "eevee"
+            ],
+            "description": "Render engine",
+            "default": "auto"
+          },
+          "ortho": {
+            "type": "boolean",
+            "description": "Use orthographic projection",
+            "default": false
+          },
+          "world_light": {
+            "type": "number",
+            "description": "Ambient dome strength used to light the transparent subject",
+            "default": 0.4
+          },
+          "padding": {
+            "type": "number",
+            "description": "Framing margin; 1.0 is tight and larger values add breathing room",
+            "default": 1.16
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "render.view",
       "summary": "Render one framed view of the scene or of specific objects. The camera and a three-point light rig are auto-fitted to the subject, so you never get an empty or blown-out frame.",
       "tags": [

@@ -219,6 +219,19 @@ def _render_to(path):
     return path
 
 
+def _alpha_coverage(path):
+    """Fraction of pixels occupied by a transparent-background subject."""
+    loaded = bpy.data.images.load(str(path))
+    try:
+        pixels = loaded.pixels[:]
+        if not pixels:
+            return 0.0
+        opaque = sum(1 for alpha in pixels[3::4] if alpha > 0.02)
+        return round(opaque / max(1, len(pixels) // 4), 4)
+    finally:
+        bpy.data.images.remove(loaded)
+
+
 def _camera_is_buried(eye, target):
     """Is the camera inside solid geometry? Returns the object name, or None.
 
@@ -322,6 +335,61 @@ def render_view(ctx, out, objects, view, resolution, samples, engine, ortho, wor
         "path": str(path), "rel": ctx.rel(path), "view": view, "engine": used,
         "resolution": resolution, "subject_radius_m": round(radius, 4),
         "analysis": _analyse(ctx, path),
+    }
+
+
+@op(
+    "render.ui_card",
+    summary="Render a clean transparent-background game UI card from an asset. Auto-framing, alpha output and subject-coverage measurement make icon batches consistent without hand-tuning cameras.",
+    params={
+        "out": ("path", "ui_card.png", "Transparent PNG output path"),
+        "objects": ("str[]", [], "Objects to frame and show (empty = whole scene)"),
+        "view": ("enum:hero|front|back|left|right|top|low", "hero", "Camera angle"),
+        "resolution": ("int", 512, "Square card resolution in pixels"),
+        "samples": ("int", 24, "Render samples"),
+        "engine": ("enum:auto|cycles|eevee", "auto", "Render engine"),
+        "ortho": ("bool", False, "Use orthographic projection"),
+        "world_light": ("num", 0.4, "Ambient dome strength used to light the transparent subject"),
+        "padding": ("num", 1.16, "Framing margin; 1.0 is tight and larger values add breathing room"),
+    },
+    tags=["render", "ui"],
+)
+def render_ui_card(ctx, out, objects, view, resolution, samples, engine, ortho,
+                   world_light, padding):
+    targets = _targets(objects)
+    hidden = _hide_others(targets) if objects else []
+    centre, radius = _bounding_sphere(targets)
+    _setup_world(world_light)
+    lights = _setup_lights(centre, radius)
+    camera = _setup_camera(
+        centre, radius, view, ortho, margin=max(1.02, min(2.5, padding))
+    )
+    used = _configure_engine(engine, samples, resolution)
+    scene = bpy.context.scene
+    scene.render.film_transparent = True
+    scene.render.image_settings.color_mode = "RGBA"
+    path = ctx.out_path(out, ".png")
+    try:
+        _render_to(path)
+        coverage = _alpha_coverage(path)
+    finally:
+        _cleanup_rig(lights + [camera])
+        for obj in hidden:
+            obj.hide_render = False
+    if coverage < 0.08:
+        ctx.note(
+            "subject occupies less than 8% of the card; reduce padding or inspect "
+            "the imported asset bounds"
+        )
+    elif coverage > 0.82:
+        ctx.note(
+            "subject occupies more than 82% of the card; increase padding to avoid "
+            "edge clipping in framed UI"
+        )
+    return {
+        "path": str(path), "rel": ctx.rel(path), "view": view, "engine": used,
+        "resolution": resolution, "subject_radius_m": round(radius, 4),
+        "alpha": True, "subject_coverage": coverage, "padding": padding,
     }
 
 

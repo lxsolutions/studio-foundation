@@ -548,6 +548,23 @@ class Rendering(ForgeCase):
         self.assertTrue(path.is_file())
         self.assertGreater(path.stat().st_size, 1000)
 
+    def test_ui_card_has_alpha_and_measured_subject_coverage(self):
+        self.forge.call("prop.crate", name="crate", seed=1)
+        result = self.forge.call(
+            "render.ui_card",
+            out="crate_card.png",
+            resolution=128,
+            samples=4,
+            padding=1.2,
+            _timeout=600,
+        )
+        path = Path(result["path"])
+        self.assertTrue(path.is_file())
+        self.assertGreater(path.stat().st_size, 1000)
+        self.assertTrue(result["alpha"])
+        self.assertGreater(result["subject_coverage"], 0.08)
+        self.assertLess(result["subject_coverage"], 0.9)
+
     def test_contact_sheet_tiles_every_requested_panel(self):
         self.forge.call("prop.crate", name="crate", seed=1)
         result = self.forge.call(
