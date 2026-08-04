@@ -82,6 +82,13 @@ repositories. When a measurement and a critic disagree here, the measurement
 wins — a lesson the most public rival effort independently converged on
 *after we published it*.
 
+**🌐 The forge, live and public.** [forge-live](https://platosplaza.com/forge/)
+— type a small brief in a web page and watch bforge build the asset in
+seconds: contact sheet, the quality measurements in plain numbers, and the
+real GLB orbiting in a Babylon preview with a download link. No signup, no
+install, no GUI Blender anywhere in the loop. This is the pipeline,
+operating in public, that the claims above describe.
+
 **⚙ The doctrine, proven in public.** Generation is not the bottleneck;
 judgement, integration, and iteration speed are. Everything in this list was
 built by AI agents using these tools — the ultimate dogfood, running in the
