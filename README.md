@@ -32,11 +32,14 @@ with the evidence committed.
 Critics say projects like this are marketing. Here is the inventory, with the
 proof attached to every line. Hype is welcome here — it is earned.
 
-**🥇 The first public, working Godot 4.7.1 on WebGPU — and the only public
-Forward+ renderer on WebGPU anywhere.** Official Godot ships no WebGPU
-support; the only other public effort targets 4.6.2 with the Mobile renderer.
-29 checksummed patches of named engineering separate "does not draw" from
-"renders at 60 fps on a Tesla P40 with 0 `GPUValidationError`."
+**🥇 The only public Forward+ renderer running on WebGPU — anywhere.** Not
+the Mobile renderer: the full clustered desktop path — clustered lighting,
+SSAO, volumetric fog — that AAA-feeling games actually need. Official Godot
+ships no WebGPU support; the only other public WebGPU effort targets the
+Mobile renderer on 4.6.2. Version numbers are perishable; this capability is
+not. And the same build is also the first public, working Godot 4.7.1 on
+WebGPU. 29 checksummed patches of named engineering separate "does not draw"
+from "renders at 60 fps on a Tesla P40 with 0 `GPUValidationError`."
 [Play it in your browser](https://lxsolutions.github.io/studio-foundation/).
 
 **🔨 The only deterministic, quality-gated Blender forge for AI agents.**
@@ -142,14 +145,15 @@ because claims need a floor to stand on. Official
 upstream; the WebGPU export path below is maintained here as an ordered,
 SHA-256-locked patch series. WebGL 2 remains the supported fallback.
 
-**First, and stated plainly.** This is the first public, working build of
-Godot 4.7.1 on WebGPU. Official Godot ships no WebGPU support —
-[their own docs say so](https://docs.godotengine.org/en/latest/tutorials/export/exporting_for_web.html).
-The only other public effort, David Walter's driver, targets Godot 4.6.2 with
-the Mobile renderer. Nothing else public renders Godot 4.7.1 in a browser
-through WebGPU — and nothing else public renders the **Forward+** renderer
-there at all. It is said here, with the evidence attached, because it is true
-and it is checkable.
+**First, and stated plainly.** Nothing else public renders Godot's Forward+
+renderer — the full clustered desktop path — through WebGPU. Not official
+Godot, which ships no WebGPU support at all
+[by their own docs](https://docs.godotengine.org/en/latest/tutorials/export/exporting_for_web.html);
+not the only other public WebGPU effort, David Walter's driver, which targets
+the Mobile renderer on 4.6.2. This build renders Forward+ in a browser tab,
+and it is also the first public, working Godot 4.7.1 on WebGPU. The version
+number will age; the capability claim will not. It is said here, with the
+evidence attached, because it is true and it is checkable.
 
 **What it took to make 4.7.1 draw.** 29 targeted, checksummed patches, each
 killing a distinct defect between "does not draw" and "renders": the
