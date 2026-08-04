@@ -27,6 +27,63 @@ with the evidence committed.
 > boundary and commit pins:
 > [webgpu-integration.md](docs/architecture/webgpu-integration.md), [NOTICE.md](NOTICE.md).
 
+## The receipts, stated out loud
+
+Critics say projects like this are marketing. Here is the inventory, with the
+proof attached to every line. Hype is welcome here — it is earned.
+
+**🥇 The first public, working Godot 4.7.1 on WebGPU — and the only public
+Forward+ renderer on WebGPU anywhere.** Official Godot ships no WebGPU
+support; the only other public effort targets 4.6.2 with the Mobile renderer.
+29 checksummed patches of named engineering separate "does not draw" from
+"renders at 60 fps on a Tesla P40 with 0 `GPUValidationError`."
+[Play it in your browser](https://lxsolutions.github.io/studio-foundation/).
+
+**🔨 The only deterministic, quality-gated Blender forge for AI agents.**
+bforge is 130 typed, whitelisted operations driven into a persistent headless
+Blender daemon — LODs, collision, budgets, rigs, gaits, baking, validation —
+with byte-identical output run to run and 174 tests that execute against a
+real Blender. No GUI remote-control, no arbitrary code execution, no "same
+prompt, different mesh." Nothing else public does all four of those.
+
+**🛡 A toolchain that rejects its own output.** The quality gate measures
+perceptual material separation (CIELAB ΔE), texel density, triangle budgets,
+and set-level style conformance — and `export.asset` refuses below-bar
+exports. This gate was not designed in a meeting: it exists because an
+earlier agent shipped a character made of eight identical browns, we autopsied
+it in public, and we made the failure unshippable. That is what engineering
+around your own mistakes looks like.
+
+**🐺 Characters and creatures that are actually rigged and animated.**
+Humanoids at figure-drawing proportions with fitted armour, faces, and hands;
+quadrupeds and hexapods with real footfall gaits — lateral-sequence walk,
+diagonal trot, rotary gallop, tripod scuttle. Exported glTF skins and clips
+are verified by parsing the file, not by trusting the log.
+
+**📐 A concept-image pipeline with a fidelity score.** `image.to_mesh` turns
+a 2D concept into a real extruded, UV'd, textured solid and reports the
+silhouette IoU against the source — "how close is the model to the picture"
+as a number, not a vibe.
+
+**🎮 A real game, in production, today.** [Ashenward](https://platosplaza.com/spike/)
+— built with this toolkit: the Gates to the Underworld standing at start,
+every unit and monster rebuilt through the enforced loop as rigged 3D,
+Mineralz-style swarm pressure with forced-march pacing, and a PBR-baked hero
+landmark with high-to-low relief. 421 tests, CI green, hash-verified deploys
+with atomic rollback. Play it, then tell us the pipeline doesn't work.
+
+**📏 Verification instead of vibes.** GLB budget gates, pixel-diff capture
+harnesses, render probes that answer "did it draw," provenance that
+fingerprints any engine build, fresh-clone-green installs, and CI on both
+repositories. When a measurement and a critic disagree here, the measurement
+wins — a lesson the most public rival effort independently converged on
+*after we published it*.
+
+**⚙ The doctrine, proven in public.** Generation is not the bottleneck;
+judgement, integration, and iteration speed are. Everything in this list was
+built by AI agents using these tools — the ultimate dogfood, running in the
+open.
+
 ## bforge: the asset forge — deterministic, headless, quality-gated
 
 Most Blender-AI integrations are remote controls for a GUI Blender: arbitrary
