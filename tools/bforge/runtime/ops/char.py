@@ -1628,13 +1628,36 @@ def char_creature(ctx, name, length, shoulder, plan, bulk, detail, location, ski
     limb(joints["neck"][0], joints["neck"][1], body_r * 0.55, body_r * 0.42)
     head_center = Vector(joints["head"][0]).lerp(Vector(joints["head"][1]), 0.55)
     blob(head_center, body_r * 0.62, (0.85, 1.35, 0.95))
-    # Muzzle — the feature that stops a quadruped head reading as a ball.
+    # Muzzle: a tapered snout, not a bulge — the difference between "canine"
+    # and "potato with legs".
     muzzle = Vector(joints["head"][1])
-    blob((muzzle.x, muzzle.y - length * 0.015, muzzle.z - length * 0.01),
-         body_r * 0.34, (0.7, 1.5, 0.8))
+    snout_tip = Vector((muzzle.x, muzzle.y - length * 0.09, muzzle.z - length * 0.025))
+    limb(head_center.lerp(muzzle, 0.55), snout_tip, body_r * 0.34, body_r * 0.14)
+    blob(snout_tip, body_r * 0.16, (0.9, 1.1, 0.8))
+    # Ears: the two triangles that make a head read as an animal at any distance.
+    if plan in ("canine", "feline", "generic"):
+        for sign in (1.0, -1.0):
+            ear_base = Vector((head_center.x + sign * body_r * 0.34,
+                               head_center.y + length * 0.015,
+                               head_center.z + body_r * 0.52))
+            ear_tip = Vector((ear_base.x + sign * body_r * 0.10,
+                              ear_base.y - length * 0.012,
+                              ear_base.z + body_r * (0.5 if plan == "canine" else 0.34)))
+            limb(ear_base, ear_tip, body_r * 0.13, 0.001)
 
-    limb(joints["tail_1"][0], joints["tail_1"][1], body_r * 0.30, body_r * 0.22)
-    limb(joints["tail_2"][0], joints["tail_2"][1], body_r * 0.22, body_r * 0.08)
+    # Tail: an arc, not a stick. Three segments stepping down and back.
+    tail_pts = [joints["tail_1"][0], joints["tail_1"][1], joints["tail_2"][1]]
+    arc_y = length * 0.10
+    arc_z = -length * 0.055
+    tail_curve = [
+        tail_pts[0],
+        Vector((0.0, tail_pts[1][1] + arc_y * 0.4, tail_pts[1][2] + arc_z * 0.4)),
+        Vector((0.0, tail_pts[2][1] + arc_y * 1.4, tail_pts[2][2] + arc_z * 1.2)),
+        Vector((0.0, tail_pts[2][1] + arc_y * 2.1, tail_pts[2][2] + arc_z * 2.3)),
+    ]
+    for i in range(len(tail_curve) - 1):
+        limb(tail_curve[i], tail_curve[i + 1],
+             body_r * (0.26 - i * 0.06), body_r * (0.20 - i * 0.06))
 
     leg_r = body_r * 0.30
     for side in ("l", "r"):
@@ -1657,6 +1680,22 @@ def char_creature(ctx, name, length, shoulder, plan, bulk, detail, location, ski
     )
     result["plan"] = plan
     result["length_m"] = length
+
+    # The default coat: a potato-dog is a body with no fur logic. Two-tone
+    # (dark back / light belly), a seeded mottle, and grime in the cavities —
+    # deterministic, derived from the same skin colour, glTF COLOR_0.
+    from . import paint as paint_ops
+
+    base = mat_lib.resolve_color(skin)
+    darker = tuple(max(0.0, c * 0.55) for c in base[:3]) + (1.0,)
+    lighter = tuple(min(1.0, c * 1.55 + 0.04) for c in base[:3]) + (1.0,)
+    paint_ops.paint_fill(ctx, obj.name, (1.0, 1.0, 1.0, 1.0), "color")
+    paint_ops.paint_height(ctx, obj.name, lighter, darker, "z", None, None, "smooth", "color")
+    paint_ops.paint_noise(ctx, obj.name, lighter, base,
+                          max(1.5, 3.0 / max(0.4, length)), seed + 101, 3, "color")
+    paint_ops.paint_cavity(ctx, obj.name, darker, "cavity", 0.45, False, "color")
+    result["coat"] = "two_tone+mottle+cavity (COLOR_0)"
+
     ctx.note(
         f"'{obj.name}' is a body. Run char.creature_rig name='{obj.name}' for the "
         "armature, then char.animate clip='trot' (or walk/gallop/graze/idle)."
