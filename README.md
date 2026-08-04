@@ -85,6 +85,34 @@ because claims need a floor to stand on. Official
 upstream; the WebGPU export path below is maintained here as an ordered,
 SHA-256-locked patch series. WebGL 2 remains the supported fallback.
 
+**First, and stated plainly.** This is the first public, working build of
+Godot 4.7.1 on WebGPU. Official Godot ships no WebGPU support —
+[their own docs say so](https://docs.godotengine.org/en/latest/tutorials/export/exporting_for_web.html).
+The only other public effort, David Walter's driver, targets Godot 4.6.2 with
+the Mobile renderer. Nothing else public renders Godot 4.7.1 in a browser
+through WebGPU — and nothing else public renders the **Forward+** renderer
+there at all. It is said here, with the evidence attached, because it is true
+and it is checkable.
+
+**What it took to make 4.7.1 draw.** 29 targeted, checksummed patches, each
+killing a distinct defect between "does not draw" and "renders": the
+Tint/SPIR-V translation chain (texture lowering, storage-buffer access, image
+ordering, volatile decoration), sampler/texture stage-visibility splits, lit
+shadow sampler types, the storage texture formats Forward+ needs, a cluster
+builder that does not rely on subgroup ops, integer texture sample types,
+negative LOD clamps, view-invariant physical formats, the SSAO R8 interleave
+fix, and the volumetric-fog dead sampler. Plus the harness that makes the
+claim auditable: render probes that answer "did it draw" with
+`GPUValidationError` counts and engine counters, provenance that identifies
+any WebGPU build, and atomic, checksummed template installs.
+
+**What it is for.** The same toolkit — the forge, the verification substrate,
+and this rendering path — is the foundation being built so that AI agents can
+develop AAA-feeling games that run in a browser tab. The receipts are already
+public: the forge above, the gates below, and a live game in production
+([Ashenward](https://platosplaza.com/spike/)). We are not backing off that
+claim; we are building the substance that makes it ordinary.
+
 ### ▶ [Play it live — a Godot game running on WebGPU, in your browser](https://lxsolutions.github.io/studio-foundation/)
 
 No install, no plugin. Needs a WebGPU-capable browser (Chrome/Edge 113+, Safari 26+,
