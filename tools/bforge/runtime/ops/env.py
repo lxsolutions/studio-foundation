@@ -735,6 +735,249 @@ def _absorb(target_bm, source_bm):
     bpy.data.meshes.remove(temp)
 
 
+def _absorb(target_bm, source_bm):
+    import bpy
+
+    temp = bpy.data.meshes.new("_absorb")
+    source_bm.to_mesh(temp)
+    source_bm.free()
+    target_bm.from_mesh(temp)
+    bpy.data.meshes.remove(temp)
+
+
+@op(
+    "env.camp",
+    summary="A complete Age-1 settlement in one call: central fire (stones, log teepee, live embers), A-frame shelters ringing it, a stockade perimeter with a gate opening, a well, and storage racks on a deterministic seeded layout. The homeland diorama, not a bag of props — the layout relationships (fire at the heart, shelters facing it, one way in) are what makes it read as a camp instead of a yard sale.",
+    params={
+        "name": ("str", "camp", "Object-name prefix for the camp's structures"),
+        "radius": ("num", 8.0, "Palisade ring radius in metres; shelters sit at ~55% of it"),
+        "shelters": ("int", 5, "A-frame shelters around the fire"),
+        "palisade": ("bool", True, "Build the sharpened-log perimeter"),
+        "gate_angle": ("num", 90.0, "Compass degrees the gate opening faces (0 = +X, 90 = +Y). The ONE way in — put it toward where threats should come from"),
+        "well": ("bool", True, "Stone well with windlass frame"),
+        "racks": ("int", 1, "Storage racks with sacks (0-3)"),
+        "ground": ("bool", True, "Flatten a dirt disc under the camp — helps dioramas; skip when the game supplies terrain"),
+        "wood_color": ("colorref", "", "Override the timber family colour"),
+        "cloth_color": ("colorref", "", "Override the hide/cloth family colour"),
+        "seed": ("int", 0, "Layout seed — same seed, same camp, forever"),
+    },
+    tags=["env", "architecture"],
+)
+def env_camp(ctx, name, radius, shelters, palisade, gate_angle, well, racks, ground,
+             wood_color, cloth_color, seed):
+    rng = ctx.reseed(seed)
+    made = []
+
+    def finish_part(bm, part, preset, color=None, rough=-1.0, smooth=True):
+        mesh_lib.cleanup(bm, merge_dist=1e-4)
+        obj = mesh_lib.to_object(bm, scene_lib.unique_name(f"{name}_{part}"))
+        mat = mat_lib.from_preset(preset, color=color or None,
+                                  roughness=rough if rough >= 0 else None)
+        result = finish_lib.finish(
+            ctx, obj, material=mat, uv="smart_packed", origin="bottom",
+            smooth=smooth, smooth_angle=45.0,
+        )
+        made.append({"object": obj.name, "part": part, "triangles": result["triangles"]})
+        return obj
+
+    def cyl(bm, radius, depth, center, tip=False, segments=10, axis="Z", yaw=0.0, pitch=0.0):
+        piece = mesh_lib.new_bmesh()
+        mesh_lib.add_cylinder(
+            piece, radius=radius, radius_top=0.0 if tip else -1.0, depth=depth,
+            segments=segments, center=(0.0, 0.0, 0.0),
+        )
+        matrix = (
+            Matrix.Translation(Vector(center))
+            @ Matrix.Rotation(math.radians(yaw), 4, "Z")
+            @ Matrix.Rotation(math.radians(pitch), 4, "Y")
+        )
+        bmesh.ops.transform(piece, matrix=matrix, verts=piece.verts[:])
+        _absorb(bm, piece)
+
+    wood = wood_color or "#6a4e2c"
+    cloth = cloth_color or "#7a5a38"
+
+    # --- the fire at the heart ------------------------------------------------
+    stones = mesh_lib.new_bmesh()
+    for i in range(8):
+        angle = math.tau * i / 8.0
+        rock = mesh_lib.new_bmesh()
+        mesh_lib.add_icosphere(rock, radius=0.13, subdivisions=1)
+        bmesh.ops.transform(
+            rock,
+            matrix=Matrix.Translation(
+                Vector((0.45 * math.cos(angle), 0.45 * math.sin(angle), 0.09))
+            ) @ Matrix.Diagonal(Vector((1.0, 0.9, 0.75))).to_4x4(),
+            verts=rock.verts[:],
+        )
+        _absorb(stones, rock)
+    finish_part(stones, "fire_stones", "stone")
+
+    logs = mesh_lib.new_bmesh()
+    for i in range(3):
+        cyl(logs, 0.045, 0.7, (0.0, 0.0, 0.28), segments=8, yaw=i * 120.0, pitch=62.0)
+    finish_part(logs, "fire_logs", "wood", wood)
+
+    coals_bm = mesh_lib.new_bmesh()
+    cyl(coals_bm, 0.26, 0.1, (0.0, 0.0, 0.05), segments=12)
+    coals = mesh_lib.to_object(coals_bm, scene_lib.unique_name(f"{name}_embers"))
+    embers = mat_lib.principled("m_camp_embers", color="#ff5a14", roughness=0.9,
+                                emission=4.5, emission_color="#ff6a1a")
+    finish_lib.finish(ctx, coals, material=embers, uv="smart_packed", origin="bottom",
+                      smooth=True, smooth_angle=45.0)
+    made.append({"object": coals.name, "part": "embers", "triangles": mesh_lib.tri_count(coals)})
+
+    # --- shelters ringing the fire, facing it ----------------------------------
+    for i in range(max(0, shelters)):
+        base_angle = math.tau * i / max(1, shelters) + rng.uniform(-0.14, 0.14)
+        dist = radius * (0.55 + rng.uniform(-0.05, 0.05))
+        cx, cy = dist * math.cos(base_angle), dist * math.sin(base_angle)
+        scale = rng.uniform(0.9, 1.1)
+        yaw_deg = math.degrees(base_angle) + 90.0  # open side toward the fire
+
+        frame = mesh_lib.new_bmesh()
+        ridge = mesh_lib.new_bmesh()
+        mesh_lib.add_cylinder(ridge, radius=0.035, depth=2.4 * scale, segments=8,
+                              center=(0.0, 0.0, 1.55 * scale))
+        bmesh.ops.transform(
+            ridge, matrix=Matrix.Translation(Vector((cx, cy, 0.0)))
+            @ Matrix.Rotation(math.radians(yaw_deg), 4, "Z")
+            @ Matrix.Rotation(math.radians(90.0), 4, "Y"),
+            verts=ridge.verts[:],
+        )
+        _absorb(frame, ridge)
+        for end in (-1, 1):
+            pole = mesh_lib.new_bmesh()
+            mesh_lib.add_cylinder(pole, radius=0.035, depth=1.6 * scale, segments=8,
+                                  center=(end * 1.1 * scale, 0.0, 0.8 * scale))
+            bmesh.ops.transform(
+                pole, matrix=Matrix.Translation(Vector((cx, cy, 0.0)))
+                @ Matrix.Rotation(math.radians(yaw_deg), 4, "Z"),
+                verts=pole.verts[:],
+            )
+            _absorb(frame, pole)
+        finish_part(frame, f"shelter_{i}_frame", "wood", wood)
+
+        hide = mesh_lib.new_bmesh()
+        for side, pitch in ((-1, 58.0), (1, -58.0)):
+            panel = mesh_lib.new_bmesh()
+            mesh_lib.add_box(panel, size=(2.3 * scale, 0.05, 1.9 * scale),
+                             center=(0.0, side * 0.72 * scale, 0.82 * scale), bevel=0.01)
+            bmesh.ops.transform(
+                panel,
+                matrix=Matrix.Translation(Vector((cx, cy, 0.0)))
+                @ Matrix.Rotation(math.radians(yaw_deg), 4, "Z")
+                @ Matrix.Rotation(math.radians(pitch), 4, "X"),
+                verts=panel.verts[:],
+            )
+            _absorb(hide, panel)
+        finish_part(hide, f"shelter_{i}_hide", "cloth", cloth, rough=0.9)
+
+    # --- stockade with exactly one way in ---------------------------------------
+    if palisade:
+        ring = mesh_lib.new_bmesh()
+        spacing = 0.23
+        gate_half = math.radians(11.0)  # ~3 m opening at radius 8
+        count = int(math.tau * radius / spacing)
+        for i in range(count):
+            angle = math.tau * i / count
+            gate_delta = (math.degrees(angle) - gate_angle + 540.0) % 360.0 - 180.0
+            if abs(gate_delta) < math.degrees(gate_half):
+                continue
+            depth = 2.4 if i % 2 == 0 else 2.55
+            px, py = radius * math.cos(angle), radius * math.sin(angle)
+            cyl(ring, 0.09, depth, (px, py, depth * 0.5), tip=True, segments=10)
+        for edge in (-1, 1):
+            angle = math.radians(gate_angle) + edge * gate_half
+            px, py = radius * math.cos(angle), radius * math.sin(angle)
+            cyl(ring, 0.13, 2.8, (px, py, 1.4), tip=True, segments=12)
+        finish_part(ring, "palisade", "wood", wood, smooth=False)
+
+    # --- the well ----------------------------------------------------------------
+    if well:
+        wangle = rng.uniform(0.0, math.tau)
+        wx, wy = radius * 0.3 * math.cos(wangle), radius * 0.3 * math.sin(wangle)
+        ring_bm = mesh_lib.new_bmesh()
+        for row in range(2):
+            for i in range(9):
+                angle = math.tau * i / 9.0 + row * 0.35
+                rock = mesh_lib.new_bmesh()
+                mesh_lib.add_icosphere(rock, radius=0.15, subdivisions=1)
+                bmesh.ops.transform(
+                    rock,
+                    matrix=Matrix.Translation(Vector((
+                        wx + 0.62 * math.cos(angle),
+                        wy + 0.62 * math.sin(angle),
+                        0.14 + row * 0.24,
+                    ))) @ Matrix.Diagonal(Vector((1.0, 0.9, 0.8))).to_4x4(),
+                    verts=rock.verts[:],
+                )
+                _absorb(ring_bm, rock)
+        finish_part(ring_bm, "well_stones", "stone")
+        wood_bm = mesh_lib.new_bmesh()
+        for side in (-1, 1):
+            cyl(wood_bm, 0.05, 1.3, (wx + side * 0.62, wy, 0.65), segments=8)
+        bar = mesh_lib.new_bmesh()
+        mesh_lib.add_cylinder(bar, radius=0.045, depth=1.34, segments=8,
+                              center=(0.0, 0.0, 0.0))
+        bmesh.ops.transform(
+            bar,
+            matrix=Matrix.Translation(Vector((wx, wy, 1.28)))
+            @ Matrix.Rotation(math.radians(90.0), 4, "Y"),
+            verts=bar.verts[:],
+        )
+        _absorb(wood_bm, bar)
+        finish_part(wood_bm, "well_frame", "wood", wood)
+
+    # --- storage racks -------------------------------------------------------------
+    for r in range(max(0, min(3, racks))):
+        rangle = gate_angle + 140.0 + r * 80.0 + rng.uniform(-10.0, 10.0)
+        rr = radius * 0.4
+        rx, ry = rr * math.cos(math.radians(rangle)), rr * math.sin(math.radians(rangle))
+        frame = mesh_lib.new_bmesh()
+        for side in (-1, 1):
+            for depth in (1.1,):
+                cyl(frame, 0.04, depth, (rx + side * 0.6, ry, depth * 0.5), segments=8)
+        shelf = mesh_lib.new_bmesh()
+        mesh_lib.add_box(shelf, size=(1.4, 0.5, 0.06), center=(rx, ry, 0.72), bevel=0.01)
+        _absorb(frame, shelf)
+        finish_part(frame, f"rack_{r}_frame", "wood", wood)
+        sacks = mesh_lib.new_bmesh()
+        for s in range(2):
+            sack = mesh_lib.new_bmesh()
+            mesh_lib.add_icosphere(sack, radius=0.22, subdivisions=2)
+            bmesh.ops.transform(
+                sack,
+                matrix=Matrix.Translation(
+                    Vector((rx - 0.3 + s * 0.6, ry, 0.95 if s == 0 else 0.2))
+                ) @ Matrix.Diagonal(Vector((1.0, 0.85, 1.15))).to_4x4(),
+                verts=sack.verts[:],
+            )
+            _absorb(sacks, sack)
+        finish_part(sacks, f"rack_{r}_sacks", "cloth", cloth, rough=0.9)
+
+    # --- ground --------------------------------------------------------------------)
+    if ground:
+        disc = mesh_lib.new_bmesh()
+        mesh_lib.add_cylinder(disc, radius=radius + 2.0, depth=0.2, segments=32,
+                              center=(0.0, 0.0, -0.1))
+        finish_part(disc, "ground", "sand", "#8a7350", rough=1.0, smooth=False)
+
+    total = sum(entry["triangles"] for entry in made)
+    ctx.note(
+        f"Camp layout: fire at the heart, {shelters} shelters facing it, gate at "
+        f"{gate_angle:.0f} degrees. Dress the surroundings with env.scatter "
+        "(trees/rocks) and put a watch at the gate — it is the only way in."
+    )
+    return {
+        "structures": made,
+        "object_count": len(made),
+        "triangles": total,
+        "gate_angle": gate_angle,
+        "radius": radius,
+    }
+
+
 def _get(name):
     try:
         return scene_lib.get_object(name)

@@ -9,6 +9,13 @@ SHA-256-locked patch series, plus the MCP server, agent workflows, and asset
 pipeline that make the whole thing drivable by AI assistants. WebGL 2 remains the
 supported fallback.
 
+> **Lineage.** The WebGPU backend builds on David Walter's MIT-licensed
+> [`dwalter/godotwebgpu`](https://github.com/dwalter/godotwebgpu) driver (Godot
+> 4.6.2); Studio Foundation maintains the 4.7.1 rebase, 29 targeted integration
+> patches, the build tooling, and the browser validation evidence. Exact source
+> boundary and commit pins:
+> [webgpu-integration.md](docs/architecture/webgpu-integration.md), [NOTICE.md](NOTICE.md).
+
 ### ▶ [Play it live — a Godot game running on WebGPU, in your browser](https://lxsolutions.github.io/studio-foundation/)
 
 No install, no plugin. Needs a WebGPU-capable browser (Chrome/Edge 113+, Safari 26+,
@@ -74,6 +81,54 @@ first-class throughout the repo, not just in the engine:
 
 Official Godot stays the upstream. We own the distribution, not the engine
 ([ADR 0008](docs/adr/0008-own-the-distribution-not-the-engine.md)).
+
+## bforge: the asset forge — deterministic, headless, quality-gated
+
+Most Blender-AI integrations are remote controls for a GUI Blender: arbitrary
+code into a live session, a different mesh every run, nothing CI can test.
+**bforge inverts that** — a persistent headless Blender daemon driven through
+127 whitelisted, typed, deterministic operations. Same params + same seed →
+byte-identical GLB, forever. It is how this toolkit's games get their art, and
+it works identically on a laptop, in CI, and on a headless build box.
+
+[![A tavern scene composed headlessly by bforge](docs/bforge/img/tavern.png)](tools/bforge/README.md)
+
+**The receipts, all reproducible:**
+
+- **It fixes real games' assets.** The Chariot Club's shipped track was a flat
+  oval slab: 25,796 tris, 26 materials, no UVs. One bforge audit-and-rebuild
+  pass: 14,084 tris, 11 draw calls, UVs everywhere, real architecture — driven
+  from the game's own track spec so mesh and race maths cannot drift
+  ([the build](games/chariot/art_source/build_hippodrome.py)).
+- **Quality is measured, not claimed.** `check.materials` computes perceptual
+  colour distance (CIELAB ΔE) across an asset's materials — the "8 materials,
+  all the same brown" failure an earlier agent shipped is now an error-level
+  gate finding, and `export.asset` refuses to export below the bar without an
+  explicit override. `check.style`/`check.conformance` score set-level art
+  direction and name the axis that breaks it.
+- **Characters and creatures, actually rigged and animated.** Humanoids at
+  figure-drawing proportions with fitted armour (`char.outfit`), faces, hands;
+  quadrupeds and hexapods with real footfall gaits — lateral-sequence walk,
+  diagonal trot, rotary gallop, tripod scuttle. Exported glTF skins and clips
+  are verified by parsing the file, not by trusting the log.
+- **The agent can see and prove what it made.** Six-panel contact sheets
+  (hero/front/side/top/wireframe/UV-checker), luminance and palette
+  measurement, silhouette scoring, impostor sprite sheets for distant LOD,
+  and concept-image → extruded-mesh with a silhouette-IoU fidelity score.
+- **171 tests, all live against real Blender.** Schema, MCP protocol, and
+  per-op integration — including byte-determinism asserted on exports.
+
+Full reference: [`tools/bforge/README.md`](tools/bforge/README.md) ·
+[`docs/bforge/OPS.md`](docs/bforge/OPS.md) · engine-neutral output (glTF) —
+the same assets ship into Godot, Babylon.js and three.js.
+
+> **What we do not claim.** Nobody's agents produce Call-of-Duty-photoreal
+> humans today — the most public attempt self-scored 5.05/10 with mannequin
+> characters, and its own postmortem converged on the same lessons this repo
+> codified earlier (instruments over eyes; measurement over critics). bforge's
+> target is stylized-good, budget-verified, regenerable art that a small team
+> can actually ship — and a pipeline honest enough to say when it isn't there
+> yet.
 
 ## Quick start
 
