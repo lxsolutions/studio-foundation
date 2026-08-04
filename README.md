@@ -1,13 +1,24 @@
 # Studio Foundation
 
-**An AI-native, open-source game-dev toolkit — with a Godot 4.7.1 WebGPU browser
-backend that actually renders 3D.**
+**An AI-native, open-source game-dev toolkit: the deterministic asset forge,
+the verification substrate, and the engine-neutral pipelines that let AI
+agents build, prove, and ship real games — into Babylon.js, three.js, Godot,
+and Rust services.**
 
-Official [Godot](https://github.com/godotengine/godot) is the base and stays the
-upstream. On top of it sits a WebGPU export path maintained as an ordered,
-SHA-256-locked patch series, plus the MCP server, agent workflows, and asset
-pipeline that make the whole thing drivable by AI assistants. WebGL 2 remains the
-supported fallback.
+The pillars:
+
+- **bforge** — a deterministic headless-Blender asset forge for AI agents:
+  130 whitelisted, typed operations with a quality gate that rejects output
+  below the bar, byte-identical regeneration, and 174 live-Blender tests.
+- **Verification** — GLB budget gates, pixel-diff captures, provenance, and
+  render probes, so agent output is measured rather than trusted.
+- **Engine-neutral shipping** — glTF pipelines into Babylon.js, three.js and
+  Godot, with Rust multiplayer services behind them.
+
+And as the standing proof that the model works at the hard end of the stack:
+**the only maintained Godot 4.7.1 WebGPU browser backend** — a checksummed
+patch series on official Godot that renders 3D on real hardware, in public,
+with the evidence committed.
 
 > **Lineage.** The WebGPU backend builds on David Walter's MIT-licensed
 > [`dwalter/godotwebgpu`](https://github.com/dwalter/godotwebgpu) driver (Godot
@@ -15,72 +26,6 @@ supported fallback.
 > patches, the build tooling, and the browser validation evidence. Exact source
 > boundary and commit pins:
 > [webgpu-integration.md](docs/architecture/webgpu-integration.md), [NOTICE.md](NOTICE.md).
-
-### ▶ [Play it live — a Godot game running on WebGPU, in your browser](https://lxsolutions.github.io/studio-foundation/)
-
-No install, no plugin. Needs a WebGPU-capable browser (Chrome/Edge 113+, Safari 26+,
-Firefox on Windows); the page tells you if yours qualifies before you click. First load
-takes roughly 15–30 seconds depending on your connection — most of it downloading the
-~46 MB engine, not compiling shaders (pipelines build in about 2 seconds). It is
-cached afterwards. Details: [webgpu-performance.md](docs/architecture/webgpu-performance.md).
-
-[![The Chariot Club: a Roman colosseum with crowded stands and chariots, rendered in Godot through WebGPU](docs/images/webgpu-chariot.png)](https://lxsolutions.github.io/studio-foundation/)
-
-***The Chariot Club*** *— a real game, not a test scene: a Roman colosseum with
-crowded stands, chariot teams, and real-time shadows, rendered by Godot 4.7.1 through
-WebGPU. Verified on an NVIDIA Tesla P40 at a locked 60 fps, ~490–630 draw calls and
-~23M primitives per frame, with **0 `GPUValidationError`**. The published demo was
-re-rendered from its own public URL on that GPU as a final check.*
-
-> **What you can rebuild:** all of it. The engine and the patch series are
-> checksum-locked, and both demos are now in this repository — the minimal scene below,
-> and The Chariot Club itself under [`games/chariot/`](games/chariot). Note the game is
-> published to make the demo reproducible and auditable, not to relicense it: per
-> [`games/LICENSE`](games/LICENSE) a game directory without its own LICENSE stays all
-> rights reserved. The Foundation itself (`engine/`, `tools/`, `shared/`, …) remains
-> under the repository root LICENSE.
-
-<details>
-<summary>Also published: a ~100-line minimal scene, for reproducing the render path from scratch</summary>
-
-[![Six PBR meshes with a directional light and real-time shadows](docs/images/webgpu-3d-lit-shadows.png)](https://lxsolutions.github.io/studio-foundation/showcase/index.html)
-
-[`webgpu_showcase.gd`](templates/godot-game/project/scenes/webgpu_showcase.gd) builds
-six PBR meshes, a directional light, and real-time shadow mapping entirely in code with
-no external assets — 59–60 fps, 36 draws/frame, 0 `GPUValidationError`. It exists so the
-render path can be re-verified without any game content. Live at
-[`/showcase/`](https://lxsolutions.github.io/studio-foundation/showcase/index.html).
-
-</details>
-
-## Our lane: AI-native, open-source game development
-
-Godot does not accept AI-generated code contributions, and has stated it does not
-intend to add AI features to the engine. That is a deliberate choice — and it
-leaves an open lane. Studio Foundation takes it: building games **with** AI, in the
-open, is the point of this toolkit, not a bolt-on.
-
-The WebGPU backend is proof the model works: an AI-assisted capability the community
-wanted for years, carried as a transparent patch series on official Godot (MIT) and
-verified on real hardware. It could never land upstream under Godot's policy no
-matter how well it works — so it lives here instead. The AI-native surface is
-first-class throughout the repo, not just in the engine:
-
-- **An MCP server** ([`tools/studio-mcp`](tools/studio-mcp), config in
-  [`.mcp.json`](.mcp.json)) that exposes the toolkit to AI assistants and CLIs, with
-  its own tests and a security boundary ([`studio_tools/mcp`](tools/pylib/studio_tools/mcp)).
-- **Agent operating agreements** ([`AGENTS.md`](AGENTS.md), [`CLAUDE.md`](CLAUDE.md),
-  [`docs/agents`](docs/agents)) so AI agents build, test, and verify against the repo
-  predictably instead of ad hoc.
-- **An AI-driven Blender asset pipeline**
-  ([ADR 0006](docs/adr/0006-blender-master-asset-pipeline.md)).
-- **Reproducible by construction** — every artifact is byte-and-SHA-256 pinned and
-  every patch is checksum-locked, so "AI-built" never means "unauditable." You can
-  rebuild and re-verify all of it yourself. That auditability is the whole answer to
-  the slop critique.
-
-Official Godot stays the upstream. We own the distribution, not the engine
-([ADR 0008](docs/adr/0008-own-the-distribution-not-the-engine.md)).
 
 ## bforge: the asset forge — deterministic, headless, quality-gated
 
@@ -129,6 +74,84 @@ the same assets ship into Godot, Babylon.js and three.js.
 > target is stylized-good, budget-verified, regenerable art that a small team
 > can actually ship — and a pipeline honest enough to say when it isn't there
 > yet.
+
+
+## The standing proof: Godot 4.7.1 on WebGPU
+
+Everything above this section is the toolkit. This is what it looks like when
+the toolkit is pointed at the hardest problem in the room — and it is here
+because claims need a floor to stand on. Official
+[Godot](https://github.com/godotengine/godot) is the base and stays the
+upstream; the WebGPU export path below is maintained here as an ordered,
+SHA-256-locked patch series. WebGL 2 remains the supported fallback.
+
+### ▶ [Play it live — a Godot game running on WebGPU, in your browser](https://lxsolutions.github.io/studio-foundation/)
+
+No install, no plugin. Needs a WebGPU-capable browser (Chrome/Edge 113+, Safari 26+,
+Firefox on Windows); the page tells you if yours qualifies before you click. First load
+takes roughly 15–30 seconds depending on your connection — most of it downloading the
+~46 MB engine, not compiling shaders (pipelines build in about 2 seconds). It is
+cached afterwards. Details: [webgpu-performance.md](docs/architecture/webgpu-performance.md).
+
+[![The Chariot Club: a Roman colosseum with crowded stands and chariots, rendered in Godot through WebGPU](docs/images/webgpu-chariot.png)](https://lxsolutions.github.io/studio-foundation/)
+
+***The Chariot Club*** *— a real game, not a test scene: a Roman colosseum with
+crowded stands, chariot teams, and real-time shadows, rendered by Godot 4.7.1 through
+WebGPU. Verified on an NVIDIA Tesla P40 at a locked 60 fps, ~490–630 draw calls and
+~23M primitives per frame, with **0 `GPUValidationError`**. The published demo was
+re-rendered from its own public URL on that GPU as a final check.*
+
+> **What you can rebuild:** all of it. The engine and the patch series are
+> checksum-locked, and both demos are now in this repository — the minimal scene below,
+> and The Chariot Club itself under [`games/chariot/`](games/chariot). Note the game is
+> published to make the demo reproducible and auditable, not to relicense it: per
+> [`games/LICENSE`](games/LICENSE) a game directory without its own LICENSE stays all
+> rights reserved. The Foundation itself (`engine/`, `tools/`, `shared/`, …) remains
+> under the repository root LICENSE.
+
+<details>
+<summary>Also published: a ~100-line minimal scene, for reproducing the render path from scratch</summary>
+
+[![Six PBR meshes with a directional light and real-time shadows](docs/images/webgpu-3d-lit-shadows.png)](https://lxsolutions.github.io/studio-foundation/showcase/index.html)
+
+[`webgpu_showcase.gd`](templates/godot-game/project/scenes/webgpu_showcase.gd) builds
+six PBR meshes, a directional light, and real-time shadow mapping entirely in code with
+no external assets — 59–60 fps, 36 draws/frame, 0 `GPUValidationError`. It exists so the
+render path can be re-verified without any game content. Live at
+[`/showcase/`](https://lxsolutions.github.io/studio-foundation/showcase/index.html).
+
+</details>
+
+
+## Our lane: AI-native, open-source game development
+
+Godot does not accept AI-generated code contributions, and has stated it does not
+intend to add AI features to the engine. That is a deliberate choice — and it
+leaves an open lane. Studio Foundation takes it: building games **with** AI, in the
+open, is the point of this toolkit, not a bolt-on.
+
+The WebGPU backend is proof the model works: an AI-assisted capability the community
+wanted for years, carried as a transparent patch series on official Godot (MIT) and
+verified on real hardware. It could never land upstream under Godot's policy no
+matter how well it works — so it lives here instead. The AI-native surface is
+first-class throughout the repo, not just in the engine:
+
+- **An MCP server** ([`tools/studio-mcp`](tools/studio-mcp), config in
+  [`.mcp.json`](.mcp.json)) that exposes the toolkit to AI assistants and CLIs, with
+  its own tests and a security boundary ([`studio_tools/mcp`](tools/pylib/studio_tools/mcp)).
+- **Agent operating agreements** ([`AGENTS.md`](AGENTS.md), [`CLAUDE.md`](CLAUDE.md),
+  [`docs/agents`](docs/agents)) so AI agents build, test, and verify against the repo
+  predictably instead of ad hoc.
+- **An AI-driven Blender asset pipeline**
+  ([ADR 0006](docs/adr/0006-blender-master-asset-pipeline.md)).
+- **Reproducible by construction** — every artifact is byte-and-SHA-256 pinned and
+  every patch is checksum-locked, so "AI-built" never means "unauditable." You can
+  rebuild and re-verify all of it yourself. That auditability is the whole answer to
+  the slop critique.
+
+Official Godot stays the upstream. We own the distribution, not the engine
+([ADR 0008](docs/adr/0008-own-the-distribution-not-the-engine.md)).
+
 
 ## Quick start
 
