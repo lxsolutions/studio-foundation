@@ -9,6 +9,13 @@ SHA-256-locked patch series, plus the MCP server, agent workflows, and asset
 pipeline that make the whole thing drivable by AI assistants. WebGL 2 remains the
 supported fallback.
 
+> **Lineage.** The WebGPU backend builds on David Walter's MIT-licensed
+> [`dwalter/godotwebgpu`](https://github.com/dwalter/godotwebgpu) driver (Godot
+> 4.6.2); Studio Foundation maintains the 4.7.1 rebase, 29 targeted integration
+> patches, the build tooling, and the browser validation evidence. Exact source
+> boundary and commit pins:
+> [webgpu-integration.md](docs/architecture/webgpu-integration.md), [NOTICE.md](NOTICE.md).
+
 ### ▶ [Play it live — a Godot game running on WebGPU, in your browser](https://lxsolutions.github.io/studio-foundation/)
 
 No install, no plugin. Needs a WebGPU-capable browser (Chrome/Edge 113+, Safari 26+,
