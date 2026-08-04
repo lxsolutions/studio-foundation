@@ -130,7 +130,7 @@ tools/bforge/
     daemon.py          JSON-line RPC loop
     registry.py        @op decorator: types, coercion, schema generation
     lib/               mesh, uvs, materials, scene-graph, finishing pass
-    ops/               the 127 operations, grouped by namespace
+    ops/               the 130 operations, grouped by namespace
   catalog.json       committed op snapshot (so tools/list needs no Blender)
   tests/             unit + live-integration + visual gallery
 ```
@@ -211,7 +211,7 @@ wrong" that no metric shows.
 
 ## What it can make
 
-127 ops across 18 namespaces. Full reference: [`docs/bforge/OPS.md`](../../docs/bforge/OPS.md).
+130 ops across 19 namespaces. Full reference: [`docs/bforge/OPS.md`](../../docs/bforge/OPS.md).
 
 - **`prop.*`** — crate, barrel, chest, sack, rock, crystal, tree, pillar, torch,
   fence, furniture, weapon, banner, debris

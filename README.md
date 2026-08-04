@@ -87,7 +87,7 @@ Official Godot stays the upstream. We own the distribution, not the engine
 Most Blender-AI integrations are remote controls for a GUI Blender: arbitrary
 code into a live session, a different mesh every run, nothing CI can test.
 **bforge inverts that** — a persistent headless Blender daemon driven through
-127 whitelisted, typed, deterministic operations. Same params + same seed →
+130 whitelisted, typed, deterministic operations. Same params + same seed →
 byte-identical GLB, forever. It is how this toolkit's games get their art, and
 it works identically on a laptop, in CI, and on a headless build box.
 
@@ -115,7 +115,7 @@ it works identically on a laptop, in CI, and on a headless build box.
   (hero/front/side/top/wireframe/UV-checker), luminance and palette
   measurement, silhouette scoring, impostor sprite sheets for distant LOD,
   and concept-image → extruded-mesh with a silhouette-IoU fidelity score.
-- **171 tests, all live against real Blender.** Schema, MCP protocol, and
+- **174 tests, all live against real Blender.** Schema, MCP protocol, and
   per-op integration — including byte-determinism asserted on exports.
 
 Full reference: [`tools/bforge/README.md`](tools/bforge/README.md) ·
