@@ -877,7 +877,7 @@ _PIECE_BONE = {
     "cuirass": "chest", "pteruges": "hips", "helmet": "head",
     "greave_l": "shin_l", "greave_r": "shin_r",
     "bracer_l": "forearm_l", "bracer_r": "forearm_r",
-    "shield": "forearm_l",
+    "shield": "forearm_l", "robe": "chest", "hood": "head",
 }
 
 
@@ -952,7 +952,7 @@ def _attach_or_parent(ctx, piece_obj, body, bone):
     summary="Fit an armour or clothing piece to a char.humanoid body: cuirass, pteruges skirt, greaves, bracers, helmet or round shield. Fit is derived from the body's own proportions, materials are perceptually distinct by construction (this is the anti 'brown blob' op), and pieces bone-parent to the rig when one exists so they animate with the character.",
     params={
         "name": ("str", None, "Body mesh (from char.humanoid)"),
-        "piece": ("enum:cuirass|pteruges|greaves|bracers|helmet|shield", "cuirass", "What to fit. greaves and bracers come in pairs"),
+        "piece": ("enum:cuirass|pteruges|greaves|bracers|helmet|shield|robe|hood", "cuirass", "What to fit. greaves and bracers come in pairs; robe is a full-length caster/priest garment, hood its matching cowl"),
         "height": ("num", 0.0, "Character height; 0 measures the mesh bounds"),
         "build": ("enum:realistic|heroic|stylized|chibi|lithe", "heroic", "Proportions the fit assumes — match the char.humanoid build"),
         "material": ("enum:bronze|iron|leather|cloth", "", "Material family (defaults per piece: bronze for cuirass/greaves/helmet/shield, leather for pteruges/bracers). The families are deliberately far apart in colour and response — keep them that way"),
@@ -969,7 +969,9 @@ def char_outfit(ctx, name, piece, height, build, material, color, crest, side, g
     shoulder_z = total_height - head_unit * 1.42
     hip_z = total_height * 0.50
 
-    default_material = "leather" if piece in ("pteruges", "bracers") else "bronze"
+    default_material = "leather" if piece in ("pteruges", "bracers") else (
+        "cloth" if piece in ("robe", "hood") else "bronze"
+    )
     family = material or default_material
     hex_color, metallic, roughness = OUTFIT_MATERIALS[family]
     mat = mat_lib.principled(
@@ -1108,6 +1110,51 @@ def char_outfit(ctx, name, piece, height, build, material, color, crest, side, g
         )
         _absorb(bm, boss)
         bone = f"forearm_{side}"
+
+    elif piece == "robe":
+        # Full-length garment: shoulders to ankles, flaring at the hem, with
+        # loose sleeves suggested by a wider torso band. Lathe shell like the
+        # cuirass but floor-length and cloth.
+        z_top = shoulder_z + head_unit * 0.02
+        z_hem = hip_z - (hip_z - 0.06 * total_height) * 0.94
+        outer = [
+            (torso_r * 1.12 + gap, z_top),
+            (torso_r * 1.20 + gap, hip_z),
+            (torso_r * 1.55 + gap, z_hem + (z_top - z_hem) * 0.35),
+            (torso_r * 1.85 + gap, z_hem),
+        ]
+        mesh_lib.lathe(bm, _shell_profile(outer), segments=16, cap=False)
+        bone = "chest"
+
+    elif piece == "hood":
+        head_center = Vector(joints["head"][0]).lerp(Vector(joints["head"][1]), 0.5)
+        hood_r = head_unit * 0.56 + gap
+        # Open-front cowl: lathe from brow over the crown to the shoulders,
+        # face left visible (the front quarter is cut away by the profile's
+        # open hem sitting forward).
+        mesh_lib.lathe(
+            bm,
+            _shell_profile([
+                (hood_r, 0.0),
+                (hood_r * 1.02, hood_r * 0.6),
+                (hood_r * 0.6, hood_r * 1.0),
+                (0.012, hood_r * 1.08),
+            ]),
+            segments=16, center=(0.0, head_r * 0.1, head_center.z + head_unit * 0.02),
+            cap=False,
+        )
+        # Shoulder drape.
+        piece_bm = mesh_lib.new_bmesh()
+        mesh_lib.lathe(
+            piece_bm,
+            _shell_profile([
+                (torso_r * 0.95 + gap, 0.0),
+                (torso_r * 1.05 + gap, head_unit * 0.16),
+            ]),
+            segments=14, center=(0.0, 0.0, shoulder_z - head_unit * 0.05), cap=False,
+        )
+        _absorb(bm, piece_bm)
+        bone = "head"
 
     mesh_lib.cleanup(bm, merge_dist=total_height * 0.001)
     bm = _canonicalize_faces(bm)

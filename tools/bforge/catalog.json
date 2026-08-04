@@ -2026,9 +2026,11 @@
               "greaves",
               "bracers",
               "helmet",
-              "shield"
+              "shield",
+              "robe",
+              "hood"
             ],
-            "description": "What to fit. greaves and bracers come in pairs",
+            "description": "What to fit. greaves and bracers come in pairs; robe is a full-length caster/priest garment, hood its matching cowl",
             "default": "cuirass"
           },
           "height": {
@@ -2633,6 +2635,101 @@
           "seed": {
             "type": "integer",
             "description": "Random seed",
+            "default": 0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "env.camp",
+      "summary": "A complete Age-1 settlement in one call: central fire (stones, log teepee, live embers), A-frame shelters ringing it, a stockade perimeter with a gate opening, a well, and storage racks on a deterministic seeded layout. The homeland diorama, not a bag of props \u2014 the layout relationships (fire at the heart, shelters facing it, one way in) are what makes it read as a camp instead of a yard sale.",
+      "tags": [
+        "env",
+        "architecture"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object-name prefix for the camp's structures",
+            "default": "camp"
+          },
+          "radius": {
+            "type": "number",
+            "description": "Palisade ring radius in metres; shelters sit at ~55% of it",
+            "default": 8.0
+          },
+          "shelters": {
+            "type": "integer",
+            "description": "A-frame shelters around the fire",
+            "default": 5
+          },
+          "palisade": {
+            "type": "boolean",
+            "description": "Build the sharpened-log perimeter",
+            "default": true
+          },
+          "gate_angle": {
+            "type": "number",
+            "description": "Compass degrees the gate opening faces (0 = +X, 90 = +Y). The ONE way in \u2014 put it toward where threats should come from",
+            "default": 90.0
+          },
+          "well": {
+            "type": "boolean",
+            "description": "Stone well with windlass frame",
+            "default": true
+          },
+          "racks": {
+            "type": "integer",
+            "description": "Storage racks with sacks (0-3)",
+            "default": 1
+          },
+          "ground": {
+            "type": "boolean",
+            "description": "Flatten a dirt disc under the camp \u2014 helps dioramas; skip when the game supplies terrain",
+            "default": true
+          },
+          "wood_color": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 4
+              }
+            ],
+            "description": "Override the timber family colour",
+            "default": ""
+          },
+          "cloth_color": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 4
+              }
+            ],
+            "description": "Override the hide/cloth family colour",
+            "default": ""
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Layout seed \u2014 same seed, same camp, forever",
             "default": 0
           }
         },
@@ -3709,6 +3806,101 @@
             "type": "boolean",
             "description": "Report cost after KTX2/Basis transcoding (~8:1) instead of raw RGBA. Only set this once the cook step actually compresses, or the number is fiction",
             "default": false
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "image.analyze",
+      "summary": "Measure a concept image instead of eyeballing it: silhouette coverage and proportions, left-right symmetry, dominant and regional palette, and an honest recommendation \u2014 extrude it (image.to_mesh) or use it as parametric guidance for a recipe. The first step of concept art -> production asset.",
+      "tags": [
+        "inspect",
+        "image"
+      ],
+      "mutates": false,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Image file (PNG with alpha, or any subject on a fairly uniform background)"
+          },
+          "threshold": {
+            "type": "number",
+            "description": "Background distance cutoff when there is no alpha channel; raise if the backdrop bleeds into the subject",
+            "default": 0.06
+          },
+          "colors": {
+            "type": "integer",
+            "description": "Dominant palette colours to report",
+            "default": 5
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "image.to_mesh",
+      "summary": "Turn a concept image into a real 3D solid: extract the subject silhouette, extrude it with a bevelled rim, and map the source image onto the front face as a texture (or bake it to vertex colours). Returns the silhouette IoU against the source \u2014 'how close is the model to the picture' as a number, not a vibe. Emblems, totems, props, side-view creatures, relief work.",
+      "tags": [
+        "build",
+        "image"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Concept image (alpha or uniform background)"
+          },
+          "name": {
+            "type": "string",
+            "description": "Object name",
+            "default": "concept"
+          },
+          "target_height": {
+            "type": "number",
+            "description": "Silhouette height in metres; width follows the image aspect",
+            "default": 1.0
+          },
+          "depth": {
+            "type": "number",
+            "description": "Extrusion depth in metres along the view axis",
+            "default": 0.25
+          },
+          "bevel": {
+            "type": "number",
+            "description": "Rim chamfer \u2014 catches light so the edge reads; 0 disables",
+            "default": 0.02
+          },
+          "texture": {
+            "type": "string",
+            "enum": [
+              "project",
+              "vertex",
+              "none"
+            ],
+            "description": "project: map the source image on the front face; vertex: bake nearest pixel colours to COLOR_0; none: flat palette material",
+            "default": "project"
+          },
+          "simplify": {
+            "type": "number",
+            "description": "Contour simplification tolerance in working pixels \u2014 higher is fewer vertices and smoother shapes",
+            "default": 1.5
+          },
+          "threshold": {
+            "type": "number",
+            "description": "Background distance cutoff (no alpha)",
+            "default": 0.06
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Random seed (reserved; the mesh is a pure function of the image)",
+            "default": 0
           }
         },
         "additionalProperties": false

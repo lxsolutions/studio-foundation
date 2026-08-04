@@ -1,6 +1,6 @@
 # bforge op reference
 
-127 operations.
+130 operations.
 
 ## `arch.*`
 
@@ -450,7 +450,7 @@ Fit an armour or clothing piece to a char.humanoid body: cuirass, pteruges skirt
 | parameter | type | default | description |
 | --- | --- | --- | --- |
 | `name` | string | None | Body mesh (from char.humanoid) |
-| `piece` | cuirass \| pteruges \| greaves \| bracers \| helmet \| shield | 'cuirass' | What to fit. greaves and bracers come in pairs |
+| `piece` | cuirass \| pteruges \| greaves \| bracers \| helmet \| shield \| robe \| hood | 'cuirass' | What to fit. greaves and bracers come in pairs; robe is a full-length caster/priest garment, hood its matching cowl |
 | `height` | number | 0.0 | Character height; 0 measures the mesh bounds |
 | `build` | realistic \| heroic \| stylized \| chibi \| lithe | 'heroic' | Proportions the fit assumes — match the char.humanoid build |
 | `material` | bronze \| iron \| leather \| cloth | '' | Material family (defaults per piece: bronze for cuirass/greaves/helmet/shield, leather for pteruges/bracers). The families are deliberately far apart in colour and response — keep them that way |
@@ -602,6 +602,24 @@ Complete combat arena in one call: floor, tiered walls, entrance arches and corn
 | `color` | string | '' | Override colour |
 | `uv_scale` | number | 3.0 | Metres per UV tile |
 | `seed` | integer | 0 | Random seed |
+
+### `env.camp`
+
+A complete Age-1 settlement in one call: central fire (stones, log teepee, live embers), A-frame shelters ringing it, a stockade perimeter with a gate opening, a well, and storage racks on a deterministic seeded layout. The homeland diorama, not a bag of props — the layout relationships (fire at the heart, shelters facing it, one way in) are what makes it read as a camp instead of a yard sale.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `name` | string | 'camp' | Object-name prefix for the camp's structures |
+| `radius` | number | 8.0 | Palisade ring radius in metres; shelters sit at ~55% of it |
+| `shelters` | integer | 5 | A-frame shelters around the fire |
+| `palisade` | boolean | True | Build the sharpened-log perimeter |
+| `gate_angle` | number | 90.0 | Compass degrees the gate opening faces (0 = +X, 90 = +Y). The ONE way in — put it toward where threats should come from |
+| `well` | boolean | True | Stone well with windlass frame |
+| `racks` | integer | 1 | Storage racks with sacks (0-3) |
+| `ground` | boolean | True | Flatten a dirt disc under the camp — helps dioramas; skip when the game supplies terrain |
+| `wood_color` | any | '' | Override the timber family colour |
+| `cloth_color` | any | '' | Override the hide/cloth family colour |
+| `seed` | integer | 0 | Layout seed — same seed, same camp, forever |
 
 ### `env.cliff`
 
@@ -855,6 +873,34 @@ Measure what the textures actually cost in GPU memory and flag any over the plat
 | --- | --- | --- | --- |
 | `profile` | mobile_low \| mobile_high \| browser_webgl \| browser_webgpu \| desktop_high | 'browser_webgpu' | Target platform profile |
 | `assume_compressed` | boolean | False | Report cost after KTX2/Basis transcoding (~8:1) instead of raw RGBA. Only set this once the cook step actually compresses, or the number is fiction |
+
+## `image.*`
+
+### `image.analyze`
+
+Measure a concept image instead of eyeballing it: silhouette coverage and proportions, left-right symmetry, dominant and regional palette, and an honest recommendation — extrude it (image.to_mesh) or use it as parametric guidance for a recipe. The first step of concept art -> production asset.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `path` | string | None | Image file (PNG with alpha, or any subject on a fairly uniform background) |
+| `threshold` | number | 0.06 | Background distance cutoff when there is no alpha channel; raise if the backdrop bleeds into the subject |
+| `colors` | integer | 5 | Dominant palette colours to report |
+
+### `image.to_mesh`
+
+Turn a concept image into a real 3D solid: extract the subject silhouette, extrude it with a bevelled rim, and map the source image onto the front face as a texture (or bake it to vertex colours). Returns the silhouette IoU against the source — 'how close is the model to the picture' as a number, not a vibe. Emblems, totems, props, side-view creatures, relief work.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `path` | string | None | Concept image (alpha or uniform background) |
+| `name` | string | 'concept' | Object name |
+| `target_height` | number | 1.0 | Silhouette height in metres; width follows the image aspect |
+| `depth` | number | 0.25 | Extrusion depth in metres along the view axis |
+| `bevel` | number | 0.02 | Rim chamfer — catches light so the edge reads; 0 disables |
+| `texture` | project \| vertex \| none | 'project' | project: map the source image on the front face; vertex: bake nearest pixel colours to COLOR_0; none: flat palette material |
+| `simplify` | number | 1.5 | Contour simplification tolerance in working pixels — higher is fewer vertices and smoother shapes |
+| `threshold` | number | 0.06 | Background distance cutoff (no alpha) |
+| `seed` | integer | 0 | Random seed (reserved; the mesh is a pure function of the image) |
 
 ## `kit.*`
 

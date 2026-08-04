@@ -4,6 +4,7 @@ Layering, low to high:
 
     session   scene lifecycle, inspection, transforms
     build     parametric primitives and mesh editing
+    image     concept image -> production mesh (silhouette extrusion)
     material  PBR + procedural materials, baking
     uv        unwrapping and UV measurement
     paint     vertex colours, exported as glTF COLOR_0
@@ -20,6 +21,7 @@ Layering, low to high:
 
 from . import session  # noqa: F401  (import order = registration order)
 from . import build  # noqa: F401
+from . import image  # noqa: F401
 from . import arch  # noqa: F401
 from . import material  # noqa: F401
 from . import uv  # noqa: F401
