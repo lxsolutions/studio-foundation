@@ -15,6 +15,7 @@ from __future__ import annotations
 import re
 
 import bpy
+from lib import mat as mat_lib
 from lib import mesh as mesh_lib
 from lib import scene as scene_lib
 from lib import uvs as uv_lib
@@ -348,9 +349,348 @@ def check_critique(ctx, objects, texture_size):
 
 
 @op(
-    "check.image",
-    summary="Measure an image instead of eyeballing it: luminance range, blown highlights, crushed blacks, contrast, saturation, dominant colours and subject coverage. Reading a render is slow and cannot tell 'the asset is wrong' from 'the render is over-lit'. These numbers can, in a fraction of the time.",
+    "check.materials",
+    summary="Measure whether an asset's materials are actually distinguishable — the '8 materials, all the same brown' failure that produces mud-blob characters. Reports every material's colour in CIELAB and the pairwise perceptual distance (ΔE); fails when several materials are perceptually identical or share one roughness/metallic signature.",
     params={
+        "objects": ("str[]", [], "Objects whose materials to measure (empty = every mesh)"),
+        "min_delta_e": ("num", 12.0, "Perceptual-separation floor in ΔE76. Below ~6 the difference is invisible in game; 12 is a safe bar for metal vs leather vs cloth"),
+    },
+    tags=["check", "inspect", "material"],
+    mutates=False,
+)
+def check_materials(ctx, objects, min_delta_e):
+    targets = [_get(n) for n in objects] if objects else scene_lib.mesh_objects()
+    targets = [o for o in targets if o.type == "MESH"]
+    if not targets:
+        raise OpError("no mesh objects to measure materials on")
+
+    materials = []
+    seen = set()
+    for obj in targets:
+        for material in obj.data.materials:
+            if material is None or material.name in seen:
+                continue
+            seen.add(material.name)
+            materials.append(_material_appearance(material))
+
+    for entry in materials:
+        entry["lab"] = [round(c, 2) for c in _linear_rgb_to_lab(*entry["base_color"][:3])]
+
+    pairs = []
+    for i in range(len(materials)):
+        for j in range(i + 1, len(materials)):
+            a, b = materials[i]["lab"], materials[j]["lab"]
+            delta = sum((a[k] - b[k]) ** 2 for k in range(3)) ** 0.5
+            pairs.append({"a": materials[i]["name"], "b": materials[j]["name"], "delta_e": round(delta, 2)})
+
+    findings = []
+    max_pair = max(pairs, key=lambda p: p["delta_e"]) if pairs else None
+    if len(materials) >= 3 and max_pair and max_pair["delta_e"] < min_delta_e:
+        findings.append(
+            {
+                "object": f"{len(materials)} materials",
+                "severity": "error",
+                "issue": "perceptually identical materials",
+                "detail": f"the most distant pair ('{max_pair['a']}' vs '{max_pair['b']}') is only "
+                          f"ΔE {max_pair['delta_e']:.1f} — every material reads as the same "
+                          "substance, so the asset renders as one flat mass no matter how many "
+                          "slots it has. This is the single most common reason generated "
+                          "characters look like brown blobs",
+                "fix": "separate metal/leather/cloth/skin with material.set + material.pbr "
+                       "(distinct base colours AND roughness/metallic), then add wear with "
+                       "paint.cavity and paint.height",
+            }
+        )
+    if len(materials) >= 2:
+        rough = [m["roughness"] for m in materials]
+        metal = [m["metallic"] for m in materials]
+        if max(rough) - min(rough) < 0.05 and max(metal) - min(metal) < 0.05:
+            findings.append(
+                {
+                    "object": f"{len(materials)} materials",
+                    "severity": "warn",
+                    "issue": "no material language",
+                    "detail": f"all materials share roughness {rough[0]:.2f} and metallic "
+                              f"{metal[0]:.2f} — even distinct colours will read as one "
+                              "substance because light responds identically to all of them",
+                    "fix": "spread the response: metal metallic=1 roughness~0.3, leather "
+                           "metallic=0 roughness~0.7, cloth roughness~0.9 (material.set)",
+                }
+            )
+
+    return {
+        "materials": materials,
+        "pairs": pairs,
+        "max_delta_e": max_pair["delta_e"] if max_pair else None,
+        "findings": findings,
+        "separated": not findings,
+        "note": "colours are linear-space base colours; ΔE76 below ~6 is invisible at gameplay distance",
+    }
+
+
+def _material_appearance(material):
+    """Base colour / roughness / metallic for a material, nodes or not."""
+    if material.use_nodes:
+        described = mat_lib._describes(material)
+        if described is not None:
+            base, roughness, metallic = described[0], described[1], described[2]
+            return {
+                "name": material.name,
+                "base_color": [round(float(c), 4) for c in base[:3]],
+                "hex": "#" + "".join(
+                    f"{max(0, min(255, round(_linear_to_srgb(float(c)) * 255))):02x}"
+                    for c in base[:3]
+                ),
+                "roughness": round(float(roughness), 4),
+                "metallic": round(float(metallic), 4),
+            }
+    base = tuple(material.diffuse_color)
+    return {
+        "name": material.name,
+        "base_color": [round(float(c), 4) for c in base[:3]],
+        "hex": "#" + "".join(
+            f"{max(0, min(255, round(_linear_to_srgb(float(c)) * 255))):02x}" for c in base[:3]
+        ),
+        "roughness": round(float(getattr(material, "roughness", 0.5)), 4),
+        "metallic": round(float(getattr(material, "metallic", 0.0)), 4),
+    }
+
+
+def _linear_rgb_to_lab(r, g, b):
+    """Linear sRGB -> CIELAB (D65). Deterministic stdlib math; ΔE76 is the
+    Euclidean distance in this space."""
+    x = r * 0.4124 + g * 0.3576 + b * 0.1805
+    y = r * 0.2126 + g * 0.7152 + b * 0.0722
+    z = r * 0.0193 + g * 0.1192 + b * 0.9505
+
+    def f(t):
+        return t ** (1.0 / 3.0) if t > 0.008856 else 7.787 * t + 16.0 / 116.0
+
+    fx, fy, fz = f(x / 0.95047), f(y), f(z / 1.08883)
+    return (116.0 * fy - 16.0, 500.0 * (fx - fy), 200.0 * (fy - fz))
+
+
+@op(
+    "check.style",
+    summary="Compute the style fingerprint of every mesh: area-weighted palette (in CIELAB), texel density, triangle density, hard-edge ratio, material count, UV coverage. This is the raw material of art direction — 'do these 40 assets look like one game' is unanswerable without it.",
+    params={
+        "objects": ("str[]", [], "Objects to fingerprint (empty = every mesh)"),
+        "texture_size": ("int", 1024, "Texture resolution the texel-density figure assumes"),
+        "palette_size": ("int", 4, "Dominant colours to keep per object, area-weighted"),
+    },
+    tags=["check", "inspect", "material"],
+    mutates=False,
+)
+def check_style(ctx, objects, texture_size, palette_size):
+    targets = [_get(n) for n in objects] if objects else scene_lib.mesh_objects()
+    targets = [o for o in targets if o.type == "MESH"]
+    if not targets:
+        raise OpError("no mesh objects to fingerprint")
+
+    fingerprints = [_fingerprint(o, texture_size, palette_size) for o in targets]
+    texels = [f["texel_density"] for f in fingerprints if f["texel_density"] > 0]
+    return {
+        "objects": fingerprints,
+        "set": {
+            "count": len(fingerprints),
+            "median_texel_density": _median(texels) if texels else 0.0,
+            "median_hard_edge_ratio": _median([f["hard_edge_ratio"] for f in fingerprints]),
+            "median_tris_per_m3": _median([f["tris_per_m3"] for f in fingerprints]),
+        },
+    }
+
+
+@op(
+    "check.conformance",
+    summary="Score how well each object conforms to the set's (or a reference object's) style fingerprint. Names the exact axis that breaks coherence — palette drift, texel-density mismatch, density outlier, edge-treatment drift — with the op that fixes it. The art-director gate: run it over a whole pack before export.",
+    params={
+        "objects": ("str[]", [], "Objects to score (empty = every mesh)"),
+        "reference": ("str", "", "Conform to THIS object's fingerprint instead of the set median"),
+        "texture_size": ("int", 1024, "Texture resolution the texel-density figure assumes"),
+    },
+    tags=["check", "inspect", "material"],
+    mutates=False,
+)
+def check_conformance(ctx, objects, reference, texture_size):
+    targets = [_get(n) for n in objects] if objects else scene_lib.mesh_objects()
+    targets = [o for o in targets if o.type == "MESH"]
+    if len(targets) < 2:
+        raise OpError("conformance needs at least two objects — a set, or an object plus its reference")
+
+    prints = {o.name: _fingerprint(o, texture_size, 4) for o in targets}
+    if reference:
+        if reference not in prints:
+            raise OpError(f"reference '{reference}' is not among the objects")
+        anchor = prints[reference]
+    else:
+        anchor = {
+            "palette": _set_palette(list(prints.values())),
+            "texel_density": _median([f["texel_density"] for f in prints.values()
+                                      if f["texel_density"] > 0] or [0.0]),
+            "hard_edge_ratio": _median([f["hard_edge_ratio"] for f in prints.values()]),
+            "tris_per_m3": _median([f["tris_per_m3"] for f in prints.values()]),
+            "materials": _median([f["materials"] for f in prints.values()]),
+        }
+
+    results = []
+    for name, fp in prints.items():
+        axes = {
+            "palette": _palette_distance(fp["palette"], anchor["palette"]),
+            "texel_density": _ratio_off(fp["texel_density"], anchor["texel_density"]),
+            "hard_edge": abs(fp["hard_edge_ratio"] - anchor["hard_edge_ratio"]),
+            "tris_density": _ratio_off(fp["tris_per_m3"], anchor["tris_per_m3"]),
+            "materials": abs(fp["materials"] - anchor["materials"]),
+        }
+        # Penalty weights tuned so each axis fires at its known coherence-break
+        # point: texel >2.5x (ADR-level finding), palette ΔE ~12 (the blob
+        # floor), hard-edge drift ~0.35, density ~4x, material count ±2.
+        penalty = min(100.0,
+                      axes["palette"] / 12.0 * 25.0
+                      + max(0.0, axes["texel_density"] - 1.0) * 20.0
+                      + axes["hard_edge"] / 0.35 * 15.0
+                      + max(0.0, axes["tris_density"] - 2.0) * 10.0
+                      + axes["materials"] / 2.0 * 10.0)
+        score = round(max(0.0, 100.0 - penalty), 1)
+        worst = max(axes, key=lambda a: (
+            axes["palette"] / 12.0 * 25.0 if a == "palette" else
+            max(0.0, axes["texel_density"] - 1.0) * 20.0 if a == "texel_density" else
+            axes["hard_edge"] / 0.35 * 15.0 if a == "hard_edge" else
+            max(0.0, axes["tris_density"] - 2.0) * 10.0 if a == "tris_density" else
+            axes["materials"] / 2.0 * 10.0))
+        verdict = ("coherent" if score >= 75 else
+                   "drifting" if score >= 45 else "outlier")
+        results.append({
+            "object": name,
+            "score": score,
+            "verdict": verdict,
+            "axes": {k: round(v, 3) for k, v in axes.items()},
+            "worst_axis": worst,
+            "fix": _conformance_fix(name, worst, axes),
+        })
+
+    results.sort(key=lambda r: r["score"])
+    return {
+        "reference": reference or "(set median)",
+        "objects": results,
+        "coherent": sum(1 for r in results if r["verdict"] == "coherent"),
+        "outliers": [r["object"] for r in results if r["verdict"] == "outlier"],
+    }
+
+
+def _fingerprint(obj, texture_size, palette_size):
+    import bmesh
+
+    mesh = obj.data
+    tris = mesh_lib.tri_count(obj)
+    bounds = mesh_lib.bounds(obj)
+    volume = max(1e-6, bounds["size"][0] * bounds["size"][1] * bounds["size"][2])
+
+    # Area-weighted palette from the materials actually facing outward.
+    areas = {}
+    for poly in mesh.polygons:
+        if poly.material_index < len(mesh.materials) and mesh.materials[poly.material_index]:
+            key = mesh.materials[poly.material_index].name
+            areas[key] = areas.get(key, 0.0) + poly.area
+    palette = []
+    total_area = sum(areas.values()) or 1.0
+    for mat_name, area in sorted(areas.items(), key=lambda kv: -kv[1])[:palette_size]:
+        appearance = _material_appearance(bpy.data.materials[mat_name])
+        palette.append({
+            "material": mat_name,
+            "hex": appearance["hex"],
+            "lab": [round(c, 2) for c in _linear_rgb_to_lab(*appearance["base_color"])],
+            "share": round(area / total_area, 3),
+        })
+
+    bm = bmesh.new()
+    bm.from_mesh(mesh)
+    hard = 0
+    for edge in bm.edges:
+        if len(edge.link_faces) == 2:
+            angle = edge.link_faces[0].normal.angle(edge.link_faces[1].normal)
+            if angle > 0.61:  # ~35 degrees, matching the studio shade threshold
+                hard += 1
+    boundary = sum(1 for e in bm.edges if len(e.link_faces) == 1)
+    bm.free()
+    solid = max(1, len(mesh.edges) - boundary)
+
+    uv_stats = uv_lib.stats(obj, texture_size=texture_size)
+    return {
+        "name": obj.name,
+        "triangles": tris,
+        "tris_per_m3": round(tris / volume, 1),
+        "materials": len(areas),
+        "palette": palette,
+        "texel_density": uv_stats.get("texel_density_px_per_m", 0.0),
+        "uv_coverage": uv_stats.get("coverage", 0.0),
+        "hard_edge_ratio": round(hard / solid, 3),
+    }
+
+
+def _median(values):
+    ordered = sorted(values)
+    mid = len(ordered) // 2
+    if len(ordered) % 2:
+        return ordered[mid]
+    return (ordered[mid - 1] + ordered[mid]) / 2.0
+
+
+def _set_palette(fps):
+    merged = {}
+    for fp in fps:
+        for entry in fp["palette"]:
+            key = entry["hex"]
+            if key not in merged or entry["share"] > merged[key]["share"]:
+                merged[key] = entry
+    return sorted(merged.values(), key=lambda e: -e["share"])[:6]
+
+
+def _palette_distance(palette, anchor_palette):
+    """Mean ΔE from each of the object's colours to the nearest anchor colour."""
+    if not palette or not anchor_palette:
+        return 0.0
+    total = 0.0
+    weight = 0.0
+    for entry in palette:
+        best = min(
+            sum((entry["lab"][k] - anchor["lab"][k]) ** 2 for k in range(3)) ** 0.5
+            for anchor in anchor_palette
+        )
+        total += best * entry["share"]
+        weight += entry["share"]
+    return total / max(weight, 1e-6)
+
+
+def _ratio_off(value, anchor):
+    """log2-style fold distance from the anchor: 0 = identical, 1 = 2x off."""
+    if value <= 0 or anchor <= 0:
+        return 0.0
+    import math as _math
+    return abs(_math.log2(value / anchor))
+
+
+def _conformance_fix(name, worst, axes):
+    if worst == "palette":
+        return (f"'{name}' palette drifts ΔE {axes['palette']:.1f} from the set — "
+                "re-colour with material.set using the set's hex values (check.style "
+                "prints them), then re-run check.conformance")
+    if worst == "texel_density":
+        return (f"'{name}' texel density is {axes['texel_density']:.1f} doublings off the "
+                "set — re-unwrap with uv.unwrap using the SAME uv_scale as the rest of "
+                "the pack")
+    if worst == "hard_edge":
+        return (f"'{name}' edge treatment differs — object.shade angle=35 to match the "
+                "studio threshold, or add the missing chamfer with build.bevel")
+    if worst == "tris_density":
+        return (f"'{name}' spends triangles {axes['tris_density']:.1f} doublings off the "
+                "set's density — gameready.optimize or raise the generator detail to match")
+    return (f"'{name}' uses {axes['materials']:.0f} more/fewer materials than the set — "
+            "gameready.atlas or material.consolidate")
+
+
+@op(
+    "check.image",
+    summary="Measure an image instead of eyeballing it: luminance range, blown highlights, crushed blacks, contrast, saturation, dominant colours and subject coverage. Reading a render is slow and cannot tell 'the asset is wrong' from 'the render is over-lit'. These numbers can, in a fraction of the time.",    params={
         "path": ("path", None, "PNG to analyse — a render, a contact sheet, or a baked texture"),
         "colors": ("int", 6, "How many dominant colours to report"),
         "background": ("color", [0.05, 0.055, 0.065, 1.0], "Backdrop colour, excluded from subject stats"),

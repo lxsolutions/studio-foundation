@@ -18,7 +18,11 @@ def reset_scene(ctx, unit_scale=1.0):
     scene.unit_settings.system = "METRIC"
     scene.unit_settings.scale_length = unit_scale
     scene.unit_settings.length_unit = "METERS"
-    scene.render.engine = "BLENDER_EEVEE"
+    # EEVEE was renamed to EEVEE Next in Blender 4.2; pick whichever exists.
+    engines = {item.identifier for item in scene.render.bl_rna.properties["engine"].enum_items}
+    scene.render.engine = (
+        "BLENDER_EEVEE_NEXT" if "BLENDER_EEVEE_NEXT" in engines else "BLENDER_EEVEE"
+    )
     scene.render.fps = 30
     scene.frame_start = 1
     scene.frame_end = 1

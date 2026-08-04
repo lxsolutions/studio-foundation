@@ -498,6 +498,64 @@ def gameready_socket(ctx, name, parent, location, rotation, size):
     }
 
 
+@op(
+    "gameready.review",
+    summary="The quality gate: aggregate check.critique and check.materials into one pass/fail verdict before export. Exists because quality steps that are optional get skipped — a scene that passes this cannot ship the mud-blob failure (perceptually identical materials), broken geometry, or missing UVs without knowing it.",
+    params={
+        "objects": ("str[]", [], "Objects to review (empty = every mesh in the scene)"),
+        "severity": ("enum:error|warn", "error", "Findings at this level or worse fail the gate. 'error' blocks only what corrupts or reads as broken; 'warn' also blocks advisories like texel-density spread"),
+        "style": ("enum:stylized|realistic", "stylized", "'realistic' additionally fails an asset whose materials are ALL flat untextured colour — bake material.bake_pbr or pick the stylized look deliberately"),
+        "min_delta_e": ("num", 12.0, "Material-separation floor in ΔE76, passed to check.materials"),
+    },
+    tags=["gameready", "check"],
+    mutates=False,
+)
+def gameready_review(ctx, objects, severity, style, min_delta_e):
+    from . import check as check_ops
+
+    critique = check_ops.check_critique(ctx, objects, 1024)
+    materials = check_ops.check_materials(ctx, objects, min_delta_e)
+
+    findings = list(critique["findings"]) + list(materials["findings"])
+    if style == "realistic":
+        textured = any(
+            material.use_nodes
+            and any(n.type == "TEX_IMAGE" for n in material.node_tree.nodes)
+            for material in bpy.data.materials
+        )
+        if not textured and materials["materials"]:
+            findings.append(
+                {
+                    "object": f"{len(materials['materials'])} materials",
+                    "severity": "error",
+                    "issue": "flat colours only under a realistic brief",
+                    "detail": "not one material carries a texture — at realistic art direction "
+                              "that reads as untextured blockout, not as a finished surface",
+                    "fix": "run material.bake_pbr (and material.bake_detail if a high-detail "
+                           "source exists), or review again with style='stylized'",
+                }
+            )
+
+    ranks = {"error": 0, "warn": 1, "info": 2}
+    floor = ranks[severity]
+    blocking = [f for f in findings if ranks.get(f["severity"], 3) <= floor]
+    findings.sort(key=lambda f: ranks.get(f["severity"], 3))
+    return {
+        "passed": not blocking,
+        "blocking": len(blocking),
+        "findings": findings,
+        "summary": {
+            "objects": len(critique["objects"]),
+            "critique_errors": critique["errors"],
+            "critique_warnings": critique["warnings"],
+            "max_delta_e": materials["max_delta_e"],
+            "style": style,
+            "severity_floor": severity,
+        },
+        "note": "every finding names the op that fixes it; export.asset runs this gate by default (gate=false overrides deliberately)",
+    }
+
+
 def _get(name):
     try:
         return scene_lib.get_object(name)

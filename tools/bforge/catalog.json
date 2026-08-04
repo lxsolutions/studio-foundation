@@ -1604,7 +1604,10 @@
               "attack",
               "jump",
               "death",
-              "wave"
+              "wave",
+              "trot",
+              "gallop",
+              "graze"
             ],
             "description": "Which clip to author",
             "default": "idle"
@@ -1725,6 +1728,211 @@
       }
     },
     {
+      "name": "char.creature",
+      "summary": "Proportioned quadruped body (canine/equine/feline/generic) or hexapod (insect: scarab class, three leg stations). Pair with char.creature_rig and char.animate \u2014 walk/trot/gallop/graze for quadrupeds, tripod-gait walk for hexapods. Deterministic, data-API only, metres.",
+      "tags": [
+        "char"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object name",
+            "default": "creature"
+          },
+          "length": {
+            "type": "number",
+            "description": "Body length in metres (chest-to-hip; abdomen-tip to head for insect)",
+            "default": 1.4
+          },
+          "shoulder": {
+            "type": "number",
+            "description": "Shoulder height in metres (thorax height for insect)",
+            "default": 0.9
+          },
+          "plan": {
+            "type": "string",
+            "enum": [
+              "canine",
+              "equine",
+              "feline",
+              "generic",
+              "insect"
+            ],
+            "description": "Body plan \u2014 quadruped proportions or the hexapod scarab class",
+            "default": "canine"
+          },
+          "bulk": {
+            "type": "number",
+            "description": "Extra girth multiplier",
+            "default": 1.0
+          },
+          "detail": {
+            "type": "integer",
+            "description": "Limb cross-section segments",
+            "default": 8
+          },
+          "location": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World position",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "skin": {
+            "type": "string",
+            "description": "Body colour",
+            "default": "#7a6248"
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Random seed",
+            "default": 0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "char.creature_rig",
+      "summary": "Build a quadruped armature (hips root, spine chain, neck/head, 2-segment tail, 3-bone legs at both stations) fitted to a char.creature body, and skin it with the same shell-constrained distance-falloff solve as char.rig.",
+      "tags": [
+        "char",
+        "rig"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Creature mesh object (from char.creature)"
+          },
+          "length": {
+            "type": "number",
+            "description": "Chest-to-hip length; 0 measures from the mesh bounds Y extent",
+            "default": 0.0
+          },
+          "shoulder": {
+            "type": "number",
+            "description": "Shoulder height; 0 measures from the mesh bounds Z extent",
+            "default": 0.0
+          },
+          "plan": {
+            "type": "string",
+            "enum": [
+              "canine",
+              "equine",
+              "feline",
+              "generic",
+              "insect"
+            ],
+            "description": "Body plan the rig assumes \u2014 match char.creature",
+            "default": "canine"
+          },
+          "falloff": {
+            "type": "number",
+            "description": "Weight blend sharpness; higher is more rigid",
+            "default": 1.6
+          },
+          "armature_name": {
+            "type": "string",
+            "description": "Armature object name (defaults to <mesh>_rig)",
+            "default": ""
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "char.face",
+      "summary": "Give a char.humanoid head a readable face \u2014 brow ridge, nose wedge, chin \u2014 so a close-up review render reads as a person, not a box. Stylised readability, not realism. Geometry is welded into the body mesh and takes the head bone when skinned.",
+      "tags": [
+        "char"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Body mesh (from char.humanoid)"
+          },
+          "height": {
+            "type": "number",
+            "description": "Character height; 0 measures the mesh bounds",
+            "default": 0.0
+          },
+          "build": {
+            "type": "string",
+            "enum": [
+              "realistic",
+              "heroic",
+              "stylized",
+              "chibi",
+              "lithe"
+            ],
+            "description": "Proportions \u2014 match the char.humanoid build",
+            "default": "heroic"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "char.hands",
+      "summary": "Upgrade a char.humanoid's block hands with readable fingers: four two-segment fingers with a relaxed curl plus a thumb, so a weapon grip or open hand reads at review distance. Welded into the body mesh; the hand bones own them when skinned.",
+      "tags": [
+        "char"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Body mesh (from char.humanoid)"
+          },
+          "height": {
+            "type": "number",
+            "description": "Character height; 0 measures the mesh bounds",
+            "default": 0.0
+          },
+          "build": {
+            "type": "string",
+            "enum": [
+              "realistic",
+              "heroic",
+              "stylized",
+              "chibi",
+              "lithe"
+            ],
+            "description": "Proportions \u2014 match the char.humanoid build",
+            "default": "heroic"
+          },
+          "curl": {
+            "type": "number",
+            "description": "Finger curl in radians-ish (0 flat, 0.8 fist); a relaxed read is ~0.35",
+            "default": 0.35
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "char.humanoid",
       "summary": "Proportioned humanoid blockout using classic figure-drawing head ratios (7.5 realistic, 8 heroic, 4 chibi). ~1400 tris. Pair with char.rig and char.animate for a complete animated character.",
       "tags": [
@@ -1789,6 +1997,112 @@
           "seed": {
             "type": "integer",
             "description": "Random seed",
+            "default": 0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "char.outfit",
+      "summary": "Fit an armour or clothing piece to a char.humanoid body: cuirass, pteruges skirt, greaves, bracers, helmet or round shield. Fit is derived from the body's own proportions, materials are perceptually distinct by construction (this is the anti 'brown blob' op), and pieces bone-parent to the rig when one exists so they animate with the character.",
+      "tags": [
+        "char"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Body mesh (from char.humanoid)"
+          },
+          "piece": {
+            "type": "string",
+            "enum": [
+              "cuirass",
+              "pteruges",
+              "greaves",
+              "bracers",
+              "helmet",
+              "shield"
+            ],
+            "description": "What to fit. greaves and bracers come in pairs",
+            "default": "cuirass"
+          },
+          "height": {
+            "type": "number",
+            "description": "Character height; 0 measures the mesh bounds",
+            "default": 0.0
+          },
+          "build": {
+            "type": "string",
+            "enum": [
+              "realistic",
+              "heroic",
+              "stylized",
+              "chibi",
+              "lithe"
+            ],
+            "description": "Proportions the fit assumes \u2014 match the char.humanoid build",
+            "default": "heroic"
+          },
+          "material": {
+            "type": "string",
+            "enum": [
+              "bronze",
+              "iron",
+              "leather",
+              "cloth"
+            ],
+            "description": "Material family (defaults per piece: bronze for cuirass/greaves/helmet/shield, leather for pteruges/bracers). The families are deliberately far apart in colour and response \u2014 keep them that way",
+            "default": ""
+          },
+          "color": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 4
+              }
+            ],
+            "description": "Override colour; stay clear of the other pieces' colours or check.materials will fail the set",
+            "default": ""
+          },
+          "crest": {
+            "type": "string",
+            "enum": [
+              "none",
+              "longitudinal",
+              "transverse"
+            ],
+            "description": "helmet: crest ridge orientation",
+            "default": "longitudinal"
+          },
+          "side": {
+            "type": "string",
+            "enum": [
+              "l",
+              "r"
+            ],
+            "description": "shield: which forearm carries it",
+            "default": "l"
+          },
+          "gap": {
+            "type": "number",
+            "description": "Clearance between body and armour in metres; raise for bulky bodies",
+            "default": 0.012
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Random seed (reserved; current pieces are fully deterministic)",
             "default": 0
           }
         },
@@ -1916,6 +2230,41 @@
       }
     },
     {
+      "name": "check.conformance",
+      "summary": "Score how well each object conforms to the set's (or a reference object's) style fingerprint. Names the exact axis that breaks coherence \u2014 palette drift, texel-density mismatch, density outlier, edge-treatment drift \u2014 with the op that fixes it. The art-director gate: run it over a whole pack before export.",
+      "tags": [
+        "check",
+        "inspect",
+        "material"
+      ],
+      "mutates": false,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "objects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Objects to score (empty = every mesh)",
+            "default": []
+          },
+          "reference": {
+            "type": "string",
+            "description": "Conform to THIS object's fingerprint instead of the set median",
+            "default": ""
+          },
+          "texture_size": {
+            "type": "integer",
+            "description": "Texture resolution the texel-density figure assumes",
+            "default": 1024
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "check.critique",
       "summary": "Quality critique with specific, actionable findings: triangle-density hot spots, degenerate and n-gon faces, UV stretch, texel-density mismatch between objects, non-manifold edges, unused material slots. Pair it with render.contact_sheet \u2014 numbers plus eyes.",
       "tags": [
@@ -1985,6 +2334,36 @@
       }
     },
     {
+      "name": "check.materials",
+      "summary": "Measure whether an asset's materials are actually distinguishable \u2014 the '8 materials, all the same brown' failure that produces mud-blob characters. Reports every material's colour in CIELAB and the pairwise perceptual distance (\u0394E); fails when several materials are perceptually identical or share one roughness/metallic signature.",
+      "tags": [
+        "check",
+        "inspect",
+        "material"
+      ],
+      "mutates": false,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "objects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Objects whose materials to measure (empty = every mesh)",
+            "default": []
+          },
+          "min_delta_e": {
+            "type": "number",
+            "description": "Perceptual-separation floor in \u0394E76. Below ~6 the difference is invisible in game; 12 is a safe bar for metal vs leather vs cloth",
+            "default": 12.0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "check.silhouette",
       "summary": "Score how readable an object's silhouette is from the standard game camera angles. A prop that fails here will not read at gameplay distance no matter how good its texture is.",
       "tags": [
@@ -2004,6 +2383,41 @@
             "type": "integer",
             "description": "Rays per axis for the projected-area estimate",
             "default": 64
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "check.style",
+      "summary": "Compute the style fingerprint of every mesh: area-weighted palette (in CIELAB), texel density, triangle density, hard-edge ratio, material count, UV coverage. This is the raw material of art direction \u2014 'do these 40 assets look like one game' is unanswerable without it.",
+      "tags": [
+        "check",
+        "inspect",
+        "material"
+      ],
+      "mutates": false,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "objects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Objects to fingerprint (empty = every mesh)",
+            "default": []
+          },
+          "texture_size": {
+            "type": "integer",
+            "description": "Texture resolution the texel-density figure assumes",
+            "default": 1024
+          },
+          "palette_size": {
+            "type": "integer",
+            "description": "Dominant colours to keep per object, area-weighted",
+            "default": 4
           }
         },
         "additionalProperties": false
@@ -2676,6 +3090,20 @@
             "type": "boolean",
             "description": "Block export on problems that would corrupt the import",
             "default": true
+          },
+          "gate": {
+            "type": "boolean",
+            "description": "Run gameready.review before writing anything; a failed review blocks the hand-off. Set false only for deliberate blockouts",
+            "default": true
+          },
+          "style": {
+            "type": "string",
+            "enum": [
+              "stylized",
+              "realistic"
+            ],
+            "description": "Art direction passed to gameready.review when gate=true",
+            "default": "stylized"
           }
         },
         "additionalProperties": false
@@ -3144,6 +3572,53 @@
             "type": "boolean",
             "description": "Also move the object itself to (0,0,0). Required for a single-asset master file \u2014 the studio validator rejects a root object that is not at the world origin",
             "default": false
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "gameready.review",
+      "summary": "The quality gate: aggregate check.critique and check.materials into one pass/fail verdict before export. Exists because quality steps that are optional get skipped \u2014 a scene that passes this cannot ship the mud-blob failure (perceptually identical materials), broken geometry, or missing UVs without knowing it.",
+      "tags": [
+        "gameready",
+        "check"
+      ],
+      "mutates": false,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "objects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Objects to review (empty = every mesh in the scene)",
+            "default": []
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "error",
+              "warn"
+            ],
+            "description": "Findings at this level or worse fail the gate. 'error' blocks only what corrupts or reads as broken; 'warn' also blocks advisories like texel-density spread",
+            "default": "error"
+          },
+          "style": {
+            "type": "string",
+            "enum": [
+              "stylized",
+              "realistic"
+            ],
+            "description": "'realistic' additionally fails an asset whose materials are ALL flat untextured colour \u2014 bake material.bake_pbr or pick the stylized look deliberately",
+            "default": "stylized"
+          },
+          "min_delta_e": {
+            "type": "number",
+            "description": "Material-separation floor in \u0394E76, passed to check.materials",
+            "default": 12.0
           }
         },
         "additionalProperties": false
@@ -4244,6 +4719,165 @@
       }
     },
     {
+      "name": "morph.add",
+      "summary": "Add a shape key that displaces vertices by a deterministic rule \u2014 dent a crate for a damage state, inflate a cartoon prop, taper a tree trunk, bulge a cartoon cheek. Exports to glTF as a morph target on top of Basis.",
+      "tags": [
+        "morph"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Mesh object to add the shape key to"
+          },
+          "key": {
+            "type": "string",
+            "description": "Shape key name \u2014 this becomes the glTF morph target name (extras.targetNames), so make it meaningful: 'dented', 'inflate', 'blink'"
+          },
+          "rule": {
+            "type": "string",
+            "enum": [
+              "inflate",
+              "dent",
+              "flatten",
+              "taper",
+              "bulge"
+            ],
+            "description": "Displacement rule: inflate pushes verts out along their normals, dent pulls verts inside `radius` toward `center`, bulge pushes them away, flatten squashes toward the center plane along `axis`, taper scales the cross-section down along `axis`",
+            "default": "dent"
+          },
+          "amount": {
+            "type": "number",
+            "description": "Displacement in metres (flatten/taper: 0..1 fraction of the way)",
+            "default": 0.1
+          },
+          "axis": {
+            "type": "string",
+            "enum": [
+              "x",
+              "y",
+              "z"
+            ],
+            "description": "Axis for flatten and taper (z is up)",
+            "default": "z"
+          },
+          "center": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "Local-space point the rule acts around; omit to use the centre of the mesh's own bounds"
+          },
+          "radius": {
+            "type": "number",
+            "description": "Reach of the effect in metres \u2014 verts beyond this from `center` are untouched (taper: full axis half-extent)",
+            "default": 1.0
+          },
+          "falloff": {
+            "type": "string",
+            "enum": [
+              "smooth",
+              "linear"
+            ],
+            "description": "How the effect fades toward `radius`; smooth eases out, linear is a straight ramp",
+            "default": "smooth"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "morph.animate",
+      "summary": "Keyframe a shape key's weight over time so glTF exports a morph-target animation channel \u2014 a crate denting on impact, a chest lid swell, a pulsing crystal. Follows the same action idiom as char.animate.",
+      "tags": [
+        "morph",
+        "anim"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Mesh object with the shape key"
+          },
+          "key": {
+            "type": "string",
+            "description": "Shape key name to animate"
+          },
+          "frames": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "description": "Frame numbers, e.g. [1, 12, 24]; must be the same length as `values`"
+          },
+          "values": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "description": "Weight at each frame (0..1), e.g. [0, 1, 0] pops the morph and settles back"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "morph.list",
+      "summary": "Report an object's shape keys: names, slider ranges and current values. Check this before morph.animate \u2014 the key name must match exactly.",
+      "tags": [
+        "morph",
+        "inspect"
+      ],
+      "mutates": false,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Mesh object to inspect"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "morph.set",
+      "summary": "Set a shape key's slider value (0..1) for review renders \u2014 pose the dent at 60% before render.contact_sheet so the still shows the damaged state.",
+      "tags": [
+        "morph"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Mesh object with the shape key"
+          },
+          "key": {
+            "type": "string",
+            "description": "Shape key name (from morph.add or morph.list)"
+          },
+          "value": {
+            "type": "number",
+            "description": "Slider weight, clamped to 0..1: 0 is Basis, 1 is the full morph",
+            "default": 1.0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "object.delete",
       "summary": "Remove objects from the scene.",
       "tags": [
@@ -4510,6 +5144,259 @@
             "type": "boolean",
             "description": "Bake rotation+scale into mesh data (required before export)",
             "default": false
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "paint.cavity",
+      "summary": "Bake 'dirt in the crevices' or 'edge wear' without textures: a deterministic geometric curvature estimate per vertex. Concave spots (recesses, grooves, inside corners) take the colour in cavity mode; convex ridges take it in edge mode. Blends over the existing layer, so fill white first if the mesh is unpainted.",
+      "tags": [
+        "paint"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Mesh object to paint \u2014 needs real surface relief; a flat quad has no curvature to find"
+          },
+          "color": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 4
+              }
+            ],
+            "description": "Colour blended into the crevices/edges: palette name, #rrggbb, or linear [r,g,b]. Dark browns read as grime, light greys as worn edges"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "cavity",
+              "edge"
+            ],
+            "description": "cavity paints concave spots (dirt), edge paints convex ridges (wear)",
+            "default": "cavity"
+          },
+          "strength": {
+            "type": "number",
+            "description": "Blend strength multiplier; the deepest cavity gets the full colour at 1.0",
+            "default": 1.0
+          },
+          "invert": {
+            "type": "boolean",
+            "description": "Flip the result \u2014 paint everything EXCEPT the crevices/edges",
+            "default": false
+          },
+          "layer": {
+            "type": "string",
+            "description": "Colour attribute name; the glTF exporter ships the active one as COLOR_0",
+            "default": "color"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "paint.fill",
+      "summary": "Set every loop of a mesh to one vertex colour. The base coat for the other paint.* ops \u2014 fill white before paint.cavity so unpainted areas stay neutral, or fill a flat tint for a stylised asset.",
+      "tags": [
+        "paint"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Mesh object to paint"
+          },
+          "color": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 4
+              }
+            ],
+            "description": "Colour: palette name, #rrggbb, or linear [r,g,b]. White leaves the material unchanged when the engine multiplies COLOR_0 in"
+          },
+          "layer": {
+            "type": "string",
+            "description": "Colour attribute name; the glTF exporter ships the active one as COLOR_0",
+            "default": "color"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "paint.height",
+      "summary": "Paint a two-colour gradient along an axis \u2014 dust at the base of a wall, a snow line on a peak, waterline grime on a hull. Cheaper than any texture and it can never stretch or seam.",
+      "tags": [
+        "paint"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Mesh object to paint"
+          },
+          "low": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 4
+              }
+            ],
+            "description": "Colour at the bottom of the range: palette name, #rrggbb, or linear [r,g,b]"
+          },
+          "high": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 4
+              }
+            ],
+            "description": "Colour at the top of the range"
+          },
+          "axis": {
+            "type": "string",
+            "enum": [
+              "x",
+              "y",
+              "z"
+            ],
+            "description": "Axis the gradient runs along (z is up). Measured in the mesh's LOCAL space, like material.face_assign",
+            "default": "z"
+          },
+          "min": {
+            "type": "number",
+            "description": "Axis value for 100% `low`; omit to use the mesh's own lower bound. Set both min and max to share one gradient across several objects"
+          },
+          "max": {
+            "type": "number",
+            "description": "Axis value for 100% `high`; omit to use the mesh's upper bound"
+          },
+          "curve": {
+            "type": "string",
+            "enum": [
+              "linear",
+              "smooth"
+            ],
+            "description": "Gradient easing; smooth eases in and out, which hides the band edges",
+            "default": "linear"
+          },
+          "layer": {
+            "type": "string",
+            "description": "Colour attribute name; the glTF exporter ships the active one as COLOR_0",
+            "default": "color"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "paint.noise",
+      "summary": "Blend two colours by deterministic fBm noise sampled at vertex positions \u2014 mottled wear, rust patches, moss, dirt variation. Breaks up flat fills so large surfaces stop looking computer-perfect.",
+      "tags": [
+        "paint"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Mesh object to paint"
+          },
+          "color_a": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 4
+              }
+            ],
+            "description": "Colour where the noise is low: palette name, #rrggbb, or linear [r,g,b]"
+          },
+          "color_b": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 4
+              }
+            ],
+            "description": "Colour where the noise is high"
+          },
+          "scale": {
+            "type": "number",
+            "description": "Noise frequency in 1/metres \u2014 higher gives smaller, busier patches",
+            "default": 2.0
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Random seed; same seed gives the same pattern forever",
+            "default": 0
+          },
+          "octaves": {
+            "type": "integer",
+            "description": "Fractal detail levels; more octaves, finer grain",
+            "default": 3
+          },
+          "layer": {
+            "type": "string",
+            "description": "Colour attribute name; the glTF exporter ships the active one as COLOR_0",
+            "default": "color"
           }
         },
         "additionalProperties": false
@@ -5954,6 +6841,55 @@
             "type": "integer",
             "description": "Tiles per row",
             "default": 3
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "render.impostor",
+      "summary": "Bake an object into a billboard impostor sprite sheet: N orthographic views orbiting it, packed left-to-right then top-to-bottom into ONE transparent PNG, plus a JSON sidecar (grid layout, yaw angles, bounds) with everything a game engine needs to billboard it. This is THE distant-LOD technique \u2014 swap the real mesh for a camera-facing quad with this sheet beyond a few hundred metres and a browser can show thousands of instances at full frame rate. Pass normals=True to also bake a world-space normal sheet so the billboard can react to scene lighting.",
+      "tags": [
+        "render"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object to bake; its children are baked with it. Use object.list if you are unsure of the exact name"
+          },
+          "out": {
+            "type": "string",
+            "description": "Sprite-sheet PNG path. The JSON sidecar is written next to it as <stem>.json",
+            "default": "impostor.png"
+          },
+          "views": {
+            "type": "integer",
+            "description": "Yaw angles around the object, evenly spaced over 360 degrees. 8 is the standard for props; 4 is enough for near-symmetric ones and halves the bake time",
+            "default": 8
+          },
+          "size": {
+            "type": "integer",
+            "description": "Pixel size of each frame (frames are square). Billboards are only ever seen at distance, so 64-256 is the useful range \u2014 bigger just costs render time",
+            "default": 128
+          },
+          "normals": {
+            "type": "boolean",
+            "description": "Also write <stem>_normal.png: world-space normals packed into 0..1 colour, so the billboard can be lit instead of looking pasted on. Doubles render cost",
+            "default": false
+          },
+          "samples": {
+            "type": "integer",
+            "description": "Cycles samples per frame. 16 is plenty at these sizes; raise only if the sprites look grainy",
+            "default": 16
+          },
+          "elevation": {
+            "type": "number",
+            "description": "Camera height above the horizon in degrees, the same for every view. Ground props read best at 0-15; high values waste frame area on the top face",
+            "default": 0.0
           }
         },
         "additionalProperties": false

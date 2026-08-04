@@ -1,6 +1,6 @@
 # bforge op reference
 
-109 operations.
+127 operations.
 
 ## `arch.*`
 
@@ -349,7 +349,7 @@ Author a keyframed animation clip on a rig: idle, walk, run, attack, jump, death
 | parameter | type | default | description |
 | --- | --- | --- | --- |
 | `rig` | string | None | Armature object name (from char.rig) |
-| `clip` | idle \| walk \| run \| attack \| jump \| death \| wave | 'idle' | Which clip to author |
+| `clip` | idle \| walk \| run \| attack \| jump \| death \| wave \| trot \| gallop \| graze | 'idle' | Which clip to author |
 | `length` | integer | 24 | Clip length in frames (24 frames at 30 fps = 0.8 s) |
 | `amplitude` | number | 1.0 | Motion scale — 0.6 is subtle, 1.4 is exaggerated |
 | `loop` | boolean | True | Match the last frame to the first so the clip cycles |
@@ -378,6 +378,56 @@ Freeze a posed rig into the mesh vertices and drop the skin. Turns a char.rig + 
 | `rig` | string | None | Armature to delete afterwards (default: the one deforming this mesh; pass "" to keep it) |
 | `keep_groups` | boolean | False | Keep the vertex groups after baking |
 
+### `char.creature`
+
+Proportioned quadruped body (canine/equine/feline/generic) or hexapod (insect: scarab class, three leg stations). Pair with char.creature_rig and char.animate — walk/trot/gallop/graze for quadrupeds, tripod-gait walk for hexapods. Deterministic, data-API only, metres.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `name` | string | 'creature' | Object name |
+| `length` | number | 1.4 | Body length in metres (chest-to-hip; abdomen-tip to head for insect) |
+| `shoulder` | number | 0.9 | Shoulder height in metres (thorax height for insect) |
+| `plan` | canine \| equine \| feline \| generic \| insect | 'canine' | Body plan — quadruped proportions or the hexapod scarab class |
+| `bulk` | number | 1.0 | Extra girth multiplier |
+| `detail` | integer | 8 | Limb cross-section segments |
+| `location` | array | [0.0, 0.0, 0.0] | World position |
+| `skin` | string | '#7a6248' | Body colour |
+| `seed` | integer | 0 | Random seed |
+
+### `char.creature_rig`
+
+Build a quadruped armature (hips root, spine chain, neck/head, 2-segment tail, 3-bone legs at both stations) fitted to a char.creature body, and skin it with the same shell-constrained distance-falloff solve as char.rig.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `name` | string | None | Creature mesh object (from char.creature) |
+| `length` | number | 0.0 | Chest-to-hip length; 0 measures from the mesh bounds Y extent |
+| `shoulder` | number | 0.0 | Shoulder height; 0 measures from the mesh bounds Z extent |
+| `plan` | canine \| equine \| feline \| generic \| insect | 'canine' | Body plan the rig assumes — match char.creature |
+| `falloff` | number | 1.6 | Weight blend sharpness; higher is more rigid |
+| `armature_name` | string | '' | Armature object name (defaults to <mesh>_rig) |
+
+### `char.face`
+
+Give a char.humanoid head a readable face — brow ridge, nose wedge, chin — so a close-up review render reads as a person, not a box. Stylised readability, not realism. Geometry is welded into the body mesh and takes the head bone when skinned.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `name` | string | None | Body mesh (from char.humanoid) |
+| `height` | number | 0.0 | Character height; 0 measures the mesh bounds |
+| `build` | realistic \| heroic \| stylized \| chibi \| lithe | 'heroic' | Proportions — match the char.humanoid build |
+
+### `char.hands`
+
+Upgrade a char.humanoid's block hands with readable fingers: four two-segment fingers with a relaxed curl plus a thumb, so a weapon grip or open hand reads at review distance. Welded into the body mesh; the hand bones own them when skinned.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `name` | string | None | Body mesh (from char.humanoid) |
+| `height` | number | 0.0 | Character height; 0 measures the mesh bounds |
+| `build` | realistic \| heroic \| stylized \| chibi \| lithe | 'heroic' | Proportions — match the char.humanoid build |
+| `curl` | number | 0.35 | Finger curl in radians-ish (0 flat, 0.8 fist); a relaxed read is ~0.35 |
+
 ### `char.humanoid`
 
 Proportioned humanoid blockout using classic figure-drawing head ratios (7.5 realistic, 8 heroic, 4 chibi). ~1400 tris. Pair with char.rig and char.animate for a complete animated character.
@@ -392,6 +442,23 @@ Proportioned humanoid blockout using classic figure-drawing head ratios (7.5 rea
 | `location` | array | [0.0, 0.0, 0.0] | World position |
 | `skin` | string | '#c08a6a' | Body colour |
 | `seed` | integer | 0 | Random seed |
+
+### `char.outfit`
+
+Fit an armour or clothing piece to a char.humanoid body: cuirass, pteruges skirt, greaves, bracers, helmet or round shield. Fit is derived from the body's own proportions, materials are perceptually distinct by construction (this is the anti 'brown blob' op), and pieces bone-parent to the rig when one exists so they animate with the character.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `name` | string | None | Body mesh (from char.humanoid) |
+| `piece` | cuirass \| pteruges \| greaves \| bracers \| helmet \| shield | 'cuirass' | What to fit. greaves and bracers come in pairs |
+| `height` | number | 0.0 | Character height; 0 measures the mesh bounds |
+| `build` | realistic \| heroic \| stylized \| chibi \| lithe | 'heroic' | Proportions the fit assumes — match the char.humanoid build |
+| `material` | bronze \| iron \| leather \| cloth | '' | Material family (defaults per piece: bronze for cuirass/greaves/helmet/shield, leather for pteruges/bracers). The families are deliberately far apart in colour and response — keep them that way |
+| `color` | any | '' | Override colour; stay clear of the other pieces' colours or check.materials will fail the set |
+| `crest` | none \| longitudinal \| transverse | 'longitudinal' | helmet: crest ridge orientation |
+| `side` | l \| r | 'l' | shield: which forearm carries it |
+| `gap` | number | 0.012 | Clearance between body and armour in metres; raise for bulky bodies |
+| `seed` | integer | 0 | Random seed (reserved; current pieces are fully deterministic) |
 
 ### `char.pose`
 
@@ -428,6 +495,16 @@ Run the studio's ADR 0006 asset rules against the open scene: naming, units, app
 | `require_collision` | boolean | False | Fail when no -col/-convcol proxy exists |
 | `require_lods` | boolean | False | Fail when no _lod1 object exists |
 
+### `check.conformance`
+
+Score how well each object conforms to the set's (or a reference object's) style fingerprint. Names the exact axis that breaks coherence — palette drift, texel-density mismatch, density outlier, edge-treatment drift — with the op that fixes it. The art-director gate: run it over a whole pack before export.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `objects` | array | [] | Objects to score (empty = every mesh) |
+| `reference` | string | '' | Conform to THIS object's fingerprint instead of the set median |
+| `texture_size` | integer | 1024 | Texture resolution the texel-density figure assumes |
+
 ### `check.critique`
 
 Quality critique with specific, actionable findings: triangle-density hot spots, degenerate and n-gon faces, UV stretch, texel-density mismatch between objects, non-manifold edges, unused material slots. Pair it with render.contact_sheet — numbers plus eyes.
@@ -447,6 +524,15 @@ Measure an image instead of eyeballing it: luminance range, blown highlights, cr
 | `colors` | integer | 6 | How many dominant colours to report |
 | `background` | array | [0.05, 0.055, 0.065, 1.0] | Backdrop colour, excluded from subject stats |
 
+### `check.materials`
+
+Measure whether an asset's materials are actually distinguishable — the '8 materials, all the same brown' failure that produces mud-blob characters. Reports every material's colour in CIELAB and the pairwise perceptual distance (ΔE); fails when several materials are perceptually identical or share one roughness/metallic signature.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `objects` | array | [] | Objects whose materials to measure (empty = every mesh) |
+| `min_delta_e` | number | 12.0 | Perceptual-separation floor in ΔE76. Below ~6 the difference is invisible in game; 12 is a safe bar for metal vs leather vs cloth |
+
 ### `check.silhouette`
 
 Score how readable an object's silhouette is from the standard game camera angles. A prop that fails here will not read at gameplay distance no matter how good its texture is.
@@ -455,6 +541,16 @@ Score how readable an object's silhouette is from the standard game camera angle
 | --- | --- | --- | --- |
 | `name` | string | None | Object to test |
 | `samples` | integer | 64 | Rays per axis for the projected-area estimate |
+
+### `check.style`
+
+Compute the style fingerprint of every mesh: area-weighted palette (in CIELAB), texel density, triangle density, hard-edge ratio, material count, UV coverage. This is the raw material of art direction — 'do these 40 assets look like one game' is unanswerable without it.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `objects` | array | [] | Objects to fingerprint (empty = every mesh) |
+| `texture_size` | integer | 1024 | Texture resolution the texel-density figure assumes |
+| `palette_size` | integer | 4 | Dominant colours to keep per object, area-weighted |
 
 ## `env.*`
 
@@ -609,6 +705,8 @@ One call: save the .blend master, export the GLB, write the .meta.json sidecar a
 | `ai_prompt` | string | '' | What the asset was asked for — recorded in provenance |
 | `contact_sheet` | boolean | True | Also render a review contact sheet |
 | `strict` | boolean | True | Block export on problems that would corrupt the import |
+| `gate` | boolean | True | Run gameready.review before writing anything; a failed review blocks the hand-off. Set false only for deliberate blockouts |
+| `style` | stylized \| realistic | 'stylized' | Art direction passed to gameready.review when gate=true |
 
 ### `export.blend`
 
@@ -725,6 +823,17 @@ Fix pivots and transforms across many objects at once — the two things engines
 | `apply_transforms` | boolean | True | Bake rotation and scale into the mesh |
 | `snap_to_ground` | boolean | False | Move each object so its lowest point sits at Z=0 |
 | `to_origin` | boolean | False | Also move the object itself to (0,0,0). Required for a single-asset master file — the studio validator rejects a root object that is not at the world origin |
+
+### `gameready.review`
+
+The quality gate: aggregate check.critique and check.materials into one pass/fail verdict before export. Exists because quality steps that are optional get skipped — a scene that passes this cannot ship the mud-blob failure (perceptually identical materials), broken geometry, or missing UVs without knowing it.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `objects` | array | [] | Objects to review (empty = every mesh in the scene) |
+| `severity` | error \| warn | 'error' | Findings at this level or worse fail the gate. 'error' blocks only what corrupts or reads as broken; 'warn' also blocks advisories like texel-density spread |
+| `style` | stylized \| realistic | 'stylized' | 'realistic' additionally fails an asset whose materials are ALL flat untextured colour — bake material.bake_pbr or pick the stylized look deliberately |
+| `min_delta_e` | number | 12.0 | Material-separation floor in ΔE76, passed to check.materials |
 
 ### `gameready.socket`
 
@@ -980,6 +1089,52 @@ List every available operation with its parameters. Call this first if you are u
 
 The studio colour palette and material presets. Use these names instead of inventing colours — palette discipline is what makes a set of assets look like one game.
 
+## `morph.*`
+
+### `morph.add`
+
+Add a shape key that displaces vertices by a deterministic rule — dent a crate for a damage state, inflate a cartoon prop, taper a tree trunk, bulge a cartoon cheek. Exports to glTF as a morph target on top of Basis.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `name` | string | None | Mesh object to add the shape key to |
+| `key` | string | None | Shape key name — this becomes the glTF morph target name (extras.targetNames), so make it meaningful: 'dented', 'inflate', 'blink' |
+| `rule` | inflate \| dent \| flatten \| taper \| bulge | 'dent' | Displacement rule: inflate pushes verts out along their normals, dent pulls verts inside `radius` toward `center`, bulge pushes them away, flatten squashes toward the center plane along `axis`, taper scales the cross-section down along `axis` |
+| `amount` | number | 0.1 | Displacement in metres (flatten/taper: 0..1 fraction of the way) |
+| `axis` | x \| y \| z | 'z' | Axis for flatten and taper (z is up) |
+| `center` | array | None | Local-space point the rule acts around; omit to use the centre of the mesh's own bounds |
+| `radius` | number | 1.0 | Reach of the effect in metres — verts beyond this from `center` are untouched (taper: full axis half-extent) |
+| `falloff` | smooth \| linear | 'smooth' | How the effect fades toward `radius`; smooth eases out, linear is a straight ramp |
+
+### `morph.animate`
+
+Keyframe a shape key's weight over time so glTF exports a morph-target animation channel — a crate denting on impact, a chest lid swell, a pulsing crystal. Follows the same action idiom as char.animate.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `name` | string | None | Mesh object with the shape key |
+| `key` | string | None | Shape key name to animate |
+| `frames` | array | None | Frame numbers, e.g. [1, 12, 24]; must be the same length as `values` |
+| `values` | array | None | Weight at each frame (0..1), e.g. [0, 1, 0] pops the morph and settles back |
+
+### `morph.list`
+
+Report an object's shape keys: names, slider ranges and current values. Check this before morph.animate — the key name must match exactly.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `name` | string | None | Mesh object to inspect |
+
+### `morph.set`
+
+Set a shape key's slider value (0..1) for review renders — pose the dent at 60% before render.contact_sheet so the still shows the damaged state.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `name` | string | None | Mesh object with the shape key |
+| `key` | string | None | Shape key name (from morph.add or morph.list) |
+| `value` | number | 1.0 | Slider weight, clamped to 0..1: 0 is Basis, 1 is the full morph |
+
 ## `object.*`
 
 ### `object.delete`
@@ -1066,6 +1221,60 @@ Move, rotate or scale an object. Rotation is in degrees.
 | `rotation` | array | None | Euler XYZ rotation in degrees |
 | `scale` | array | None | Per-axis scale multiplier |
 | `apply` | boolean | False | Bake rotation+scale into mesh data (required before export) |
+
+## `paint.*`
+
+### `paint.cavity`
+
+Bake 'dirt in the crevices' or 'edge wear' without textures: a deterministic geometric curvature estimate per vertex. Concave spots (recesses, grooves, inside corners) take the colour in cavity mode; convex ridges take it in edge mode. Blends over the existing layer, so fill white first if the mesh is unpainted.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `name` | string | None | Mesh object to paint — needs real surface relief; a flat quad has no curvature to find |
+| `color` | any | None | Colour blended into the crevices/edges: palette name, #rrggbb, or linear [r,g,b]. Dark browns read as grime, light greys as worn edges |
+| `mode` | cavity \| edge | 'cavity' | cavity paints concave spots (dirt), edge paints convex ridges (wear) |
+| `strength` | number | 1.0 | Blend strength multiplier; the deepest cavity gets the full colour at 1.0 |
+| `invert` | boolean | False | Flip the result — paint everything EXCEPT the crevices/edges |
+| `layer` | string | 'color' | Colour attribute name; the glTF exporter ships the active one as COLOR_0 |
+
+### `paint.fill`
+
+Set every loop of a mesh to one vertex colour. The base coat for the other paint.* ops — fill white before paint.cavity so unpainted areas stay neutral, or fill a flat tint for a stylised asset.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `name` | string | None | Mesh object to paint |
+| `color` | any | None | Colour: palette name, #rrggbb, or linear [r,g,b]. White leaves the material unchanged when the engine multiplies COLOR_0 in |
+| `layer` | string | 'color' | Colour attribute name; the glTF exporter ships the active one as COLOR_0 |
+
+### `paint.height`
+
+Paint a two-colour gradient along an axis — dust at the base of a wall, a snow line on a peak, waterline grime on a hull. Cheaper than any texture and it can never stretch or seam.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `name` | string | None | Mesh object to paint |
+| `low` | any | None | Colour at the bottom of the range: palette name, #rrggbb, or linear [r,g,b] |
+| `high` | any | None | Colour at the top of the range |
+| `axis` | x \| y \| z | 'z' | Axis the gradient runs along (z is up). Measured in the mesh's LOCAL space, like material.face_assign |
+| `min` | number | None | Axis value for 100% `low`; omit to use the mesh's own lower bound. Set both min and max to share one gradient across several objects |
+| `max` | number | None | Axis value for 100% `high`; omit to use the mesh's upper bound |
+| `curve` | linear \| smooth | 'linear' | Gradient easing; smooth eases in and out, which hides the band edges |
+| `layer` | string | 'color' | Colour attribute name; the glTF exporter ships the active one as COLOR_0 |
+
+### `paint.noise`
+
+Blend two colours by deterministic fBm noise sampled at vertex positions — mottled wear, rust patches, moss, dirt variation. Breaks up flat fills so large surfaces stop looking computer-perfect.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `name` | string | None | Mesh object to paint |
+| `color_a` | any | None | Colour where the noise is low: palette name, #rrggbb, or linear [r,g,b] |
+| `color_b` | any | None | Colour where the noise is high |
+| `scale` | number | 2.0 | Noise frequency in 1/metres — higher gives smaller, busier patches |
+| `seed` | integer | 0 | Random seed; same seed gives the same pattern forever |
+| `octaves` | integer | 3 | Fractal detail levels; more octaves, finer grain |
+| `layer` | string | 'color' | Colour attribute name; the glTF exporter ships the active one as COLOR_0 |
 
 ## `prop.*`
 
@@ -1362,6 +1571,20 @@ THE review image. Renders hero/front/side/top plus a wireframe pass (shows topol
 | `engine` | auto \| cycles \| eevee | 'auto' | Render engine |
 | `panels` | array | ['hero', 'front', 'left', 'top', 'wireframe', 'checker'] | Which panels to include |
 | `columns` | integer | 3 | Tiles per row |
+
+### `render.impostor`
+
+Bake an object into a billboard impostor sprite sheet: N orthographic views orbiting it, packed left-to-right then top-to-bottom into ONE transparent PNG, plus a JSON sidecar (grid layout, yaw angles, bounds) with everything a game engine needs to billboard it. This is THE distant-LOD technique — swap the real mesh for a camera-facing quad with this sheet beyond a few hundred metres and a browser can show thousands of instances at full frame rate. Pass normals=True to also bake a world-space normal sheet so the billboard can react to scene lighting.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `name` | string | None | Object to bake; its children are baked with it. Use object.list if you are unsure of the exact name |
+| `out` | string | 'impostor.png' | Sprite-sheet PNG path. The JSON sidecar is written next to it as <stem>.json |
+| `views` | integer | 8 | Yaw angles around the object, evenly spaced over 360 degrees. 8 is the standard for props; 4 is enough for near-symmetric ones and halves the bake time |
+| `size` | integer | 128 | Pixel size of each frame (frames are square). Billboards are only ever seen at distance, so 64-256 is the useful range — bigger just costs render time |
+| `normals` | boolean | False | Also write <stem>_normal.png: world-space normals packed into 0..1 colour, so the billboard can be lit instead of looking pasted on. Doubles render cost |
+| `samples` | integer | 16 | Cycles samples per frame. 16 is plenty at these sizes; raise only if the sprites look grainy |
+| `elevation` | number | 0.0 | Camera height above the horizon in degrees, the same for every view. Ground props read best at 0-15; high values waste frame area on the top face |
 
 ### `render.turntable`
 
