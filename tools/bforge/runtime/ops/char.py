@@ -1128,6 +1128,7 @@ def char_outfit(ctx, name, piece, height, build, material, color, crest, side, g
 
     elif piece == "hood":
         head_center = Vector(joints["head"][0]).lerp(Vector(joints["head"][1]), 0.5)
+        head_r = head_unit * 0.46
         hood_r = head_unit * 0.56 + gap
         # Open-front cowl: lathe from brow over the crown to the shoulders,
         # face left visible (the front quarter is cut away by the profile's
