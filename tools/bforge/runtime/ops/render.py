@@ -15,6 +15,7 @@ speed where a GPU context exists, with an automatic fallback.
 
 from __future__ import annotations
 
+import json
 import math
 
 import bpy
@@ -816,3 +817,194 @@ def render_turntable(ctx, out_dir, objects, frames, resolution, samples, elevati
         "directory": str(base), "rel": ctx.rel(base), "frames": len(paths),
         "files": paths, "engine": used,
     }
+
+
+def _impostor_normal_material():
+    """World-space normal -> emission colour, the standard impostor bake.
+
+    The Geometry node's Normal output is the world-space shading normal in
+    -1..1; a billboard shader expects the 0..1 texture encoding, so scale by
+    0.5 and bias by 0.5. Emission makes the pass independent of the light rig.
+    """
+    material = bpy.data.materials.get("_bforge_impostor_normal")
+    if material is not None:
+        return material
+    material = bpy.data.materials.new("_bforge_impostor_normal")
+    material.use_nodes = True
+    tree = material.node_tree
+    tree.nodes.clear()
+    output = tree.nodes.new("ShaderNodeOutputMaterial")
+    emission = tree.nodes.new("ShaderNodeEmission")
+    geometry = tree.nodes.new("ShaderNodeNewGeometry")
+    multiply = tree.nodes.new("ShaderNodeVectorMath")
+    multiply.operation = "MULTIPLY"
+    multiply.inputs[1].default_value = (0.5, 0.5, 0.5)
+    add = tree.nodes.new("ShaderNodeVectorMath")
+    add.operation = "ADD"
+    add.inputs[1].default_value = (0.5, 0.5, 0.5)
+    tree.links.new(geometry.outputs["Normal"], multiply.inputs[0])
+    tree.links.new(multiply.outputs[0], add.inputs[0])
+    tree.links.new(add.outputs[0], emission.inputs["Color"])
+    tree.links.new(emission.outputs[0], output.inputs["Surface"])
+    return material
+
+
+def _save_sheet_png(numpy, grid, path, cols, rows, size):
+    """Same compositing path as render.contact_sheet: a data-API image saved
+    directly, so no GUI-dependent writer is involved."""
+    image = bpy.data.images.new(
+        "_bforge_impostor", width=cols * size, height=rows * size, alpha=True
+    )
+    # Blender images are bottom-up; the grid is laid out top-down.
+    image.pixels = numpy.flipud(grid).ravel().tolist()
+    image.filepath_raw = str(path)
+    image.file_format = "PNG"
+    image.save()
+    bpy.data.images.remove(image)
+
+
+@op(
+    "render.impostor",
+    summary="Bake an object into a billboard impostor sprite sheet: N orthographic views orbiting it, packed left-to-right then top-to-bottom into ONE transparent PNG, plus a JSON sidecar (grid layout, yaw angles, bounds) with everything a game engine needs to billboard it. This is THE distant-LOD technique — swap the real mesh for a camera-facing quad with this sheet beyond a few hundred metres and a browser can show thousands of instances at full frame rate. Pass normals=True to also bake a world-space normal sheet so the billboard can react to scene lighting.",
+    params={
+        "name": ("str", None, "Object to bake; its children are baked with it. Use object.list if you are unsure of the exact name"),
+        "out": ("path", "impostor.png", "Sprite-sheet PNG path. The JSON sidecar is written next to it as <stem>.json"),
+        "views": ("int", 8, "Yaw angles around the object, evenly spaced over 360 degrees. 8 is the standard for props; 4 is enough for near-symmetric ones and halves the bake time"),
+        "size": ("int", 128, "Pixel size of each frame (frames are square). Billboards are only ever seen at distance, so 64-256 is the useful range — bigger just costs render time"),
+        "normals": ("bool", False, "Also write <stem>_normal.png: world-space normals packed into 0..1 colour, so the billboard can be lit instead of looking pasted on. Doubles render cost"),
+        "samples": ("int", 16, "Cycles samples per frame. 16 is plenty at these sizes; raise only if the sprites look grainy"),
+        "elevation": ("num", 0.0, "Camera height above the horizon in degrees, the same for every view. Ground props read best at 0-15; high values waste frame area on the top face"),
+    },
+    tags=["render"],
+)
+def render_impostor(ctx, name, out, views, size, normals, samples, elevation):
+    try:
+        import numpy
+    except ImportError as exc:  # pragma: no cover - Blender bundles numpy
+        raise OpError(
+            "numpy is unavailable in this Blender build; use render.turntable instead"
+        ) from exc
+
+    try:
+        root = scene_lib.get_object(name)
+    except ValueError as exc:
+        raise OpError(f"{exc} Run 'object.list' to see the names in the scene.") from exc
+    meshes = [o for o in [root, *root.children_recursive] if o.type == "MESH"]
+    triangles = sum(mesh_lib.tri_count(o) for o in meshes)
+    if triangles == 0:
+        raise OpError(
+            f"'{name}' has no triangles to bake — it and its children are not meshes. "
+            "Bake a mesh object: build one with build.*/prop.* first, or run "
+            "'session.info' to see what every object in the scene actually is."
+        )
+
+    views = max(1, min(64, views))
+    size = max(8, min(1024, size))
+    cols = math.ceil(math.sqrt(views))
+    rows = math.ceil(views / cols)
+
+    # Frame from the world AABB of the whole hierarchy. The diagonal is the
+    # worst-case projected extent over every yaw angle, so sizing the ortho
+    # frame to it guarantees the subject fills ~90% of the square frame at its
+    # widest and never clips at any other angle.
+    bpy.context.view_layer.update()  # world matrices must be current to frame anything
+    points = [o.matrix_world @ Vector(c) for o in meshes for c in o.bound_box]
+    lo = Vector((min(p[i] for p in points) for i in range(3)))
+    hi = Vector((max(p[i] for p in points) for i in range(3)))
+    centre = (lo + hi) * 0.5
+    diagonal = max((hi - lo).length, 1e-6)
+
+    hidden = _hide_others(meshes)
+    _setup_world(0.6)
+    lights = _setup_lights(centre, diagonal * 0.5)
+    used = _configure_engine("cycles", samples, size)
+    scene = bpy.context.scene
+    scene.render.film_transparent = True
+    scene.render.image_settings.color_mode = "RGBA"
+
+    camera_data = bpy.data.cameras.new("_bforge_impostor")
+    camera = bpy.data.objects.new("_bforge_impostor", camera_data)
+    scene.collection.objects.link(camera)
+    scene.camera = camera
+    camera_data.type = "ORTHO"
+    camera_data.ortho_scale = diagonal / 0.9
+    distance = diagonal * 2.0
+    camera_data.clip_start = max(0.01, distance * 0.01)
+    camera_data.clip_end = distance * 4.0
+
+    sheet_path = ctx.out_path(out, ".png")
+    normal_path = sheet_path.with_name(f"{sheet_path.stem}_normal.png")
+    sidecar_path = sheet_path.with_suffix(".json")
+    scratch = ctx.out_dir / "_impostor"
+    scratch.mkdir(parents=True, exist_ok=True)
+
+    tilt = math.radians(elevation)
+
+    def _render_frames(stem):
+        # Empty grid cells (views not filling the last row) stay transparent.
+        grid = numpy.zeros((rows * size, cols * size, 4), dtype=numpy.float32)
+        for index in range(views):
+            # The camera orbits while the light rig stays fixed — the sprite
+            # lighting is then consistent across frames, as if the object spun.
+            yaw = math.tau * index / views
+            offset = Vector(
+                (
+                    math.cos(yaw) * math.cos(tilt),
+                    math.sin(yaw) * math.cos(tilt),
+                    math.sin(tilt),
+                )
+            ) * distance
+            camera.location = centre + offset
+            camera.rotation_euler = (-offset).to_track_quat("-Z", "Y").to_euler()
+            _render_to(scratch / f"{stem}_{index:03d}.png")
+            pixels = _load_pixels(numpy, scratch / f"{stem}_{index:03d}.png", size)
+            row, column = divmod(index, cols)
+            grid[row * size : (row + 1) * size, column * size : (column + 1) * size] = pixels
+        return grid
+
+    try:
+        _save_sheet_png(numpy, _render_frames("beauty"), sheet_path, cols, rows, size)
+        if normals:
+            swapped = _swap_materials(meshes, _impostor_normal_material())
+            view = scene.view_settings
+            previous_transform = view.view_transform
+            try:
+                # A normal map is data, not a beauty image: Raw writes the
+                # remapped 0..1 normal to the PNG exactly, skipping the display
+                # transform the colour pass wants.
+                try:
+                    view.view_transform = "Raw"
+                except TypeError:
+                    pass
+                _save_sheet_png(numpy, _render_frames("normal"), normal_path, cols, rows, size)
+            finally:
+                view.view_transform = previous_transform
+                _restore_materials(swapped)
+    finally:
+        _cleanup_rig(lights + [camera])
+        for obj in hidden:
+            obj.hide_render = False
+
+    sidecar = {
+        "frames": views,
+        "cols": cols,
+        "rows": rows,
+        "frame_px": size,
+        "yaw_degrees": [round(360.0 * i / views, 6) for i in range(views)],
+        "elevation": elevation,
+        "object": root.name,
+        "bounds_m": [round(v, 5) for v in (hi - lo)],
+    }
+    sidecar_path.write_text(json.dumps(sidecar, indent=2) + "\n", encoding="utf-8")
+
+    result = {
+        "sheet": ctx.rel(sheet_path),
+        "sidecar": ctx.rel(sidecar_path),
+        "frames": views,
+        "cols": cols,
+        "rows": rows,
+        "bytes": sheet_path.stat().st_size,
+    }
+    if normals:
+        result["normal_sheet"] = ctx.rel(normal_path)
+    return result

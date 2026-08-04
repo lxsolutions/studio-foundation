@@ -104,6 +104,10 @@ def export_gltf(ctx, out, objects, engine, format, animations, draco, strict, re
             export_image_format="AUTO",
             export_skins=True,
             export_morph=True,
+            # The default 'MATERIAL' only ships COLOR_0 when a material node
+            # consumes it; paint.* writes the active colour attribute and expects
+            # it in the export. Meshes without a colour attribute are unaffected.
+            export_vertex_color="ACTIVE",
             **settings,
         )
     except (RuntimeError, TypeError) as exc:
@@ -309,15 +313,31 @@ def export_meta(ctx, out, asset_id, category, license, creator, source, ai_tool,
         "ai_prompt": ("str", "", "What the asset was asked for — recorded in provenance"),
         "contact_sheet": ("bool", True, "Also render a review contact sheet"),
         "strict": ("bool", True, "Block export on problems that would corrupt the import"),
+        "gate": ("bool", True, "Run gameready.review before writing anything; a failed review blocks the hand-off. Set false only for deliberate blockouts"),
+        "style": ("enum:stylized|realistic", "stylized", "Art direction passed to gameready.review when gate=true"),
     },
     tags=["export", "io"],
 )
 def export_asset(ctx, asset_id, out_dir, objects, engine, category, ai_prompt, contact_sheet,
-                 strict):
+                 strict, gate, style):
+    from . import gameready as gameready_ops
     from . import render as render_ops
 
     identifier = scene_lib.sanitize(asset_id)
     prefix = f"{out_dir.rstrip('/')}/{identifier}" if out_dir else identifier
+
+    if gate:
+        review = gameready_ops.gameready_review(ctx, objects, "error", style, 12.0)
+        if not review["passed"]:
+            lines = "\n  - ".join(
+                f"[{f['severity']}] {f['issue']} on {f['object']}: {f['fix']}"
+                for f in review["findings"]
+                if f["severity"] == "error"
+            )
+            raise OpError(
+                f"export '{identifier}' blocked by gameready.review:\n  - {lines}\n"
+                "Fix these, or re-run with gate=false to export anyway."
+            )
 
     blend = export_blend(ctx, f"{prefix}.blend", True, True)
     glb = export_gltf(ctx, f"{prefix}.glb", objects, engine, "glb", True, False, strict, None)

@@ -130,7 +130,7 @@ tools/bforge/
     daemon.py          JSON-line RPC loop
     registry.py        @op decorator: types, coercion, schema generation
     lib/               mesh, uvs, materials, scene-graph, finishing pass
-    ops/               the ~89 operations, grouped by namespace
+    ops/               the 127 operations, grouped by namespace
   catalog.json       committed op snapshot (so tools/list needs no Blender)
   tests/             unit + live-integration + visual gallery
 ```
@@ -197,8 +197,11 @@ Generation alone is not the hard part. This is:
    shows triangles spent where they buy no silhouette. The checker shows UV
    stretch and texel-density mismatch. Neither is visible in a triangle count.
 4. `check.critique` — numeric findings, each naming the op that fixes it
-5. `gameready.collision`, `gameready.lod`, `gameready.budget`
-6. `export.asset` — `.blend` master + `.glb` + `.meta.json` + review sheet
+5. `gameready.review` — the quality gate: critique + material separation in
+   one pass/fail. `export.asset` runs it by default (`gate=false` overrides),
+   so a mud-blob of identical materials cannot ship by accident
+6. `gameready.collision`, `gameready.lod`, `gameready.budget`
+7. `export.asset` — `.blend` master + `.glb` + `.meta.json` + review sheet
 
 Both halves matter. `check.critique` catches non-manifold edges and texel
 mismatch that no render shows; the contact sheet catches "the proportions are
@@ -208,7 +211,7 @@ wrong" that no metric shows.
 
 ## What it can make
 
-89 ops across 13 namespaces. Full reference: [`docs/bforge/OPS.md`](../../docs/bforge/OPS.md).
+127 ops across 18 namespaces. Full reference: [`docs/bforge/OPS.md`](../../docs/bforge/OPS.md).
 
 - **`prop.*`** — crate, barrel, chest, sack, rock, crystal, tree, pillar, torch,
   fence, furniture, weapon, banner, debris
@@ -218,7 +221,15 @@ wrong" that no metric shows.
   water, roads draped onto terrain, surface scatter, complete arenas
 - **`char.*`** — humanoid blockouts at real figure-drawing proportions, fitted
   armatures with distance-falloff skinning, keyframed idle/walk/run/attack/
-  jump/death/wave clips, bone attachment for weapons
+  jump/death/wave clips, bone attachment for weapons — plus **`char.outfit`**
+  (fitted cuirass/pteruges/greaves/bracers/helmet/shield, bone-parented,
+  materials distinct by construction), **`char.face`** and **`char.hands`**, and
+  **`char.creature`** + **`char.creature_rig`** for quadrupeds (canine/equine/
+  feline/generic plans) with walk/trot/gallop/graze gait tables
+- **`paint.*`** — vertex-colour wear: fill, height gradients (dust/snow/waterline),
+  cavity/edge grime from geometry, deterministic noise. Exports as glTF COLOR_0
+- **`morph.*`** — shape keys (inflate/dent/flatten/taper/bulge) with keyframable
+  weights, exported as glTF morph targets and morph animations
 - **`build.*`** — parametric primitives, lathe, loft, greeble, extrude, bevel,
   array, mirror, deform, and **`build.sweep`**: a cross-section along a path
   (oval / circle / line / arc / custom), which is how racetracks, grandstands,
@@ -230,8 +241,10 @@ wrong" that no metric shows.
   pivots, attachment sockets
 - **`render.*` / `check.*` / `export.*`** — contact sheets, turntables,
   **`render.camera`** (explicit position/target/lens, because auto-framing is
-  useless on a 700 m stadium), studio validation, critique, silhouette scoring,
-  glTF/blend/meta export
+  useless on a 700 m stadium), **`render.impostor`** (billboard sprite sheets +
+  normal sheets + JSON sidecar — the distant-LOD technique), studio validation,
+  critique, **`check.materials`** (perceptual material separation, the mud-blob
+  detector), silhouette scoring, gated glTF/blend/meta export
 - **`session.import`** — pull in an existing GLB/glTF/OBJ/FBX/blend to inspect,
   critique, fix or extend assets a game already ships. This is how the Chariot
   audit above was done.
@@ -281,7 +294,7 @@ wrong" that no metric shows.
 
 ```bash
 just bforge-test        # schema + MCP protocol (fast, no Blender)
-just bforge-test-live   # 42 live Blender integration tests
+just bforge-test-live   # 100+ live Blender integration tests
 just bforge-gallery     # regenerate the visual review gallery
 ```
 
