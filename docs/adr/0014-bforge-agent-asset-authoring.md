@@ -19,7 +19,7 @@ The obvious fix — adopt a community Blender MCP server — conflicts directly 
 ADR 0006 and, on inspection, is a bad tool regardless:
 
 - **Requires a GUI Blender** with a socket add-on. Rules out CI, containers,
-  headless build boxes, and the GPU host (`smeagol`) where we do rendering work.
+  headless build boxes, and the GPU host used for rendering work.
   Our own prior attempt to verify one of these servers stalled on exactly this:
   the last hop could never be confirmed because a GUI Blender could not be
   launched from an automated shell.
