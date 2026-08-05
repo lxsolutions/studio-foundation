@@ -44,6 +44,11 @@ jobs:
       - name: Scan for committed secrets
         run: uv run --project tools python tools/ci/secret_scan.py
 
+      # The repository's prose must agree with its pinned artifacts: op counts,
+      # patch counts, test counts, and no indefensible claims. Stdlib only.
+      - name: Check public claims against the artifacts
+        run: uv run --project tools python tools/ci/check_claims.py
+
   python:
     name: python unit suites
     runs-on: ubuntu-latest
@@ -93,11 +98,26 @@ jobs:
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
 
       # The bench drives a real Blender: official tarball, headless, CPU-only.
-      - name: install Blender 4.5 LTS
+      # The archive is hash-pinned in tools/bforge/blender-lock.toml — the same
+      # treatment the engine lock gives Godot patches and templates.
+      - name: install Blender 4.5 LTS (hash-verified)
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq libxrender1 libxi6 libxkbcommon0 libsm6 libice6 libxxf86vm1 libxfixes3 libegl1 libgl1
-          curl -sL -o /tmp/blender.tar.xz https://download.blender.org/release/Blender4.5/blender-4.5.12-linux-x64.tar.xz
+          URL=$(python3 -c 'import tomllib; print(tomllib.load(open("tools/bforge/blender-lock.toml","rb"))["blender"]["url"])')
+          curl -sL -o /tmp/blender.tar.xz "$URL"
+          python3 - <<'EOF'
+          import hashlib, tomllib
+          with open("tools/bforge/blender-lock.toml", "rb") as fh:
+              lock = tomllib.load(fh)["blender"]
+          digest = hashlib.sha256()
+          with open("/tmp/blender.tar.xz", "rb") as fh:
+              for chunk in iter(lambda: fh.read(1 << 20), b""):
+                  digest.update(chunk)
+          assert digest.hexdigest() == lock["sha256"], \
+              f"Blender archive sha256 mismatch: {digest.hexdigest()} != {lock['sha256']}"
+          print(f"verified {lock['archive']} sha256={lock['sha256'][:16]}…")
+          EOF
           sudo mkdir -p /opt/blender
           sudo tar -xJf /tmp/blender.tar.xz -C /opt/blender --strip-components=1
           /opt/blender/blender --version | head -1
@@ -106,6 +126,15 @@ jobs:
         env:
           BLENDER_BIN: /opt/blender/blender
         run: uv run --project tools python tools/bforge/bench.py
+
+      # The whole live-Blender surface, not just the schema subset — the README
+      # quotes a test count, and a count the public gate does not run is not a
+      # claim, it is a hope. One daemon is shared per module, so discovery is
+      # cheap despite booting real Blender.
+      - name: bforge full live suite
+        env:
+          BLENDER_BIN: /opt/blender/blender
+        run: uv run --project tools python -m unittest discover -s tools/bforge/tests -p "test_*.py"
 
       # The committed summary is the public number: if the tooling changed the
       # deterministic output, this diff fails and the summary must be

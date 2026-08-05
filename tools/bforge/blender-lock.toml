@@ -1,0 +1,16 @@
+# The pinned Blender toolchain for bforge.
+#
+# This is the version hosted CI installs, the byte-identical bench verifies
+# against, and the documentation quotes (docs/architecture/dependency-licenses.md,
+# ADR 0006). The engine lock checksums Godot patches and templates; this lock
+# gives the asset compiler the same treatment — CI verifies the archive hash
+# before extracting it.
+#
+# Byte-identical output is claimed under this pinned build, on the CI OS, only.
+
+[blender]
+version = "4.5.12"
+flavor = "LTS"
+archive = "blender-4.5.12-linux-x64.tar.xz"
+url = "https://download.blender.org/release/Blender4.5/blender-4.5.12-linux-x64.tar.xz"
+sha256 = "95e3a2dfedba3bd32ca54fc355eac6b15a11986954ccb02815a07535d0120a25"
