@@ -8,11 +8,13 @@
       "triangles": 444,
       "bytes": 17752,
       "gate": "pass",
-      "deterministic": true,
-      "glb_sha256": "8fafbf2f30dc8cf6a3cc23bed1fb5f7339c8d3e788af38f10ee52ad514d06fb6",
-      "structure_failures": [],
+      "deterministic": false,
+      "glb_sha256": "698501d1cd8a759f150d3670416c2dfd176b050b7fdb1d0fad6a7a6e2041d52d",
+      "structure_failures": [
+        "nondeterministic export: BIN chunk: 2188 bytes differ from offset 0; as floats (-0.34002700448036194, 0.7844864130020142) vs (-0.3400270640850067, 0.7844853401184082); as uints (3199080453, 1061737498) vs (3199080455, 1061737480)"
+      ],
       "max_delta_e": null,
-      "ok": true
+      "ok": false
     },
     {
       "brief": "a wolf with a synthesized trot",
@@ -30,7 +32,7 @@
     {
       "brief": "an armored warden that walks",
       "iteration": 1,
-      "seconds": 0.9,
+      "seconds": 1.0,
       "triangles": 5186,
       "bytes": 275476,
       "gate": "pass",
@@ -70,11 +72,11 @@
   ],
   "aggregates": {
     "runs": 5,
-    "passed": 5,
-    "pass_rate": 1.0,
+    "passed": 4,
+    "pass_rate": 0.8,
     "mean_seconds": 0.7,
     "total_triangles": 12690,
-    "deterministic": true,
-    "verdict": "pass"
+    "deterministic": false,
+    "verdict": "fail"
   }
 }

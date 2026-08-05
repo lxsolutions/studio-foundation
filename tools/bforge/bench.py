@@ -139,6 +139,29 @@ def verify(glb_path: Path, requires: dict) -> list[str]:
     return failures
 
 
+def forensics(a: bytes, b: bytes) -> str:
+    """Where two 'deterministic' GLBs actually differ: chunk, region, value."""
+    if len(a) != len(b):
+        return f"size {len(a)} != {len(b)}"
+    la = struct.unpack_from("<I", a, 12)[0]
+    if a[20 : 20 + la] != b[20 : 20 + la]:
+        return "JSON chunk differs (names/structure)"
+    off = 20 + la
+    bin_a = a[off + 8 :]
+    bin_b = b[off + 8 :]
+    diffs = [i for i, (x, y) in enumerate(zip(bin_a, bin_b)) if x != y]
+    if not diffs:
+        return "chunks equal but files differ (padding?)"
+    first = diffs[0]
+    base = first - first % 4
+    fa = struct.unpack_from("<2f", bin_a, base)
+    fb = struct.unpack_from("<2f", bin_b, base)
+    ia = struct.unpack_from("<2I", bin_a, base)
+    ib = struct.unpack_from("<2I", bin_b, base)
+    return (f"BIN chunk: {len(diffs)} bytes differ from offset {first}; "
+            f"as floats {fa} vs {fb}; as uints {ia} vs {ib}")
+
+
 def main() -> None:
     runs = int(sys.argv[1]) if len(sys.argv) > 1 else 1
     OUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -154,6 +177,7 @@ def main() -> None:
         for title, brief_fn in BRIEFS:
             for iteration in range(runs):
                 hashes = []
+                export_bytes = []
                 first = None
                 started = time.time()
                 # Build the same brief twice from a reset session: the two
@@ -166,7 +190,9 @@ def main() -> None:
                         built = brief_fn(forge)
                     glb = forge.call("export.gltf", out=f"{built['objects'][0]}.glb",
                                      objects=built["objects"])
-                    hashes.append(hashlib.sha256(Path(glb["path"]).read_bytes()).hexdigest())
+                    payload = Path(glb["path"]).read_bytes()
+                    hashes.append(hashlib.sha256(payload).hexdigest())
+                    export_bytes.append(payload)
                     if attempt == 1:
                         first = (built, glb)
                 built, glb = first
@@ -178,7 +204,7 @@ def main() -> None:
                 deterministic = hashes[0] == hashes[1]
                 if not deterministic:
                     failures.append(
-                        f"nondeterministic export: {hashes[0][:12]} != {hashes[1][:12]}")
+                        f"nondeterministic export: {forensics(export_bytes[0], export_bytes[1])}")
                 ok = review["passed"] and not failures
                 all_ok = all_ok and ok
                 entry = {
