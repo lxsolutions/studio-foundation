@@ -231,6 +231,11 @@ bforge-gallery:
 bforge-catalog:
     uv run --project tools python tools/bforge/bforge/cli.py catalog --refresh --reference docs/bforge/OPS.md
 
+# Compile a Recipe IR document (ADR 0018): content hash -> cache -> gates -> proof capsule.
+#   just RECIPE=tools/bforge/examples/recipes/crate.json bforge-cook
+bforge-cook:
+    uv run --project tools python tools/bforge/bforge/cli.py cook "{{RECIPE}}"
+
 # ------------------------------------------------------------------ exports
 
 # WebGL2 Compatibility export — works with official installed templates

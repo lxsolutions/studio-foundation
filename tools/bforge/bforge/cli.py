@@ -227,6 +227,28 @@ def cmd_make(args) -> int:
         forge.stop()
 
 
+def cmd_cook(args) -> int:
+    """Compile a Recipe IR document: cache check -> worker -> gates -> proof."""
+    from bforge import recipe as recipe_mod
+
+    def factory() -> Forge:
+        return _forge(args)
+
+    try:
+        proof = recipe_mod.cook(
+            args.file,
+            cache_dir=args.cache_dir,
+            no_cache=args.no_cache,
+            forge_factory=factory,
+            allow_unpinned=args.allow_unpinned,
+        )
+    except recipe_mod.RecipeError as exc:
+        print(json.dumps({"error": str(exc)}, indent=2), file=sys.stderr)
+        return 1
+    _emit(proof, True)
+    return 0
+
+
 def cmd_catalog(args) -> int:
     if args.refresh:
         forge = _forge(args)
@@ -345,6 +367,19 @@ def build_parser() -> argparse.ArgumentParser:
     make.add_argument("--prompt", default="", help="Recorded in the asset's provenance")
     make.add_argument("--timeout", type=float, default=900)
     make.set_defaults(func=cmd_make)
+
+    cook = sub.add_parser(
+        "cook", help="Compile a Recipe IR document (ADR 0017): cache, gates, proof capsule"
+    )
+    cook.add_argument("file", help="Path to the recipe JSON")
+    cook.add_argument("--cache-dir", default=None, help="Override the content-addressed cache root")
+    cook.add_argument("--no-cache", action="store_true", help="Rebuild even when a pass is cached")
+    cook.add_argument(
+        "--allow-unpinned",
+        action="store_true",
+        help="Permit a Blender other than blender-lock.toml's pin; results are never cached",
+    )
+    cook.set_defaults(func=cmd_cook)
 
     catalog = sub.add_parser("catalog", help="Show or regenerate the committed op catalog")
     catalog.add_argument("--refresh", action="store_true")

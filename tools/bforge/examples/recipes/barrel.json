@@ -1,0 +1,14 @@
+{
+  "recipe_version": 1,
+  "asset_id": "recipe_barrel",
+  "brief": "a small barrel, for the browser",
+  "steps": [
+    { "op": "prop.barrel", "args": { "name": "recipe_barrel", "seed": 11 } }
+  ],
+  "requirements": {
+    "max_triangles": 2000,
+    "platform": "browser_webgpu",
+    "asset_class": "prop"
+  },
+  "export": { "engine": "godot", "category": "prop" }
+}
