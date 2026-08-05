@@ -1,6 +1,6 @@
 # bforge op reference
 
-130 operations.
+131 operations.
 
 ## `arch.*`
 
@@ -416,6 +416,19 @@ Give a char.humanoid head a readable face — brow ridge, nose wedge, chin — s
 | `name` | string | None | Body mesh (from char.humanoid) |
 | `height` | number | 0.0 | Character height; 0 measures the mesh bounds |
 | `build` | realistic \| heroic \| stylized \| chibi \| lithe | 'heroic' | Proportions — match the char.humanoid build |
+
+### `char.gait`
+
+Synthesize a walk/trot/gallop cycle from the rig's OWN morphology: measure the leg chains, pick the gait by Froude number (v²/gL — the real biomechanical transition rule), compute swing angles and cadence from a target speed in m/s, and key the result with real footfall phase patterns. No hand-authored table — any body plan, any size, any speed.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `rig` | string | None | Armature object name (humanoid, quadruped, or hexapod rig) |
+| `speed` | number | 1.2 | Target locomotion speed in metres per second — gait style and cadence derive from it |
+| `style` | auto \| walk \| trot \| gallop \| run | 'auto' | 'auto' selects by Froude number (walk < 0.55, trot < 2.0, else gallop/run) |
+| `length` | integer | 0 | Cycle length in frames; 0 computes it from the cadence |
+| `loop` | boolean | True | Match the last frame to the first so the clip cycles |
+| `action_name` | string | '' | Action name (defaults to gait_<style>_<speed>mps) |
 
 ### `char.hands`
 

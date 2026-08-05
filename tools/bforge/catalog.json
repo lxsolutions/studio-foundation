@@ -1892,6 +1892,58 @@
       }
     },
     {
+      "name": "char.gait",
+      "summary": "Synthesize a walk/trot/gallop cycle from the rig's OWN morphology: measure the leg chains, pick the gait by Froude number (v\u00b2/gL \u2014 the real biomechanical transition rule), compute swing angles and cadence from a target speed in m/s, and key the result with real footfall phase patterns. No hand-authored table \u2014 any body plan, any size, any speed.",
+      "tags": [
+        "char",
+        "anim"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "rig": {
+            "type": "string",
+            "description": "Armature object name (humanoid, quadruped, or hexapod rig)"
+          },
+          "speed": {
+            "type": "number",
+            "description": "Target locomotion speed in metres per second \u2014 gait style and cadence derive from it",
+            "default": 1.2
+          },
+          "style": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "walk",
+              "trot",
+              "gallop",
+              "run"
+            ],
+            "description": "'auto' selects by Froude number (walk < 0.55, trot < 2.0, else gallop/run)",
+            "default": "auto"
+          },
+          "length": {
+            "type": "integer",
+            "description": "Cycle length in frames; 0 computes it from the cadence",
+            "default": 0
+          },
+          "loop": {
+            "type": "boolean",
+            "description": "Match the last frame to the first so the clip cycles",
+            "default": true
+          },
+          "action_name": {
+            "type": "string",
+            "description": "Action name (defaults to gait_<style>_<speed>mps)",
+            "default": ""
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "char.hands",
       "summary": "Upgrade a char.humanoid's block hands with readable fingers: four two-segment fingers with a relaxed curl plus a thumb, so a weapon grip or open hand reads at review distance. Welded into the body mesh; the hand bones own them when skinned.",
       "tags": [

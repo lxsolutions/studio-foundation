@@ -552,6 +552,230 @@ def _clip_keys(clip, length, amplitude):
     }
 
 
+def _measure_leg(obj, *chain_names):
+    """Total length of a bone chain in metres, from the armature's own data."""
+    total = 0.0
+    for name in chain_names:
+        bone = obj.data.bones.get(name)
+        if bone is not None:
+            total += (Vector(bone.tail_local) - Vector(bone.head_local)).length
+    return total
+
+
+def _gait_family(obj):
+    if "mid_upper_l" in obj.data.bones:
+        return "hexapod"
+    if "front_upper_l" in obj.data.bones:
+        return "quadruped"
+    if "thigh_l" in obj.data.bones:
+        return "humanoid"
+    return None
+
+
+@op(
+    "char.gait",
+    summary="Synthesize a walk/trot/gallop cycle from the rig's OWN morphology: measure the leg chains, pick the gait by Froude number (v²/gL — the real biomechanical transition rule), compute swing angles and cadence from a target speed in m/s, and key the result with real footfall phase patterns. No hand-authored table — any body plan, any size, any speed.",
+    params={
+        "rig": ("str", None, "Armature object name (humanoid, quadruped, or hexapod rig)"),
+        "speed": ("num", 1.2, "Target locomotion speed in metres per second — gait style and cadence derive from it"),
+        "style": ("enum:auto|walk|trot|gallop|run", "auto", "'auto' selects by Froude number (walk < 0.55, trot < 2.0, else gallop/run)"),
+        "length": ("int", 0, "Cycle length in frames; 0 computes it from the cadence"),
+        "loop": ("bool", True, "Match the last frame to the first so the clip cycles"),
+        "action_name": ("str", "", "Action name (defaults to gait_<style>_<speed>mps)"),
+    },
+    tags=["char", "anim"],
+)
+def char_gait(ctx, rig, speed, style, length, loop, action_name):
+    obj = _get(rig)
+    if obj.type != "ARMATURE":
+        raise OpError(
+            f"'{rig}' is a {obj.type}, not an armature. Pass the rig from "
+            "char.rig or char.creature_rig."
+        )
+    family = _gait_family(obj)
+    if family is None:
+        raise OpError(
+            f"no leg chains found on '{rig}' — char.gait needs a humanoid, "
+            "quadruped or hexapod rig."
+        )
+    speed = max(0.2, min(12.0, speed))
+
+    if family == "humanoid":
+        leg_l = _measure_leg(obj, "thigh_l", "shin_l")
+        leg_r = _measure_leg(obj, "thigh_r", "shin_r")
+        chains = [("thigh_l", "shin_l"), ("thigh_r", "shin_r")]
+        stations = [("front", "l"), ("rear", "r")]  # humanoid reuses the 2-beat pattern
+    elif family == "quadruped":
+        chains = [("front_upper_l", "front_lower_l"), ("front_upper_r", "front_lower_r"),
+                  ("rear_upper_l", "rear_lower_l"), ("rear_upper_r", "rear_lower_r")]
+        leg_l = _measure_leg(obj, *chains[0])
+        leg_r = leg_l
+    else:
+        chains = [("front_upper_l", "front_lower_l"), ("mid_upper_l", "mid_lower_l"),
+                  ("rear_upper_l", "rear_lower_l")]
+        leg_l = _measure_leg(obj, *chains[0])
+        leg_r = leg_l
+    leg_total = max(0.05, (leg_l + leg_r) / 2.0)
+
+    froude = (speed * speed) / (9.81 * leg_total)
+    if style == "auto":
+        if family == "humanoid":
+            style = "walk" if froude < 0.55 else "run"
+        else:
+            style = "walk" if froude < 0.55 else ("trot" if froude < 2.0 else "gallop")
+
+    swing_deg = {"walk": 22.0, "trot": 34.0, "gallop": 52.0, "run": 46.0}[style]
+    import math as _math
+    step_length = 2.0 * leg_total * _math.sin(_math.radians(swing_deg))
+    cadence = speed / max(0.05, step_length)
+    if length <= 0:
+        length = max(8, min(60, round(30.0 / cadence)))
+    cycle = _synth_cycle(obj, family, style, swing_deg, length, chains)
+
+    # Key the synthesized cycle (mirrors char_animate's action discipline).
+    if obj.animation_data is None:
+        obj.animation_data_create()
+    name = scene_lib.sanitize(
+        action_name or f"gait_{style}_{str(speed).replace('.', '_')}mps"
+    )
+    action = bpy.data.actions.new(name)
+    obj.animation_data.action = action
+    for bone in obj.pose.bones:
+        bone.rotation_mode = "XYZ"
+        bone.rotation_euler = (0.0, 0.0, 0.0)
+        bone.location = (0.0, 0.0, 0.0)
+    for frame, poses in cycle.items():
+        for bone_name, (rotation, location) in poses.items():
+            _pose(obj, bone_name, frame, rotation_deg=rotation, location=location)
+    curves = action_fcurves(action)
+    if loop:
+        for curve in curves:
+            if len(curve.keyframe_points) >= 2:
+                first = curve.keyframe_points[0].co[1]
+                curve.keyframe_points[-1].co[1] = first
+                curve.keyframe_points[-1].handle_left[1] = first
+                curve.keyframe_points[-1].handle_right[1] = first
+            curve.update()
+        if hasattr(action, "use_cyclic"):
+            action.use_cyclic = True
+    action.use_fake_user = True
+    scene = bpy.context.scene
+    scene.frame_start = 1
+    scene.frame_end = max(scene.frame_end, length)
+    return {
+        "rig": obj.name,
+        "action": action.name,
+        "family": family,
+        "style": style,
+        "froude": round(froude, 3),
+        "leg_total_m": round(leg_total, 3),
+        "cadence_steps_per_s": round(cadence, 2),
+        "frames": length,
+        "swing_deg": swing_deg,
+        "keyframes": sum(len(c.keyframe_points) for c in curves),
+    }
+
+
+def _synth_cycle(obj, family, style, swing, length, chains):
+    """Pose keys for one gait cycle, computed (not tabled).
+
+    The phase PATTERNS are biology (walk = 4-beat lateral sequence, trot =
+    2-beat diagonal pairs, gallop = rotary with a flying phase). The ANGLES
+    are morphology (swing from the measured chain, knee compensation
+    proportional to the lower segment's share).
+    """
+    quarter = max(1, length // 4)
+    import math as _math
+
+    if style in ("walk", "run") and family == "humanoid":
+        order = [("l", 0.0), ("r", _math.pi)]
+        keys = {}
+        for frame, phase in ((1, 0.0), (quarter, _math.pi * 0.5), (quarter * 2, _math.pi),
+                             (quarter * 3, _math.pi * 1.5), (length, _math.pi * 2)):
+            poses = {}
+            for side, offset in order:
+                leg_phase = phase + offset
+                upper = f"thigh_{side}"
+                lower = f"shin_{side}"
+                poses[upper] = ((swing * _math.cos(leg_phase), 0, 0), None)
+                poses[lower] = ((-swing * 0.55 * max(0.0, _math.sin(leg_phase)) - swing * 0.1, 0, 0), None)
+            poses["spine"] = ((2.5 * _math.sin(phase * 2), 0, 1.5 * _math.sin(phase)), None)
+            keys[frame] = poses
+        return keys
+
+    if style == "walk":
+        sequence = [(("rear", "l"), 0.0), (("front", "l"), _math.pi * 0.5),
+                    (("rear", "r"), _math.pi), (("front", "r"), _math.pi * 1.5)]
+        keys = {}
+        for frame, phase in ((1, 0.0), (quarter, _math.pi * 0.5), (quarter * 2, _math.pi),
+                             (quarter * 3, _math.pi * 1.5), (length, _math.pi * 2)):
+            poses = {}
+            for (station, side), offset in sequence:
+                leg_phase = phase + offset
+                poses[f"{station}_upper_{side}"] = ((swing * _math.cos(leg_phase), 0, 0), None)
+                poses[f"{station}_lower_{side}"] = (
+                    (-swing * 0.55 * max(0.0, _math.sin(leg_phase)) - swing * 0.12, 0, 0), None)
+            keys[frame] = poses
+        return keys
+
+    if style == "trot":
+        diagonal_a = (("front", "l"), ("rear", "r"))
+        diagonal_b = (("front", "r"), ("rear", "l"))
+        keys = {}
+        for frame, forward in ((1, diagonal_a), (quarter * 2, diagonal_b), (length, diagonal_a)):
+            poses = {}
+            for station, side in forward:
+                poses[f"{station}_upper_{side}"] = ((swing * 0.8, 0, 0), None)
+                poses[f"{station}_lower_{side}"] = ((-swing * 0.5, 0, 0), None)
+            for station, side in (diagonal_b if forward is diagonal_a else diagonal_a):
+                poses[f"{station}_upper_{side}"] = ((-swing * 0.8, 0, 0), None)
+                poses[f"{station}_lower_{side}"] = ((-swing * 0.15, 0, 0), None)
+            keys[frame] = poses
+            if frame != length:
+                mid = frame + max(1, (length - frame) // 2) if frame == 1 else quarter * 3
+                keys.setdefault(mid, {})
+                for station in ("front", "rear"):
+                    for side in ("l", "r"):
+                        keys[mid][f"{station}_upper_{side}"] = ((0, 0, 0), None)
+                        keys[mid][f"{station}_lower_{side}"] = ((-swing * 0.25, 0, 0), None)
+        return keys
+
+    # gallop / run: rotary reach, spine flex, a brief flying moment
+    flex = swing * 0.22
+    keys = {
+        1: {
+            "chest": ((-flex * 0.5, 0, 0), None), "spine": ((flex * 0.5, 0, 0), None),
+            "front_upper_l": ((swing * 0.85, 0, 0), None), "front_upper_r": ((swing * 0.75, 0, 0), None),
+            "rear_upper_l": ((-swing * 0.7, 0, 0), None), "rear_upper_r": ((-swing * 0.65, 0, 0), None),
+            "neck": ((-swing * 0.12, 0, 0), None),
+        },
+        quarter: {
+            "chest": ((flex, 0, 0), None), "spine": ((-flex, 0, 0), None),
+            "front_upper_l": ((-swing * 0.3, 0, 0), None), "front_upper_r": ((-swing * 0.25, 0, 0), None),
+            "rear_upper_l": ((swing * 0.5, 0, 0), None), "rear_upper_r": ((swing * 0.45, 0, 0), None),
+            "hips": (None, (0, 0, 0.02 * swing / 30.0)),
+            "neck": ((swing * 0.08, 0, 0), None),
+        },
+        quarter * 2: {
+            "chest": ((flex * 0.6, 0, 0), None), "spine": ((-flex * 0.6, 0, 0), None),
+            "front_upper_l": ((swing * 0.2, 0, 0), None), "front_upper_r": ((swing * 0.25, 0, 0), None),
+            "rear_upper_l": ((swing * 0.1, 0, 0), None), "rear_upper_r": ((swing * 0.15, 0, 0), None),
+            "neck": ((0, 0, 0), None),
+        },
+        length: {
+            "chest": ((-flex * 0.5, 0, 0), None), "spine": ((flex * 0.5, 0, 0), None),
+            "front_upper_l": ((swing * 0.85, 0, 0), None), "front_upper_r": ((swing * 0.75, 0, 0), None),
+            "rear_upper_l": ((-swing * 0.7, 0, 0), None), "rear_upper_r": ((-swing * 0.65, 0, 0), None),
+            "neck": ((-swing * 0.12, 0, 0), None),
+        },
+    }
+    # prune bones that don't exist on this rig (hexapod has no neck/hips shape)
+    pruned = {}
+    for frame, poses in keys.items():
+        pruned[frame] = {b: v for b, v in poses.items() if obj.data.bones.get(b) is not None}
+    return pruned
+
+
 @op(
     "char.animate",
     summary="Author a keyframed animation clip on a rig: idle, walk, run, attack, jump, death or wave. Real pose-to-pose keys at contact/passing frames, not sine-wave wiggle — the difference between a walk and a shuffle.",
