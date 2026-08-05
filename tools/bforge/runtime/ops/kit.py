@@ -37,7 +37,8 @@ def _grid_piece(bm, kind, grid, height, thickness, rng, detail):
                          center=(half, half, -thickness * 0.5), bevel=thickness * 0.12)
         if detail:
             faces = [f for f in bm.faces if f.normal.z > 0.7]
-            edges = list({e for f in faces for e in f.edges})
+            bm.edges.ensure_lookup_table()
+            edges = sorted({e for f in faces for e in f.edges}, key=lambda e: e.index)
             bmesh.ops.subdivide_edges(bm, edges=edges, cuts=1, use_grid_fill=True)
     elif kind == "wall":
         mesh_lib.add_box(bm, size=(grid, thickness, height),

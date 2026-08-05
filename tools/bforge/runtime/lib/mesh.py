@@ -81,11 +81,17 @@ def add_box(bm, size=(1.0, 1.0, 1.0), center=(0.0, 0.0, 0.0), bevel=0.0, segment
     faces = [f for f in bm.faces if f not in before]
     if bevel > 0.0:
         limit = min(size) * 0.49
+        # BMesh element sets iterate in hash order, which varies run to run;
+        # sort by element index or the op's output order (and the exported
+        # index buffer) becomes nondeterministic.
+        bm.edges.ensure_lookup_table()
+        bm.verts.ensure_lookup_table()
         edges = {e for f in faces for e in f.edges}
         verts_set = {v for f in faces for v in f.verts}
         bmesh.ops.bevel(
             bm,
-            geom=list(verts_set) + list(edges) + faces,
+            geom=(sorted(verts_set, key=lambda v: v.index)
+                  + sorted(edges, key=lambda e: e.index) + faces),
             offset=min(bevel, limit),
             offset_type="OFFSET",
             segments=max(1, segments),
@@ -560,7 +566,8 @@ def greeble(bm, faces, rng, density=0.4, min_depth=0.01, max_depth=0.05, inset=0
     """
     targets = [f for f in faces if f.is_valid]
     if cuts > 0 and targets:
-        edges = list({e for f in targets for e in f.edges})
+        bm.edges.ensure_lookup_table()
+        edges = sorted({e for f in targets for e in f.edges}, key=lambda e: e.index)
         subdivided = bmesh.ops.subdivide_edges(
             bm, edges=edges, cuts=cuts, use_grid_fill=True
         )
