@@ -956,7 +956,13 @@ def is_gltf_safe(material) -> tuple[bool, list[str]]:
     }
     if not material.use_nodes:
         return True, []
-    offenders = sorted({n.type for n in material.node_tree.nodes if n.type not in allowed})
+    offenders = sorted({
+        n.type for n in material.node_tree.nodes
+        if n.type not in allowed
+        # The glTF exporter's own occlusion convention: a group named
+        # "glTF Material Output" IS expressible — it maps to occlusionTexture.
+        and not (n.type == "GROUP" and getattr(n.node_tree, "name", "") == "glTF Material Output")
+    })
     return (not offenders), offenders
 
 
