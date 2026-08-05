@@ -79,3 +79,35 @@ jobs:
 
       - name: Protocol golden fixtures
         run: uv run --project tools python tools/asset-pipeline/check_fixtures.py
+
+  bench:
+    name: bforge bench (public number, regenerated and diffed)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+
+      # The bench drives a real Blender: official tarball, headless, CPU-only.
+      - name: install Blender 4.5 LTS
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libxrender1 libxi6 libxkbcommon0 libsm6 libice6 libxxf86vm1 libxfixes3 libegl1 libgl1
+          curl -sL -o /tmp/blender.tar.xz https://download.blender.org/release/Blender4.5/blender-4.5.12-linux-x64.tar.xz
+          sudo mkdir -p /opt/blender
+          sudo tar -xJf /tmp/blender.tar.xz -C /opt/blender --strip-components=1
+          /opt/blender/blender --version | head -1
+
+      - name: run the bench
+        env:
+          BLENDER_BIN: /opt/blender/blender
+        run: uv run --project tools python tools/bforge/bench.py
+
+      # The committed summary is the public number: if the tooling changed the
+      # output, this diff fails and the summary must be re-committed honestly.
+      - name: the committed number matches a fresh run
+        run: git diff --exit-code tools/bforge/bench/SUMMARY.md tools/bforge/bench/report.json
