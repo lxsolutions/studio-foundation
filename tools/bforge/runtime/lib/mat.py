@@ -184,6 +184,10 @@ def _describes(material):
             return tuple(round(float(v), 4) for v in socket.default_value)
 
     base = value("Base Color", (0.0, 0.0, 0.0, 1.0))
+    if bsdf.inputs.get("Base Color") is not None and bsdf.inputs["Base Color"].is_linked:
+        # A texture-linked base (e.g. after material.bake_pbr) has no socket
+        # value; the viewport colour is the authored readback instead of black.
+        base = tuple(round(float(c), 4) for c in material.diffuse_color)
     if not isinstance(base, tuple):
         base = (base, base, base, 1.0)
     return (
@@ -355,6 +359,10 @@ def layered_pbr(
     tree = material.node_tree
     nodes, links = tree.nodes, tree.links
     bsdf = nodes.get("Principled BSDF")
+    # The metal family is a scalar per piece - corroded bronze cuirass, iron
+    # sickle. It MUST land on the Principled here: the bake passes carry no
+    # metallic channel, so wire_pbr_set can only preserve a scalar that exists.
+    _set(bsdf, "Metallic", float(metallic))
     base_rgba = resolve_color(base_color)
     # Worn stone is POLISHED, not bleached. Lifting the albedo a third of the
     # way to white made every angular prop read as chalk, because on a faceted
@@ -911,11 +919,21 @@ def wire_pbr_set(obj, produced):
         if material is None or not material.use_nodes:
             continue
         tree = material.node_tree
+        # Capture what the rebuild drops: the authored metal family. Without
+        # this, baked bronze exports metallicFactor 0 and reads as black clay
+        # under IBL instead of metal.
+        old_bsdf = next((n for n in tree.nodes if n.type == "BSDF_PRINCIPLED"), None)
+        metallic = 0.0
+        if old_bsdf is not None:
+            socket = old_bsdf.inputs.get("Metallic")
+            if socket is not None and not socket.is_linked:
+                metallic = float(socket.default_value)
         tree.nodes.clear()
         output = tree.nodes.new("ShaderNodeOutputMaterial")
         output.location = (400, 0)
         bsdf = tree.nodes.new("ShaderNodeBsdfPrincipled")
         bsdf.location = (100, 0)
+        bsdf.inputs["Metallic"].default_value = metallic
         tree.links.new(bsdf.outputs["BSDF"], output.inputs["Surface"])
         uv = tree.nodes.new("ShaderNodeUVMap")
         uv.location = (-800, 0)
@@ -939,9 +957,19 @@ def wire_pbr_set(obj, produced):
                 tree.links.new(tex.outputs["Color"], normal_map.inputs["Color"])
                 tree.links.new(normal_map.outputs["Normal"], bsdf.inputs["Normal"])
             elif map_name == "ao":
-                # glTF has no AO slot on the core material; multiply it into
-                # base colour so the occlusion still ships.
-                pass
+                # glTF carries AO as occlusionTexture; the Blender exporter's
+                # convention for it is a node group named "glTF Material
+                # Output" with an Occlusion input. Before this, the baked AO
+                # was silently dropped and every crevice shipped flat.
+                tex.image.colorspace_settings.name = "Non-Color"
+                group_tree = bpy.data.node_groups.get("glTF Material Output")
+                if group_tree is None:
+                    group_tree = bpy.data.node_groups.new("glTF Material Output", "ShaderNodeTree")
+                    group_tree.interface.new_socket("Occlusion", in_out="INPUT", socket_type="NodeSocketFloat")
+                group = tree.nodes.new("ShaderNodeGroup")
+                group.node_tree = group_tree
+                group.location = (100, row + 560)
+                tree.links.new(tex.outputs["Color"], group.inputs["Occlusion"])
         material.pop("bforge_procedural", None)
         wired.append(material.name)
     return wired

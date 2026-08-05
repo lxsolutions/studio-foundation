@@ -373,7 +373,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Which maps to bake: base_color, normal",
+            "description": "Which maps to bake: base_color, normal, ao",
             "default": [
               "base_color",
               "normal"
@@ -4550,6 +4550,56 @@
       }
     },
     {
+      "name": "material.detail_normal",
+      "summary": "Generate a surface-detail normal map procedurally (cloth weave, hide scales, skin pores, wood grain) and wire it into the object's material. Bake passes only capture GEOMETRY normals, so shader bumps never survive export \u2014 this writes the relief into a real normal map, which is what makes cloth/skin/hide read as material instead of flat plastic at close range. Deterministic (seeded), glTF-safe (TEX_IMAGE + NORMAL_MAP only).",
+      "tags": [
+        "material"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "object": {
+            "type": "string",
+            "description": "Object to detail (must have UVs)"
+          },
+          "pattern": {
+            "type": "string",
+            "enum": [
+              "weave",
+              "scales",
+              "pores",
+              "grain"
+            ],
+            "description": "Surface class: weave=cloth, scales=hide/armour, pores=skin/leather, grain=wood",
+            "default": "weave"
+          },
+          "scale": {
+            "type": "number",
+            "description": "Pattern frequency across the texture",
+            "default": 24.0
+          },
+          "strength": {
+            "type": "number",
+            "description": "Relief intensity 0..1",
+            "default": 0.6
+          },
+          "size": {
+            "type": "integer",
+            "description": "Texture size (square)",
+            "default": 512
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Random seed",
+            "default": 0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "material.face_assign",
       "summary": "Give a subset of faces its own material \u2014 trim strips, emissive panels, painted details. Selected by world-space direction or height.",
       "tags": [
@@ -5000,7 +5050,7 @@
     },
     {
       "name": "mesh.retopo",
-      "summary": "Quad-remesh a dense triangle soup (neural/scan import) down to a clean quad mesh at a target face count, in place, preserving volume and sharp features. UVs do not survive retopology \u2014 unwrap again afterwards (uv.unwrap). Pair with bake.transfer to move the source's textures onto the retopo'd mesh.",
+      "summary": "Rebuild a dense triangle soup (neural/scan import) as a clean all-quad mesh via voxel remesh, in place. Robust on any input \u2014 open seams, overlapping shells, interior garbage all get swallowed by the voxel grid. Destroys UVs and skin weights (unwrap again after; re-rig if it had a rig). Pair with bake.transfer to move the source's textures and detail across.",
       "tags": [
         "mesh"
       ],
@@ -5013,25 +5063,20 @@
             "type": "string",
             "description": "Mesh object to retopologize (modified in place)"
           },
-          "target_faces": {
-            "type": "integer",
-            "description": "Face count to aim for \u2014 game budget, not render vanity",
-            "default": 4000
+          "voxel_size": {
+            "type": "number",
+            "description": "Voxel edge in metres \u2014 0 picks it from the bounds (~1/120 of the longest side). Smaller keeps more detail at more quads",
+            "default": 0.0
           },
-          "preserve_volume": {
+          "adaptivity": {
+            "type": "number",
+            "description": "Quad adaptivity 0..0.2 \u2014 higher spends quads only where curvature demands",
+            "default": 0.02
+          },
+          "strip_rig": {
             "type": "boolean",
-            "description": "Hold the silhouette while reducing",
+            "description": "Retopo destroys skin weights: unparent, drop armature modifiers, and apply transforms first (neural/scan inputs arrive unrigged anyway)",
             "default": true
-          },
-          "preserve_sharp": {
-            "type": "boolean",
-            "description": "Keep sharp edges crisp (hard-surface); off for organics",
-            "default": false
-          },
-          "seed": {
-            "type": "integer",
-            "description": "Remesher seed \u2014 determinism is the house rule",
-            "default": 0
           }
         },
         "additionalProperties": false
