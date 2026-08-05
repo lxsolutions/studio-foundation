@@ -423,7 +423,7 @@ def _skin(obj, joints, falloff, rig=None):
 CLIPS = ["idle", "walk", "run", "attack", "jump", "death", "wave",
          "trot", "gallop", "graze"]
 
-_HUMANOID_ONLY = {"run", "attack", "jump", "death", "wave"}
+_HUMANOID_ONLY = {"run", "attack", "jump", "wave"}
 _QUADRUPED_ONLY = {"trot", "gallop", "graze"}
 
 
@@ -813,10 +813,11 @@ def char_animate(ctx, rig, clip, length, amplitude, loop, action_name):
     hexapod = "mid_upper_l" in obj.data.bones
     quadruped = not hexapod and "front_upper_l" in obj.data.bones
     if hexapod:
-        if clip not in ("walk", "idle"):
+        if clip not in ("walk", "idle", "death"):
             raise OpError(
                 f"'{clip}' has no hexapod table — hexapod clips are walk (tripod "
-                "gait) and idle. The full gait vocabulary is a quadruped feature."
+                "gait), idle, and death (the beetle flip). The full gait vocabulary "
+                "is a quadruped feature."
             )
         keys_source = _hexapod_clip_keys
     elif quadruped and clip in _HUMANOID_ONLY:
@@ -841,6 +842,20 @@ def char_animate(ctx, rig, clip, length, amplitude, loop, action_name):
             if rotation is None:
                 continue
             _pose(obj, bone_name, frame, rotation_deg=rotation)
+    if clip == "death" and (quadruped or hexapod):
+        # The body falls: the hips drop to the ground and roll — onto the side
+        # for quadrupeds, right past 90 degrees onto the back for hexapods
+        # (the beetle read). Pose-space location Y is world-up for these
+        # root bones; rotation Z is the side roll.
+        roll_end = 155.0 * amplitude if hexapod else 74.0 * amplitude
+        drop_end = -0.30 * amplitude if hexapod else -0.34 * amplitude
+        for frame, drop, roll in (
+            (1, 0.0, 0.0),
+            (max(2, length // 3), drop_end * 0.3, roll_end * 0.2),
+            (max(3, length * 2 // 3), drop_end * 0.85, roll_end * 0.75),
+            (length, drop_end, roll_end),
+        ):
+            _pose(obj, "hips", frame, rotation_deg=(0.0, 0.0, roll), location=(0.0, drop, 0.0))
     if hip_lift:
         for frame, height in (
             (1, 0.0), (max(2, length // 4), hip_lift), (max(3, length // 2), 0.0),
@@ -1673,6 +1688,21 @@ def _hexapod_clip_keys(clip, length, amplitude):
                 keys[frame][f"{station}_lower_{side}"] = (-knee * 0.15, 0, 0)
         return keys, 0.012 * a
 
+    if clip == "death":
+        # The beetle read: flip onto the back (char_animate rolls the hips
+        # past 90 degrees) and every leg curls upward — unmistakable even at
+        # swarm distance.
+        curl = 42 * a
+        keys = {1: {}, max(2, half): {}, length: {}}
+        for frame in (max(2, half), length):
+            depth = 0.6 if frame < length else 1.0
+            for station in ("front", "mid", "rear"):
+                for side in ("l", "r"):
+                    keys[frame][f"{station}_upper_{side}"] = (curl * depth, 0, 0)
+                    keys[frame][f"{station}_lower_{side}"] = (-curl * 1.2 * depth, 0, 0)
+            keys[frame]["head"] = (10 * a * depth, 0, 0)
+        return keys
+
     # idle: antennae/head wobble and a slow abdomen breath.
     return {
         1:      {"head": (0, 0, 0), "hips": (0, 0, 0), "chest": (0, 0, 0)},
@@ -2149,6 +2179,40 @@ def _quadruped_clip_keys(clip, length, amplitude):
                 pose[f"{station}_upper_{side}"] = (angle, 0, 0)
                 pose[f"{station}_lower_{side}"] = (-knee * (0.4 if angle > 0 else 0.1), 0, 0)
             keys[frame] = pose
+        return keys
+
+    if clip == "death":
+        # The collapse: legs fold under in stages, the neck lets go, the tail
+        # goes slack. char_animate adds the hips' drop and side-roll so the
+        # body lands on the ground plane instead of folding around the origin.
+        fold, tuck = 26 * a, 38 * a
+        keys = {
+            1: {},
+            max(2, length // 3): {
+                "front_upper_l": (fold * 0.7, 0, 0), "front_upper_r": (fold * 0.5, 0, 0),
+                "rear_upper_l": (-fold * 0.6, 0, 0), "rear_upper_r": (-fold * 0.8, 0, 0),
+                "front_lower_l": (tuck * 0.8, 0, 0), "front_lower_r": (tuck * 0.7, 0, 0),
+                "rear_lower_l": (-tuck * 0.7, 0, 0), "rear_lower_r": (-tuck * 0.9, 0, 0),
+                "neck": (10 * a, 0, 0), "head": (8 * a, 0, 0),
+                "tail_1": (0, 0, 6 * a), "tail_2": (0, 0, 8 * a),
+            },
+            max(3, length * 2 // 3): {
+                "front_upper_l": (fold, 0, 14 * a), "front_upper_r": (fold * 0.8, 0, 14 * a),
+                "rear_upper_l": (-fold * 0.9, 0, -14 * a), "rear_upper_r": (-fold, 0, -14 * a),
+                "front_lower_l": (tuck, 0, 0), "front_lower_r": (tuck * 0.9, 0, 0),
+                "rear_lower_l": (-tuck * 0.9, 0, 0), "rear_lower_r": (-tuck, 0, 0),
+                "neck": (18 * a, 0, 6 * a), "head": (14 * a, 0, 0),
+                "tail_1": (0, 0, 10 * a), "tail_2": (0, 0, 14 * a),
+            },
+            length: {
+                "front_upper_l": (fold * 1.1, 0, 18 * a), "front_upper_r": (fold, 0, 18 * a),
+                "rear_upper_l": (-fold, 0, -18 * a), "rear_upper_r": (-fold * 1.1, 0, -18 * a),
+                "front_lower_l": (tuck * 1.1, 0, 0), "front_lower_r": (tuck, 0, 0),
+                "rear_lower_l": (-tuck, 0, 0), "rear_lower_r": (-tuck * 1.1, 0, 0),
+                "neck": (24 * a, 0, 10 * a), "head": (18 * a, 0, 0),
+                "tail_1": (0, 0, 12 * a), "tail_2": (0, 0, 16 * a),
+            },
+        }
         return keys
 
     if clip == "trot":
