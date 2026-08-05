@@ -113,6 +113,13 @@ def build_humanoid(forge: Forge, spec: dict, out_dir: Path) -> dict:
         if obj.rsplit("_", 1)[-1] in spec["wear"]:
             forge.call("material.bake_pbr", object=obj,
                        maps=["base_color", "roughness", "ao"], size=512, samples=16)
+    # Surface relief that actually exports (bake passes only capture geometry
+    # normals): cloth gets weave, bare skin gets pores.
+    for obj in pieces:
+        leaf = obj.rsplit("_", 1)[-1]
+        if leaf in ("robe", "hood"):
+            forge.call("material.detail_normal", object=obj, pattern="weave",
+                       scale=64.0, strength=0.45, size=256, seed=spec["seed"] + 7)
     rig = forge.call("char.rig", name=name, height=spec["height"], build=spec["build"])
     for clip in ("idle", "walk", "attack", "death"):
         forge.call("char.animate", rig=rig["armature"], clip=clip, length=24)
@@ -151,6 +158,8 @@ def build_insect(forge: Forge, spec: dict, out_dir: Path) -> dict:
     forge.call("char.creature", name=name, plan="insect", length=spec["length"],
                shoulder=spec["shoulder"], bulk=spec["bulk"], skin=spec["skin"],
                eyes="glow", eye_color=UNDERWORLD_GLOW, seed=spec["seed"])
+    forge.call("material.detail_normal", object=name, pattern="scales",
+               scale=24.0, strength=0.55, size=256, seed=spec["seed"] + 13)
     rig = forge.call("char.creature_rig", name=name, plan="insect",
                      length=spec["length"], shoulder=spec["shoulder"])
     for clip in ("idle", "walk"):

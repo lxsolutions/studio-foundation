@@ -214,6 +214,10 @@ def material_pbr(ctx, object, base_color, roughness, metallic, detail_scale, gra
         )
     except ValueError as exc:
         raise OpError(str(exc)) from exc
+    # Keep the viewport/readback colour on the authored base: after baking, the
+    # Principled base socket is texture-linked, and the materials gate
+    # (check.materials) would otherwise read every baked surface as flat black.
+    material.diffuse_color = mat_lib.resolve_color(base_color)
     obj.data.materials.clear()
     mat_lib.assign(obj, material)
     ctx.note(
