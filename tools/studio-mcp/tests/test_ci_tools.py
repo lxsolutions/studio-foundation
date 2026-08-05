@@ -226,6 +226,9 @@ class CheckClaimsTests(unittest.TestCase):
         self.assertGreaterEqual(derived["engine.patches"], 1)
         self.assertGreaterEqual(derived["bforge.namespaces"], 10)
 
+    def test_the_repository_s_own_surfaces_are_consistent(self) -> None:
+        self.assertEqual(check_claims.check(REPO), [])
+
     def test_green_when_prose_matches(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = self.make_repo(Path(temp_dir))

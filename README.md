@@ -1,29 +1,35 @@
 # Studio Foundation
 
 **An AI-native, open-source game-dev toolkit: the deterministic asset forge,
-the verification substrate, and the engine-neutral pipelines that let AI
-agents build, prove, and ship real games — into Babylon.js, three.js, Godot,
-and Rust services.**
+the verification substrate, and the pipelines that let AI agents build, prove,
+and ship real games — engine-neutral at the asset boundary (glTF/GLB into
+Godot, Babylon.js, three.js), with Godot as the standardized runtime and
+Rust services behind.**
 
 The pillars:
 
 - **bforge** — a deterministic headless-Blender asset forge for AI agents:
-  130 whitelisted, typed operations with a quality gate that rejects output
-  below the bar, byte-identical regeneration, and 174 live-Blender tests.
+  136 whitelisted, typed operations with a quality gate that rejects output
+  below the bar, byte-identical regeneration, and 203 bforge tests, 164 in suites that start a real Blender daemon.
 - **Verification** — GLB budget gates, pixel-diff captures, provenance, and
   render probes, so agent output is measured rather than trusted.
-- **Engine-neutral shipping** — glTF pipelines into Babylon.js, three.js and
-  Godot, with Rust multiplayer services behind them.
+- **Engine-neutral assets, standardized runtime** — the forge outputs portable
+  glTF/GLB consumed by Godot, Babylon.js and three.js. Godot remains the
+  standardized full runtime; promoting another runtime to peer status requires
+  a separate accepted ADR (the TypeScript/Three.js proposal,
+  [PR #50](https://github.com/lxsolutions/studio-foundation/pull/50), is still
+  an open draft; [ADR 0018](docs/adr/0018-brief-to-battle-world-compiler.md)
+  charts the World IR path), with Rust multiplayer services behind.
 
 And as the standing proof that the model works at the hard end of the stack:
-**the only maintained Godot 4.7.1 WebGPU browser backend** — a checksummed
-patch series on official Godot that renders 3D on real hardware, in public,
-with the evidence committed.
+**a maintained Godot 4.7.1 WebGPU browser backend** — a checksummed
+patch series on official Godot that renders Forward+ on real hardware, in
+public, with the evidence committed.
 
 > **Lineage.** The WebGPU backend builds on David Walter's MIT-licensed
 > [`dwalter/godotwebgpu`](https://github.com/dwalter/godotwebgpu) driver (Godot
-> 4.6.2); Studio Foundation maintains the 4.7.1 rebase, 29 targeted integration
-> patches, the build tooling, and the browser validation evidence. Exact source
+> 4.6.2); Studio Foundation maintains the 4.7.1 rebase, 33 targeted integration patches,
+> the build tooling, and the browser validation evidence. Exact source
 > boundary and commit pins:
 > [webgpu-integration.md](docs/architecture/webgpu-integration.md), [NOTICE.md](NOTICE.md).
 
@@ -32,22 +38,24 @@ with the evidence committed.
 Critics say projects like this are marketing. Here is the inventory, with the
 proof attached to every line. Hype is welcome here — it is earned.
 
-**🥇 The only public Forward+ renderer running on WebGPU — anywhere.** Not
+**🥇 Godot's Forward+ renderer, running on WebGPU, reproducibly.** Not
 the Mobile renderer: the full clustered desktop path — clustered lighting,
 SSAO, volumetric fog — that AAA-feeling games actually need. Official Godot
-ships no WebGPU support; the only other public WebGPU effort targets the
-Mobile renderer on 4.6.2. Version numbers are perishable; this capability is
-not. And the same build is also the first public, working Godot 4.7.1 on
-WebGPU. 29 checksummed patches of named engineering separate "does not draw"
-from "renders at 60 fps on a Tesla P40 with 0 `GPUValidationError`."
+ships no WebGPU support. Other public WebGPU patch stacks exist — including
+the 4.6.2 driver this one descends from — but what is rare at any version is
+the part we consider the actual product: 33 checksummed patches of named
+engineering between "does not draw" and "renders at 60 fps on a Tesla P40 with
+0 `GPUValidationError`", an evidence file that ties adapter, engine counters,
+composited pixels and command-buffer validity together, and a one-command
+reproduction path. Other implementations may exist; this one you can audit.
 [Play it in your browser](https://lxsolutions.github.io/studio-foundation/).
 
-**🔨 The only deterministic, quality-gated Blender forge for AI agents.**
-bforge is 130 typed, whitelisted operations driven into a persistent headless
+**🔨 A deterministic, quality-gated Blender forge for AI agents.**
+bforge is 136 typed, whitelisted operations driven into a persistent headless
 Blender daemon — LODs, collision, budgets, rigs, gaits, baking, validation —
-with byte-identical output run to run and 174 tests that execute against a
-real Blender. No GUI remote-control, no arbitrary code execution, no "same
-prompt, different mesh." Nothing else public does all four of those.
+with byte-identical output run to run and 203 tests, 164 of them in suites that start a real Blender daemon.
+No GUI remote-control, no arbitrary code execution, no "same
+prompt, different mesh." We know of nothing else public that does all four of those.
 
 **🛡 A toolchain that rejects its own output.** The quality gate measures
 perceptual material separation (CIELAB ΔE), texel density, triangle budgets,
@@ -99,7 +107,7 @@ open.
 Most Blender-AI integrations are remote controls for a GUI Blender: arbitrary
 code into a live session, a different mesh every run, nothing CI can test.
 **bforge inverts that** — a persistent headless Blender daemon driven through
-130 whitelisted, typed, deterministic operations. Same params + same seed →
+136 whitelisted, typed, deterministic operations. Same params + same seed →
 byte-identical GLB, forever. It is how this toolkit's games get their art, and
 it works identically on a laptop, in CI, and on a headless build box.
 
@@ -127,8 +135,9 @@ it works identically on a laptop, in CI, and on a headless build box.
   (hero/front/side/top/wireframe/UV-checker), luminance and palette
   measurement, silhouette scoring, impostor sprite sheets for distant LOD,
   and concept-image → extruded-mesh with a silhouette-IoU fidelity score.
-- **174 tests, all live against real Blender.** Schema, MCP protocol, and
-  per-op integration — including byte-determinism asserted on exports.
+- **203 tests, 164 of them in suites that start a real Blender daemon.** Schema,
+  MCP protocol, and per-op integration — including byte-determinism asserted
+  on exports.
 
 Full reference: [`tools/bforge/README.md`](tools/bforge/README.md) ·
 [`docs/bforge/OPS.md`](docs/bforge/OPS.md) · engine-neutral output (glTF) —
@@ -152,17 +161,18 @@ because claims need a floor to stand on. Official
 upstream; the WebGPU export path below is maintained here as an ordered,
 SHA-256-locked patch series. WebGL 2 remains the supported fallback.
 
-**First, and stated plainly.** Nothing else public renders Godot's Forward+
-renderer — the full clustered desktop path — through WebGPU. Not official
-Godot, which ships no WebGPU support at all
-[by their own docs](https://docs.godotengine.org/en/latest/tutorials/export/exporting_for_web.html);
-not the only other public WebGPU effort, David Walter's driver, which targets
-the Mobile renderer on 4.6.2. This build renders Forward+ in a browser tab,
-and it is also the first public, working Godot 4.7.1 on WebGPU. The version
-number will age; the capability claim will not. It is said here, with the
-evidence attached, because it is true and it is checkable.
+**Stated plainly.** This build renders Godot's Forward+ renderer — the full
+clustered desktop path — through WebGPU, in a browser tab, on real hardware,
+with the evidence committed. Official Godot ships no WebGPU support at all
+[by their own docs](https://docs.godotengine.org/en/latest/tutorials/export/exporting_for_web.html).
+Other public WebGPU patch stacks exist, including the 4.6.2 driver this work
+descends from; we claim no monopoly on the idea. What we do claim is the part
+that matters for trust: an ordered, checksum-locked patch series, a render
+probe that refuses to call a fallback adapter or a blank canvas success, and a
+published evidence file you can regenerate. The version number will age; the
+auditability will not.
 
-**What it took to make 4.7.1 draw.** 29 targeted, checksummed patches, each
+**What it took to make 4.7.1 draw.** 33 targeted, checksummed patches, each
 killing a distinct defect between "does not draw" and "renders": the
 Tint/SPIR-V translation chain (texture lowering, storage-buffer access, image
 ordering, volatile decoration), sampler/texture stage-visibility splits, lit
@@ -273,7 +283,7 @@ multi-hour engine build:
 **[Download the templates](https://github.com/lxsolutions/studio-foundation/releases/tag/godot-4.7.1-webgpu-p0033)**
 (official Godot 4.7.1 + patch series 0001–0033, single-threaded so exports run on plain
 static hosts with no COOP/COEP headers). These are the first templates that render
-**Forward+** — the earlier `p0014` release cannot, and predates the eleven patches
+**Forward+** — the earlier `p0014` release cannot, and predates the nineteen patches
 that made the clustered renderer work. Point your `web` preset's
 `custom_template/release` and `custom_template/debug` at them, then export with
 `just export-browser-webgpu` — that step applies the WebGPU handoff the official editor
@@ -293,12 +303,14 @@ a pass when it cannot establish those. **If your result differs from the
 published one, please open an issue and attach the evidence file.** Independent
 confirmation on hardware we do not own is the most useful contribution right now.
 
-**What this download is not.** It is pinned at patch **0014**, while `main`
-carries **0022**. Those eight patches are what made Forward+ work on hardware
-(0015 and 0018–0022) — so the published templates render **Forward Mobile only**,
-which is also the default and what every published demo runs. If you want to try
-Forward+, build from source below; the release cannot do it. A templates build
-matching the current series is not yet published.
+**What this download is not.** It is a beta pinned at patch series **0001–0033** —
+the series whose Forward+ frame is hardware-verified — but the verification is
+narrow: one scene class, one browser (headed Chrome), one OS, one GPU (an
+NVIDIA Tesla P40). Three WebGPU validation errors remain outside the
+presented-frame path, the uncompressed payload is about 46 MB, cold startup is
+tens of seconds, and AMD, Intel, Apple, Safari, and iOS are unverified. If
+your hardware differs from that matrix, run the probe above and send the
+evidence file either way — that is how the matrix grows.
 
 ### Build the WebGPU path yourself
 
@@ -342,7 +354,7 @@ to work here.
 | Runtime verification | Browser smoke tests observe the engine's adapter, device, and WebGPU canvas requests and reject any WebGL context request |
 | 3D shader translation | Verified in-browser on an NVIDIA Tesla P40. Patches 0009–0012 fix four distinct translation crashes; the runtime-specialized scene shader translates without crashing |
 | WebGPU shader coverage | 199 of 205 shader modules translate to valid WGSL offline, with **0 GLSL compile failures**, measured at the engine's real target env (Vulkan 1.1 / SPIR-V 1.3 — the harness previously measured 1.0 and so did not reproduce the engine; see patch 0016). **None of the 6 remaining failures blocks Forward+ under WebGPU**: two are Forward Mobile's subpass tonemap, one is FSR's 16-bit variant (the driver reports no half-float, so the engine picks the fallback, which translates), two are the subgroup variants WebGPU does not select, one is an editor debug gizmo |
-| Renderer ceiling | Every WebGPU export ran **Forward Mobile**, which hard-disables SSAO, SSIL, SSR, SDFGI, VoxelGI and volumetric fog regardless of project settings. Patches 0015 and 0017 unblock **Forward+** (clustered) — the renderer those effects need, and the better architectural fit for WebGPU, since Mobile's one untranslatable shader is also the engine's only user of subpasses. Every shader Forward+ needs now translates; **not yet hardware-verified**, so `mobile` stays the export default |
+| Renderer ceiling | **Forward+ (clustered) renders on hardware** — verified in-browser on an NVIDIA Tesla P40 with the p0033 templates: 188 objects / 2,015,266 primitives at 59 fps, 0 invalid `commandEncoder.finish` out of 10,842, 0 rejected `queue.submit`, 0 bind-group failure classes. Forward Mobile remains an export option; WebGL 2 remains the fallback. Three validation errors outside the presented-frame path and the wider hardware matrix are the open work |
 | 3D render (lit + shadowed) | **Verified in-browser on an NVIDIA Tesla P40.** Patches 0013–0014 fix per-stage sampler visibility and depth-texture sampler types. A minimal PBR + shadow scene renders at 59–60 fps / 36 draws per frame, and a full game (The Chariot Club) holds a locked 60 fps at ~490–630 draws and ~23M primitives per frame — both with 0 `GPUValidationError` |
 | Fallback | The same template project has an official WebGL 2 export preset |
 | Template behavior | Headless GDScript tests cover the shared addon and neutral starter project |
@@ -355,16 +367,18 @@ Exact test counts, artifact state, and unverified areas are in the
 
 WebGPU support is **beta**.
 
-What works, verified on real GPU hardware: the engine boots the WebGPU backend
-(Forward Mobile), translates the runtime-specialized 3D scene shaders, and renders
-lit, shadowed 3D geometry with 0 validation errors. 2D/UI renders and was gated
-against the WebGL baseline at a 1.2% visual difference.
+What works, verified on real GPU hardware: the engine boots the WebGPU backend,
+translates the shaders the runtime actually selects, and renders lit, shadowed
+3D geometry with 0 validation errors — under **Forward Mobile**, and under
+**Forward+** (the clustered desktop path) since patch series 0001–0033. 2D/UI
+renders and was gated against the WebGL baseline at a 1.2% visual difference.
 
 What does not, yet: several post-processing effects (tonemap variants, SSR, TAA,
 SDFGI/voxel-GI debug views) still fail Tint translation *gracefully* — they are
-skipped rather than crashing, so 3D renders without them. Getting to a visible frame
-took fourteen patches worth of shader-translation and binding-description fixes; each
-one is documented in [engine/patches/README.md](engine/patches/README.md) with the
+skipped rather than crashing, so 3D renders without them. Three WebGPU validation
+errors remain outside the presented-frame path. Getting here took 33 patches of
+shader-translation, binding-description, and format-invariant fixes; each one is
+documented in [engine/patches/README.md](engine/patches/README.md) with the
 exact defect it addresses.
 
 Godot's own WebGPU support is separately in development upstream. This project is

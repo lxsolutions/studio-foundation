@@ -5,9 +5,10 @@
 > build/smoke logs under `engine/.cache/` and uncommitted edits in this worktree.
 > This file is the handoff — update it whenever the runtime status changes.
 >
-> **Last reconciled:** 2026-07-27, from `origin/main` @ `0f2bab8` (patch series
-> 0001–0022). Supersedes the 2026-07-23 reconciliation, which predated patches
-> 0018–0022 and still listed Forward+ on hardware as untested.
+> **Last reconciled:** 2026-08-05, patch series **0001–0033** — the series whose
+> Forward+ frame is hardware-verified (first verified frame 2026-07-28, Tesla
+> P40). Supersedes the 2026-07-27 reconciliation (0001–0022), which listed
+> Forward+ as compiling but never having rendered.
 > **Scope:** the ADR 0002 runtime-acceptance gate. The editor and WebGL fallback
 > are unaffected and green.
 
@@ -35,21 +36,19 @@ Folding that 3D render into the automated gate is the remaining CI task — host
 CI now proves the patch series (checksums + a clean-tree apply) on every change,
 but a render probe needs a GPU runner and remains self-hosted work.
 
-**One sentence on which renderer that means.** Everything shipped and published —
-the live demo, the templates, the performance A/B — is **Forward Mobile**, which
-`tools/godot/export_game.py` calls "the hardware-verified default". **Forward+**
-is opt-in (`--rendering-method forward_plus`) and, as of patch 0033, **renders**.
-As of patches 0023–0029 it gets substantially further — the scene shader
-translates, the cluster builder exists, scene pipelines are created and command
-buffers encoded, and clears attachment compatibility across 44 measured
-pipeline/pass pairs. It renders the 2D UI; the 3D scene is black. The frontier is
-now resource and bind-group compatibility.
-See §Forward+ on hardware (0023–0029). Do not read a Forward Mobile result as a
-Forward+ result, and do not read "the render loop runs" as "a frame rendered".
+**One sentence on which renderer that means.** The export default is **Forward
+Mobile** — `tools/godot/export_game.py` keeps `rendering_method="mobile"` unless
+asked otherwise — and Forward+ is opt-in (`--rendering-method forward_plus`).
+As of patch series 0001–0033, Forward+ **renders**: first verified frame
+2026-07-28, Tesla P40, headed Chrome/WebGPU (§Forward+ renders — first verified
+frame). Do not read a Forward Mobile result as a Forward+ result, and do not
+read "the render loop runs" as "a frame rendered" — both mistakes have been
+made in this file's own history, which is why the sections below are dated
+checkpoints rather than overwritten prose.
 
 | Gate | Status | Evidence |
 | --- | --- | --- |
-| Patch series (0001–0022) applies to official 4.7.1 `a13da4feb8` | ✅ **enforced in CI** | `.github/workflows/patch-series.yml` — checksums + a clean-tree apply on every push and PR |
+| Patch series (0001–0033) applies to official 4.7.1 `a13da4feb8` | ✅ **enforced in CI** | `.github/workflows/patch-series.yml` — checksums + a clean-tree apply on every push and PR |
 | Web templates compile (release + debug, `nothreads`, `webgpu=yes`) | ✅ | `bin/godot.web.template_*.wasm32.nothreads.*` |
 | Tint SPIR‑V→WGSL translation (storage‑buffer + OpImage ordering) | ✅ | patches 0007, 0008 |
 | **Emdawn/Godot `RefCounted` ODR collision** (the heap‑buffer‑overflow) | ✅ **fixed in source** | `engine/toolchain/patches/0001-emdawn-private-namespace.patch`, locked in `[toolchain.emdawnwebgpu]` |
@@ -137,6 +136,10 @@ aggressively than Mobile, and the next five patches were all things only
 hardware could show. See the section below.
 
 ## Forward+ on hardware — 168 → 18 (patches 0018–0022, 2026‑07‑25)
+
+> **Superseded checkpoint.** This section is the 2026-07-25 state, kept as the
+> record of how the abort layer was cleared. Forward+ **does render** now — see
+> §Forward+ renders — first verified frame (patches 0023–0033, 2026‑07‑28).
 
 Run on a **Tesla P40** through Chrome/WebGPU, exporting with
 `export_game.py --preset web-webgpu --rendering-method forward_plus`.
@@ -241,6 +244,10 @@ still an invalid bind group that took the whole scene command buffer with it.
 The fix was to delete the dead resource, not to describe it more accurately.
 
 ## Forward+ on hardware — 18 → the render loop runs (patches 0023–0029, 2026‑07‑28)
+
+> **Superseded checkpoint.** Same-day state before 0033 landed; kept as the
+> record of the resource/bind-group frontier. The presented frame is the next
+> section, §Forward+ renders — first verified frame.
 
 Same host: a Tesla P40 through headed Chrome/WebGPU under Xvfb, Chariot exported
 with `--rendering-method forward_plus`, measured by
