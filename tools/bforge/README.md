@@ -290,6 +290,14 @@ wrong" that no metric shows.
 
 ---
 
+## The bench — the loop as a public number
+
+[`bench.py`](bench.py) runs the whole loop out loud: five briefs (a prop, a
+synthesized-gait wolf, an armored warden that walks, a whole camp, a 2D
+concept) each forged, quality-gated, exported, and parsed back for structure
+— then publishes [`bench/SUMMARY.md`](bench/SUMMARY.md). Rerun it and diff:
+the numbers come from the runner, never from memory.
+
 ## Testing
 
 ```bash

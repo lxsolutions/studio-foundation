@@ -1,0 +1,69 @@
+{
+  "bench": "bforge bench v1",
+  "runs": [
+    {
+      "brief": "crate from a one-line brief",
+      "iteration": 1,
+      "seconds": 0.1,
+      "triangles": 444,
+      "bytes": 17752,
+      "gate": "pass",
+      "structure_failures": [],
+      "max_delta_e": null,
+      "ok": true
+    },
+    {
+      "brief": "a wolf with a synthesized trot",
+      "iteration": 1,
+      "seconds": 0.2,
+      "triangles": 1036,
+      "bytes": 99308,
+      "gate": "pass",
+      "structure_failures": [],
+      "max_delta_e": null,
+      "ok": true
+    },
+    {
+      "brief": "an armored warden that walks",
+      "iteration": 1,
+      "seconds": 0.3,
+      "triangles": 5146,
+      "bytes": 272700,
+      "gate": "pass",
+      "structure_failures": [],
+      "max_delta_e": 27.58,
+      "ok": true
+    },
+    {
+      "brief": "a whole Age-1 camp in one call",
+      "iteration": 1,
+      "seconds": 0.5,
+      "triangles": 5796,
+      "bytes": 427528,
+      "gate": "pass",
+      "structure_failures": [],
+      "max_delta_e": 93.04,
+      "ok": true
+    },
+    {
+      "brief": "a 2D concept become a solid",
+      "iteration": 1,
+      "seconds": 0.2,
+      "triangles": 188,
+      "bytes": 9148,
+      "gate": "pass",
+      "structure_failures": [],
+      "max_delta_e": null,
+      "ok": true,
+      "silhouette_iou": 0.978
+    }
+  ],
+  "aggregates": {
+    "runs": 5,
+    "passed": 5,
+    "pass_rate": 1.0,
+    "mean_seconds": 0.3,
+    "total_triangles": 12610,
+    "verdict": "pass"
+  }
+}
