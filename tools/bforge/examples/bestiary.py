@@ -114,7 +114,7 @@ def build_humanoid(forge: Forge, spec: dict, out_dir: Path) -> dict:
             forge.call("material.bake_pbr", object=obj,
                        maps=["base_color", "roughness", "ao"], size=512, samples=16)
     rig = forge.call("char.rig", name=name, height=spec["height"], build=spec["build"])
-    for clip in ("idle", "walk", "attack"):
+    for clip in ("idle", "walk", "attack", "death"):
         forge.call("char.animate", rig=rig["armature"], clip=clip, length=24)
     objects = [name, rig["armature"]] + pieces
     review = forge.call("gameready.review", objects=objects)
