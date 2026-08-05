@@ -58,12 +58,21 @@ an empty table and the compiled runtime Tint path converts cache misses.
 
 ## Current runtime status
 
-The no-threads build reaches a browser WebGPU adapter, device, canvas context,
-and Godot's Mobile renderer without requesting WebGL. Startup then fails in the
-vendored Tint SPIR-V reader at `texture.cc:606` while lowering a texture
+Maintained in [webgpu-runtime-status.md](webgpu-runtime-status.md), reconciled
+against `engine-lock.toml` and hardware evidence on every status change. As of
+the 2026-07-27 reconciliation: the no-threads build renders 3D in-browser on
+real GPU hardware (NVIDIA Tesla P40, headed Chrome/WebGPU) at 59–60 fps with
+0 `GPUValidationError`, both export templates are locked with SHA-256 in
+`[artifacts.export_templates]`, and Forward+ renders as of patch 0033.
+
+### Historical checkpoint (2026-07-22, superseded — kept for the record)
+
+The no-threads build reached a browser WebGPU adapter, device, canvas context,
+and Godot's Mobile renderer without requesting WebGL. Startup then failed in
+the vendored Tint SPIR-V reader at `texture.cc:606` while lowering a texture
 operation. Patch 0007 removed the preceding illegal write-only storage-buffer
-errors, but the texture assertion remains. Consequently, there are no accepted
-WebGPU template artifacts or public game proof at this checkpoint.
+errors; patches 0009–0014 later fixed the full translation chain, so this
+checkpoint no longer describes the runtime.
 
 ## Reproduce and inspect
 
