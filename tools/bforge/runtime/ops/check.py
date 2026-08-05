@@ -446,6 +446,7 @@ ART_BIBLES = {
         {"name": "soot fur", "hex": "#24231f"},
         {"name": "burial shell", "hex": "#3a3026"},
         {"name": "aged bronze", "hex": "#67492f"},
+        {"name": "cast bronze", "hex": "#c49b6c"},
         {"name": "dark iron", "hex": "#3f3d3a"},
         {"name": "worn leather", "hex": "#34231d"},
         {"name": "ember", "hex": "#ff5a14"},

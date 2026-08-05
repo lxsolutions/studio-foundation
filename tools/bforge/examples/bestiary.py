@@ -43,6 +43,7 @@ ROSTER = [
         "brief": "Bone Oracle — robed caster reading the dead's debts, pale as candle wax",
         "height": 1.78, "build": "lithe", "skin": "#cfc6b2",
         "outfit": [("robe", "cloth"), ("hood", "cloth")],
+        "robe_color": "#cfc6b2", "hood_color": "#191b1b",
         "wear": [], "seed": 71,
     },
     {
