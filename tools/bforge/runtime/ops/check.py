@@ -12,6 +12,7 @@ that fixes each one, because "your mesh has issues" is not actionable and
 
 from __future__ import annotations
 
+import json
 import re
 
 import bpy
@@ -426,6 +427,119 @@ def check_materials(ctx, objects, min_delta_e):
         "separated": not findings,
         "note": "colours are linear-space base colours; ΔE76 below ~6 is invisible at gameplay distance",
     }
+
+
+# Art bibles: executable art direction. Each family is a colour the game has
+# committed to; an asset conforms when every material sits within tolerance of
+# a family. New games add their bible here and every asset they ship can be
+# measured against it instead of eyeballed against it.
+ART_BIBLES = {
+    "ashenward": [
+        {"name": "underworld glow", "hex": "#39ff88"},
+        {"name": "bone ash", "hex": "#c9c2b0"},
+        {"name": "pale wax", "hex": "#cfc6b2"},
+        {"name": "old skin", "hex": "#a39c88"},
+        {"name": "umber hide", "hex": "#8a7a66"},
+        {"name": "stygian green", "hex": "#7d8471"},
+        {"name": "river robe", "hex": "#2e3b33"},
+        {"name": "shroud black", "hex": "#191b1b"},
+        {"name": "soot fur", "hex": "#24231f"},
+        {"name": "burial shell", "hex": "#3a3026"},
+        {"name": "aged bronze", "hex": "#67492f"},
+        {"name": "cast bronze", "hex": "#c49b6c"},
+        {"name": "dark iron", "hex": "#3f3d3a"},
+        {"name": "worn leather", "hex": "#34231d"},
+        {"name": "ember", "hex": "#ff5a14"},
+    ],
+}
+
+
+@op(
+    "check.palette",
+    summary="Measure an asset against the game's art bible: every material's base colour is mapped to the nearest palette family in CIELAB and must land within tolerance (ΔE76). This is executable art direction — the difference between 'assets that look generated' and 'assets that look like they belong to one game'.",
+    params={
+        "objects": ("str[]", [], "Objects whose materials to measure (empty = every mesh)"),
+        "bible": ("str", "ashenward", "Art bible name (see ART_BIBLES) or a JSON list of {\"name\", \"hex\"} entries"),
+        "tolerance": ("num", 22.0, "Max distance to the nearest family in ΔE76 — 18 is strict, 26 is permissive"),
+    },
+    tags=["check", "inspect", "material"],
+    mutates=False,
+)
+def check_palette(ctx, objects, bible, tolerance):
+    targets = [_get(n) for n in objects] if objects else scene_lib.mesh_objects()
+    targets = [o for o in targets if o.type == "MESH"]
+    if not targets:
+        raise OpError("no mesh objects to measure")
+
+    if bible in ART_BIBLES:
+        families = ART_BIBLES[bible]
+    else:
+        try:
+            families = json.loads(bible)
+        except (ValueError, TypeError) as exc:
+            raise OpError(
+                f"unknown bible '{bible}' — available: {', '.join(sorted(ART_BIBLES))} "
+                "— or pass a JSON list of {\"name\", \"hex\"} entries"
+            ) from exc
+    palette = [
+        {"name": f["name"], "lab": _linear_rgb_to_lab(*_hex_to_linear(f["hex"]))}
+        for f in families
+    ]
+
+    materials = []
+    seen = set()
+    for obj in targets:
+        for material in obj.data.materials:
+            if material is None or material.name in seen:
+                continue
+            seen.add(material.name)
+            materials.append(_material_appearance(material))
+
+    findings = []
+    rows = []
+    worst = None
+    for entry in materials:
+        lab = _linear_rgb_to_lab(*entry["base_color"][:3])
+        nearest = min(
+            palette,
+            key=lambda fam: sum((lab[k] - fam["lab"][k]) ** 2 for k in range(3)) ** 0.5,
+        )
+        delta = sum((lab[k] - nearest["lab"][k]) ** 2 for k in range(3)) ** 0.5
+        rows.append({
+            "material": entry["name"],
+            "family": nearest["name"],
+            "delta_e": round(delta, 2),
+            "conforms": delta <= tolerance,
+        })
+        if worst is None or delta > worst["delta_e"]:
+            worst = rows[-1]
+        if delta > tolerance:
+            findings.append({
+                "object": entry["name"],
+                "severity": "warn",
+                "issue": "off-palette material",
+                "detail": f"'{entry['name']}' is ΔE {delta:.1f} from its nearest family "
+                          f"('{nearest['name']}') — it will read as foreign next to the rest "
+                          "of the game",
+                "fix": "nudge the base colour toward the family with material.set color=..., "
+                       "or extend the art bible if this is a deliberate new family",
+            })
+
+    return {
+        "bible": bible if bible in ART_BIBLES else "inline",
+        "materials": rows,
+        "conforming": sum(1 for r in rows if r["conforms"]),
+        "total": len(rows),
+        "worst": worst,
+        "findings": findings,
+        "conforms": not findings,
+    }
+
+
+def _hex_to_linear(value):
+    value = value.lstrip("#")
+    srgb = [int(value[i : i + 2], 16) / 255.0 for i in (0, 2, 4)]
+    return [c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4 for c in srgb]
 
 
 def _material_appearance(material):

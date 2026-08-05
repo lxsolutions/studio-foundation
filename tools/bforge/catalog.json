@@ -2522,6 +2522,41 @@
       }
     },
     {
+      "name": "check.palette",
+      "summary": "Measure an asset against the game's art bible: every material's base colour is mapped to the nearest palette family in CIELAB and must land within tolerance (\u0394E76). This is executable art direction \u2014 the difference between 'assets that look generated' and 'assets that look like they belong to one game'.",
+      "tags": [
+        "check",
+        "inspect",
+        "material"
+      ],
+      "mutates": false,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "objects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Objects whose materials to measure (empty = every mesh)",
+            "default": []
+          },
+          "bible": {
+            "type": "string",
+            "description": "Art bible name (see ART_BIBLES) or a JSON list of {\"name\", \"hex\"} entries",
+            "default": "ashenward"
+          },
+          "tolerance": {
+            "type": "number",
+            "description": "Max distance to the nearest family in \u0394E76 \u2014 18 is strict, 26 is permissive",
+            "default": 22.0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "check.silhouette",
       "summary": "Score how readable an object's silhouette is from the standard game camera angles. A prop that fails here will not read at gameplay distance no matter how good its texture is.",
       "tags": [
