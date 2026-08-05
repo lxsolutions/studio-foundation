@@ -56,8 +56,14 @@ def _three_mud_materials(forge: Forge, name="blob"):
         (("#4a3828", "m_mud_a"), ("#4b3929", "m_mud_b"), ("#493827", "m_mud_c"))
     ):
         forge.call(
-            "material.set", object=name, preset="metal", name=mat_name, slot=slot,
-            color=brown, roughness=0.7, metallic=0.0,
+            "material.set",
+            object=name,
+            preset="metal",
+            name=mat_name,
+            slot=slot,
+            color=brown,
+            roughness=0.7,
+            metallic=0.0,
         )
     return name
 
@@ -79,12 +85,36 @@ class Materials(ForgeCase):
 
     def test_separated_materials_pass(self):
         FORGE.call("build.box", name="good", size=[1.0, 1.0, 1.0])
-        FORGE.call("material.set", object="good", preset="metal", name="m_red_cloth", slot=0,
-                   color="#8c1f1f", roughness=0.85, metallic=0.0)
-        FORGE.call("material.set", object="good", preset="metal", name="m_brass", slot=1,
-                   color="#c8b06a", roughness=0.3, metallic=1.0)
-        FORGE.call("material.set", object="good", preset="metal", name="m_slate", slot=2,
-                   color="#2a4a6a", roughness=0.6, metallic=0.0)
+        FORGE.call(
+            "material.set",
+            object="good",
+            preset="metal",
+            name="m_red_cloth",
+            slot=0,
+            color="#8c1f1f",
+            roughness=0.85,
+            metallic=0.0,
+        )
+        FORGE.call(
+            "material.set",
+            object="good",
+            preset="metal",
+            name="m_brass",
+            slot=1,
+            color="#c8b06a",
+            roughness=0.3,
+            metallic=1.0,
+        )
+        FORGE.call(
+            "material.set",
+            object="good",
+            preset="metal",
+            name="m_slate",
+            slot=2,
+            color="#2a4a6a",
+            roughness=0.6,
+            metallic=0.0,
+        )
         result = FORGE.call("check.materials", objects=["good"])
         self.assertTrue(result["separated"], f"unexpected findings: {result['findings']}")
         self.assertGreater(result["max_delta_e"], 12.0)
@@ -127,22 +157,27 @@ class ExportGate(ForgeCase):
         name = _three_mud_materials(FORGE)
         FORGE.call("uv.unwrap", object=name, style="smart_packed")
         with self.assertRaises(ForgeError) as ctx:
-            FORGE.call("export.asset", asset_id="mud_blob", objects=[name],
-                       contact_sheet=False)
+            FORGE.call("export.asset", asset_id="mud_blob", objects=[name], contact_sheet=False)
         self.assertIn("gameready.review", str(ctx.exception))
         self.assertIn("gate=false", str(ctx.exception))
 
     def test_gate_false_exports_anyway(self):
         name = _three_mud_materials(FORGE)
         FORGE.call("uv.unwrap", object=name, style="smart_packed")
-        result = FORGE.call("export.asset", asset_id="mud_blob_forced", objects=[name],
-                            contact_sheet=False, gate=False)
+        result = FORGE.call(
+            "export.asset",
+            asset_id="mud_blob_forced",
+            objects=[name],
+            contact_sheet=False,
+            gate=False,
+        )
         self.assertEqual(result["asset_id"], "mud_blob_forced")
 
     def test_gate_passes_a_clean_prop(self):
         FORGE.call("prop.barrel", name="barrel", height=1.1, bands=3, seed=7)
-        result = FORGE.call("export.asset", asset_id="barrel_gated", objects=["barrel"],
-                            contact_sheet=False)
+        result = FORGE.call(
+            "export.asset", asset_id="barrel_gated", objects=["barrel"], contact_sheet=False
+        )
         self.assertEqual(result["asset_id"], "barrel_gated")
 
 

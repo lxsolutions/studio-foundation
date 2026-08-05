@@ -34,8 +34,11 @@ def main() -> None:
         forge.call("session.reset")
         imp = forge.call("session.import", path=str(source), prefix="src")
         imported = imp.get("objects") or []
-        meshes = [n for n in imported
-                  if not n.lower().endswith(("_rig", "_armature")) and "rig" not in n.lower()]
+        meshes = [
+            n
+            for n in imported
+            if not n.lower().endswith(("_rig", "_armature")) and "rig" not in n.lower()
+        ]
         if not meshes:
             raise SystemExit(f"no mesh found in {source.name}: {imported}")
         src = meshes[0]
@@ -48,19 +51,26 @@ def main() -> None:
 
         forge.call("uv.unwrap", object=asset_id, style="smart_packed")
         forge.call("uv.pack", object=asset_id, margin=0.01)
-        forge.call("bake.transfer", source=src, target=asset_id,
-                   maps=["base_color", "normal"], size=1024, samples=16,
-                   ray_distance=voxel * 4)
+        forge.call(
+            "bake.transfer",
+            source=src,
+            target=asset_id,
+            maps=["base_color", "normal"],
+            size=1024,
+            samples=16,
+            ray_distance=voxel * 4,
+        )
 
         if plan == "humanoid":
             rig = forge.call("char.rig", name=asset_id, height=0, build="realistic")
             clips = ("idle", "walk", "attack", "death")
         else:
-            rig = forge.call("char.creature_rig", name=asset_id, plan=plan,
-                             length=0, shoulder=0)
+            rig = forge.call("char.creature_rig", name=asset_id, plan=plan, length=0, shoulder=0)
             clips = ("idle", "walk", "trot") if plan != "insect" else ("idle", "walk")
-        print(f"rig: {rig['armature']} ({rig['bone_count']} bones, "
-              f"{rig['weighted_vertices']} weighted verts)")
+        print(
+            f"rig: {rig['armature']} ({rig['bone_count']} bones, "
+            f"{rig['weighted_vertices']} weighted verts)"
+        )
         for clip in clips:
             forge.call("char.animate", rig=rig["armature"], clip=clip, length=24)
 
@@ -68,11 +78,16 @@ def main() -> None:
         review = forge.call("gameready.review", objects=objects)
         if not review["passed"]:
             raise SystemExit(f"{asset_id} failed the gate: {review['findings']}")
-        result = forge.call("export.asset", asset_id=asset_id, out_dir=str(out_dir),
-                            objects=objects, engine="threejs", category="character",
-                            ai_prompt=f"neural-mesh finishing line: {source.name} -> game-ready")
-        print(f"{asset_id}: {result['triangles']} tris, {result['bytes'] // 1024} KiB "
-              f"-> {out_dir}")
+        result = forge.call(
+            "export.asset",
+            asset_id=asset_id,
+            out_dir=str(out_dir),
+            objects=objects,
+            engine="threejs",
+            category="character",
+            ai_prompt=f"neural-mesh finishing line: {source.name} -> game-ready",
+        )
+        print(f"{asset_id}: {result['triangles']} tris, {result['bytes'] // 1024} KiB -> {out_dir}")
 
 
 if __name__ == "__main__":

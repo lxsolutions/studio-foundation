@@ -16,7 +16,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from bforge.client import DaemonError, Forge, ForgeError, find_blender  # noqa: E402
+from bforge.client import DaemonError, Forge, find_blender  # noqa: E402
 
 FORGE: Forge | None = None
 TEMP: tempfile.TemporaryDirectory | None = None
@@ -82,17 +82,18 @@ class Outfit(ForgeCase):
         center_x = (info["bounds"]["min"][0] + info["bounds"]["max"][0]) / 2.0
         torso_r = 1.8 * 0.078 * 1.18  # heroic bulk
         self.assertGreater(
-            abs(center_x), torso_r,
+            abs(center_x),
+            torso_r,
             f"shield centre |x|={abs(center_x):.3f} is inside the torso silhouette "
             f"(torso_r={torso_r:.3f}) — the warden failure",
         )
 
     def test_materials_are_separated_by_construction(self):
         body = _humanoid()
-        FORGE.call("char.outfit", name=body, piece="cuirass", height=1.8)   # bronze
+        FORGE.call("char.outfit", name=body, piece="cuirass", height=1.8)  # bronze
         FORGE.call("char.outfit", name=body, piece="pteruges", height=1.8)  # leather
-        FORGE.call("char.outfit", name=body, piece="helmet", height=1.8)    # bronze
-        FORGE.call("char.outfit", name=body, piece="bracers", height=1.8)   # leather
+        FORGE.call("char.outfit", name=body, piece="helmet", height=1.8)  # bronze
+        FORGE.call("char.outfit", name=body, piece="bracers", height=1.8)  # leather
         result = FORGE.call("check.materials")
         errors = [f for f in result["findings"] if f["severity"] == "error"]
         self.assertEqual(errors, [], f"outfit defaults must pass the blob gate: {errors}")
@@ -105,9 +106,11 @@ class Outfit(ForgeCase):
         shield = FORGE.call("char.outfit", name=body, piece="shield", height=1.8)
         self.assertIn("head", helmet["follows"])
         self.assertIn("forearm_l", shield["follows"])
-        glb = FORGE.call("export.gltf", out="rigged.glb", objects=[rig["armature"], body,
-                                                                   helmet["object"],
-                                                                   shield["object"]])
+        glb = FORGE.call(
+            "export.gltf",
+            out="rigged.glb",
+            objects=[rig["armature"], body, helmet["object"], shield["object"]],
+        )
         parsed = read_glb_json(Path(glb["path"]))
         self.assertGreaterEqual(len(parsed.get("skins", [])), 1)
         # Bone-parented pieces export as children of their joint node.
@@ -116,8 +119,7 @@ class Outfit(ForgeCase):
         for index, node in enumerate(nodes):
             for child in node.get("children", []):
                 parent_of[child] = index
-        for piece_name, bone in ((helmet["object"], "head"),
-                                 (shield["object"], "forearm_l")):
+        for piece_name, bone in ((helmet["object"], "head"), (shield["object"], "forearm_l")):
             piece_idx = next(i for i, n in enumerate(nodes) if n.get("name") == piece_name)
             self.assertEqual(nodes[parent_of[piece_idx]].get("name"), bone)
 

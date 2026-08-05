@@ -14,7 +14,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from bforge.client import DaemonError, Forge, ForgeError, find_blender  # noqa: E402
+from bforge.client import DaemonError, Forge, find_blender  # noqa: E402
 
 FORGE: Forge | None = None
 TEMP: tempfile.TemporaryDirectory | None = None
@@ -50,8 +50,15 @@ class ForgeCase(unittest.TestCase):
 
 
 def _styled_box(name, color="#777777", uv_scale=1.0):
-    FORGE.call("build.box", name=name, size=[1.0, 1.0, 1.0],
-               material="metal", color=color, uv="box", uv_scale=uv_scale)
+    FORGE.call(
+        "build.box",
+        name=name,
+        size=[1.0, 1.0, 1.0],
+        material="metal",
+        color=color,
+        uv="box",
+        uv_scale=uv_scale,
+    )
     return name
 
 
@@ -60,8 +67,14 @@ class Style(ForgeCase):
         _styled_box("crate_a")
         result = FORGE.call("check.style")
         fp = result["objects"][0]
-        for key in ("palette", "texel_density", "hard_edge_ratio", "materials",
-                    "tris_per_m3", "uv_coverage"):
+        for key in (
+            "palette",
+            "texel_density",
+            "hard_edge_ratio",
+            "materials",
+            "tris_per_m3",
+            "uv_coverage",
+        ):
             self.assertIn(key, fp)
         self.assertEqual(fp["materials"], 1)
         self.assertGreater(fp["texel_density"], 0)
@@ -76,8 +89,9 @@ class Conformance(ForgeCase):
         result = FORGE.call("check.conformance")
         self.assertEqual(result["outliers"], [])
         for row in result["objects"]:
-            self.assertEqual(row["verdict"], "coherent",
-                             f"{row['object']} should be coherent: {row}")
+            self.assertEqual(
+                row["verdict"], "coherent", f"{row['object']} should be coherent: {row}"
+            )
 
     def test_palette_and_texel_drift_are_caught_and_named(self):
         _styled_box("a")
@@ -107,8 +121,9 @@ class Conformance(ForgeCase):
         FORGE.call("prop.crate", name="crate", seed=3)
         FORGE.call("prop.barrel", name="barrel", height=1.1, bands=3, seed=7)
         result = FORGE.call("check.conformance")
-        self.assertEqual(result["outliers"], [],
-                         f"stock props should look like one game: {result['objects']}")
+        self.assertEqual(
+            result["outliers"], [], f"stock props should look like one game: {result['objects']}"
+        )
 
 
 if __name__ == "__main__":

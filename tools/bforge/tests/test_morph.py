@@ -100,12 +100,14 @@ class Add(ForgeCase):
 
     def test_rules_actually_displace_different_verts(self):
         self.forge.call("build.box", name="b", size=[1, 1, 1])
-        dent = self.forge.call("morph.add", name="b", key="dent", rule="dent",
-                               amount=0.2, radius=2.0)
+        dent = self.forge.call(
+            "morph.add", name="b", key="dent", rule="dent", amount=0.2, radius=2.0
+        )
         self.forge.call("session.reset")
         self.forge.call("build.box", name="b", size=[1, 1, 1])
-        taper = self.forge.call("morph.add", name="b", key="taper", rule="taper",
-                                amount=0.5, radius=2.0)
+        taper = self.forge.call(
+            "morph.add", name="b", key="taper", rule="taper", amount=0.5, radius=2.0
+        )
         self.assertGreater(dent["vertices_moved"], 0)
         self.assertGreater(taper["vertices_moved"], 0)
 
@@ -148,8 +150,11 @@ class Animate(ForgeCase):
         self.forge.call("build.box", name="b", size=[1, 1, 1])
         self.forge.call("morph.add", name="b", key="dented", rule="dent", amount=0.2, radius=2.0)
         result = self.forge.call(
-            "morph.animate", name="b", key="dented",
-            frames=[1, 12, 24], values=[0.0, 1.0, 0.0],
+            "morph.animate",
+            name="b",
+            key="dented",
+            frames=[1, 12, 24],
+            values=[0.0, 1.0, 0.0],
         )
         self.assertEqual(result["keyframes"], 3)
         exported = self.forge.call("export.gltf", out="morph_anim.glb")
@@ -165,15 +170,15 @@ class Animate(ForgeCase):
         self.forge.call("build.box", name="b")
         self.forge.call("morph.add", name="b", key="dent", rule="dent")
         with self.assertRaises(ForgeError) as ctx:
-            self.forge.call("morph.animate", name="b", key="dent",
-                            frames=[1, 12], values=[0.0])
+            self.forge.call("morph.animate", name="b", key="dent", frames=[1, 12], values=[0.0])
         self.assertIn("same length", str(ctx.exception))
 
     def test_animate_requires_an_existing_key(self):
         self.forge.call("build.box", name="b")
         with self.assertRaises(ForgeError):
-            self.forge.call("morph.animate", name="b", key="ghost",
-                            frames=[1, 12], values=[0.0, 1.0])
+            self.forge.call(
+                "morph.animate", name="b", key="ghost", frames=[1, 12], values=[0.0, 1.0]
+            )
 
 
 if __name__ == "__main__":
