@@ -349,6 +349,56 @@
       }
     },
     {
+      "name": "bake.transfer",
+      "summary": "Bake textures from a source mesh (the neural soup, the high-poly sculpt) onto a target mesh (the retopo'd game mesh) via selected-to-active projection: base colour and tangent-space normal map. This is the AAA high->low transfer step \u2014 the game mesh keeps the source's surface richness at a fraction of the triangles.",
+      "tags": [
+        "material",
+        "mesh"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "description": "Source mesh object (textured / high-poly)"
+          },
+          "target": {
+            "type": "string",
+            "description": "Target mesh object (retopo'd, with fresh UVs)"
+          },
+          "maps": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Which maps to bake: base_color, normal",
+            "default": [
+              "base_color",
+              "normal"
+            ]
+          },
+          "size": {
+            "type": "integer",
+            "description": "Bake resolution (square)",
+            "default": 1024
+          },
+          "ray_distance": {
+            "type": "number",
+            "description": "Projection ray length in metres \u2014 raise if the bake misses recessed detail, lower if it picks up neighbouring parts",
+            "default": 0.05
+          },
+          "samples": {
+            "type": "integer",
+            "description": "Cycles samples per texel",
+            "default": 16
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "build.array",
       "summary": "Repeat an object along a vector, or in a 2D/3D grid. Fences, columns, pipes, city blocks, crowd props.",
       "tags": [
@@ -1794,6 +1844,33 @@
             "description": "Body colour",
             "default": "#7a6248"
           },
+          "eyes": {
+            "type": "string",
+            "enum": [
+              "none",
+              "natural",
+              "glow"
+            ],
+            "description": "Eye blobs: natural (dark), glow (emissive \u2014 the underworld signature, reads at any distance)",
+            "default": "natural"
+          },
+          "eye_color": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 4
+              }
+            ],
+            "description": "Eye colour; glow reads best saturated (#39ff88 underworld, #ffb35a ember)",
+            "default": "#1c1c22"
+          },
           "seed": {
             "type": "integer",
             "description": "Random seed",
@@ -1886,6 +1963,33 @@
             ],
             "description": "Proportions \u2014 match the char.humanoid build",
             "default": "heroic"
+          },
+          "eyes": {
+            "type": "string",
+            "enum": [
+              "none",
+              "natural",
+              "glow"
+            ],
+            "description": "Eye blobs: natural (dark), glow (emissive \u2014 underworld/monster signature, reads at any distance)",
+            "default": "natural"
+          },
+          "eye_color": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 4
+              }
+            ],
+            "description": "Eye colour; glow eyes read best saturated (#39ff88 underworld, #ffb35a ember)",
+            "default": "#1c1c22"
           }
         },
         "additionalProperties": false
@@ -4888,6 +4992,45 @@
           "seed": {
             "type": "integer",
             "description": "Random seed",
+            "default": 0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "mesh.retopo",
+      "summary": "Quad-remesh a dense triangle soup (neural/scan import) down to a clean quad mesh at a target face count, in place, preserving volume and sharp features. UVs do not survive retopology \u2014 unwrap again afterwards (uv.unwrap). Pair with bake.transfer to move the source's textures onto the retopo'd mesh.",
+      "tags": [
+        "mesh"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Mesh object to retopologize (modified in place)"
+          },
+          "target_faces": {
+            "type": "integer",
+            "description": "Face count to aim for \u2014 game budget, not render vanity",
+            "default": 4000
+          },
+          "preserve_volume": {
+            "type": "boolean",
+            "description": "Hold the silhouette while reducing",
+            "default": true
+          },
+          "preserve_sharp": {
+            "type": "boolean",
+            "description": "Keep sharp edges crisp (hard-surface); off for organics",
+            "default": false
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Remesher seed \u2014 determinism is the house rule",
             "default": 0
           }
         },
