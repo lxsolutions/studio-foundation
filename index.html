@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Studio Foundation — Godot 4.7.1 WebGPU release evidence</title>
-<meta name="description" content="The published Godot 4.7.1 p0014 Forward Mobile WebGPU demo, release templates, source, and evidence.">
+<meta name="description" content="Godot 4.7.1 WebGPU: the p0033 release renders the Forward+ clustered renderer on real hardware; live demo, release templates, source, and evidence.">
 <style>
   :root {
     --bg: #0b0e14; --panel: #131824; --edge: #2a3346;
@@ -45,12 +45,12 @@
 <main class="wrap">
   <p>
     <span class="badge">Godot 4.7.1</span>
-    <span class="badge">p0014 published</span>
-    <span class="badge">Forward Mobile</span>
+    <span class="badge">p0033 published</span>
+    <span class="badge">Forward+ verified on hardware</span>
     <span class="badge">WebGPU beta</span>
   </p>
 
-  <h1>A published Godot game running through <span class="hl">WebGPU</span>.</h1>
+  <h1>Godot's Forward+ renderer, running in a browser through <span class="hl">WebGPU</span>.</h1>
   <p class="sub">
     The initial backend lineage is David Walter's MIT-licensed
     <a href="https://github.com/dwalter/godotwebgpu">dwalter/godotwebgpu</a>
@@ -68,17 +68,21 @@
     <a class="cta" id="launch" href="demo/index.html">Enter the colosseum</a>
     <a class="ghost" href="showcase/index.html">Minimal showcase</a>
     <a class="ghost" href="https://github.com/lxsolutions/studio-foundation">Repository</a>
-    <a class="ghost" href="https://github.com/lxsolutions/studio-foundation/releases/tag/godot-4.7.1-webgpu-p0014">p0014 templates</a>
-    <a class="ghost" href="https://github.com/lxsolutions/studio-foundation/blob/docs/public-evidence-refresh/docs/architecture/webgpu-evidence.md">Evidence matrix</a>
+    <a class="ghost" href="https://github.com/lxsolutions/studio-foundation/releases/tag/godot-4.7.1-webgpu-p0033">p0033 templates</a>
+    <a class="ghost" href="https://github.com/lxsolutions/studio-foundation/blob/main/docs/architecture/webgpu-runtime-status.md">Runtime status</a>
     <p class="note">
-      Initial load downloads a ~45.8 MB wasm (~12.0 MB over GitHub Pages gzip).
-      In the recorded 12 Mbps p0014 run, frames appeared around 13 seconds and
-      pipeline construction occupied about 2 seconds of engine startup.
+      The live demos on this page still serve the earlier <strong>p0014 Forward Mobile</strong>
+      build — a Forward+ rebuild of the demo has not been deployed yet. The
+      <strong>p0033</strong> release templates render <strong>Forward+</strong>, verified on
+      hardware (below). Initial load downloads a ~45.8 MB wasm (~12.0 MB over
+      GitHub Pages gzip); in the recorded 12 Mbps p0014 run, frames appeared
+      around 13 seconds and pipeline construction occupied about 2 seconds of
+      engine startup.
     </p>
   </section>
 
-  <section class="card" data-current-main-patches="22" data-published-patch-through="14">
-    <h2>Published release versus current main</h2>
+  <section class="card" data-current-main-patches="33" data-published-patch-through="33">
+    <h2>Published releases and current main</h2>
     <div class="table-wrap">
       <table>
         <thead>
@@ -86,40 +90,49 @@
         </thead>
         <tbody>
           <tr>
-            <td>Published <code>godot-4.7.1-webgpu-p0014</code></td>
+            <td>Published <code>godot-4.7.1-webgpu-p0033</code> (current)</td>
+            <td><code>0001–0033</code></td>
+            <td>WebGPU <strong>Forward+</strong> (clustered); Forward Mobile selectable</td>
+            <td>Release/debug downloads available</td>
+            <td>First verified Forward+ frame 2026-07-28, NVIDIA Tesla P40, headed Chrome/WebGPU: 59 fps, 188 objects / 2,015,266 primitives, 0 invalid <code>commandEncoder.finish</code> out of 10,842, 0 rejected <code>queue.submit</code>, 0 bind-group failure classes. Three validation errors remain outside the presented-frame path.</td>
+          </tr>
+          <tr>
+            <td>Published <code>godot-4.7.1-webgpu-p0014</code> (historical)</td>
             <td><code>0001–0014</code></td>
             <td>WebGPU Forward Mobile</td>
-            <td>Release/debug downloads available</td>
+            <td>Release/debug downloads available; the live demos on this page still serve this build</td>
             <td>Minimal scene and three game scenes rendered on an NVIDIA Tesla P40 with 0 <code>GPUValidationError</code></td>
           </tr>
           <tr>
             <td>Current <code>main</code></td>
-            <td><code>0001–0022</code></td>
-            <td>Forward Mobile plus unfinished Forward+ investigation</td>
-            <td>No p0022 templates published</td>
-            <td>Forward+ was hardware-run on the P40; 18 validation errors remain and no frame renders</td>
+            <td><code>0001–0033</code></td>
+            <td>Forward+ renders; Mobile remains the export default</td>
+            <td>p0033 matches the locked series</td>
+            <td>Verified on one GPU (Tesla P40), one browser, one OS. AMD, Intel, Apple, Safari and iOS are unverified — run the probe and send the evidence file.</td>
           </tr>
         </tbody>
       </table>
     </div>
     <p class="muted">
-      Patches 0015–0022 are not in the p0014 downloads. Forward+ hardware
-      execution is investigation evidence, not a successful-render claim.
+      Patches 0015–0033 are what made the clustered renderer work on hardware;
+      they are in the p0033 downloads, not in p0014. Verification so far is one
+      scene class on one machine — independent confirmations on other hardware
+      are the most useful contribution right now.
     </p>
   </section>
 
   <section class="card">
-    <h2>What the published demo proves</h2>
+    <h2>What the evidence proves</h2>
     <ul>
       <li>Official Godot 4.7.1 commit <code>a13da4feb8d8aefc283c3763d33a2f170a18d541</code> is the base.</li>
-      <li>The p0014 archives use the checksum-locked patch range <code>0001–0014</code> and Forward Mobile.</li>
+      <li>The p0033 archives use the checksum-locked patch range <code>0001–0033</code> and render <strong>Forward+</strong> — the clustered desktop path — on hardware (Tesla P40, headed Chrome/WebGPU, 59 fps, 0 rejected command buffers).</li>
+      <li>The live demo on this page is the earlier p0014 build: checksum-locked range <code>0001–0014</code>, Forward Mobile, 60 fps at ~489–631 draws and ~23M primitives/frame with 0 validation errors on the recorded P40 run.</li>
       <li>The browser probe observes an active WebGPU canvas context and rejects WebGL/WebGL 2 requests.</li>
-      <li>On the recorded P40 run, Chariot held 60 fps at ~489–631 draws and ~23M primitives/frame with 0 validation errors.</li>
     </ul>
     <p class="muted">
       WebGPU support is beta. Safari/iOS, native mobile devices, and non-NVIDIA
       GPU vendors remain unverified. The p0014 Jolt web build also has a known
-      concave-collider regression documented in the evidence matrix.
+      concave-collider regression documented in the runtime status notes.
     </p>
   </section>
 
@@ -131,10 +144,13 @@
       rights reserved under <code>games/LICENSE</code>.
     </p>
     <p>
-      Download both p0014 templates, verify their SHA-256 values from the
-      evidence matrix, and export with <code>just export-browser-webgpu</code>.
+      Download both p0033 templates, verify their SHA-256 values from the
+      release notes, and export with <code>just export-browser-webgpu</code>.
       That command applies the WebGPU shell handoff the official editor cannot
-      emit for these templates.
+      emit for these templates. Then <code>just verify-renderer
+      --renderer forward_plus</code> exports, serves, probes and traces the
+      build and writes one evidence file — it exits 0 only when a non-fallback
+      adapter, varied composited pixels, and engine draw counters all agree.
     </p>
   </section>
 
