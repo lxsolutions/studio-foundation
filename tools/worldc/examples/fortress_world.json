@@ -1,0 +1,14 @@
+{
+  "world_ir": "0.1",
+  "world": "fortress",
+  "brief": "a fortress with a main gate and a side gate; the battle scenario must breach the main gate while the side gate holds",
+  "entities": {
+    "gate_main": { "doc": "fortress_gate.json" },
+    "gate_side": { "doc": "fortress_gate.json" }
+  },
+  "scenario": "fortress_battle.json",
+  "expect_navigation": {
+    "gate_main": false,
+    "gate_side": true
+  }
+}
