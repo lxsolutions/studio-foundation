@@ -48,6 +48,7 @@ Pure-Rust policy (no C compilation) per ADR 0004. All verified permissive:
 | tokio-tungstenite (no TLS) | MIT | WebSocket transport |
 | uuid (v7) | MIT OR Apache-2.0 | Identifiers |
 | rand | MIT OR Apache-2.0 | Seeds/nonces (non-crypto uses documented) |
+| sha2 | MIT OR Apache-2.0 | Deterministic sim-kernel state hashing (RustCrypto, pure Rust) |
 
 Full transitive inventory: `just sbom` writes SPDX 2.3 under `build/sbom/`.
 `just audit` queries OSV for exact Cargo, PyPI, and npm lockfile versions and

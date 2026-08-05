@@ -1,0 +1,14 @@
+[package]
+name = "sim-kernel"
+version = "0.1.0"
+edition = "2021"
+description = "Deterministic gate simulation kernel (ADR 0018 M3): native + Wasm parity"
+license = "MIT"
+
+[lib]
+crate-type = ["rlib", "cdylib"]
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+sha2 = { workspace = true }

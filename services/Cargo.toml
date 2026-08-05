@@ -6,6 +6,7 @@ members = [
     "dedicated-server",
     "admin-cli",
     "integration-tests",
+    "sim-kernel",
 ]
 
 # Pure-Rust dependency policy (no C toolchain required) — see ADR 0004.
@@ -25,6 +26,7 @@ tokio-tungstenite = "0.24"
 futures-util = "0.3"
 uuid = { version = "1", features = ["v4", "v7", "serde"] }
 rand = "0.8"
+sha2 = "0.10"
 # test-only
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
