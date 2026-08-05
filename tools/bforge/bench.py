@@ -1,17 +1,27 @@
 """The bforge bench: the full loop, run out loud, with a public verdict.
 
 Brief -> forged asset -> quality gate (must pass) -> GLB parsed back and
-structure-verified -> measurements recorded. Every run is a claim checked by
+structure-verified -> measurements recorded. Every brief is built TWICE from
+a reset session and the two GLB exports must hash identically — determinism
+is not a slogan, it is a checked property. Every run is a claim checked by
 a machine, and the report is committed so anyone can rerun it and diff.
 
     uv run --project tools python tools/bforge/bench.py [runs]
 
-Exit 0 when every run passes the gate and every GLB parses with its required
-structure. The report lands in tools/bforge/bench/ (report.json + SUMMARY.md).
+Exit 0 when every run passes the gate, every GLB parses with its required
+structure, and every brief regenerates byte-identically. The report lands in
+tools/bforge/bench/ (report.json + SUMMARY.md).
+
+Scope, honestly: the briefs are programmatic op sequences (this bench proves
+the ops, gates, and export are deterministic and green — it does not test
+natural-language interpretation), and the daemon is persistent, so startup
+is excluded from the timings. NL-brief -> tool-call evaluation is a separate
+harness (the BRIEF->BATTLE track in strategy/FRONTIER.md).
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import struct
 import sys
@@ -129,6 +139,29 @@ def verify(glb_path: Path, requires: dict) -> list[str]:
     return failures
 
 
+def forensics(a: bytes, b: bytes) -> str:
+    """Where two 'deterministic' GLBs actually differ: chunk, region, value."""
+    if len(a) != len(b):
+        return f"size {len(a)} != {len(b)}"
+    la = struct.unpack_from("<I", a, 12)[0]
+    if a[20 : 20 + la] != b[20 : 20 + la]:
+        return "JSON chunk differs (names/structure)"
+    off = 20 + la
+    bin_a = a[off + 8 :]
+    bin_b = b[off + 8 :]
+    diffs = [i for i, (x, y) in enumerate(zip(bin_a, bin_b)) if x != y]
+    if not diffs:
+        return "chunks equal but files differ (padding?)"
+    first = diffs[0]
+    base = first - first % 4
+    fa = struct.unpack_from("<2f", bin_a, base)
+    fb = struct.unpack_from("<2f", bin_b, base)
+    ia = struct.unpack_from("<2I", bin_a, base)
+    ib = struct.unpack_from("<2I", bin_b, base)
+    return (f"BIN chunk: {len(diffs)} bytes differ from offset {first}; "
+            f"as floats {fa} vs {fb}; as uints {ia} vs {ib}")
+
+
 def main() -> None:
     runs = int(sys.argv[1]) if len(sys.argv) > 1 else 1
     OUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -137,25 +170,41 @@ def main() -> None:
               lambda x, y: (200, 30, 30, 255) if (x - 64) ** 2 + (y - 64) ** 2 < 40 ** 2
               else (12, 12, 16, 255))
 
-    report = {"bench": "bforge bench v1", "runs": [], "aggregates": {}}
+    report = {"bench": "bforge bench v2", "runs": [], "aggregates": {}}
     all_ok = True
     with Forge(workdir=tempfile.mkdtemp(prefix="bforge_bench_"),
                out_dir=str(OUT_DIR / "out")) as forge:
         for title, brief_fn in BRIEFS:
             for iteration in range(runs):
+                hashes = []
+                export_bytes = []
+                first = None
                 started = time.time()
-                forge.call("session.reset")
-                if brief_fn is brief_concept:
-                    built = brief_fn(forge, concept)
-                else:
-                    built = brief_fn(forge)
+                # Build the same brief twice from a reset session: the two
+                # exports must be byte-identical, or "deterministic" is a lie.
+                for attempt in (1, 2):
+                    forge.call("session.reset")
+                    if brief_fn is brief_concept:
+                        built = brief_fn(forge, concept)
+                    else:
+                        built = brief_fn(forge)
+                    glb = forge.call("export.gltf", out=f"{built['objects'][0]}.glb",
+                                     objects=built["objects"])
+                    payload = Path(glb["path"]).read_bytes()
+                    hashes.append(hashlib.sha256(payload).hexdigest())
+                    export_bytes.append(payload)
+                    if attempt == 1:
+                        first = (built, glb)
+                built, glb = first
+                review = forge.call("gameready.review", objects=built["objects"])
+                materials = forge.call("check.materials", objects=built["objects"])
                 seconds = round(time.time() - started, 1)
 
-                review = forge.call("gameready.review", objects=built["objects"])
-                glb = forge.call("export.gltf", out=f"{built['objects'][0]}.glb",
-                                 objects=built["objects"])
-                materials = forge.call("check.materials", objects=built["objects"])
                 failures = verify(Path(glb["path"]), built["requires"])
+                deterministic = hashes[0] == hashes[1]
+                if not deterministic:
+                    failures.append(
+                        f"nondeterministic export: {forensics(export_bytes[0], export_bytes[1])}")
                 ok = review["passed"] and not failures
                 all_ok = all_ok and ok
                 entry = {
@@ -165,6 +214,8 @@ def main() -> None:
                     "triangles": glb["triangles"],
                     "bytes": glb["bytes"],
                     "gate": "pass" if review["passed"] else "FAIL",
+                    "deterministic": deterministic,
+                    "glb_sha256": hashes[0],
                     "structure_failures": failures,
                     "max_delta_e": materials["max_delta_e"],
                     "ok": ok,
@@ -174,34 +225,46 @@ def main() -> None:
                 report["runs"].append(entry)
                 mark = "ok " if ok else "FAIL"
                 print(f"  {mark} {title} #{iteration + 1}: {glb['triangles']} tris, "
-                      f"{seconds}s, gate {entry['gate']}"
+                      f"{seconds}s, gate {entry['gate']}, "
+                      f"{'deterministic' if deterministic else 'NONDETERMINISTIC'}"
                       + (f" (iou {built['iou']})" if "iou" in built else ""))
 
     total = len(report["runs"])
     passed = sum(1 for r in report["runs"] if r["ok"])
+    deterministic_all = all(r["deterministic"] for r in report["runs"])
     report["aggregates"] = {
         "runs": total,
         "passed": passed,
         "pass_rate": round(passed / max(1, total), 3),
         "mean_seconds": round(sum(r["seconds"] for r in report["runs"]) / max(1, total), 1),
         "total_triangles": sum(r["triangles"] for r in report["runs"]),
+        "deterministic": deterministic_all,
         "verdict": "pass" if all_ok else "fail",
     }
     (OUT_DIR / "report.json").write_text(json.dumps(report, indent=2) + "\n")
 
     summary = ["# bforge bench", "",
                f"verdict: **{report['aggregates']['verdict'].upper()}** — "
-               f"{passed}/{total} runs green "
+               f"{passed}/{total} runs green, "
+               f"{'all briefs byte-identical across regeneration' if deterministic_all else 'DETERMINISM FAILURE'} "
                f"({report['aggregates']['total_triangles']} triangles total)", "",
-               "| brief | tris | gate | structure |", "| --- | --- | --- | --- | --- |"]
+               "| brief | tris | gate | deterministic | structure |", "| --- | --- | --- | --- | --- |"]
     for r in report["runs"]:
         summary.append(
             f"| {r['brief']} | {r['triangles']} | {r['gate']} | "
+            f"{'✓' if r['deterministic'] else 'FAIL'} | "
             f"{'ok' if not r['structure_failures'] else ', '.join(r['structure_failures'])} |"
         )
     summary.append("")
-    summary.append("Deterministic outputs only — wall-clock seconds live in report.json "
-                   "(they are machine-dependent); this file is what CI diffs.")
+    summary.append("Every brief is forged twice from a reset session and the two GLB exports "
+                   "must hash identically (SHA-256 in report.json) — determinism is a checked "
+                   "property, not a slogan. Wall-clock seconds live in report.json "
+                   "(machine-dependent); this file carries only deterministic outputs and is "
+                   "what CI diffs.")
+    summary.append("")
+    summary.append("Scope: programmatic op briefs over the persistent daemon — this bench proves "
+                   "the ops, gates, and export; natural-language brief evaluation is the "
+                   "BRIEF->BATTLE track (strategy/FRONTIER.md).")
     summary.append("")
     summary.append("Rerun: `uv run --project tools python tools/bforge/bench.py [runs]` — "
                    "the numbers are produced by the runner, not by memory.")

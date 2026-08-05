@@ -56,6 +56,93 @@ def write_bmesh(bm, obj, free: bool = True) -> None:
     obj.data.update()
 
 
+def canonicalize(obj) -> None:
+    """Canonical polygon order so identical geometry exports byte-identically.
+
+    Blender's bevel/subdivide ops iterate internal pointer-keyed hash tables,
+    so face emission order depends on allocation addresses and flakes
+    run-to-run even with sorted inputs (bench-caught, prop.crate). Sort
+    polygons by (centroid, normal, size, material) and permute every
+    loop-domain channel (vertex indices, UV layers, colour attributes) to
+    match. Sharp edges are re-applied by vertex pair because the edge table
+    is re-derived from the new polygon order. Idempotent.
+    """
+    mesh = obj.data
+    if len(mesh.polygons) < 2:
+        return
+    loops_n = len(mesh.loops)
+    loop_verts = [0] * loops_n
+    mesh.loops.foreach_get("vertex_index", loop_verts)
+
+    uv_layers = []
+    for layer in mesh.uv_layers:
+        data = [0.0] * (loops_n * 2)
+        layer.data.foreach_get("uv", data)
+        uv_layers.append((layer, data))
+    color_layers = []
+    for attr in mesh.color_attributes:
+        if attr.domain != "CORNER":
+            continue
+        data = [0.0] * (loops_n * 4)
+        attr.data.foreach_get("color", data)
+        color_layers.append((attr, data))
+    sharp_pairs = {
+        (min(e.vertices[0], e.vertices[1]), max(e.vertices[0], e.vertices[1]))
+        for e in mesh.edges if e.use_edge_sharp
+    }
+
+    vert_co = [v.co for v in mesh.vertices]
+    polys = []
+    for p in mesh.polygons:
+        vs = loop_verts[p.loop_start : p.loop_start + p.loop_total]
+        inv = 1.0 / len(vs)
+        cx = sum(vert_co[v].x for v in vs) * inv
+        cy = sum(vert_co[v].y for v in vs) * inv
+        cz = sum(vert_co[v].z for v in vs) * inv
+        key = (
+            round(cx, 6), round(cy, 6), round(cz, 6),
+            round(p.normal.x, 4), round(p.normal.y, 4), round(p.normal.z, 4),
+            p.loop_total, p.material_index,
+        )
+        polys.append((key, p.material_index, p.use_smooth, p.loop_start, vs))
+    polys.sort(key=lambda entry: entry[0])
+
+    perm = []
+    for _key, _mat, _smooth, old_start, vs in polys:
+        perm.extend(range(old_start, old_start + len(vs)))
+
+    mesh.loops.foreach_set("vertex_index", [loop_verts[j] for j in perm])
+    for layer, data in uv_layers:
+        flat = [0.0] * (loops_n * 2)
+        for i, j in enumerate(perm):
+            flat[2 * i] = data[2 * j]
+            flat[2 * i + 1] = data[2 * j + 1]
+        layer.data.foreach_set("uv", flat)
+    for attr, data in color_layers:
+        flat = [0.0] * (loops_n * 4)
+        for i, j in enumerate(perm):
+            base = 4 * i
+            other = 4 * j
+            flat[base] = data[other]
+            flat[base + 1] = data[other + 1]
+            flat[base + 2] = data[other + 2]
+            flat[base + 3] = data[other + 3]
+        attr.data.foreach_set("color", flat)
+
+    start = 0
+    for i, (_key, mat, smooth, _old, vs) in enumerate(polys):
+        poly = mesh.polygons[i]
+        poly.loop_start = start
+        poly.material_index = mat
+        poly.use_smooth = smooth
+        start += len(vs)
+    mesh.update()
+    for edge in mesh.edges:
+        pair = (min(edge.vertices[0], edge.vertices[1]), max(edge.vertices[0], edge.vertices[1]))
+        edge.use_edge_sharp = pair in sharp_pairs
+    mesh.update()
+
+
 def geom_of(bm) -> list:
     return bm.verts[:] + bm.edges[:] + bm.faces[:]
 
@@ -63,6 +150,92 @@ def geom_of(bm) -> list:
 # ---------------------------------------------------------------------------
 # primitives (all centred on the origin unless `center` says otherwise)
 # ---------------------------------------------------------------------------
+
+
+def _chamfer_box(bm, size, center, bevel, segments):
+    """Rounded box built analytically: 6 inset ngon faces, 12 quarter-cylinder
+    edge strips, 8 octant corner patches — every vertex generated inside a
+    fixed-range loop and merged by rounded position, so the geometry is
+    byte-identical on every run. bmesh.ops.bevel cannot promise that: it
+    iterates pointer-keyed hash tables and, depending on allocator state,
+    emits one of several slightly different geometries (bench-caught).
+    """
+    import math as _math
+
+    h = (size[0] * 0.5, size[1] * 0.5, size[2] * 0.5)
+    c = min(bevel, min(size) * 0.49)
+    n = max(1, segments)
+    inner = (h[0] - c, h[1] - c, h[2] - c)
+    others = ((1, 2), (0, 2), (0, 1))
+
+    verts = {}
+    faces = []
+
+    def vert(x, y, z):
+        key = (round(x, 6), round(y, 6), round(z, 6))
+        got = verts.get(key)
+        if got is None:
+            got = bm.verts.new((x + center[0], y + center[1], z + center[2]))
+            verts[key] = got
+        return got
+
+    # 6 inset faces — each is the original face shrunk by c on all four
+    # sides (the rounding lives entirely in the strips and corner patches).
+    for a in range(3):
+        b1, b2 = others[a]
+        for s in (1, -1):
+            quad = []
+            for k1, k2 in ((1, 1), (1, -1), (-1, -1), (-1, 1)):
+                co = [0.0, 0.0, 0.0]
+                co[a], co[b1], co[b2] = s * h[a], k1 * inner[b1], k2 * inner[b2]
+                quad.append(vert(*co))
+            faces.append(bm.faces.new(quad))
+
+    # 12 quarter-cylinder edge strips, n quads across the round.
+    for a in range(3):
+        b1, b2 = others[a]
+        for s1 in (1, -1):
+            for s2 in (1, -1):
+                ends = []
+                for l in (0, 1):
+                    row = []
+                    for t in range(n + 1):
+                        theta = (_math.pi * 0.5) * t / n
+                        co = [0.0, 0.0, 0.0]
+                        co[b1] = s1 * (inner[b1] + c * _math.sin(theta))
+                        co[b2] = s2 * (inner[b2] + c * _math.cos(theta))
+                        co[a] = -inner[a] if l == 0 else inner[a]
+                        row.append(vert(*co))
+                    ends.append(row)
+                for t in range(n):
+                    faces.append(bm.faces.new(
+                        (ends[0][t], ends[0][t + 1], ends[1][t + 1], ends[1][t])))
+
+    # 8 octant corner patches, barycentric lattice, n^2 triangles.
+    for sx in (1, -1):
+        for sy in (1, -1):
+            for sz in (1, -1):
+                lattice = {}
+                for u in range(n + 1):
+                    for v in range(n + 1 - u):
+                        w = n - u - v
+                        d = Vector((sx * u, sy * v, sz * w)).normalized()
+                        lattice[(u, v)] = vert(
+                            sx * inner[0] + c * d.x,
+                            sy * inner[1] + c * d.y,
+                            sz * inner[2] + c * d.z,
+                        )
+                for u in range(n):
+                    for v in range(n - u):
+                        faces.append(bm.faces.new(
+                            (lattice[(u, v)], lattice[(u + 1, v)], lattice[(u, v + 1)])))
+                        if u + v < n - 1:
+                            faces.append(bm.faces.new(
+                                (lattice[(u + 1, v)], lattice[(u + 1, v + 1)],
+                                 lattice[(u, v + 1)])))
+
+    bmesh.ops.recalc_face_normals(bm, faces=faces)
+    return faces
 
 
 def add_box(bm, size=(1.0, 1.0, 1.0), center=(0.0, 0.0, 0.0), bevel=0.0, segments=2):
@@ -73,30 +246,15 @@ def add_box(bm, size=(1.0, 1.0, 1.0), center=(0.0, 0.0, 0.0), bevel=0.0, segment
     triangles per corner, where a subdivision would cost hundreds.
     """
     before = set(bm.faces)
-    result = bmesh.ops.create_cube(bm, size=1.0)
-    verts = result["verts"]
-    scale = Matrix.Diagonal(Vector(size)).to_4x4()
-    bmesh.ops.transform(bm, matrix=scale, verts=verts)
-    bmesh.ops.translate(bm, vec=Vector(center), verts=verts)
-    faces = [f for f in bm.faces if f not in before]
     if bevel > 0.0:
-        limit = min(size) * 0.49
-        edges = {e for f in faces for e in f.edges}
-        verts_set = {v for f in faces for v in f.verts}
-        bmesh.ops.bevel(
-            bm,
-            geom=list(verts_set) + list(edges) + faces,
-            offset=min(bevel, limit),
-            offset_type="OFFSET",
-            segments=max(1, segments),
-            profile=0.5,
-            affect="EDGES",
-            clamp_overlap=True,
-        )
-        # bevel's "faces" output is only the new chamfer strips; callers want the
-        # whole region back, including the (now smaller) original faces.
-        faces = [f for f in bm.faces if f not in before]
-    return faces
+        _chamfer_box(bm, size, center, bevel, segments)
+    else:
+        result = bmesh.ops.create_cube(bm, size=1.0)
+        verts = result["verts"]
+        scale = Matrix.Diagonal(Vector(size)).to_4x4()
+        bmesh.ops.transform(bm, matrix=scale, verts=verts)
+        bmesh.ops.translate(bm, vec=Vector(center), verts=verts)
+    return [f for f in bm.faces if f not in before]
 
 
 def add_cylinder(
@@ -130,15 +288,16 @@ def add_cylinder(
             if len({round(v.co.z, 5) for v in e.verts}) == 1
         ]
         if rim:
+            bm.edges.ensure_lookup_table()
             bmesh.ops.bevel(
                 bm,
-                geom=list(set(rim)),
+                geom=sorted(set(rim), key=lambda e: e.index),
                 offset=min(bevel, radius * 0.4, depth * 0.4),
                 offset_type="OFFSET",
                 segments=2,
                 profile=0.5,
                 affect="EDGES",
-                clamp_overlap=True,
+                clamp_overlap=False,
             )
             faces = [f for f in bm.faces if f not in before]
     return faces
@@ -539,15 +698,16 @@ def bevel_edges(bm, edges=None, offset=0.02, segments=2, angle_min=0.35):
     edges = [e for e in edges if e.is_valid]
     if not edges:
         return []
+    bm.edges.ensure_lookup_table()
     return bmesh.ops.bevel(
         bm,
-        geom=edges,
+        geom=sorted(edges, key=lambda e: e.index),
         offset=offset,
         offset_type="OFFSET",
         segments=max(1, segments),
         profile=0.5,
         affect="EDGES",
-        clamp_overlap=True,
+        clamp_overlap=False,
     )["faces"]
 
 
@@ -560,7 +720,8 @@ def greeble(bm, faces, rng, density=0.4, min_depth=0.01, max_depth=0.05, inset=0
     """
     targets = [f for f in faces if f.is_valid]
     if cuts > 0 and targets:
-        edges = list({e for f in targets for e in f.edges})
+        bm.edges.ensure_lookup_table()
+        edges = sorted({e for f in targets for e in f.edges}, key=lambda e: e.index)
         subdivided = bmesh.ops.subdivide_edges(
             bm, edges=edges, cuts=cuts, use_grid_fill=True
         )

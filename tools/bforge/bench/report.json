@@ -1,13 +1,15 @@
 {
-  "bench": "bforge bench v1",
+  "bench": "bforge bench v2",
   "runs": [
     {
       "brief": "crate from a one-line brief",
       "iteration": 1,
-      "seconds": 0.1,
-      "triangles": 444,
-      "bytes": 17752,
+      "seconds": 0.3,
+      "triangles": 428,
+      "bytes": 17664,
       "gate": "pass",
+      "deterministic": true,
+      "glb_sha256": "c863b90d04074bd7e9cf743cd121a01e2253b67d2dab8f5c3a2758ac65e675a0",
       "structure_failures": [],
       "max_delta_e": null,
       "ok": true
@@ -15,10 +17,12 @@
     {
       "brief": "a wolf with a synthesized trot",
       "iteration": 1,
-      "seconds": 0.2,
+      "seconds": 0.5,
       "triangles": 1076,
-      "bytes": 105232,
+      "bytes": 105116,
       "gate": "pass",
+      "deterministic": true,
+      "glb_sha256": "b43bd547d85655b88c2d04679b382a665dd4c9fd88d079b4567bf14622061473",
       "structure_failures": [],
       "max_delta_e": 21.25,
       "ok": true
@@ -26,10 +30,12 @@
     {
       "brief": "an armored warden that walks",
       "iteration": 1,
-      "seconds": 0.3,
-      "triangles": 5186,
-      "bytes": 275476,
+      "seconds": 1.1,
+      "triangles": 4902,
+      "bytes": 262412,
       "gate": "pass",
+      "deterministic": true,
+      "glb_sha256": "530edb1db62b99ac212c061ffa2799df258f70898cd14aa37d3386322deab086",
       "structure_failures": [],
       "max_delta_e": 63.39,
       "ok": true
@@ -37,10 +43,12 @@
     {
       "brief": "a whole Age-1 camp in one call",
       "iteration": 1,
-      "seconds": 0.5,
-      "triangles": 5796,
-      "bytes": 427528,
+      "seconds": 1.4,
+      "triangles": 5684,
+      "bytes": 421352,
       "gate": "pass",
+      "deterministic": true,
+      "glb_sha256": "6b21cdfb9395b3366bb82f5b1233656e78a4c9c38908279e001a5893af341205",
       "structure_failures": [],
       "max_delta_e": 93.04,
       "ok": true
@@ -48,10 +56,12 @@
     {
       "brief": "a 2D concept become a solid",
       "iteration": 1,
-      "seconds": 0.2,
+      "seconds": 0.4,
       "triangles": 188,
       "bytes": 9148,
       "gate": "pass",
+      "deterministic": true,
+      "glb_sha256": "374ad2d772256e9a200523ace4ccd46c739919b45be53965cb8bed30ca67d361",
       "structure_failures": [],
       "max_delta_e": null,
       "ok": true,
@@ -62,8 +72,9 @@
     "runs": 5,
     "passed": 5,
     "pass_rate": 1.0,
-    "mean_seconds": 0.3,
-    "total_triangles": 12690,
+    "mean_seconds": 0.7,
+    "total_triangles": 12278,
+    "deterministic": true,
     "verdict": "pass"
   }
 }

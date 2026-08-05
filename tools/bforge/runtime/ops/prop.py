@@ -84,7 +84,8 @@ def prop_crate(ctx, name, location, seed, size, frame_width, panel_depth, planks
     flat = [f for f in faces if f.is_valid and f.calc_area() > (frame_width * 3) ** 2]
     panels = _recess_faces(bm, flat, frame_width, panel_depth)
     if planks > 0 and panels:
-        edges = list({e for f in panels if f.is_valid for e in f.edges})
+        bm.edges.ensure_lookup_table()
+        edges = sorted({e for f in panels if f.is_valid for e in f.edges}, key=lambda e: e.index)
         bmesh.ops.subdivide_edges(bm, edges=edges, cuts=planks, use_grid_fill=False)
     obj = mesh_lib.to_object(bm, _named(name, "crate"))
     obj.location = location
