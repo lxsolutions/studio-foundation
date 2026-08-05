@@ -5,16 +5,14 @@
       "brief": "crate from a one-line brief",
       "iteration": 1,
       "seconds": 0.3,
-      "triangles": 444,
-      "bytes": 17752,
+      "triangles": 428,
+      "bytes": 17664,
       "gate": "pass",
-      "deterministic": false,
-      "glb_sha256": "698501d1cd8a759f150d3670416c2dfd176b050b7fdb1d0fad6a7a6e2041d52d",
-      "structure_failures": [
-        "nondeterministic export: BIN chunk: 2188 bytes differ from offset 0; as floats (-0.34002700448036194, 0.7844864130020142) vs (-0.3400270640850067, 0.7844853401184082); as uints (3199080453, 1061737498) vs (3199080455, 1061737480)"
-      ],
+      "deterministic": true,
+      "glb_sha256": "c863b90d04074bd7e9cf743cd121a01e2253b67d2dab8f5c3a2758ac65e675a0",
+      "structure_failures": [],
       "max_delta_e": null,
-      "ok": false
+      "ok": true
     },
     {
       "brief": "a wolf with a synthesized trot",
@@ -24,7 +22,7 @@
       "bytes": 105116,
       "gate": "pass",
       "deterministic": true,
-      "glb_sha256": "1087d9edf4939adaba47eda3a63104b594be9655033fe1afb36305ad1f7249f7",
+      "glb_sha256": "b43bd547d85655b88c2d04679b382a665dd4c9fd88d079b4567bf14622061473",
       "structure_failures": [],
       "max_delta_e": 21.25,
       "ok": true
@@ -32,12 +30,12 @@
     {
       "brief": "an armored warden that walks",
       "iteration": 1,
-      "seconds": 1.0,
-      "triangles": 5186,
-      "bytes": 275476,
+      "seconds": 1.1,
+      "triangles": 4902,
+      "bytes": 262412,
       "gate": "pass",
       "deterministic": true,
-      "glb_sha256": "d895cf0156d3b26835a6f711b0a4e0ad50cee731618a5077c9e406d298c7d845",
+      "glb_sha256": "530edb1db62b99ac212c061ffa2799df258f70898cd14aa37d3386322deab086",
       "structure_failures": [],
       "max_delta_e": 63.39,
       "ok": true
@@ -45,12 +43,12 @@
     {
       "brief": "a whole Age-1 camp in one call",
       "iteration": 1,
-      "seconds": 1.2,
-      "triangles": 5796,
-      "bytes": 427528,
+      "seconds": 1.4,
+      "triangles": 5684,
+      "bytes": 421352,
       "gate": "pass",
       "deterministic": true,
-      "glb_sha256": "7ca6bc8e7cf1e5a68a9fb4dffcc844346b841502602b34162e605d686b67ed96",
+      "glb_sha256": "6b21cdfb9395b3366bb82f5b1233656e78a4c9c38908279e001a5893af341205",
       "structure_failures": [],
       "max_delta_e": 93.04,
       "ok": true
@@ -63,7 +61,7 @@
       "bytes": 9148,
       "gate": "pass",
       "deterministic": true,
-      "glb_sha256": "64b5250cf18ea45d29449dc72b46490d5a0c0f246dc50d9a80d446d471b18c63",
+      "glb_sha256": "374ad2d772256e9a200523ace4ccd46c739919b45be53965cb8bed30ca67d361",
       "structure_failures": [],
       "max_delta_e": null,
       "ok": true,
@@ -72,11 +70,11 @@
   ],
   "aggregates": {
     "runs": 5,
-    "passed": 4,
-    "pass_rate": 0.8,
+    "passed": 5,
+    "pass_rate": 1.0,
     "mean_seconds": 0.7,
-    "total_triangles": 12690,
-    "deterministic": false,
-    "verdict": "fail"
+    "total_triangles": 12278,
+    "deterministic": true,
+    "verdict": "pass"
   }
 }
