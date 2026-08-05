@@ -99,7 +99,7 @@ def mesh_retopo(ctx, name, voxel_size, adaptivity, strip_rig):
     params={
         "source": ("str", None, "Source mesh object (textured / high-poly)"),
         "target": ("str", None, "Target mesh object (retopo'd, with fresh UVs)"),
-        "maps": ("str[]", ["base_color", "normal"], "Which maps to bake: base_color, normal"),
+        "maps": ("str[]", ["base_color", "normal"], "Which maps to bake: base_color, normal, ao"),
         "size": ("int", 1024, "Bake resolution (square)"),
         "ray_distance": ("num", 0.05, "Projection ray length in metres — raise if the bake misses recessed detail, lower if it picks up neighbouring parts"),
         "samples": ("int", 16, "Cycles samples per texel"),
@@ -153,8 +153,20 @@ def bake_transfer(ctx, source, target, maps, size, ray_distance, samples):
                 normal_node = nodes.new("ShaderNodeNormalMap")
                 links.new(tex_node.outputs["Color"], normal_node.inputs["Color"])
                 links.new(normal_node.outputs["Normal"], principled.inputs["Normal"])
+        elif kind == "ao":
+            bpy.ops.object.bake(type="AO")
+            # glTF carries occlusion only through the exporter's dedicated
+            # settings group — a node group named "glTF Material Output" with
+            # an "Occlusion" input. Anything else bakes fine and exports nothing.
+            group = bpy.data.node_groups.get("glTF Material Output")
+            if group is None:
+                group = bpy.data.node_groups.new("glTF Material Output", "ShaderNodeTree")
+                group.interface.new_socket("Occlusion", in_out="INPUT", socket_type="NodeSocketFloat")
+            group_node = nodes.new("ShaderNodeGroup")
+            group_node.node_tree = group
+            links.new(tex_node.outputs["Color"], group_node.inputs["Occlusion"])
         else:
-            raise OpError(f"unknown bake map '{kind}' (base_color | normal)")
+            raise OpError(f"unknown bake map '{kind}' (base_color | normal | ao)")
         tex_node.select = False
         baked.append(kind)
 
