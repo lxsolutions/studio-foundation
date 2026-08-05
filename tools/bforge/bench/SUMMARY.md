@@ -1,6 +1,6 @@
 # bforge bench
 
-verdict: **PASS** — 5/5 runs green, all briefs byte-identical across regeneration (12278 triangles total)
+verdict: **PASS** — 6/6 runs green, all briefs byte-identical across regeneration (22390 triangles total)
 
 | brief | tris | gate | deterministic | structure |
 | --- | --- | --- | --- | --- |
@@ -9,6 +9,7 @@ verdict: **PASS** — 5/5 runs green, all briefs byte-identical across regenerat
 | an armored warden that walks | 4902 | pass | ✓ | ok |
 | a whole Age-1 camp in one call | 5684 | pass | ✓ | ok |
 | a 2D concept become a solid | 188 | pass | ✓ | ok |
+| neural soup finished to a game asset | 10112 | pass | ✓ | ok |
 
 Every brief is forged twice from a reset session and the two GLB exports must hash identically (SHA-256 in report.json) — determinism is a checked property, not a slogan. Wall-clock seconds live in report.json (machine-dependent); this file carries only deterministic outputs and is what CI diffs.
 
