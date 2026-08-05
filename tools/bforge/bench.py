@@ -108,12 +108,35 @@ def brief_concept(forge: Forge, concept: Path) -> dict:
             "requires": {"meshes_min": 1}, "iou": result["silhouette_iou"]}
 
 
+def brief_finishing(forge: Forge) -> dict:
+    """The finishing line, exercised as a bench brief: build a creature, thicken
+    it into soup (what a neural generator would emit), then import -> retopo ->
+    unwrap -> transfer-bake -> gate. Determinism here is what makes the neural
+    pipeline trustworthy.
+    """
+    forge.call("char.creature", name="bench_soup_source", plan="canine", length=1.3,
+               shoulder=0.85, bulk=1.15, skin="#4a3c30", seed=13)
+    soup_path = OUT_DIR / "out" / "bench_soup.glb"
+    forge.call("export.gltf", out="bench_soup.glb", objects=["bench_soup_source"])
+    forge.call("session.reset")
+    forge.call("session.import", path=str(soup_path), prefix="soup")
+    forge.call("object.duplicate", name="soup_bench_soup_source", new_name="bench_finished")
+    forge.call("build.subdivide", name="bench_finished", cuts=1)
+    forge.call("mesh.retopo", name="bench_finished", voxel_size=0.025)
+    forge.call("uv.unwrap", object="bench_finished", style="smart_packed")
+    forge.call("bake.transfer", source="soup_bench_soup_source", target="bench_finished",
+               maps=["base_color"], size=256, samples=4, ray_distance=0.08)
+    return {"objects": ["bench_finished"],
+            "requires": {"meshes_min": 1, "materials_min": 1, "textures_min": 1}}
+
+
 BRIEFS = [
     ("crate from a one-line brief", brief_crate),
     ("a wolf with a synthesized trot", brief_wolf),
     ("an armored warden that walks", brief_warden),
     ("a whole Age-1 camp in one call", brief_camp),
     ("a 2D concept become a solid", brief_concept),
+    ("neural soup finished to a game asset", brief_finishing),
 ]
 
 
@@ -129,6 +152,8 @@ def verify(glb_path: Path, requires: dict) -> list[str]:
         failures.append("no animations exported")
     if len(parsed.get("materials", [])) < requires.get("materials_min", 0):
         failures.append(f"materials {len(parsed.get('materials', []))} < {requires['materials_min']}")
+    if len(parsed.get("images", [])) < requires.get("textures_min", 0):
+        failures.append("no baked textures exported")
     if requires.get("vertex_color"):
         has_vcol = any(
             "COLOR_0" in (prim.get("attributes") or {})

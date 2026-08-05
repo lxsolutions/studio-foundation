@@ -9,7 +9,7 @@
       "bytes": 17664,
       "gate": "pass",
       "deterministic": true,
-      "glb_sha256": "c863b90d04074bd7e9cf743cd121a01e2253b67d2dab8f5c3a2758ac65e675a0",
+      "glb_sha256": "813d1e91250ad6665106a59ce2cb236ae0e4a6a412afb27c1dd8fa2f9416802c",
       "structure_failures": [],
       "max_delta_e": null,
       "ok": true
@@ -22,7 +22,7 @@
       "bytes": 105116,
       "gate": "pass",
       "deterministic": true,
-      "glb_sha256": "b43bd547d85655b88c2d04679b382a665dd4c9fd88d079b4567bf14622061473",
+      "glb_sha256": "1087d9edf4939adaba47eda3a63104b594be9655033fe1afb36305ad1f7249f7",
       "structure_failures": [],
       "max_delta_e": 21.25,
       "ok": true
@@ -30,12 +30,12 @@
     {
       "brief": "an armored warden that walks",
       "iteration": 1,
-      "seconds": 1.1,
+      "seconds": 1.0,
       "triangles": 4902,
       "bytes": 262412,
       "gate": "pass",
       "deterministic": true,
-      "glb_sha256": "530edb1db62b99ac212c061ffa2799df258f70898cd14aa37d3386322deab086",
+      "glb_sha256": "405d44235e5233ebe7d19b4d6776ebc39e85cbb7fd9b3ef51cb7341c8f0c9a32",
       "structure_failures": [],
       "max_delta_e": 63.39,
       "ok": true
@@ -43,12 +43,12 @@
     {
       "brief": "a whole Age-1 camp in one call",
       "iteration": 1,
-      "seconds": 1.4,
+      "seconds": 1.2,
       "triangles": 5684,
       "bytes": 421352,
       "gate": "pass",
       "deterministic": true,
-      "glb_sha256": "6b21cdfb9395b3366bb82f5b1233656e78a4c9c38908279e001a5893af341205",
+      "glb_sha256": "5cb924dd86c6dc3f2b9328f30f489e4bb0371bd232b06c41765eec08d235f86e",
       "structure_failures": [],
       "max_delta_e": 93.04,
       "ok": true
@@ -56,24 +56,37 @@
     {
       "brief": "a 2D concept become a solid",
       "iteration": 1,
-      "seconds": 0.4,
+      "seconds": 0.5,
       "triangles": 188,
       "bytes": 9148,
       "gate": "pass",
       "deterministic": true,
-      "glb_sha256": "374ad2d772256e9a200523ace4ccd46c739919b45be53965cb8bed30ca67d361",
+      "glb_sha256": "64b5250cf18ea45d29449dc72b46490d5a0c0f246dc50d9a80d446d471b18c63",
       "structure_failures": [],
       "max_delta_e": null,
       "ok": true,
       "silhouette_iou": 0.978
+    },
+    {
+      "brief": "neural soup finished to a game asset",
+      "iteration": 1,
+      "seconds": 1.5,
+      "triangles": 10112,
+      "bytes": 468596,
+      "gate": "pass",
+      "deterministic": true,
+      "glb_sha256": "b8f52fc0ce3fbd69afbc32eb7078214e64eb65371dc5679b7661a8c1e9ef28f2",
+      "structure_failures": [],
+      "max_delta_e": 0.0,
+      "ok": true
     }
   ],
   "aggregates": {
-    "runs": 5,
-    "passed": 5,
+    "runs": 6,
+    "passed": 6,
     "pass_rate": 1.0,
-    "mean_seconds": 0.7,
-    "total_triangles": 12278,
+    "mean_seconds": 0.8,
+    "total_triangles": 22390,
     "deterministic": true,
     "verdict": "pass"
   }
