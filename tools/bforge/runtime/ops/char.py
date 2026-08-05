@@ -1451,12 +1451,12 @@ def char_face(ctx, name, height, build, eyes, eye_color):
             f"m_{body.name}_eyes",
             color=eye_color if eyes == "natural" else eye_color,
             roughness=0.4,
-            emission=0.0 if eyes == "natural" else 6.0,
+            emission=0.0 if eyes == "natural" else 10.0,
         )
         eye_start = len(bm.faces)
         for sign in (1.0, -1.0):
             eye = mesh_lib.new_bmesh()
-            mesh_lib.add_icosphere(eye, radius=head_r * 0.18, subdivisions=1)
+            mesh_lib.add_icosphere(eye, radius=head_r * 0.22, subdivisions=1)
             bmesh_transform(
                 eye,
                 Matrix.Translation(Vector((
@@ -1807,7 +1807,7 @@ def _creature_hexapod_body(ctx, name, length, height, plan, bulk, detail, locati
         _absorb(bm, mandible)
 
     eye_centers = []
-    eye_radius = body_r * 0.10
+    eye_radius = body_r * 0.13
     if eyes != "none":
         # Compound-glow beads above the mandibles, proud of the head shell
         # (forward surface at -0.5 body_r).
@@ -1851,7 +1851,7 @@ def _creature_hexapod_body(ctx, name, length, height, plan, bulk, detail, locati
     if eyes != "none" and eye_faces:
         eye_mat = mat_lib.principled(
             f"m_{obj.name}_eyes", color=eye_color, roughness=0.4,
-            emission=0.0 if eyes == "natural" else 6.0,
+            emission=0.0 if eyes == "natural" else 10.0,
         )
         mat_lib.assign_to_faces(obj, eye_mat, eye_faces)
         result["materials"] = [m.name for m in obj.data.materials if m]
@@ -1933,7 +1933,7 @@ def char_creature(ctx, name, length, shoulder, plan, bulk, detail, location, ski
     limb(head_center.lerp(muzzle, 0.55), snout_tip, body_r * 0.34, body_r * 0.14)
     blob(snout_tip, body_r * 0.16, (0.9, 1.1, 0.8))
     eye_centers = []
-    eye_radius = body_r * 0.15
+    eye_radius = body_r * 0.18
     if eyes != "none":
         # The head shell is squashed 1.35x in Y, so its surface sits at
         # -0.62*1.35 ≈ -0.84 body_r. Eyes at -0.78 half-embed: proud enough
@@ -2009,7 +2009,7 @@ def char_creature(ctx, name, length, shoulder, plan, bulk, detail, location, ski
     if eyes != "none" and eye_faces:
         eye_mat = mat_lib.principled(
             f"m_{obj.name}_eyes", color=eye_color, roughness=0.4,
-            emission=0.0 if eyes == "natural" else 6.0,
+            emission=0.0 if eyes == "natural" else 10.0,
         )
         mat_lib.assign_to_faces(obj, eye_mat, eye_faces)
         result["materials"] = [m.name for m in obj.data.materials if m]
