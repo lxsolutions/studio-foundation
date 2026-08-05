@@ -11,6 +11,7 @@ month; the finishing line is generator-agnostic on purpose.
 
 from __future__ import annotations
 
+import bmesh
 import bpy
 from lib import mat as mat_lib
 from lib import mesh as mesh_lib
@@ -33,6 +34,103 @@ def _activate(obj, select_others=()):
         other.select_set(other in select_others or other is obj)
     view_layer.objects.active = obj
     return previous
+
+
+@op(
+    "mesh.clean",
+    summary="Sweep a neural/scan mesh before retopo: delete floating islands below a size share of the main body, then Taubin-smooth the surface (smooth + counter-smooth, so it denoises without shrinking). Neural soup carries floaters and high-frequency noise that voxel retopo faithfully preserves — clean first or the spikes ship.",
+    params={
+        "name": ("str", None, "Mesh object to clean (modified in place)"),
+        "island_min_share": ("num", 0.02, "Drop disconnected islands smaller than this fraction of the largest island's face count (0.02 = keep anything at least 2% of the main body)"),
+        "smooth_iterations": ("int", 2, "Laplacian rounds — 1-3 denoises neural output; 0 keeps the raw surface"),
+        "smooth_factor": ("num", 0.3, "Step size per round, capped at 0.35: a negative-volume counter-step (Taubin) was tried and SHREDDED voxel-quad meshes — plain small steps are the safe smooth"),
+        "despike_iterations": ("int", 2, "Outlier-clamp passes — collapse verts sitting >threshold x the median edge length away from their neighbourhood median (the long thin spikes neural extraction leaves)"),
+        "despike_threshold": ("num", 4.0, "Spike cutoff as a multiple of the median edge length"),
+    },
+    tags=["mesh"],
+)
+def mesh_clean(ctx, name, island_min_share, smooth_iterations, smooth_factor,
+               despike_iterations, despike_threshold):
+    obj = _get(name)
+    bm = mesh_lib.obj_bmesh(obj)
+
+    clamped_total = 0
+    for _ in range(int(despike_iterations)):
+        lengths = [edge.calc_length() for edge in bm.edges]
+        if not lengths:
+            break
+        lengths.sort()
+        median_edge = lengths[len(lengths) // 2] or 1e-6
+        cutoff = median_edge * float(despike_threshold)
+        moves = []
+        for vert in bm.verts:
+            linked = [e.other_vert(vert) for e in vert.link_edges]
+            if len(linked) < 3:
+                continue
+            neighbours = sorted(v.co for v in linked)
+            mid = neighbours[len(neighbours) // 2]
+            if (vert.co - mid).length > cutoff:
+                moves.append((vert, mid.copy()))
+        for vert, target in moves:
+            vert.co = target
+        clamped_total += len(moves)
+        if not moves:
+            break
+
+    removed_islands = 0
+    if island_min_share > 0:
+        # Island walk over face adjacency; keep every island at least
+        # island_min_share the size of the largest.
+        for face in bm.faces:
+            face.tag = False
+        islands = []
+        for seed_face in bm.faces:
+            if seed_face.tag:
+                continue
+            island = []
+            stack = [seed_face]
+            seed_face.tag = True
+            while stack:
+                face = stack.pop()
+                island.append(face)
+                for edge in face.edges:
+                    for linked in edge.link_faces:
+                        if not linked.tag:
+                            linked.tag = True
+                            stack.append(linked)
+            islands.append(island)
+        if islands:
+            largest = max(len(island) for island in islands)
+            floor = largest * float(island_min_share)
+            doomed = [face for island in islands if len(island) < floor for face in island]
+            removed_islands = len(islands) - sum(
+                1 for island in islands if len(island) >= floor
+            )
+            if doomed:
+                bmesh.ops.delete(bm, geom=doomed, context="FACES")
+
+    if smooth_iterations > 0:
+        step = min(0.35, float(smooth_factor))
+        for _ in range(int(smooth_iterations)):
+            bmesh.ops.smooth_laplacian_vert(
+                bm, verts=bm.verts[:], lambda_factor=step,
+                lambda_border=0.0, use_x=True, use_y=True, use_z=True,
+                preserve_volume=False,
+            )
+
+    mesh_lib.write_bmesh(bm, obj)
+    result = {
+        "object": obj.name,
+        "islands_removed": removed_islands,
+        "smooth_rounds": int(smooth_iterations),
+        "spikes_clamped": clamped_total,
+        "triangles": mesh_lib.tri_count(obj),
+    }
+    ctx.note(
+        f"'{obj.name}': {removed_islands} islands dropped, {smooth_iterations} "
+        "Taubin rounds. Follow with mesh.retopo for the quad rebuild."
+    )
+    return result
 
 
 @op(
@@ -175,6 +273,14 @@ def bake_transfer(ctx, source, target, maps, size, ray_distance, samples):
     for image in bpy.data.images:
         if image.name.startswith(f"{dst.name}_") and not image.packed_file:
             image.pack()
+    # Prune the source's leftover texture nodes: the duplicated material
+    # still references the SOURCE's images, which otherwise hitchhike into
+    # the export (a 4K neural webp riding a 7k-tri game mesh is how you ship
+    # 8 MB of nothing). Keep only this object's own maps (baked + detail).
+    for node in list(nodes):
+        if node.type == "TEX_IMAGE" and node.image is not None:
+            if not node.image.name.startswith(f"{dst.name}_"):
+                nodes.remove(node)
     for other in bpy.context.scene.objects:
         other.select_set(False)
 
