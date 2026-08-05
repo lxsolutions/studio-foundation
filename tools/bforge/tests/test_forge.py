@@ -122,6 +122,36 @@ class Daemon(ForgeCase):
         self.assertNotIn("SystemError", str(ctx.exception))
 
 
+class Hierarchy(ForgeCase):
+    def test_parent_keeps_world_transform_and_survives_export(self):
+        self.forge.call("build.box", name="frame", size=[2, 0.2, 2], bevel=0.0)
+        self.forge.call("build.box", name="leaf", size=[1, 0.1, 1], location=[0.5, 0, 0], bevel=0.0)
+        self.forge.call("object.parent", name="leaf", parent="frame")
+        leaf = self.forge.call("object.inspect", name="leaf")
+        self.assertAlmostEqual(leaf["bounds"]["min"][0], 0.0, places=5)
+        self.assertAlmostEqual(leaf["bounds"]["max"][0], 1.0, places=5)
+        out = Path(TEMP.name) / "out" / "hier.glb"
+        self.forge.call("export.gltf", out=str(out))
+        data = out.read_bytes()
+        import struct as struct_mod
+
+        jlen = struct_mod.unpack_from("<I", data, 12)[0]
+        gltf = json.loads(data[20 : 20 + jlen])
+        nodes = gltf["nodes"]
+        frame = next(n for n in nodes if n.get("name") == "frame")
+        child_names = [nodes[c].get("name") for c in frame.get("children", [])]
+        self.assertIn("leaf", child_names)
+
+    def test_parent_rejects_cycles_and_self_parenting(self):
+        self.forge.call("build.box", name="a", size=[1, 1, 1])
+        self.forge.call("build.box", name="b", size=[1, 1, 1])
+        self.forge.call("object.parent", name="b", parent="a")
+        with self.assertRaises(ForgeError):
+            self.forge.call("object.parent", name="a", parent="a")
+        with self.assertRaises(ForgeError):
+            self.forge.call("object.parent", name="a", parent="b")
+
+
 class Geometry(ForgeCase):
     def test_box_dimensions_are_exact(self):
         result = self.forge.call("build.box", name="b", size=[2.0, 1.0, 0.5], bevel=0.0)

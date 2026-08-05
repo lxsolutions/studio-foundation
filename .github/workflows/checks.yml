@@ -82,6 +82,9 @@ jobs:
       - name: bforge schema
         run: uv run --project tools python -m unittest discover -s tools/bforge/tests -p "test_schema.py"
 
+      - name: worldc (World IR validation + artifact verification)
+        run: uv run --project tools python -m unittest discover -s tools/worldc/tests -p "test_*.py"
+
       - name: Protocol golden fixtures
         run: uv run --project tools python tools/asset-pipeline/check_fixtures.py
 

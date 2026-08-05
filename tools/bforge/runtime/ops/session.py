@@ -335,6 +335,31 @@ def object_rename(ctx, name, to):
 
 
 @op(
+    "object.parent",
+    summary="Parent one object to another, keeping the child's world transform. Entity hierarchy is how World IR parts become a GLB node tree.",
+    params={
+        "name": ("str", None, "Child object"),
+        "parent": ("str", None, "Parent object"),
+    },
+    tags=["transform"],
+)
+def object_parent(ctx, name, parent):
+    obj = _get(name)
+    par = _get(parent)
+    if obj is par:
+        raise OpError(f"'{name}' cannot parent itself")
+    ancestor = par
+    while ancestor is not None:
+        if ancestor is obj:
+            raise OpError(f"parenting '{name}' under '{parent}' would create a cycle")
+        ancestor = ancestor.parent
+    world = obj.matrix_world.copy()
+    obj.parent = par
+    obj.matrix_world = world
+    return {"name": obj.name, "parent": par.name}
+
+
+@op(
     "object.shade",
     summary="Set smooth or flat shading. Smooth shading with an angle threshold is what makes curved props read as curved.",
     params={

@@ -1,6 +1,6 @@
 # bforge op reference
 
-136 operations.
+137 operations.
 
 ## `arch.*`
 
@@ -1317,6 +1317,15 @@ Set an object's pivot. Use 'bottom' for floor props, 'center' for pickups, 'worl
 | --- | --- | --- | --- |
 | `name` | string | None | Object name |
 | `mode` | bottom \| center \| center_xy \| world | 'bottom' | Where the pivot goes |
+
+### `object.parent`
+
+Parent one object to another, keeping the child's world transform. Entity hierarchy is how World IR parts become a GLB node tree.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `name` | string | None | Child object |
+| `parent` | string | None | Parent object |
 
 ### `object.rename`
 

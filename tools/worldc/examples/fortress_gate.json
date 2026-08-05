@@ -1,0 +1,56 @@
+{
+  "world_ir": "0.1",
+  "entity": "fortress_gate",
+  "brief": "a destructible fortress gate: two leaves on a frame, opens, locks, breaks",
+  "parts": {
+    "frame": { "role": "static" },
+    "leaf_l": { "parent": "frame" },
+    "leaf_r": { "parent": "frame" }
+  },
+  "joints": {
+    "hinge_l": { "parent": "frame", "child": "leaf_l", "axis": [0, 0, 1], "range_degrees": [0, 110] },
+    "hinge_r": { "parent": "frame", "child": "leaf_r", "axis": [0, 0, 1], "range_degrees": [0, 110] }
+  },
+  "state": {
+    "openness": "float",
+    "locked": "bool",
+    "health": "int",
+    "destroyed": "bool"
+  },
+  "affordances": ["open", "close", "lock", "attack", "repair"],
+  "navigation": {
+    "blocks_below_openness": 0.7,
+    "never_blocks_when_destroyed": true
+  },
+  "network": {
+    "authority": "server",
+    "replicated": ["openness", "locked", "health", "destroyed"]
+  },
+  "requirements": {
+    "max_triangles": 4000,
+    "require_collision": "frame",
+    "payload_kb_max": 900,
+    "platform": "browser_webgpu",
+    "asset_class": "prop"
+  },
+  "recipe": {
+    "recipe_version": 1,
+    "asset_id": "fortress_gate",
+    "brief": "a destructible fortress gate: frame with two leaves and collision",
+    "steps": [
+      { "op": "build.box", "args": { "name": "frame", "size": [3.2, 0.5, 3.2] } },
+      { "op": "build.box", "args": { "name": "leaf_l", "size": [1.3, 0.15, 2.8], "location": [-0.75, 0, 0.2] } },
+      { "op": "build.box", "args": { "name": "leaf_r", "size": [1.3, 0.15, 2.8], "location": [0.75, 0, 0.2] } },
+      { "op": "object.parent", "args": { "name": "leaf_l", "parent": "frame" } },
+      { "op": "object.parent", "args": { "name": "leaf_r", "parent": "frame" } },
+      { "op": "gameready.collision", "args": { "name": "frame", "mode": "convex" } }
+    ],
+    "requirements": {
+      "max_triangles": 4000,
+      "require_collision": true,
+      "platform": "browser_webgpu",
+      "asset_class": "prop"
+    },
+    "export": { "engine": "godot", "category": "architecture" }
+  }
+}

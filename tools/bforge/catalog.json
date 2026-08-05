@@ -5554,6 +5554,29 @@
       }
     },
     {
+      "name": "object.parent",
+      "summary": "Parent one object to another, keeping the child's world transform. Entity hierarchy is how World IR parts become a GLB node tree.",
+      "tags": [
+        "transform"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Child object"
+          },
+          "parent": {
+            "type": "string",
+            "description": "Parent object"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "object.rename",
       "summary": "Rename an object, coercing the new name to the studio's snake_case convention.",
       "tags": [

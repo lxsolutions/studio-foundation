@@ -112,6 +112,7 @@ test-python:
     uv run --project tools python -m unittest discover -s tools/asset-pipeline/tests -p "test_*.py" -v
     uv run --project tools python -m unittest discover -s tools/provenance/tests -p "test_*.py" -v
     uv run --project tools python -m unittest discover -s tools/verification/tests -p "test_*.py" -v
+    uv run --project tools python -m unittest discover -s tools/worldc/tests -p "test_*.py" -v
 
 # Cross-language protocol golden-fixture checks (Rust side runs in test-rust too)
 test-protocol:
@@ -235,6 +236,11 @@ bforge-catalog:
 #   just RECIPE=tools/bforge/examples/recipes/crate.json bforge-cook
 bforge-cook:
     uv run --project tools python tools/bforge/bforge/cli.py cook "{{RECIPE}}"
+
+# Compile a World IR entity (spec: docs/specs/world-ir-v0.1.md) to a proof-carrying package.
+#   just ENTITY=tools/worldc/examples/fortress_gate.json worldc-compile
+worldc-compile:
+    uv run --project tools python tools/worldc/worldc.py compile "{{ENTITY}}"
 
 # ------------------------------------------------------------------ exports
 
