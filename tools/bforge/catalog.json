@@ -5084,6 +5084,50 @@
       }
     },
     {
+      "name": "mesh.clean",
+      "summary": "Sweep a neural/scan mesh before retopo: delete floating islands below a size share of the main body, then Taubin-smooth the surface (smooth + counter-smooth, so it denoises without shrinking). Neural soup carries floaters and high-frequency noise that voxel retopo faithfully preserves \u2014 clean first or the spikes ship.",
+      "tags": [
+        "mesh"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Mesh object to clean (modified in place)"
+          },
+          "island_min_share": {
+            "type": "number",
+            "description": "Drop disconnected islands smaller than this fraction of the largest island's face count (0.02 = keep anything at least 2% of the main body)",
+            "default": 0.02
+          },
+          "smooth_iterations": {
+            "type": "integer",
+            "description": "Laplacian rounds \u2014 1-3 denoises neural output; 0 keeps the raw surface",
+            "default": 2
+          },
+          "smooth_factor": {
+            "type": "number",
+            "description": "Step size per round, capped at 0.35: a negative-volume counter-step (Taubin) was tried and SHREDDED voxel-quad meshes \u2014 plain small steps are the safe smooth",
+            "default": 0.3
+          },
+          "despike_iterations": {
+            "type": "integer",
+            "description": "Outlier-clamp passes \u2014 collapse verts sitting >threshold x the median edge length away from their neighbourhood median (the long thin spikes neural extraction leaves)",
+            "default": 2
+          },
+          "despike_threshold": {
+            "type": "number",
+            "description": "Spike cutoff as a multiple of the median edge length",
+            "default": 4.0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "mesh.retopo",
       "summary": "Rebuild a dense triangle soup (neural/scan import) as a clean all-quad mesh via voxel remesh, in place. Robust on any input \u2014 open seams, overlapping shells, interior garbage all get swallowed by the voxel grid. Destroys UVs and skin weights (unwrap again after; re-rig if it had a rig). Pair with bake.transfer to move the source's textures and detail across.",
       "tags": [

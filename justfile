@@ -381,6 +381,10 @@ ci-local:
 secret-scan:
     uv run --project tools python tools/ci/secret_scan.py
 
+# Fail when prose (README counts, public claims) drifts from the pinned artifacts
+check-claims:
+    uv run --project tools python tools/ci/check_claims.py
+
 sbom:
     {{PY}} tools/release/make_sbom.py
 

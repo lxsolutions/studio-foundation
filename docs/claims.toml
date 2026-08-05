@@ -1,0 +1,93 @@
+# Public-claim consistency rules — the one source of truth for the numbers
+# the repository says about itself.
+#
+# Verification is this project's brand, and its own prose has drifted from the
+# code more than once (op counts, patch counts, release boundaries, a catalog
+# whose schema disagreed with the runtime). tools/ci/check_claims.py derives
+# the true values from the pinned artifacts listed here and fails CI when a
+# documented surface disagrees. Fix drift by editing the prose surface or
+# regenerating the artifact — never by hand-editing numbers to silence the
+# gate.
+#
+# Derived keys:
+#   bforge.ops         len(tools/bforge/catalog.json ops)   (regen: just bforge-catalog)
+#   bforge.namespaces  distinct namespaces in that catalog
+#   bforge.tests       test_* methods counted statically in tools/bforge/tests/test_*.py
+#   bforge.tests_blender  of those, the suites that boot a real Blender daemon
+#                      (module references find_blender / honors BFORGE_SKIP_LIVE)
+#   engine.patches     patch entries in engine/engine-lock.toml
+
+# A surface rule: every pattern must occur at least once in `file`, and every
+# number its capture group matches must equal the derived value of `key`.
+# `group` (default 1) says which capture group carries the key's number.
+# Write prose so the number appears inside one of these exact phrasings.
+
+[[surface]]
+file = "README.md"
+key = "bforge.ops"
+patterns = [
+  '(\d+) whitelisted, typed operations',
+  '(\d+) typed, whitelisted operations',
+  '(\d+) whitelisted, typed, deterministic operations',
+]
+
+[[surface]]
+file = "README.md"
+key = "bforge.tests"
+patterns = [
+  '(\d+) bforge tests, (\d+) in suites that start a real Blender daemon',
+  '(\d+) tests, (\d+) of them in suites that start a real Blender daemon',
+]
+
+[[surface]]
+file = "README.md"
+key = "bforge.tests_blender"
+group = 2
+patterns = [
+  '(\d+) bforge tests, (\d+) in suites that start a real Blender daemon',
+  '(\d+) tests, (\d+) of them in suites that start a real Blender daemon',
+]
+
+[[surface]]
+file = "README.md"
+key = "engine.patches"
+patterns = [
+  '(\d+) targeted integration patches',
+  '(\d+) checksummed patches',
+  '(\d+) targeted, checksummed patches',
+  'patch series 0001–0*(\d+)',
+]
+
+[[surface]]
+file = "tools/bforge/README.md"
+key = "bforge.ops"
+patterns = [
+  'the (\d+) operations, grouped by namespace',
+  '(\d+) ops across (\d+) namespaces',
+]
+
+[[surface]]
+file = "tools/bforge/README.md"
+key = "bforge.namespaces"
+group = 2
+patterns = [
+  '(\d+) ops across (\d+) namespaces',
+]
+
+# A forbidden claim: a phrase no surface may carry, because it is not
+# defensible. `files` is a repo-relative list; `phrase` is a literal string.
+
+[[forbidden]]
+files = ["README.md"]
+phrase = "only public Forward+"
+reason = "another public Godot Forward+ WebGPU patch stack exists (davtamay/Godot_WebGPU); absolute exclusivity claims are not defensible — claim the evidence and reproducibility instead"
+
+[[forbidden]]
+files = ["README.md"]
+phrase = "the only other public WebGPU effort"
+reason = "more than one other public WebGPU effort exists; name the specific project being compared instead"
+
+[[forbidden]]
+files = ["README.md", "docs/architecture/dependency-licenses.md", "docs/adr/0006-blender-master-asset-pipeline.md"]
+phrase = "Blender 5.2"
+reason = "the pinned and CI-verified Blender is 4.5 LTS (4.5.12); the bench installs it and every golden was produced with it"
