@@ -1407,10 +1407,12 @@ def char_outfit(ctx, name, piece, height, build, material, color, crest, side, g
         "name": ("str", None, "Body mesh (from char.humanoid)"),
         "height": ("num", 0.0, "Character height; 0 measures the mesh bounds"),
         "build": ("enum:realistic|heroic|stylized|chibi|lithe", "heroic", "Proportions — match the char.humanoid build"),
+        "eyes": ("enum:none|natural|glow", "natural", "Eye blobs: natural (dark), glow (emissive — underworld/monster signature, reads at any distance)"),
+        "eye_color": ("colorref", "#1c1c22", "Eye colour; glow eyes read best saturated (#39ff88 underworld, #ffb35a ember)"),
     },
     tags=["char"],
 )
-def char_face(ctx, name, height, build):
+def char_face(ctx, name, height, build, eyes, eye_color):
     body, joints, head_unit, _torso_r, _upper_r, _thigh_r, _h = _fit(name, height, build)
     head_center = Vector(joints["head"][0]).lerp(Vector(joints["head"][1]), 0.5)
     head_r = head_unit * 0.46
@@ -1443,12 +1445,49 @@ def char_face(ctx, name, height, build):
     )
     _absorb(bm, chin)
 
+    eye_faces = []
+    if eyes != "none":
+        eye_mat = mat_lib.principled(
+            f"m_{body.name}_eyes",
+            color=eye_color if eyes == "natural" else eye_color,
+            roughness=0.4,
+            emission=0.0 if eyes == "natural" else 6.0,
+        )
+        eye_start = len(bm.faces)
+        for sign in (1.0, -1.0):
+            eye = mesh_lib.new_bmesh()
+            mesh_lib.add_icosphere(eye, radius=head_r * 0.18, subdivisions=1)
+            bmesh_transform(
+                eye,
+                Matrix.Translation(Vector((
+                    sign * head_r * 0.33,
+                    -head_r * 0.98,
+                    head_center.z + head_unit * 0.06,
+                ))),
+            )
+            _absorb(bm, eye)
+        eye_faces = list(range(eye_start, len(bm.faces)))
+
     added = len(bm.faces) - before
     mesh_lib.write_bmesh(bm, body)
+    if eyes != "none" and eye_faces:
+        mesh = body.data
+        slot = None
+        for i, material in enumerate(mesh.materials):
+            if material and material.name == f"m_{body.name}_eyes":
+                slot = i
+                break
+        if slot is None:
+            mesh.materials.append(bpy.data.materials.get(f"m_{body.name}_eyes"))
+            slot = len(mesh.materials) - 1
+        for index in eye_faces:
+            if index < len(mesh.polygons):
+                mesh.polygons[index].material_index = slot
     mesh_lib.shade_auto_smooth(body, 50.0)
     return {
         "object": body.name,
         "faces_added": added,
+        "eyes": eyes,
         "note": "features share the body's skin material and weld to the head shell; "
                 "the head bone owns them when char.rig skins the mesh",
     }
@@ -1712,7 +1751,8 @@ _RELATED = _RELATED | frozenset(
 )
 
 
-def _creature_hexapod_body(ctx, name, length, height, plan, bulk, detail, location, skin, seed):
+def _creature_hexapod_body(ctx, name, length, height, plan, bulk, detail, location, skin, seed,
+                           eyes="none", eye_color="#1c1c22"):
     """Scarab-class body: segmented abdomen, thorax, dorsal shell, mandibles,
     six splayed legs. Separate from the quadruped assembly on purpose."""
     ctx.reseed(seed)
@@ -1766,6 +1806,23 @@ def _creature_hexapod_body(ctx, name, length, height, plan, bulk, detail, locati
         )
         _absorb(bm, mandible)
 
+    eye_centers = []
+    eye_radius = body_r * 0.10
+    if eyes != "none":
+        # Compound-glow beads above the mandibles, proud of the head shell
+        # (forward surface at -0.5 body_r).
+        for sign in (1.0, -1.0):
+            center = Vector((
+                sign * body_r * 0.20,
+                head_center.y - body_r * 0.44,
+                head_center.z + body_r * 0.10,
+            ))
+            eye = mesh_lib.new_bmesh()
+            mesh_lib.add_icosphere(eye, radius=eye_radius, subdivisions=1)
+            bmesh_transform(eye, Matrix.Translation(center))
+            _absorb(bm, eye)
+            eye_centers.append(center)
+
     leg_r = body_r * 0.16
     for side in ("l", "r"):
         for station in ("front", "mid", "rear"):
@@ -1777,6 +1834,13 @@ def _creature_hexapod_body(ctx, name, length, height, plan, bulk, detail, locati
             limb(paw_a, paw_b, leg_r * 0.65, leg_r * 0.4)
 
     mesh_lib.cleanup(bm, merge_dist=length * 0.002)
+    eye_faces = []
+    if eye_centers:
+        bm.faces.ensure_lookup_table()
+        for face in bm.faces:
+            center = face.calc_center_median()
+            if any((center - eye).length < eye_radius * 1.6 for eye in eye_centers):
+                eye_faces.append(face.index)
     obj = mesh_lib.to_object(bm, scene_lib.unique_name(name))
     obj.location = location
     skin_mat = mat_lib.principled(f"m_{obj.name}_skin", color=skin, roughness=0.55, metallic=0.15)
@@ -1784,6 +1848,14 @@ def _creature_hexapod_body(ctx, name, length, height, plan, bulk, detail, locati
         ctx, obj, material=skin_mat, uv="smart_packed", origin="bottom", smooth=True,
         smooth_angle=50.0,
     )
+    if eyes != "none" and eye_faces:
+        eye_mat = mat_lib.principled(
+            f"m_{obj.name}_eyes", color=eye_color, roughness=0.4,
+            emission=0.0 if eyes == "natural" else 6.0,
+        )
+        mat_lib.assign_to_faces(obj, eye_mat, eye_faces)
+        result["materials"] = [m.name for m in obj.data.materials if m]
+        result["eyes"] = eyes
     result["plan"] = plan
     result["length_m"] = length
     ctx.note(
@@ -1805,14 +1877,16 @@ def _creature_hexapod_body(ctx, name, length, height, plan, bulk, detail, locati
         "detail": ("int", 8, "Limb cross-section segments"),
         "location": ("vec3", [0.0, 0.0, 0.0], "World position"),
         "skin": ("str", "#7a6248", "Body colour"),
+        "eyes": ("enum:none|natural|glow", "natural", "Eye blobs: natural (dark), glow (emissive — the underworld signature, reads at any distance)"),
+        "eye_color": ("colorref", "#1c1c22", "Eye colour; glow reads best saturated (#39ff88 underworld, #ffb35a ember)"),
         "seed": ("int", 0, "Random seed"),
     },
     tags=["char"],
 )
-def char_creature(ctx, name, length, shoulder, plan, bulk, detail, location, skin, seed):
+def char_creature(ctx, name, length, shoulder, plan, bulk, detail, location, skin, seed, eyes, eye_color):
     if plan in _HEXAPOD_PLANS:
         return _creature_hexapod_body(ctx, name, length, shoulder, plan, bulk, detail,
-                                      location, skin, seed)
+                                      location, skin, seed, eyes=eyes, eye_color=eye_color)
     ctx.reseed(seed)
     joints, spec = _quadruped_skeleton(length, shoulder, plan)
     sides = max(5, min(16, detail))
@@ -1858,6 +1932,23 @@ def char_creature(ctx, name, length, shoulder, plan, bulk, detail, location, ski
     snout_tip = Vector((muzzle.x, muzzle.y - length * 0.09, muzzle.z - length * 0.025))
     limb(head_center.lerp(muzzle, 0.55), snout_tip, body_r * 0.34, body_r * 0.14)
     blob(snout_tip, body_r * 0.16, (0.9, 1.1, 0.8))
+    eye_centers = []
+    eye_radius = body_r * 0.15
+    if eyes != "none":
+        # The head shell is squashed 1.35x in Y, so its surface sits at
+        # -0.62*1.35 ≈ -0.84 body_r. Eyes at -0.78 half-embed: proud enough
+        # that the glow reads at swarm distance, seated enough to look set.
+        for sign in (1.0, -1.0):
+            center = Vector((
+                sign * body_r * 0.26,
+                head_center.y - body_r * 0.78,
+                head_center.z + body_r * 0.16,
+            ))
+            eye = mesh_lib.new_bmesh()
+            mesh_lib.add_icosphere(eye, radius=eye_radius, subdivisions=1)
+            bmesh_transform(eye, Matrix.Translation(center))
+            _absorb(bm, eye)
+            eye_centers.append(center)
     # Ears: the two triangles that make a head read as an animal at any distance.
     if plan in ("canine", "feline", "generic"):
         for sign in (1.0, -1.0):
@@ -1895,6 +1986,16 @@ def char_creature(ctx, name, length, shoulder, plan, bulk, detail, location, ski
             blob(paw_center, leg_r * 0.75, (1.0, 1.4, 0.75))
 
     mesh_lib.cleanup(bm, merge_dist=length * 0.002)
+    # Face indices are not stable across the weld above (degenerate faces are
+    # dropped), so find the eye faces geometrically after cleanup instead of
+    # tracking a pre-cleanup range.
+    eye_faces = []
+    if eye_centers:
+        bm.faces.ensure_lookup_table()
+        for face in bm.faces:
+            center = face.calc_center_median()
+            if any((center - eye).length < eye_radius * 1.6 for eye in eye_centers):
+                eye_faces.append(face.index)
     obj = mesh_lib.to_object(bm, scene_lib.unique_name(name))
     obj.location = location
     skin_mat = mat_lib.principled(f"m_{obj.name}_skin", color=skin, roughness=0.72)
@@ -1902,6 +2003,17 @@ def char_creature(ctx, name, length, shoulder, plan, bulk, detail, location, ski
         ctx, obj, material=skin_mat, uv="smart_packed", origin="bottom", smooth=True,
         smooth_angle=50.0,
     )
+    # Assign the eye material AFTER finish: finish's mat_lib.assign writes the
+    # skin into slot 0, which would silently overwrite an eye material placed
+    # there first (the bug that made glow eyes vanish).
+    if eyes != "none" and eye_faces:
+        eye_mat = mat_lib.principled(
+            f"m_{obj.name}_eyes", color=eye_color, roughness=0.4,
+            emission=0.0 if eyes == "natural" else 6.0,
+        )
+        mat_lib.assign_to_faces(obj, eye_mat, eye_faces)
+        result["materials"] = [m.name for m in obj.data.materials if m]
+        result["eyes"] = eyes
     result["plan"] = plan
     result["length_m"] = length
 

@@ -108,6 +108,8 @@ jobs:
         run: uv run --project tools python tools/bforge/bench.py
 
       # The committed summary is the public number: if the tooling changed the
-      # output, this diff fails and the summary must be re-committed honestly.
+      # deterministic output, this diff fails and the summary must be
+      # re-committed honestly. report.json also carries wall-clock seconds,
+      # which are machine-dependent, so it stays out of the diff.
       - name: the committed number matches a fresh run
-        run: git diff --exit-code tools/bforge/bench/SUMMARY.md tools/bforge/bench/report.json
+        run: git diff --exit-code tools/bforge/bench/SUMMARY.md
