@@ -113,6 +113,7 @@ test-python:
     uv run --project tools python -m unittest discover -s tools/provenance/tests -p "test_*.py" -v
     uv run --project tools python -m unittest discover -s tools/verification/tests -p "test_*.py" -v
     uv run --project tools python -m unittest discover -s tools/worldc/tests -p "test_*.py" -v
+    uv run --project tools python -m unittest discover -s tools/sim/tests -p "test_*.py" -v
 
 # Cross-language protocol golden-fixture checks (Rust side runs in test-rust too)
 test-protocol:
@@ -241,6 +242,11 @@ bforge-cook:
 #   just ENTITY=tools/worldc/examples/fortress_gate.json worldc-compile
 worldc-compile:
     uv run --project tools python tools/worldc/worldc.py compile "{{ENTITY}}"
+
+# Run a deterministic replay (spec: docs/specs/sim-replay-v0.1.md); exits non-zero on golden mismatch.
+#   just REPLAY=tools/sim/replays/gate_open_destroy.json sim-replay
+sim-replay:
+    uv run --project tools python tools/sim/kernel.py replay "{{REPLAY}}"
 
 # ------------------------------------------------------------------ exports
 

@@ -17,7 +17,7 @@
     "health": "int",
     "destroyed": "bool"
   },
-  "affordances": ["open", "close", "lock", "attack", "repair"],
+  "affordances": ["open", "close", "lock", "unlock", "attack", "repair"],
   "navigation": {
     "blocks_below_openness": 0.7,
     "never_blocks_when_destroyed": true

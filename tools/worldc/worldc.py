@@ -297,6 +297,59 @@ def verify_artifact(doc: dict, glb_path: Path) -> list[dict]:
     return checks
 
 
+# ------------------------------------------------------ simulation contracts
+
+SIM_CONTRACT_VERSION = "0.1"
+SIM_STORAGE = {"float": "milli_i64", "int": "i64", "bool": "bool", "string": "string"}
+SIM_PARAM_KEYS = {"open_rate_milli", "max_health"}
+
+
+def sim_contract(doc: dict, source: str = "<document>") -> dict:
+    """Compile a validated World IR entity document into the integer-only
+    simulation contract that both kernels consume.
+
+    This is where floats leave the simulation boundary: navigation thresholds
+    convert to milli-units exactly once, here, and both kernels read integer
+    parameters only. The contract carries the source document's canonical
+    hash so a replay pins an unbroken chain back to World IR.
+    """
+    validate_entity(doc, source=source)
+
+    sim = doc.get("sim", {})
+    if not isinstance(sim, dict):
+        raise WorldIRError(f"{source}: sim must be an object")
+    unknown = sorted(set(sim) - SIM_PARAM_KEYS)
+    if unknown:
+        raise WorldIRError(f"{source}: unknown sim parameters {unknown}")
+    parameters = {"open_rate_milli": 250, "max_health": 100}
+    for key_name, value in sim.items():
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise WorldIRError(f"{source}: sim.{key_name} must be a nonnegative integer")
+        parameters[key_name] = value
+
+    nav = doc.get("navigation", {})
+    blocks_below = []
+    for key_name, threshold in nav.items():
+        if key_name.startswith("blocks_below_"):
+            var = key_name.removeprefix("blocks_below_")
+            blocks_below.append({"var": var, "threshold_milli": int(round(threshold * 1000))})
+    navigation = {
+        "blocks_below": sorted(blocks_below, key=lambda rule: rule["var"]),
+        "never_blocks_when_destroyed": bool(nav.get("never_blocks_when_destroyed", False)),
+    }
+
+    return {
+        "sim_contract": SIM_CONTRACT_VERSION,
+        "source_world_ir_sha256": hashlib.sha256(recipe_mod.canonicalize(doc)).hexdigest(),
+        "entity": doc["entity"],
+        "state": {
+            var: {"storage": SIM_STORAGE[kind]} for var, kind in doc.get("state", {}).items()
+        },
+        "affordances": list(doc.get("affordances", [])),
+        "parameters": {**parameters, "navigation": navigation},
+    }
+
+
 # ------------------------------------------------------------------ compile
 
 # World-level requirements are authoritative: they are injected into the
