@@ -14,6 +14,7 @@ Layering, low to high:
     char      humanoid blockouts, armatures, animation
     morph     shape keys, exported as glTF morph targets
     gameready LODs, collision, budgets, atlases
+    ingest    retopo + transfer baking — the neural/scan finishing line
     render    contact sheets and turntables — the agent's eyes
     export    glTF/GLB with per-engine presets
     check     validation against the studio asset rules
@@ -33,6 +34,7 @@ from . import char  # noqa: F401
 from . import rig  # noqa: F401
 from . import morph  # noqa: F401
 from . import gameready  # noqa: F401
+from . import ingest  # noqa: F401
 from . import render  # noqa: F401
 from . import export  # noqa: F401
 from . import check  # noqa: F401
