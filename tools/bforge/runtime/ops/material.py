@@ -1,4 +1,4 @@
-﻿"""Material ops: PBR presets, procedural graphs, and baking to glTF-safe textures."""
+"""Material ops: PBR presets, procedural graphs, and baking to glTF-safe textures."""
 
 from __future__ import annotations
 
@@ -85,6 +85,98 @@ def material_procedural(ctx, object, kind, name, color_a, color_b, scale, detail
         f"arrive in-engine as flat grey."
     )
     return {"object": obj.name, "material": material.name, "gltf_safe": False}
+
+
+@op(
+    "material.detail_normal",
+    summary="Generate a surface-detail normal map procedurally (cloth weave, hide scales, skin pores, wood grain) and wire it into the object's material. Bake passes only capture GEOMETRY normals, so shader bumps never survive export — this writes the relief into a real normal map, which is what makes cloth/skin/hide read as material instead of flat plastic at close range. Deterministic (seeded), glTF-safe (TEX_IMAGE + NORMAL_MAP only).",
+    params={
+        "object": ("str", None, "Object to detail (must have UVs)"),
+        "pattern": ("enum:weave|scales|pores|grain", "weave", "Surface class: weave=cloth, scales=hide/armour, pores=skin/leather, grain=wood"),
+        "scale": ("num", 24.0, "Pattern frequency across the texture"),
+        "strength": ("num", 0.6, "Relief intensity 0..1"),
+        "size": ("int", 512, "Texture size (square)"),
+        "seed": ("int", 0, "Random seed"),
+    },
+    tags=["material"],
+)
+def material_detail_normal(ctx, object, pattern, scale, strength, size, seed):
+    import numpy as np
+
+    obj = _get(object)
+    if not obj.data.uv_layers:
+        raise OpError(f"'{obj.name}' has no UVs — unwrap first (uv.unwrap)")
+
+    n = max(64, int(size))
+    rng = np.random.default_rng(int(seed))
+    yy, xx = np.mgrid[0:n, 0:n].astype(np.float64) / n
+
+    def blur(field, radius):
+        if radius < 1:
+            return field
+        kernel = np.ones(radius) / radius
+        out = np.apply_along_axis(lambda row: np.convolve(row, kernel, mode="same"), 0, field)
+        out = np.apply_along_axis(lambda col: np.convolve(col, kernel, mode="same"), 1, out)
+        return out
+
+    if pattern == "weave":
+        h = np.sin(xx * 2 * np.pi * scale) * np.sin(yy * 2 * np.pi * scale)
+        h += 0.3 * blur(rng.standard_normal((n, n)), 2)
+    elif pattern == "scales":
+        h = np.zeros((n, n))
+        cells = max(4, int(scale))
+        jx = (np.arange(n)[None, :] * cells // n + (np.arange(n)[:, None] * cells // n) % 2 * 0.5)
+        cx = (xx * cells + ((yy * cells).astype(int) % 2) * 0.5) % 1.0
+        cy = (yy * cells) % 1.0
+        h = np.maximum(0.0, 1.0 - ((cx - 0.5) ** 2 + (cy - 0.5) ** 2) * 4.0)
+        h += 0.15 * blur(rng.standard_normal((n, n)), 2)
+    elif pattern == "pores":
+        h = blur(rng.standard_normal((n, n)), max(3, n // int(scale)))
+        h -= blur(rng.standard_normal((n, n)), max(3, n // int(scale) * 2)) * 0.5
+    else:  # grain
+        h = blur(rng.standard_normal((n, n)), 2)
+        h = blur(h, max(3, n // int(scale)))
+        h = np.apply_along_axis(lambda row: np.convolve(row, np.ones(n // 16 + 1) / (n // 16 + 1), mode="same"), 1, h)
+
+    gy, gx = np.gradient(h)
+    amp = float(strength) * 4.0
+    normal = np.dstack([-gx * amp, gy * amp, np.ones_like(h)])
+    normal /= np.linalg.norm(normal, axis=-1, keepdims=True)
+    rgb = np.clip(normal * 0.5 + 0.5, 0.0, 1.0)
+
+    image = bpy.data.images.new(
+        f"{obj.name}_detail_{pattern}", width=n, height=n, alpha=False, is_data=True,
+    )
+    rgba = np.dstack([rgb, np.ones((n, n))]).astype(np.float32)
+    image.pixels = rgba[::-1].ravel()
+    image.pack()
+
+    material = obj.data.materials[0] if obj.data.materials else None
+    if material is None:
+        material = mat_lib.principled(f"m_{obj.name}", color="#808080")
+        obj.data.materials.append(material)
+    material.use_nodes = True
+    nodes, links = material.node_tree.nodes, material.node_tree.links
+    principled = next((node for node in nodes if node.type == "BSDF_PRINCIPLED"), None)
+    if principled is None:
+        raise OpError(f"'{material.name}' has no Principled BSDF to wire into")
+    tex_node = nodes.new("ShaderNodeTexImage")
+    tex_node.image = image
+    tex_node.location = (-700, -500)
+    normal_node = nodes.new("ShaderNodeNormalMap")
+    normal_node.location = (-420, -500)
+    normal_node.inputs["Strength"].default_value = float(strength)
+    links.new(tex_node.outputs["Color"], normal_node.inputs["Color"])
+    links.new(normal_node.outputs["Normal"], principled.inputs["Normal"])
+
+    return {
+        "object": obj.name,
+        "material": material.name,
+        "pattern": pattern,
+        "image": image.name,
+        "size": n,
+        "gltf_safe": True,
+    }
 
 
 @op(
