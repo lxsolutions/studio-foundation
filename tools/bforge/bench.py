@@ -192,14 +192,16 @@ def main() -> None:
     summary = ["# bforge bench", "",
                f"verdict: **{report['aggregates']['verdict'].upper()}** — "
                f"{passed}/{total} runs green "
-               f"(mean {report['aggregates']['mean_seconds']}s per brief, "
-               f"{report['aggregates']['total_triangles']} triangles total)", "",
-               "| brief | tris | seconds | gate | structure |", "| --- | --- | --- | --- | --- |"]
+               f"({report['aggregates']['total_triangles']} triangles total)", "",
+               "| brief | tris | gate | structure |", "| --- | --- | --- | --- | --- |"]
     for r in report["runs"]:
         summary.append(
-            f"| {r['brief']} | {r['triangles']} | {r['seconds']} | {r['gate']} | "
+            f"| {r['brief']} | {r['triangles']} | {r['gate']} | "
             f"{'ok' if not r['structure_failures'] else ', '.join(r['structure_failures'])} |"
         )
+    summary.append("")
+    summary.append("Deterministic outputs only — wall-clock seconds live in report.json "
+                   "(they are machine-dependent); this file is what CI diffs.")
     summary.append("")
     summary.append("Rerun: `uv run --project tools python tools/bforge/bench.py [runs]` — "
                    "the numbers are produced by the runner, not by memory.")

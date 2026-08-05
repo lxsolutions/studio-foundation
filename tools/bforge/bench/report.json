@@ -26,7 +26,7 @@
     {
       "brief": "an armored warden that walks",
       "iteration": 1,
-      "seconds": 0.4,
+      "seconds": 0.3,
       "triangles": 5186,
       "bytes": 275476,
       "gate": "pass",
