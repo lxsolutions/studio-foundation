@@ -94,10 +94,11 @@ def storage_rack(f: Forge, at):
 def well(f: Forge, at):
     import math
     names = []
+    stone_names = []
     for row in range(2):
         for i in range(9):
             angle = i * 40.0 + row * 20.0
-            names.append(f.call(
+            stone_names.append(f.call(
                 "prop.rock", name=f"well_stone_{row}_{i}",
                 location=[at[0] + 0.62 * math.cos(math.radians(angle)),
                           at[1] + 0.62 * math.sin(math.radians(angle)),
@@ -113,7 +114,11 @@ def well(f: Forge, at):
         material="wood", color="#5d4426",
         location=[at[0], at[1], at[2] + 1.28])["name"])
     f.call("object.transform", name="well_bar", rotation=[0.0, 90.0, 0.0])
-    return names
+    # 18 stones + posts + bar would ship as 21 draw calls — join to two.
+    f.call("object.join", names=stone_names, into="well_stones")
+    f.call("object.join", names=[n for n in names if "post" in n or "bar" in n],
+           into="well_frame")
+    return ["well_stones", "well_frame"]
 
 
 def workbench(f: Forge, at):
