@@ -123,7 +123,10 @@ def build_humanoid(forge: Forge, spec: dict, out_dir: Path) -> dict:
                        scale=64.0, strength=0.45, size=256, seed=spec["seed"] + 7)
     rig = forge.call("char.rig", name=name, height=spec["height"], build=spec["build"])
     for clip in ("idle", "walk", "attack", "death"):
-        forge.call("char.animate", rig=rig["armature"], clip=clip, length=24)
+        # Death is one-shot: looping it would snap the corpse back upright on
+        # the final frame.
+        forge.call("char.animate", rig=rig["armature"], clip=clip, length=24,
+                   loop=clip != "death")
     objects = [name, rig["armature"]] + pieces
     review = forge.call("gameready.review", objects=objects)
     if not review["passed"]:
@@ -142,8 +145,9 @@ def build_quadruped(forge: Forge, spec: dict, out_dir: Path) -> dict:
                eyes="glow", eye_color=UNDERWORLD_GLOW, seed=spec["seed"])
     rig = forge.call("char.creature_rig", name=name, plan=plan,
                      length=spec["length"], shoulder=spec["shoulder"])
-    for clip in ("idle", "walk", "trot"):
-        forge.call("char.animate", rig=rig["armature"], clip=clip, length=24)
+    for clip in ("idle", "walk", "trot", "death"):
+        forge.call("char.animate", rig=rig["armature"], clip=clip, length=24,
+                   loop=clip != "death")
     objects = [name, rig["armature"]]
     review = forge.call("gameready.review", objects=objects)
     if not review["passed"]:
@@ -163,8 +167,9 @@ def build_insect(forge: Forge, spec: dict, out_dir: Path) -> dict:
                scale=24.0, strength=0.55, size=256, seed=spec["seed"] + 13)
     rig = forge.call("char.creature_rig", name=name, plan="insect",
                      length=spec["length"], shoulder=spec["shoulder"])
-    for clip in ("idle", "walk"):
-        forge.call("char.animate", rig=rig["armature"], clip=clip, length=24)
+    for clip in ("idle", "walk", "death"):
+        forge.call("char.animate", rig=rig["armature"], clip=clip, length=24,
+                   loop=clip != "death")
     objects = [name, rig["armature"]]
     review = forge.call("gameready.review", objects=objects)
     if not review["passed"]:
