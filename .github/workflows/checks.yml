@@ -191,7 +191,7 @@ jobs:
       - name: brief-to-asset benchmark (reference agent)
         env:
           BLENDER_BIN: /opt/blender/blender
-        run: uv run --project tools python benchmarks/brief-to-asset/bench.py --agent "python3 benchmarks/brief-to-asset/agents/scripted_recipe.py"
+        run: uv run --project tools python benchmarks/brief-to-asset/bench.py --summary --agent "python3 benchmarks/brief-to-asset/agents/scripted_recipe.py"
 
       - name: the committed scorecard matches a fresh run
         run: git diff --exit-code benchmarks/brief-to-asset/SUMMARY.md

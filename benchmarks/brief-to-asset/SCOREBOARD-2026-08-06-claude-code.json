@@ -1,0 +1,171 @@
+{
+  "benchmark": "brief-to-asset/v0.1",
+  "agent": "uv run --project tools python benchmarks/brief-to-asset/agents/claude_cli.py",
+  "briefs": 6,
+  "passed": 3,
+  "pass_rate": 0.5,
+  "results": [
+    {
+      "id": "barrel",
+      "category": "prop",
+      "agent_seconds": 65.161,
+      "attempts": 1,
+      "dimensions": {
+        "validity": {
+          "pass": true,
+          "detail": "1 meshes, 2 materials"
+        },
+        "semantics": {
+          "pass": true,
+          "detail": "all required structure present"
+        },
+        "budget": {
+          "pass": true,
+          "detail": "within budgets"
+        },
+        "determinism": {
+          "pass": true,
+          "detail": "byte-identical rebuild"
+        }
+      },
+      "agent_exit": 0,
+      "recipe_hash": "67bf77c0eb8eb1b800c3bf289d7a13130f60f2eab147d8fb75a2a09a07fa20e8",
+      "proof": "/home/kwebb/sf-battle/benchmarks/brief-to-asset/runs/claude-code-2026-08-06/barrel/cache/objects/23e2b087832a0111419848fbf024899a0e13cf7c5474889418e9c640429b4f9b/proof.json",
+      "pass": true
+    },
+    {
+      "id": "camp",
+      "category": "environment",
+      "agent_seconds": 21.032,
+      "attempts": 1,
+      "dimensions": {
+        "validity": {
+          "pass": false,
+          "detail": "recipe recipe.json failed: ForgeError: no object named 'camp'. In the scene: ['camp_banner', 'camp_barrel_a', 'camp_crate_a', 'camp_embers', 'camp_fire_logs', 'camp_fire_stones', 'camp_ground', 'camp_"
+        },
+        "semantics": {
+          "pass": false,
+          "detail": "recipe recipe.json failed: ForgeError: no object named 'camp'. In the scene: ['camp_banner', 'camp_barrel_a', 'camp_crate_a', 'camp_embers', 'camp_fire_logs', 'camp_fire_stones', 'camp_ground', 'camp_"
+        },
+        "budget": {
+          "pass": false,
+          "detail": "recipe recipe.json failed: ForgeError: no object named 'camp'. In the scene: ['camp_banner', 'camp_barrel_a', 'camp_crate_a', 'camp_embers', 'camp_fire_logs', 'camp_fire_stones', 'camp_ground', 'camp_"
+        },
+        "determinism": {
+          "pass": false,
+          "detail": "recipe recipe.json failed: ForgeError: no object named 'camp'. In the scene: ['camp_banner', 'camp_barrel_a', 'camp_crate_a', 'camp_embers', 'camp_fire_logs', 'camp_fire_stones', 'camp_ground', 'camp_"
+        }
+      },
+      "agent_exit": 0,
+      "pass": false
+    },
+    {
+      "id": "crate",
+      "category": "prop",
+      "agent_seconds": 37.167,
+      "attempts": 1,
+      "dimensions": {
+        "validity": {
+          "pass": true,
+          "detail": "2 meshes, 1 materials"
+        },
+        "semantics": {
+          "pass": true,
+          "detail": "all required structure present"
+        },
+        "budget": {
+          "pass": true,
+          "detail": "within budgets"
+        },
+        "determinism": {
+          "pass": true,
+          "detail": "byte-identical rebuild"
+        }
+      },
+      "agent_exit": 0,
+      "recipe_hash": "5674f8d66198f56eeedb401d5269689702072ebcdc2055764604212418d492e5",
+      "proof": "/home/kwebb/sf-battle/benchmarks/brief-to-asset/runs/claude-code-2026-08-06/crate/cache/objects/5388db77b6f15b3ba9b4f36e0e91f32692f35dd8fb510f9289dfeb842a15ce05/proof.json",
+      "pass": true
+    },
+    {
+      "id": "gladius",
+      "category": "weapon",
+      "agent_seconds": 270.186,
+      "attempts": 1,
+      "dimensions": {
+        "validity": {
+          "pass": false,
+          "detail": "recipe recipe.json failed: check.asset: 1 error(s) (proof: /home/kwebb/sf-battle/benchmarks/brief-to-asset/runs/claude-code-2026-08-06/gladius/cache/failures/20260806T061459-c5a3d0c73404/proof.json)"
+        },
+        "semantics": {
+          "pass": false,
+          "detail": "recipe recipe.json failed: check.asset: 1 error(s) (proof: /home/kwebb/sf-battle/benchmarks/brief-to-asset/runs/claude-code-2026-08-06/gladius/cache/failures/20260806T061459-c5a3d0c73404/proof.json)"
+        },
+        "budget": {
+          "pass": false,
+          "detail": "recipe recipe.json failed: check.asset: 1 error(s) (proof: /home/kwebb/sf-battle/benchmarks/brief-to-asset/runs/claude-code-2026-08-06/gladius/cache/failures/20260806T061459-c5a3d0c73404/proof.json)"
+        },
+        "determinism": {
+          "pass": false,
+          "detail": "recipe recipe.json failed: check.asset: 1 error(s) (proof: /home/kwebb/sf-battle/benchmarks/brief-to-asset/runs/claude-code-2026-08-06/gladius/cache/failures/20260806T061459-c5a3d0c73404/proof.json)"
+        }
+      },
+      "agent_exit": 0,
+      "pass": false
+    },
+    {
+      "id": "warden",
+      "category": "character",
+      "agent_seconds": 257.648,
+      "attempts": 1,
+      "dimensions": {
+        "validity": {
+          "pass": false,
+          "detail": "recipe recipe.json failed: ForgeError: char.outfit: parameter 'piece' must be one of ['cuirass', 'pteruges', 'greaves', 'bracers', 'helmet', 'shield', 'robe', 'hood'], got 'pauldron' (proof: /home/kwe"
+        },
+        "semantics": {
+          "pass": false,
+          "detail": "recipe recipe.json failed: ForgeError: char.outfit: parameter 'piece' must be one of ['cuirass', 'pteruges', 'greaves', 'bracers', 'helmet', 'shield', 'robe', 'hood'], got 'pauldron' (proof: /home/kwe"
+        },
+        "budget": {
+          "pass": false,
+          "detail": "recipe recipe.json failed: ForgeError: char.outfit: parameter 'piece' must be one of ['cuirass', 'pteruges', 'greaves', 'bracers', 'helmet', 'shield', 'robe', 'hood'], got 'pauldron' (proof: /home/kwe"
+        },
+        "determinism": {
+          "pass": false,
+          "detail": "recipe recipe.json failed: ForgeError: char.outfit: parameter 'piece' must be one of ['cuirass', 'pteruges', 'greaves', 'bracers', 'helmet', 'shield', 'robe', 'hood'], got 'pauldron' (proof: /home/kwe"
+        }
+      },
+      "agent_exit": 0,
+      "pass": false
+    },
+    {
+      "id": "wolf",
+      "category": "creature",
+      "agent_seconds": 95.519,
+      "attempts": 1,
+      "dimensions": {
+        "validity": {
+          "pass": true,
+          "detail": "1 meshes, 2 materials"
+        },
+        "semantics": {
+          "pass": true,
+          "detail": "all required structure present"
+        },
+        "budget": {
+          "pass": true,
+          "detail": "within budgets"
+        },
+        "determinism": {
+          "pass": true,
+          "detail": "byte-identical rebuild"
+        }
+      },
+      "agent_exit": 0,
+      "recipe_hash": "17346eaac1161636da9ea1b9920db6d110e18fea42e524ad71aa985e6f9e2e2e",
+      "proof": "/home/kwebb/sf-battle/benchmarks/brief-to-asset/runs/claude-code-2026-08-06/wolf/cache/objects/33d72b97e812cd5acde81db86f08e8bed1acf52f674dd6ad4dffedce54143196/proof.json",
+      "pass": true
+    }
+  ]
+}
