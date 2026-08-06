@@ -262,6 +262,11 @@ sim-parity:
 briefbench:
     uv run --project tools python benchmarks/brief-to-asset/bench.py --agent "python3 benchmarks/brief-to-asset/agents/scripted_recipe.py"
 
+# The world-level benchmark (ADR 0018 M4): reference agent against the frozen
+# battle brief, SUMMARY.md regenerated (CI diffs it).
+battlebench:
+    uv run --project tools python benchmarks/brief-to-battle/bench.py --agent "python3 benchmarks/brief-to-battle/agents/scripted_world.py"
+
 # Compile the fortress world + wasm kernel, write the viewer config, serve
 # the repo at :8077 — open http://localhost:8077/tools/sim-viewer/
 sim-viewer:

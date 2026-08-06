@@ -91,6 +91,9 @@ jobs:
       - name: brief-to-asset static checks
         run: uv run --project tools python -m unittest discover -s benchmarks/brief-to-asset/tests -p "test_*.py"
 
+      - name: brief-to-battle static checks
+        run: uv run --project tools python -m unittest discover -s benchmarks/brief-to-battle/tests -p "test_*.py"
+
       - name: Protocol golden fixtures
         run: uv run --project tools python tools/asset-pipeline/check_fixtures.py
 
@@ -192,3 +195,13 @@ jobs:
 
       - name: the committed scorecard matches a fresh run
         run: git diff --exit-code benchmarks/brief-to-asset/SUMMARY.md
+
+      # The world-level half: the reference agent's world must compile with
+      # proof, play out as briefed, and hash identically twice.
+      - name: brief-to-battle benchmark (reference agent)
+        env:
+          BLENDER_BIN: /opt/blender/blender
+        run: uv run --project tools python benchmarks/brief-to-battle/bench.py --agent "python3 benchmarks/brief-to-battle/agents/scripted_world.py"
+
+      - name: the committed battle scorecard matches a fresh run
+        run: git diff --exit-code benchmarks/brief-to-battle/SUMMARY.md

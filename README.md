@@ -132,6 +132,9 @@ it works identically on a laptop, in CI, and on a headless build box.
   validity, semantics, budget, and byte-identical determinism — regenerated
   and diffed in public CI. The scripted reference agent holds the 6/6
   baseline; models compete against the same gates, not against vibes.
+  `benchmarks/brief-to-battle` is the world-level half: the frozen fortress
+  battle brief compiles with proof, plays out deterministically, and scores
+  navigation outcomes against the brief — never the agent's claims.
 - **Characters and creatures, actually rigged and animated.** Humanoids at
   figure-drawing proportions with fitted armour (`char.outfit`), faces, hands;
   quadrupeds and hexapods with real footfall gaits — lateral-sequence walk,
