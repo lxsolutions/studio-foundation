@@ -201,7 +201,7 @@ jobs:
       - name: brief-to-battle benchmark (reference agent)
         env:
           BLENDER_BIN: /opt/blender/blender
-        run: uv run --project tools python benchmarks/brief-to-battle/bench.py --agent "python3 benchmarks/brief-to-battle/agents/scripted_world.py"
+        run: uv run --project tools python benchmarks/brief-to-battle/bench.py --summary --agent "python3 benchmarks/brief-to-battle/agents/scripted_world.py"
 
       - name: the committed battle scorecard matches a fresh run
         run: git diff --exit-code benchmarks/brief-to-battle/SUMMARY.md
