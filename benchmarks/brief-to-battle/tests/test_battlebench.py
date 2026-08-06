@@ -37,6 +37,29 @@ class FrozenSet(unittest.TestCase):
         for required in ("world.json", "battle.json", "metrics.json", "sim_contract"):
             self.assertIn(required, agent)
 
+    def test_every_brief_has_a_control_answer(self):
+        """A brief with no scripted answer has no control group: the reference
+        run fails on it, so any model score for that brief is unanchored."""
+        spec = importlib.util.spec_from_file_location(
+            "scripted_world", BENCH / "agents" / "scripted_world.py"
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        for path in sorted(BENCH.glob("briefs/*.json")):
+            brief = json.loads(path.read_text())
+            with self.subTest(brief=path.stem):
+                scenario = module.SCENARIOS.get(path.stem)
+                self.assertIsNotNone(scenario, "brief needs a reference answer")
+                self.assertEqual(
+                    sorted(scenario["initial"]),
+                    sorted(brief["scenario"]["entities"]),
+                    "reference initial state must cover exactly the brief's entities",
+                )
+                known = set(brief["scenario"]["entities"])
+                for _tick, entity, _verb, _arg in scenario["events"]:
+                    self.assertIn(entity, known, "event names an unknown entity")
+
+
 class WrapperIsBriefNeutral(unittest.TestCase):
     """The wrapper must never tell the model the objective.
 
