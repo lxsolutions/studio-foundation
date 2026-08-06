@@ -1,0 +1,136 @@
+{
+  "sim_replay": "0.1",
+  "seed": 0,
+  "ticks": 20,
+  "entities": {
+    "fortress_gate": {
+      "contract": {
+        "sim_contract": "0.1",
+        "source_world_ir_sha256": "59f7fbb7ce22dc55bf76030fe9c84f46a3af6c239ceb85c6f2438d8e2fc509fa",
+        "entity": "fortress_gate",
+        "state": {
+          "openness": {
+            "storage": "milli_i64"
+          },
+          "locked": {
+            "storage": "bool"
+          },
+          "health": {
+            "storage": "i64"
+          },
+          "destroyed": {
+            "storage": "bool"
+          }
+        },
+        "affordances": [
+          "open",
+          "close",
+          "lock",
+          "unlock",
+          "attack",
+          "repair"
+        ],
+        "parameters": {
+          "open_rate_milli": 250,
+          "max_health": 100,
+          "navigation": {
+            "blocks_below": [
+              {
+                "var": "openness",
+                "threshold_milli": 700
+              }
+            ],
+            "never_blocks_when_destroyed": true
+          }
+        }
+      },
+      "contract_sha256": "5f744f0c342fd4cd535756c974f7497537d497a880dcfc9559ef0ca4667a7ce5"
+    }
+  },
+  "initial": {
+    "fortress_gate": {
+      "health": 100,
+      "locked": true
+    }
+  },
+  "events": [
+    [
+      0,
+      "fortress_gate",
+      "open",
+      null
+    ],
+    [
+      2,
+      "fortress_gate",
+      "unlock",
+      null
+    ],
+    [
+      3,
+      "fortress_gate",
+      "open",
+      null
+    ],
+    [
+      8,
+      "fortress_gate",
+      "attack",
+      30
+    ],
+    [
+      10,
+      "fortress_gate",
+      "attack",
+      40
+    ],
+    [
+      12,
+      "fortress_gate",
+      "attack",
+      30
+    ]
+  ],
+  "expect": {
+    "final_state": {
+      "fortress_gate": {
+        "state": {
+          "openness": 1000,
+          "locked": false,
+          "health": 0,
+          "destroyed": true
+        },
+        "control": {
+          "openness_target": 1000
+        }
+      }
+    },
+    "state_hash": "4deb0d3d2ecb18bc51145081556c9109114cea5749981a85ce945ec7706d5ed6",
+    "hash_log": [
+      "13caf01605303dfcfeb74ca11684f50222eaae5ad17866ecb1e408ccb4aa32e8",
+      "13caf01605303dfcfeb74ca11684f50222eaae5ad17866ecb1e408ccb4aa32e8",
+      "b99ce07a8577d781d95eecf2d2d2518e28cb031ae06d7f649a8ed8aed660fda1",
+      "fa86c53d93fbdbf223047af55cac6198505cd1cfba6783383a442d33fc2b475d",
+      "442aa37751d8449501bc5a14b06f751a440a57daab9b7b66a382a19a08630762",
+      "593f00d92772c7d850cc0324b87eea0ef70aaa7306dfe8dc23ffb78c3411dce9",
+      "779a677df1f42c5892397b0006aa780c61ef35bc1ba4e9afb59af4140c70456b",
+      "779a677df1f42c5892397b0006aa780c61ef35bc1ba4e9afb59af4140c70456b",
+      "69a76d111ff0d9a106dd77b88a8e56cd0dbaa34e0e34674c915208221f389856",
+      "69a76d111ff0d9a106dd77b88a8e56cd0dbaa34e0e34674c915208221f389856",
+      "7e1093a0598f0a31d3a5095b7488da3c40bd60fc11fbfd42bf2bb9c9332c297d",
+      "7e1093a0598f0a31d3a5095b7488da3c40bd60fc11fbfd42bf2bb9c9332c297d",
+      "4deb0d3d2ecb18bc51145081556c9109114cea5749981a85ce945ec7706d5ed6",
+      "4deb0d3d2ecb18bc51145081556c9109114cea5749981a85ce945ec7706d5ed6",
+      "4deb0d3d2ecb18bc51145081556c9109114cea5749981a85ce945ec7706d5ed6",
+      "4deb0d3d2ecb18bc51145081556c9109114cea5749981a85ce945ec7706d5ed6",
+      "4deb0d3d2ecb18bc51145081556c9109114cea5749981a85ce945ec7706d5ed6",
+      "4deb0d3d2ecb18bc51145081556c9109114cea5749981a85ce945ec7706d5ed6",
+      "4deb0d3d2ecb18bc51145081556c9109114cea5749981a85ce945ec7706d5ed6",
+      "4deb0d3d2ecb18bc51145081556c9109114cea5749981a85ce945ec7706d5ed6",
+      "4deb0d3d2ecb18bc51145081556c9109114cea5749981a85ce945ec7706d5ed6"
+    ],
+    "navigation": {
+      "fortress_gate": false
+    }
+  }
+}

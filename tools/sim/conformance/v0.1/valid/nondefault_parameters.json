@@ -1,0 +1,95 @@
+{
+  "sim_replay": "0.1",
+  "seed": 0,
+  "ticks": 4,
+  "entities": {
+    "fortress_gate_slow": {
+      "contract": {
+        "sim_contract": "0.1",
+        "source_world_ir_sha256": "a01c9f07621db8cba21ed85ac4bc5e674b9e8a93d86707add80477138e16d5a2",
+        "entity": "fortress_gate_slow",
+        "state": {
+          "openness": {
+            "storage": "milli_i64"
+          },
+          "locked": {
+            "storage": "bool"
+          },
+          "health": {
+            "storage": "i64"
+          },
+          "destroyed": {
+            "storage": "bool"
+          }
+        },
+        "affordances": [
+          "open",
+          "close",
+          "lock",
+          "unlock",
+          "attack",
+          "repair"
+        ],
+        "parameters": {
+          "open_rate_milli": 125,
+          "max_health": 250,
+          "navigation": {
+            "blocks_below": [
+              {
+                "var": "openness",
+                "threshold_milli": 700
+              }
+            ],
+            "never_blocks_when_destroyed": true
+          }
+        }
+      },
+      "contract_sha256": "6d63aeaa33cbb4b0d625a7c15d115acbe9798630a8793f6d807bf0e37e039f0a"
+    }
+  },
+  "initial": {
+    "fortress_gate_slow": {
+      "health": 250
+    }
+  },
+  "events": [
+    [
+      0,
+      "fortress_gate_slow",
+      "open",
+      null
+    ],
+    [
+      2,
+      "fortress_gate_slow",
+      "attack",
+      120
+    ]
+  ],
+  "expect": {
+    "final_state": {
+      "fortress_gate_slow": {
+        "state": {
+          "openness": 625,
+          "locked": false,
+          "health": 130,
+          "destroyed": false
+        },
+        "control": {
+          "openness_target": 1000
+        }
+      }
+    },
+    "state_hash": "0872e34f2df505d2fe31e097eddcf8550ff5c1d48f1c8a177e2b8a3939ad76dd",
+    "hash_log": [
+      "9f435b3ba48264514189d0786f44b0cda0dfb5602544ce83a03cae16bcbdc088",
+      "18db9cf27fa804a8e865cfffeb7176417234a2413e2a5d734ed3fe77403e288d",
+      "5ff54c723dddf34279b83137b19ace4782ad62e557bbea16736f76853231f485",
+      "73e47cb6aa5884d19f6d1a997f0e53f8161ee6905290b2d088f4802e9aff9445",
+      "0872e34f2df505d2fe31e097eddcf8550ff5c1d48f1c8a177e2b8a3939ad76dd"
+    ],
+    "navigation": {
+      "fortress_gate_slow": true
+    }
+  }
+}

@@ -1,0 +1,95 @@
+{
+  "sim_replay": "0.1",
+  "seed": 0,
+  "ticks": 6,
+  "entities": {
+    "fortress_gate": {
+      "contract": {
+        "sim_contract": "0.1",
+        "source_world_ir_sha256": "59f7fbb7ce22dc55bf76030fe9c84f46a3af6c239ceb85c6f2438d8e2fc509fa",
+        "entity": "fortress_gate",
+        "state": {
+          "openness": {
+            "storage": "milli_i64"
+          },
+          "locked": {
+            "storage": "bool"
+          },
+          "health": {
+            "storage": "i64"
+          },
+          "destroyed": {
+            "storage": "bool"
+          }
+        },
+        "affordances": [
+          "open",
+          "close",
+          "lock",
+          "unlock",
+          "attack",
+          "repair"
+        ],
+        "parameters": {
+          "open_rate_milli": 250,
+          "max_health": 100,
+          "navigation": {
+            "blocks_below": [
+              {
+                "var": "openness",
+                "threshold_milli": 700
+              }
+            ],
+            "never_blocks_when_destroyed": true
+          }
+        }
+      },
+      "contract_sha256": "5f744f0c342fd4cd535756c974f7497537d497a880dcfc9559ef0ca4667a7ce5"
+    }
+  },
+  "initial": {
+    "fortress_gate": {
+      "health": 100
+    }
+  },
+  "events": [
+    [
+      5,
+      "fortress_gate",
+      "attack",
+      30
+    ],
+    [
+      5,
+      "fortress_gate",
+      "repair",
+      10
+    ]
+  ],
+  "expect": {
+    "final_state": {
+      "fortress_gate": {
+        "state": {
+          "openness": 0,
+          "locked": false,
+          "health": 80,
+          "destroyed": false
+        },
+        "control": {}
+      }
+    },
+    "state_hash": "e7036a04bb03c820fbb81a3b3e6e40e8d1fe632c5f8ee5dc7edffcaae4f0df1a",
+    "hash_log": [
+      "b99ce07a8577d781d95eecf2d2d2518e28cb031ae06d7f649a8ed8aed660fda1",
+      "b99ce07a8577d781d95eecf2d2d2518e28cb031ae06d7f649a8ed8aed660fda1",
+      "b99ce07a8577d781d95eecf2d2d2518e28cb031ae06d7f649a8ed8aed660fda1",
+      "b99ce07a8577d781d95eecf2d2d2518e28cb031ae06d7f649a8ed8aed660fda1",
+      "b99ce07a8577d781d95eecf2d2d2518e28cb031ae06d7f649a8ed8aed660fda1",
+      "e7036a04bb03c820fbb81a3b3e6e40e8d1fe632c5f8ee5dc7edffcaae4f0df1a",
+      "e7036a04bb03c820fbb81a3b3e6e40e8d1fe632c5f8ee5dc7edffcaae4f0df1a"
+    ],
+    "navigation": {
+      "fortress_gate": true
+    }
+  }
+}

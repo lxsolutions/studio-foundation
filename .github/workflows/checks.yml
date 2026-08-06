@@ -85,6 +85,9 @@ jobs:
       - name: worldc (World IR validation + artifact verification)
         run: uv run --project tools python -m unittest discover -s tools/worldc/tests -p "test_*.py"
 
+      - name: sim kernel (deterministic replay, golden hashes)
+        run: uv run --project tools python -m unittest discover -s tools/sim/tests -p "test_*.py"
+
       - name: Protocol golden fixtures
         run: uv run --project tools python tools/asset-pipeline/check_fixtures.py
 

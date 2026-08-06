@@ -1,0 +1,60 @@
+{
+  "sim_replay": "0.1",
+  "seed": 0,
+  "ticks": 10,
+  "entities": {
+    "fortress_gate": {
+      "contract": {
+        "sim_contract": "0.1",
+        "source_world_ir_sha256": "59f7fbb7ce22dc55bf76030fe9c84f46a3af6c239ceb85c6f2438d8e2fc509fa",
+        "entity": "fortress_gate",
+        "state": {
+          "openness": {
+            "storage": "milli_i64"
+          },
+          "locked": {
+            "storage": "bool"
+          },
+          "health": {
+            "storage": "i64"
+          },
+          "destroyed": {
+            "storage": "bool"
+          }
+        },
+        "affordances": [
+          "open",
+          "close",
+          "lock",
+          "unlock",
+          "attack",
+          "repair"
+        ],
+        "parameters": {
+          "open_rate_milli": 250,
+          "max_health": 100,
+          "navigation": {
+            "blocks_below": [
+              {
+                "var": "openness",
+                "threshold_milli": 700
+              }
+            ],
+            "never_blocks_when_destroyed": true
+          }
+        }
+      },
+      "contract_sha256": "5f744f0c342fd4cd535756c974f7497537d497a880dcfc9559ef0ca4667a7ce5"
+    }
+  },
+  "initial": {},
+  "events": [
+    [
+      1,
+      "fortress_gate",
+      "attack",
+      -10
+    ]
+  ],
+  "expect_error": "E_ARGUMENT_RANGE"
+}
