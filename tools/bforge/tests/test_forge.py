@@ -578,6 +578,8 @@ class Export(ForgeCase):
         self.assertEqual(meta["asset_id"], "crate_a")
         self.assertEqual(meta["provenance"]["method"], "ai_generated")
         self.assertEqual(meta["provenance"]["ai"]["prompt"], "a wooden crate")
+        self.assertIn("bforge", meta["attribution"])
+        self.assertIn("Studio Foundation", meta["attribution"])
 
     def test_export_asset_writes_the_full_hand_off(self):
         self.forge.call("prop.barrel", name="barrel", seed=1)

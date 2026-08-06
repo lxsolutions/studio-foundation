@@ -3,7 +3,7 @@ name = "studio-tools"
 version = "0.1.0"
 description = "Studio Foundation tooling: asset pipeline, doctor, generator, studio-mcp, CI helpers"
 requires-python = ">=3.11"
-license = { text = "MIT" }
+license = { text = "PolyForm-Perimeter-1.0.1" }
 dependencies = [
     # Runtime tooling is deliberately stdlib-only (auditability + offline-first).
 ]

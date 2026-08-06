@@ -465,6 +465,10 @@ Contributor workflow is in
 reporting instructions are in [SECURITY.md](SECURITY.md).
 
 Foundation code, tooling, templates, documentation, and infrastructure are
-dual-licensed under MIT and CC BY 4.0; see [LICENSE](LICENSE). Third-party attribution
-is in [NOTICE.md](NOTICE.md) and
+available under the **PolyForm Perimeter License 1.0.1** plus the Additional
+Terms in [LICENSE](LICENSE): use it freely to build and sell games and assets,
+credit Studio Foundation once per product ("Asset production powered in part
+by bforge"), and do not offer a competing bforge product. Revisions published
+before 2026-08-06 remain under their original MIT/CC BY 4.0 terms. Third-party
+attribution is in [NOTICE.md](NOTICE.md) and
 [dependency-licenses.md](docs/architecture/dependency-licenses.md).

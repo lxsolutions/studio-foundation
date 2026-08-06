@@ -1,5 +1,12 @@
 # Notices and Attribution
 
+Studio Foundation's own code, tooling, templates, documentation, and
+infrastructure are available under the **PolyForm Perimeter License 1.0.1**
+plus the Additional Terms in [LICENSE](LICENSE), including the product
+attribution condition ("Asset production powered in part by bforge, developed
+by Studio Foundation"). Revisions published before 2026-08-06 were offered
+under MIT/CC BY 4.0.
+
 Studio Foundation contains original platform work and incorporates
 third-party open-source components. The dependency and license inventory is in
 `docs/architecture/dependency-licenses.md`.
