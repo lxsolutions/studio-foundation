@@ -91,6 +91,33 @@ jobs:
       - name: Protocol golden fixtures
         run: uv run --project tools python tools/asset-pipeline/check_fixtures.py
 
+  parity:
+    name: sim kernel parity (native + wasm, mandatory)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+
+      # The claim this job substantiates: Python == native Rust == Wasm on the
+      # shared conformance corpus. It must FAIL, not skip, when the toolchain
+      # cannot be established — hence the explicit target install and
+      # SIM_REQUIRE_PARITY.
+      - name: wasm32 target
+        run: rustup target add wasm32-unknown-unknown
+
+      - name: native kernel + conformance corpus
+        run: cargo test -p sim-kernel --manifest-path services/Cargo.toml
+
+      - name: three-way parity (fail-closed)
+        env:
+          SIM_REQUIRE_PARITY: "1"
+        run: uv run --project tools python -m unittest discover -s tools/sim/tests -p "test_parity.py"
+
   bench:
     name: bforge bench (public number, regenerated and diffed)
     runs-on: ubuntu-latest

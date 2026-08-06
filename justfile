@@ -248,6 +248,10 @@ worldc-compile:
 sim-replay:
     uv run --project tools python tools/sim/kernel.py replay "{{REPLAY}}"
 
+# Native + Wasm parity for the sim kernel (needs cargo + wasm32 target; skips without)
+sim-parity:
+    uv run --project tools python -m unittest discover -s tools/sim/tests -p "test_parity.py" -v
+
 # ------------------------------------------------------------------ exports
 
 # WebGL2 Compatibility export — works with official installed templates
