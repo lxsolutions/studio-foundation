@@ -1,0 +1,35 @@
+{
+  "benchmark": "brief-to-battle/v0.1",
+  "agent": "uv run --project tools python benchmarks/brief-to-battle/agents/claude_battle.py",
+  "briefs": 1,
+  "passed": 0,
+  "pass_rate": 0.0,
+  "results": [
+    {
+      "id": "hold_the_gate",
+      "category": "battle",
+      "agent_seconds": 60.46,
+      "agent_exit": 0,
+      "attempts": 1,
+      "dimensions": {
+        "validity": {
+          "pass": true,
+          "detail": "world document validates"
+        },
+        "semantics": {
+          "pass": false,
+          "detail": "WorldIRError: fortress: world contract broken \u2014 ['navigation outcome: gate_main blocks == True', 'navigation outcome: gate_side blocks == False'] (proof: /tmp/battlebench_s1mck4rk/hold_the_gate/cache/"
+        },
+        "gameplay": {
+          "pass": false,
+          "detail": "world failed to compile"
+        },
+        "determinism": {
+          "pass": false,
+          "detail": "world failed to compile"
+        }
+      },
+      "pass": false
+    }
+  ]
+}

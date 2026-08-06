@@ -41,3 +41,15 @@ forbids.
 This is the finding the battle half exists for: document-level correctness
 does not imply tactical correctness, and only a deterministic outcome check
 can tell the difference.
+
+## 2026-08-06 — Claude Code, hold_the_gate, attempt 2 (variance check)
+
+**0/1 — FAIL, same systematic gap** (scorecard:
+`SCOREBOARD-2026-08-06-claude-code-hold-the-gate-attempt-2.json`)
+
+Not variance. On the second run the model correctly unlocked and opened the
+side gate — then closed and locked it again (ticks 8 and 13), and once more
+unlocked and opened the MAIN gate at ticks 14–15. Two runs, two different
+paths, same inversion: the gate that must hold ends open, the gate that must
+open ends closed. A systematic reasoning gap on inverted/defense briefs, not
+luck.
