@@ -11,7 +11,7 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-PR_RECIPES: tuple[str, ...] = ("test", "lint", "secret-scan")
+PR_RECIPES: tuple[str, ...] = ("test", "lint", "secret-scan", "check-claims")
 STAGE_RECIPES: dict[str, tuple[str, ...]] = {
     "pr": PR_RECIPES,
     "nightly": PR_RECIPES

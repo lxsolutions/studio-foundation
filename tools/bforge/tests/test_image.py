@@ -51,12 +51,22 @@ def setUpModule():
     FORGE.start()
     # A red disc with alpha (clean segmentation), and a green triangle with no
     # alpha on a uniform backdrop (backdrop-distance segmentation).
-    _png_rgba(Path(TEMP.name) / "disc.png", 128, 128,
-              lambda x, y: (200, 30, 30, 255) if (x - 64) ** 2 + (y - 64) ** 2 < 40 ** 2
-              else (12, 12, 16, 255))
-    _png_rgba(Path(TEMP.name) / "tri.png", 128, 128,
-              lambda x, y: (30, 180, 60, 255) if y > 30 and abs(x - 64) < (y - 30) * 0.6
-              else (240, 240, 240, 255))
+    _png_rgba(
+        Path(TEMP.name) / "disc.png",
+        128,
+        128,
+        lambda x, y: (
+            (200, 30, 30, 255) if (x - 64) ** 2 + (y - 64) ** 2 < 40**2 else (12, 12, 16, 255)
+        ),
+    )
+    _png_rgba(
+        Path(TEMP.name) / "tri.png",
+        128,
+        128,
+        lambda x, y: (
+            (30, 180, 60, 255) if y > 30 and abs(x - 64) < (y - 30) * 0.6 else (240, 240, 240, 255)
+        ),
+    )
 
 
 def tearDownModule():
@@ -92,40 +102,57 @@ class Analyze(ForgeCase):
 
 class ToMesh(ForgeCase):
     def test_disc_extrudes_with_high_fidelity(self):
-        result = FORGE.call("image.to_mesh", path=str(Path(TEMP.name) / "disc.png"),
-                            name="medallion", target_height=1.0, depth=0.2,
-                            texture="project")
-        self.assertGreater(result["silhouette_iou"], 0.9,
-                           "the mesh silhouette must BE the picture's")
+        result = FORGE.call(
+            "image.to_mesh",
+            path=str(Path(TEMP.name) / "disc.png"),
+            name="medallion",
+            target_height=1.0,
+            depth=0.2,
+            texture="project",
+        )
+        self.assertGreater(
+            result["silhouette_iou"], 0.9, "the mesh silhouette must BE the picture's"
+        )
         self.assertGreater(result["triangles"], 50)
         self.assertLess(result["triangles"], 3000)
         self.assertAlmostEqual(result["bounds"]["size"][2], 1.0, delta=0.05)
         self.assertAlmostEqual(result["bounds"]["size"][1], 0.2, delta=0.1)
 
     def test_texture_variants_and_gate(self):
-        FORGE.call("image.to_mesh", path=str(Path(TEMP.name) / "disc.png"),
-                   name="flat", texture="none")
+        FORGE.call(
+            "image.to_mesh", path=str(Path(TEMP.name) / "disc.png"), name="flat", texture="none"
+        )
         review = FORGE.call("gameready.review", objects=["flat"])
         self.assertTrue(review["passed"], f"findings: {review['findings']}")
 
     def test_exports_cleanly(self):
         import json
         import struct as st
-        FORGE.call("image.to_mesh", path=str(Path(TEMP.name) / "disc.png"),
-                   name="medallion", texture="project")
+
+        FORGE.call(
+            "image.to_mesh",
+            path=str(Path(TEMP.name) / "disc.png"),
+            name="medallion",
+            texture="project",
+        )
         glb = FORGE.call("export.gltf", out="medallion.glb", objects=["medallion"])
         data = Path(glb["path"]).read_bytes()
         chunk_len, chunk_type = st.unpack_from("<I4s", data, 12)
-        parsed = json.loads(data[20:20 + chunk_len])
+        parsed = json.loads(data[20 : 20 + chunk_len])
         self.assertGreaterEqual(len(parsed["meshes"]), 1)
-        self.assertGreaterEqual(len(parsed.get("images", [])), 1,
-                                "projected texture must ship in the GLB")
+        self.assertGreaterEqual(
+            len(parsed.get("images", [])), 1, "projected texture must ship in the GLB"
+        )
 
     def test_determinism(self):
         def build_once(out):
             FORGE.call("session.reset")
-            FORGE.call("image.to_mesh", path=str(Path(TEMP.name) / "disc.png"),
-                       name="medallion", texture="none")
+            FORGE.call(
+                "image.to_mesh",
+                path=str(Path(TEMP.name) / "disc.png"),
+                name="medallion",
+                texture="none",
+            )
             return Path(FORGE.call("export.gltf", out=out)["path"]).read_bytes()
 
         self.assertEqual(build_once("img_a.glb"), build_once("img_b.glb"))

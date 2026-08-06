@@ -61,14 +61,34 @@ class Daemon(ForgeCase):
         self.assertGreaterEqual(FORGE.info["ops"], 80)
 
     def test_catalog_matches_the_committed_snapshot(self):
+        """Full-schema parity, not just op names.
+
+        The committed catalog drives MCP discovery, CLI help and the
+        OpenAI/Anthropic schema dumps without starting Blender, and the
+        runtime rejects unknown parameters — so a parameter that drifts
+        between registry and catalog makes an agent fail *because* it
+        followed the published schema. Comparing only op names let exactly
+        that happen once (mesh.retopo). Compare the complete entries.
+        """
         from bforge import schema as schema_mod
 
-        live = {op["name"] for op in FORGE.catalog()}
-        committed = {op["name"] for op in schema_mod.load_catalog()}
+        live = {op["name"]: op for op in FORGE.catalog()}
+        committed = {op["name"]: op for op in schema_mod.load_catalog()}
         self.assertEqual(
-            live,
-            committed,
+            set(live),
+            set(committed),
             "catalog.json is stale — run `bforge catalog --refresh`",
+        )
+        drifted = [
+            name
+            for name in sorted(live)
+            if json.dumps(live[name], sort_keys=True) != json.dumps(committed[name], sort_keys=True)
+        ]
+        self.assertEqual(
+            drifted,
+            [],
+            "catalog.json schemas drifted from the live registry for "
+            f"{drifted} — run `bforge catalog --refresh`",
         )
 
     def test_unknown_op_gives_a_helpful_error(self):

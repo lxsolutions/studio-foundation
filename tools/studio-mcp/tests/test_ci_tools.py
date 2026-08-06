@@ -42,7 +42,7 @@ class CiRunnerTests(unittest.TestCase):
             return 0
 
         self.assertEqual(self.run_silently("pr", runner), 0)
-        self.assertEqual(called, ["test", "lint", "secret-scan"])
+        self.assertEqual(called, ["test", "lint", "secret-scan", "check-claims"])
 
     def test_nightly_extends_pr_with_slow_gates(self) -> None:
         called: list[str] = []
@@ -58,6 +58,7 @@ class CiRunnerTests(unittest.TestCase):
                 "test",
                 "lint",
                 "secret-scan",
+                "check-claims",
                 "test-generated",
                 "test-db",
                 "release-validate",
@@ -189,6 +190,65 @@ jobs:
 """
         )
         self.assertTrue(any("not pinned to a full commit" in item for item in problems))
+
+
+check_claims = load_script("studio_ci_check_claims", REPO / "tools" / "ci" / "check_claims.py")
+
+
+class CheckClaimsTests(unittest.TestCase):
+    def make_repo(self, root: Path) -> Path:
+        """A minimal synthetic repo with one op, one test, one patch."""
+        (root / "tools" / "bforge" / "tests").mkdir(parents=True)
+        (root / "engine").mkdir(parents=True)
+        (root / "docs").mkdir(parents=True)
+        (root / "tools" / "bforge" / "catalog.json").write_text(
+            '{"version": 1, "ops": [{"name": "build.box", "summary": "s",'
+            ' "inputSchema": {"type": "object", "properties": {}}}]}'
+        )
+        (root / "tools" / "bforge" / "tests" / "test_x.py").write_text(
+            "def test_one():\n    pass\n"
+        )
+        (root / "engine" / "engine-lock.toml").write_text(
+            '[patches]\nseries = [{ file = "patches/0001-x.patch", sha256 = "ab" }]\n'
+        )
+        (root / "docs" / "claims.toml").write_text(
+            '[[surface]]\nfile = "README.md"\nkey = "bforge.ops"\n'
+            'patterns = ["(\\\\d+) whitelisted operations"]\n'
+            '[[forbidden]]\nfiles = ["README.md"]\n'
+            'phrase = "only public"\nreason = "absolute claims are not defensible"\n'
+        )
+        return root
+
+    def test_derives_values_from_the_real_artifacts(self) -> None:
+        derived = check_claims.derive_values(REPO)
+        self.assertGreaterEqual(derived["bforge.ops"], 80)
+        self.assertGreaterEqual(derived["bforge.tests"], 80)
+        self.assertGreaterEqual(derived["engine.patches"], 1)
+        self.assertGreaterEqual(derived["bforge.namespaces"], 10)
+
+    def test_the_repository_s_own_surfaces_are_consistent(self) -> None:
+        self.assertEqual(check_claims.check(REPO), [])
+
+    def test_green_when_prose_matches(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = self.make_repo(Path(temp_dir))
+            (root / "README.md").write_text("1 whitelisted operations, honestly.\n")
+            self.assertEqual(check_claims.check(root), [])
+
+    def test_flags_a_number_that_drifted(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = self.make_repo(Path(temp_dir))
+            (root / "README.md").write_text("9 whitelisted operations, aspirationally.\n")
+            problems = check_claims.check(root)
+            self.assertTrue(any("claims 9" in problem for problem in problems))
+
+    def test_flags_a_missing_pattern_and_a_forbidden_claim(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = self.make_repo(Path(temp_dir))
+            (root / "README.md").write_text("the only public implementation\n")
+            problems = check_claims.check(root)
+            self.assertTrue(any("pattern not found" in problem for problem in problems))
+            self.assertTrue(any("forbidden claim" in problem for problem in problems))
 
 
 if __name__ == "__main__":

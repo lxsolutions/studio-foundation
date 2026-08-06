@@ -117,6 +117,16 @@ class Dialects(unittest.TestCase):
         for op in self.ops:
             self.assertIn(f"`{op['name']}`", text)
 
+    def test_committed_ops_reference_matches_the_catalog(self):
+        """docs/bforge/OPS.md is generated; fail when it drifts from the catalog."""
+        reference = Path(__file__).resolve().parents[3] / "docs" / "bforge" / "OPS.md"
+        self.assertTrue(reference.is_file(), f"missing {reference}")
+        self.assertEqual(
+            reference.read_text(encoding="utf-8"),
+            schema_mod.markdown_reference(self.ops),
+            "OPS.md is stale — run `just bforge-catalog`",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

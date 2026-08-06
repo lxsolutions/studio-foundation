@@ -1,33 +1,42 @@
 # Studio Foundation verification report
 
-Last updated: 2026-07-22
+Last updated: 2026-08-05
 
 This report separates verified repository behavior from work still in progress.
-It is not a product roadmap.
+It is not a product roadmap. The numbers it and the README state publicly are
+enforced against the pinned artifacts by `tools/ci/check_claims.py`
+(rules: `docs/claims.toml`), so this file cannot quietly drift from the code
+again.
 
 ## Public scope
 
 Studio Foundation contains reusable Godot integration, a neutral project
 template, asset/export/release tooling, mechanics-neutral transport and service
-scaffolding, optional provider adapters, and their tests.
+scaffolding, optional provider adapters, the bforge headless-Blender asset
+forge, and their tests.
 
 It does not define a game's content, entities, mechanics, domain schema,
 identity policy, persistence semantics, or production deployment. The optional
 server and Nakama adapter carry opaque application payloads supplied by a
 consumer.
 
-## Verified in this change
+## Verified
 
 | Area | Evidence |
 |---|---|
 | Official engine source | Godot 4.7.1 stable commit `a13da4feb8d8aefc283c3763d33a2f170a18d541` is the sole active upstream pin |
-| WebGPU source preparation | Eight checksum-pinned patches pass path-containment, reusable-source preparation, candidate-isolation, dry-run, resume, and conflict-handling tests |
+| WebGPU patch series | 33 ordered patches (`engine/patches/0001`–`0033`), each SHA-256-locked in `engine-lock.toml`; `.github/workflows/patch-series.yml` re-verifies checksums and a clean-tree apply on every push and PR |
 | Build configuration | WebGPU templates explicitly use `webgpu=yes`, `opengl3=no`, and `threads=no` |
 | Template installation | The installer selects only the archive matching the lock's thread mode and rejects archives missing the WebGPU loader bridge or compiled backend marker |
-| Browser evidence | The smoke test instruments engine-owned adapter, device, and canvas-context requests and rejects any WebGL/WebGL 2 request |
-| Artifact acceptance | The recorder requires a complete release/debug pair; on 2026-07-24 the release and debug WebGPU templates were recorded by byte count and SHA-256 in `engine-lock.toml` after passing the runtime gate |
-| Current engine result | A no-threads build reaches a WebGPU adapter, device, and active canvas context under the Forward Mobile renderer without requesting WebGL, and **renders 2D/Control UI**: it passes the browser probe and a visual comparison of the neutral template's 2D menu against the WebGL baseline (1.2% diff). **The 3D-black bug is root-caused and fixed (patch 0009).** 3D was black because Tint's SPIR-V reader aborts (`TINT_UNIMPLEMENTED` decoration 21 = `Volatile`) on Godot's coherent compute shaders (`volumetric_fog.glsl`, compiled during 3D init) — a wasm trap that freezes the page. Patch 0009 strips that decoration. Verified offline (native reproducer over all 182 engine shaders: 0 crash, was 1); in-browser render verification pending a GPU-capable machine (this box has no hardware GPU). Earlier `texture.cc:606` + Emdawn `RefCounted` issues also fixed. **Lit, shadowed 3D now renders in-browser on a Tesla P40 (patches 0013 + 0014):** 0013 gives sampler/texture bind-group entries precise per-stage visibility (Forward Mobile over-declared 18 samplers per stage vs WebGPU's hard 16-per-stage limit), which made an unshaded mesh draw; 0014 then fixes the two defects that still blacked out real scenes — bindings reached only through helper-function parameters were wrongly demoted to no visibility, and depth textures were paired with Filtering samplers, which WebGPU forbids. A scene with six PBR meshes, a directional light, and real-time shadow mapping now renders at 59–60 fps, 36 draws/frame, with 0 `GPUValidationError` (was 2283) |
-| WebGPU shader translation coverage | 177 of 182 engine shaders translate to valid WGSL under the offline native reproducer (was 174). Patch 0010 makes the combined image-sampler split transitive across function call chains, so a `sampler2D` forwarded from a wrapper into a deeper helper (tonemap bicubic glow, `taa_resolve`) no longer emits invalid SPIR-V that silently fails Tint. Each fixed shader is confirmed by SPIRV-Tools validation plus a correct-WGSL spot check (separate `texture_2d` + `sampler`, `textureSampleLevel` wired to the split pair). The 5 remaining failures are fundamental WGSL feature gaps (subpass `input_attachment` ×2, storage-texture format inference, vertex-stage `read_write` storage, vertex `@builtin(position)`), not crashes |
+| Export templates | The accepted release/debug pair is recorded by filename, byte count, and SHA-256 in `engine-lock.toml [artifacts.export_templates]`; the same pair is published as release `godot-4.7.1-webgpu-p0033` |
+| 3D render, Forward Mobile | Verified in-browser on an NVIDIA Tesla P40: a minimal PBR + shadow scene at 59–60 fps / 36 draws per frame, and a full game (The Chariot Club) at a locked 60 fps, ~490–630 draws and ~23M primitives per frame — both with 0 `GPUValidationError` |
+| 3D render, Forward+ | First verified frame 2026-07-28, patch series 0023–0033, Tesla P40, headed Chrome/WebGPU, non-fallback adapter: the clustered renderer presents at 59 fps, 188 objects / 2,015,266 primitives, with 0 invalid `commandEncoder.finish` out of 10,842, 0 rejected `queue.submit`, and 0 bind-group failure classes. **Three WebGPU validation errors remain outside the presented-frame path** |
+| WebGPU shader coverage | 199 of 205 shader modules translate to valid WGSL offline with 0 GLSL compile failures, measured at the engine's real target env (Vulkan 1.1 / SPIR-V 1.3). None of the 6 remaining failures blocks Forward+: two are Forward Mobile's subpass tonemap, one is FSR's 16-bit variant (fallback translates), two are subgroup variants WebGPU does not select, one is an editor debug gizmo |
+| bforge determinism | `tools/bforge/bench.py` runs six briefs twice through the persistent daemon; all six pass the quality gate and the two GLB exports hash byte-identical (SHA-256 in `bench/report.json`). CI installs the pinned Blender 4.5.12 LTS, reruns the bench, and diffs the committed summary |
+| bforge surface | 136 whitelisted, typed operations across 21 namespaces; the committed `catalog.json` is checked against the live registry by full-schema comparison (not just op names), and `docs/bforge/OPS.md` is a generated file with a freshness gate |
+| bforge tests | 203 test methods in `tools/bforge/tests` — 164 in suites that boot a real Blender daemon, the rest pure schema/protocol/compiler units; the public CI bench job runs the full suite, not a subset |
+| Browser evidence | The runtime probe instruments engine-owned adapter, device, and canvas-context requests, rejects fallback adapters and any WebGL request, and reports `inconclusive` rather than passing on incomplete evidence |
+| Prose/artifact consistency | `tools/ci/check_claims.py` derives op, namespace, test, and patch counts from the pinned artifacts and fails the hosted policy job when a documented surface disagrees; absolute-exclusivity claims ("only public …") are rejected outright |
 | Optional Nakama bridge | The bridge carries opaque consumer-owned payloads and remains optional |
 
 ## Engine lineage
@@ -47,9 +56,12 @@ matching source and artifact provenance.
 
 ## Not yet claimed
 
-- A published OSWT (or other real-game) WebGPU capture and deployment produced from the accepted templates
+- Forward+ on any GPU other than the one NVIDIA Tesla P40 — AMD, Intel, and Apple are unmeasured, and the verification matrix so far is one scene class, one browser (headed Chrome), one OS
+- The Forward+ D24 fallback on adapters without `depth32float-stencil8` (implemented in patch 0028; the verification box has the feature, so the fallback path has never run)
+- The three remaining WebGPU validation errors outside the presented-frame path
 - Safari/iOS WebGPU behavior
 - Native Android and iOS device runs
+- A published OSWT (or other real-game) WebGPU capture and deployment produced from the accepted templates
 - Database-backed integration tests against a live disposable PostgreSQL stack
 - Console support beyond the documented licensed-provider path
 
@@ -58,6 +70,7 @@ matching source and artifact provenance.
 ```sh
 just test
 just lint
+just check-claims
 just test-generated
 just release-validate --allow-dirty
 ```

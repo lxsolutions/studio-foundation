@@ -1,0 +1,16 @@
+{
+  "recipe_version": 1,
+  "asset_id": "recipe_crate",
+  "brief": "a sturdy one-metre supply crate with collision, for the browser",
+  "steps": [
+    { "op": "prop.crate", "args": { "name": "recipe_crate", "size": [1, 1, 1], "seed": 7 } },
+    { "op": "gameready.collision", "args": { "name": "recipe_crate", "mode": "convex" } }
+  ],
+  "requirements": {
+    "max_triangles": 2000,
+    "require_collision": true,
+    "platform": "browser_webgpu",
+    "asset_class": "prop"
+  },
+  "export": { "engine": "godot", "category": "prop" }
+}

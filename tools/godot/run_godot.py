@@ -145,9 +145,15 @@ def stage_budget(project: Path, profile: str, scene: str, frames: int, timeout: 
         return 2
     code, output = run_godot(
         [
-            "--headless", "--path", str(project),
-            "--script", "res://addons/studio_core/tools/audit_scene_budget.gd",
-            "--", f"--scene={target}", f"--profile={profile}", f"--frames={frames}",
+            "--headless",
+            "--path",
+            str(project),
+            "--script",
+            "res://addons/studio_core/tools/audit_scene_budget.gd",
+            "--",
+            f"--scene={target}",
+            f"--profile={profile}",
+            f"--frames={frames}",
         ],
         project,
         timeout,
@@ -162,14 +168,20 @@ def main() -> int:
     parser.add_argument("--game", default="templates/godot-game")
     parser.add_argument("--import-only", action="store_true")
     parser.add_argument("--tests", action="store_true")
-    parser.add_argument("--budget", action="store_true",
-                        help="audit the main scene against its render profile budgets")
-    parser.add_argument("--profile", default="browser_webgpu",
-                        help="render profile to apply and audit against")
-    parser.add_argument("--scene", default="",
-                        help="scene to audit (defaults to the project's main scene)")
-    parser.add_argument("--frames", type=int, default=30,
-                        help="frames to let the scene build before measuring")
+    parser.add_argument(
+        "--budget",
+        action="store_true",
+        help="audit the main scene against its render profile budgets",
+    )
+    parser.add_argument(
+        "--profile", default="browser_webgpu", help="render profile to apply and audit against"
+    )
+    parser.add_argument(
+        "--scene", default="", help="scene to audit (defaults to the project's main scene)"
+    )
+    parser.add_argument(
+        "--frames", type=int, default=30, help="frames to let the scene build before measuring"
+    )
     parser.add_argument("--timeout", type=int, default=300)
     args = parser.parse_args()
 

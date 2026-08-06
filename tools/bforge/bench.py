@@ -70,29 +70,50 @@ def brief_crate(forge: Forge) -> dict:
 
 
 def brief_wolf(forge: Forge) -> dict:
-    forge.call("char.creature", name="bench_wolf", plan="canine", length=1.3,
-               shoulder=0.85, bulk=1.15, skin="#4a3c30", seed=13)
-    rig = forge.call("char.creature_rig", name="bench_wolf", plan="canine",
-                     length=1.3, shoulder=0.85)
+    forge.call(
+        "char.creature",
+        name="bench_wolf",
+        plan="canine",
+        length=1.3,
+        shoulder=0.85,
+        bulk=1.15,
+        skin="#4a3c30",
+        seed=13,
+    )
+    rig = forge.call(
+        "char.creature_rig", name="bench_wolf", plan="canine", length=1.3, shoulder=0.85
+    )
     forge.call("char.gait", rig=rig["armature"], speed=2.0)
-    return {"objects": ["bench_wolf", rig["armature"]],
-            "requires": {"skins_min": 1, "animations_min": 1, "vertex_color": True}}
+    return {
+        "objects": ["bench_wolf", rig["armature"]],
+        "requires": {"skins_min": 1, "animations_min": 1, "vertex_color": True},
+    }
 
 
 def brief_warden(forge: Forge) -> dict:
-    forge.call("char.humanoid", name="bench_warden", height=1.82, build="heroic",
-               skin="#b08a68", seed=3)
+    forge.call(
+        "char.humanoid", name="bench_warden", height=1.82, build="heroic", skin="#b08a68", seed=3
+    )
     forge.call("char.face", name="bench_warden", height=1.82)
     forge.call("char.hands", name="bench_warden", height=1.82)
     pieces = []
-    for piece, mat in (("cuirass", "bronze"), ("pteruges", "leather"),
-                       ("greaves", "bronze"), ("helmet", "bronze")):
-        pieces.append(forge.call("char.outfit", name="bench_warden", piece=piece,
-                                 height=1.82, material=mat)["object"])
+    for piece, mat in (
+        ("cuirass", "bronze"),
+        ("pteruges", "leather"),
+        ("greaves", "bronze"),
+        ("helmet", "bronze"),
+    ):
+        pieces.append(
+            forge.call("char.outfit", name="bench_warden", piece=piece, height=1.82, material=mat)[
+                "object"
+            ]
+        )
     rig = forge.call("char.rig", name="bench_warden", height=1.82, build="heroic")
     forge.call("char.gait", rig=rig["armature"], speed=1.4)
-    return {"objects": ["bench_warden", rig["armature"]] + pieces,
-            "requires": {"skins_min": 1, "animations_min": 1, "materials_min": 4}}
+    return {
+        "objects": ["bench_warden", rig["armature"]] + pieces,
+        "requires": {"skins_min": 1, "animations_min": 1, "materials_min": 4},
+    }
 
 
 def brief_camp(forge: Forge) -> dict:
@@ -102,10 +123,19 @@ def brief_camp(forge: Forge) -> dict:
 
 
 def brief_concept(forge: Forge, concept: Path) -> dict:
-    result = forge.call("image.to_mesh", path=str(concept), name="bench_medallion",
-                        target_height=1.0, depth=0.2, texture="none")
-    return {"objects": ["bench_medallion"],
-            "requires": {"meshes_min": 1}, "iou": result["silhouette_iou"]}
+    result = forge.call(
+        "image.to_mesh",
+        path=str(concept),
+        name="bench_medallion",
+        target_height=1.0,
+        depth=0.2,
+        texture="none",
+    )
+    return {
+        "objects": ["bench_medallion"],
+        "requires": {"meshes_min": 1},
+        "iou": result["silhouette_iou"],
+    }
 
 
 def brief_finishing(forge: Forge) -> dict:
@@ -114,8 +144,16 @@ def brief_finishing(forge: Forge) -> dict:
     unwrap -> transfer-bake -> gate. Determinism here is what makes the neural
     pipeline trustworthy.
     """
-    forge.call("char.creature", name="bench_soup_source", plan="canine", length=1.3,
-               shoulder=0.85, bulk=1.15, skin="#4a3c30", seed=13)
+    forge.call(
+        "char.creature",
+        name="bench_soup_source",
+        plan="canine",
+        length=1.3,
+        shoulder=0.85,
+        bulk=1.15,
+        skin="#4a3c30",
+        seed=13,
+    )
     soup_path = OUT_DIR / "out" / "bench_soup.glb"
     forge.call("export.gltf", out="bench_soup.glb", objects=["bench_soup_source"])
     forge.call("session.reset")
@@ -124,10 +162,19 @@ def brief_finishing(forge: Forge) -> dict:
     forge.call("build.subdivide", name="bench_finished", cuts=1)
     forge.call("mesh.retopo", name="bench_finished", voxel_size=0.025)
     forge.call("uv.unwrap", object="bench_finished", style="smart_packed")
-    forge.call("bake.transfer", source="soup_bench_soup_source", target="bench_finished",
-               maps=["base_color"], size=256, samples=4, ray_distance=0.08)
-    return {"objects": ["bench_finished"],
-            "requires": {"meshes_min": 1, "materials_min": 1, "textures_min": 1}}
+    forge.call(
+        "bake.transfer",
+        source="soup_bench_soup_source",
+        target="bench_finished",
+        maps=["base_color"],
+        size=256,
+        samples=4,
+        ray_distance=0.08,
+    )
+    return {
+        "objects": ["bench_finished"],
+        "requires": {"meshes_min": 1, "materials_min": 1, "textures_min": 1},
+    }
 
 
 BRIEFS = [
@@ -151,13 +198,16 @@ def verify(glb_path: Path, requires: dict) -> list[str]:
     if len(parsed.get("animations", [])) < requires.get("animations_min", 0):
         failures.append("no animations exported")
     if len(parsed.get("materials", [])) < requires.get("materials_min", 0):
-        failures.append(f"materials {len(parsed.get('materials', []))} < {requires['materials_min']}")
+        failures.append(
+            f"materials {len(parsed.get('materials', []))} < {requires['materials_min']}"
+        )
     if len(parsed.get("images", [])) < requires.get("textures_min", 0):
         failures.append("no baked textures exported")
     if requires.get("vertex_color"):
         has_vcol = any(
             "COLOR_0" in (prim.get("attributes") or {})
-            for mesh in meshes for prim in mesh.get("primitives", [])
+            for mesh in meshes
+            for prim in mesh.get("primitives", [])
         )
         if not has_vcol:
             failures.append("no COLOR_0 vertex colours exported")
@@ -174,7 +224,7 @@ def forensics(a: bytes, b: bytes) -> str:
     off = 20 + la
     bin_a = a[off + 8 :]
     bin_b = b[off + 8 :]
-    diffs = [i for i, (x, y) in enumerate(zip(bin_a, bin_b)) if x != y]
+    diffs = [i for i, (x, y) in enumerate(zip(bin_a, bin_b, strict=False)) if x != y]
     if not diffs:
         return "chunks equal but files differ (padding?)"
     first = diffs[0]
@@ -183,22 +233,30 @@ def forensics(a: bytes, b: bytes) -> str:
     fb = struct.unpack_from("<2f", bin_b, base)
     ia = struct.unpack_from("<2I", bin_a, base)
     ib = struct.unpack_from("<2I", bin_b, base)
-    return (f"BIN chunk: {len(diffs)} bytes differ from offset {first}; "
-            f"as floats {fa} vs {fb}; as uints {ia} vs {ib}")
+    return (
+        f"BIN chunk: {len(diffs)} bytes differ from offset {first}; "
+        f"as floats {fa} vs {fb}; as uints {ia} vs {ib}"
+    )
 
 
 def main() -> None:
     runs = int(sys.argv[1]) if len(sys.argv) > 1 else 1
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     concept = OUT_DIR / "_bench_concept.png"
-    _png_rgba(concept, 128, 128,
-              lambda x, y: (200, 30, 30, 255) if (x - 64) ** 2 + (y - 64) ** 2 < 40 ** 2
-              else (12, 12, 16, 255))
+    _png_rgba(
+        concept,
+        128,
+        128,
+        lambda x, y: (
+            (200, 30, 30, 255) if (x - 64) ** 2 + (y - 64) ** 2 < 40**2 else (12, 12, 16, 255)
+        ),
+    )
 
     report = {"bench": "bforge bench v2", "runs": [], "aggregates": {}}
     all_ok = True
-    with Forge(workdir=tempfile.mkdtemp(prefix="bforge_bench_"),
-               out_dir=str(OUT_DIR / "out")) as forge:
+    with Forge(
+        workdir=tempfile.mkdtemp(prefix="bforge_bench_"), out_dir=str(OUT_DIR / "out")
+    ) as forge:
         for title, brief_fn in BRIEFS:
             for iteration in range(runs):
                 hashes = []
@@ -213,8 +271,9 @@ def main() -> None:
                         built = brief_fn(forge, concept)
                     else:
                         built = brief_fn(forge)
-                    glb = forge.call("export.gltf", out=f"{built['objects'][0]}.glb",
-                                     objects=built["objects"])
+                    glb = forge.call(
+                        "export.gltf", out=f"{built['objects'][0]}.glb", objects=built["objects"]
+                    )
                     payload = Path(glb["path"]).read_bytes()
                     hashes.append(hashlib.sha256(payload).hexdigest())
                     export_bytes.append(payload)
@@ -229,7 +288,8 @@ def main() -> None:
                 deterministic = hashes[0] == hashes[1]
                 if not deterministic:
                     failures.append(
-                        f"nondeterministic export: {forensics(export_bytes[0], export_bytes[1])}")
+                        f"nondeterministic export: {forensics(export_bytes[0], export_bytes[1])}"
+                    )
                 ok = review["passed"] and not failures
                 all_ok = all_ok and ok
                 entry = {
@@ -249,10 +309,12 @@ def main() -> None:
                     entry["silhouette_iou"] = built["iou"]
                 report["runs"].append(entry)
                 mark = "ok " if ok else "FAIL"
-                print(f"  {mark} {title} #{iteration + 1}: {glb['triangles']} tris, "
-                      f"{seconds}s, gate {entry['gate']}, "
-                      f"{'deterministic' if deterministic else 'NONDETERMINISTIC'}"
-                      + (f" (iou {built['iou']})" if "iou" in built else ""))
+                print(
+                    f"  {mark} {title} #{iteration + 1}: {glb['triangles']} tris, "
+                    f"{seconds}s, gate {entry['gate']}, "
+                    f"{'deterministic' if deterministic else 'NONDETERMINISTIC'}"
+                    + (f" (iou {built['iou']})" if "iou" in built else "")
+                )
 
     total = len(report["runs"])
     passed = sum(1 for r in report["runs"] if r["ok"])
@@ -268,12 +330,17 @@ def main() -> None:
     }
     (OUT_DIR / "report.json").write_text(json.dumps(report, indent=2) + "\n")
 
-    summary = ["# bforge bench", "",
-               f"verdict: **{report['aggregates']['verdict'].upper()}** — "
-               f"{passed}/{total} runs green, "
-               f"{'all briefs byte-identical across regeneration' if deterministic_all else 'DETERMINISM FAILURE'} "
-               f"({report['aggregates']['total_triangles']} triangles total)", "",
-               "| brief | tris | gate | deterministic | structure |", "| --- | --- | --- | --- | --- |"]
+    summary = [
+        "# bforge bench",
+        "",
+        f"verdict: **{report['aggregates']['verdict'].upper()}** — "
+        f"{passed}/{total} runs green, "
+        f"{'all briefs byte-identical across regeneration' if deterministic_all else 'DETERMINISM FAILURE'} "
+        f"({report['aggregates']['total_triangles']} triangles total)",
+        "",
+        "| brief | tris | gate | deterministic | structure |",
+        "| --- | --- | --- | --- | --- |",
+    ]
     for r in report["runs"]:
         summary.append(
             f"| {r['brief']} | {r['triangles']} | {r['gate']} | "
@@ -281,22 +348,30 @@ def main() -> None:
             f"{'ok' if not r['structure_failures'] else ', '.join(r['structure_failures'])} |"
         )
     summary.append("")
-    summary.append("Every brief is forged twice from a reset session and the two GLB exports "
-                   "must hash identically (SHA-256 in report.json) — determinism is a checked "
-                   "property, not a slogan. Wall-clock seconds live in report.json "
-                   "(machine-dependent); this file carries only deterministic outputs and is "
-                   "what CI diffs.")
+    summary.append(
+        "Every brief is forged twice from a reset session and the two GLB exports "
+        "must hash identically (SHA-256 in report.json) — determinism is a checked "
+        "property, not a slogan. Wall-clock seconds live in report.json "
+        "(machine-dependent); this file carries only deterministic outputs and is "
+        "what CI diffs."
+    )
     summary.append("")
-    summary.append("Scope: programmatic op briefs over the persistent daemon — this bench proves "
-                   "the ops, gates, and export; natural-language brief evaluation is the "
-                   "BRIEF->BATTLE track (strategy/FRONTIER.md).")
+    summary.append(
+        "Scope: programmatic op briefs over the persistent daemon — this bench proves "
+        "the ops, gates, and export; natural-language brief evaluation is the "
+        "BRIEF->BATTLE track (strategy/FRONTIER.md)."
+    )
     summary.append("")
-    summary.append("Rerun: `uv run --project tools python tools/bforge/bench.py [runs]` — "
-                   "the numbers are produced by the runner, not by memory.")
+    summary.append(
+        "Rerun: `uv run --project tools python tools/bforge/bench.py [runs]` — "
+        "the numbers are produced by the runner, not by memory."
+    )
     (OUT_DIR / "SUMMARY.md").write_text("\n".join(summary) + "\n")
 
-    print(f"\nbench verdict: {report['aggregates']['verdict']} "
-          f"({passed}/{total} green, report -> {OUT_DIR})")
+    print(
+        f"\nbench verdict: {report['aggregates']['verdict']} "
+        f"({passed}/{total} green, report -> {OUT_DIR})"
+    )
     sys.exit(0 if all_ok else 1)
 
 

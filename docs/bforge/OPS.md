@@ -1,6 +1,6 @@
 # bforge op reference
 
-131 operations.
+136 operations.
 
 ## `arch.*`
 
@@ -78,6 +78,21 @@ A monumental arched gate — the triumphal entrance every Roman venue frames its
 | `material` | string | 'stone' | Material preset |
 | `color` | string | '' | Override colour |
 | `uv_scale` | number | 3.0 | Metres per UV tile |
+
+## `bake.*`
+
+### `bake.transfer`
+
+Bake textures from a source mesh (the neural soup, the high-poly sculpt) onto a target mesh (the retopo'd game mesh) via selected-to-active projection: base colour and tangent-space normal map. This is the AAA high->low transfer step — the game mesh keeps the source's surface richness at a fraction of the triangles.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `source` | string | None | Source mesh object (textured / high-poly) |
+| `target` | string | None | Target mesh object (retopo'd, with fresh UVs) |
+| `maps` | array | ['base_color', 'normal'] | Which maps to bake: base_color, normal, ao |
+| `size` | integer | 1024 | Bake resolution (square) |
+| `ray_distance` | number | 0.05 | Projection ray length in metres — raise if the bake misses recessed detail, lower if it picks up neighbouring parts |
+| `samples` | integer | 16 | Cycles samples per texel |
 
 ## `build.*`
 
@@ -392,6 +407,8 @@ Proportioned quadruped body (canine/equine/feline/generic) or hexapod (insect: s
 | `detail` | integer | 8 | Limb cross-section segments |
 | `location` | array | [0.0, 0.0, 0.0] | World position |
 | `skin` | string | '#7a6248' | Body colour |
+| `eyes` | none \| natural \| glow | 'natural' | Eye blobs: natural (dark), glow (emissive — the underworld signature, reads at any distance) |
+| `eye_color` | any | '#1c1c22' | Eye colour; glow reads best saturated (#39ff88 underworld, #ffb35a ember) |
 | `seed` | integer | 0 | Random seed |
 
 ### `char.creature_rig`
@@ -416,6 +433,8 @@ Give a char.humanoid head a readable face — brow ridge, nose wedge, chin — s
 | `name` | string | None | Body mesh (from char.humanoid) |
 | `height` | number | 0.0 | Character height; 0 measures the mesh bounds |
 | `build` | realistic \| heroic \| stylized \| chibi \| lithe | 'heroic' | Proportions — match the char.humanoid build |
+| `eyes` | none \| natural \| glow | 'natural' | Eye blobs: natural (dark), glow (emissive — underworld/monster signature, reads at any distance) |
+| `eye_color` | any | '#1c1c22' | Eye colour; glow eyes read best saturated (#39ff88 underworld, #ffb35a ember) |
 
 ### `char.gait`
 
@@ -545,6 +564,16 @@ Measure whether an asset's materials are actually distinguishable — the '8 mat
 | --- | --- | --- | --- |
 | `objects` | array | [] | Objects whose materials to measure (empty = every mesh) |
 | `min_delta_e` | number | 12.0 | Perceptual-separation floor in ΔE76. Below ~6 the difference is invisible in game; 12 is a safe bar for metal vs leather vs cloth |
+
+### `check.palette`
+
+Measure an asset against the game's art bible: every material's base colour is mapped to the nearest palette family in CIELAB and must land within tolerance (ΔE76). This is executable art direction — the difference between 'assets that look generated' and 'assets that look like they belong to one game'.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `objects` | array | [] | Objects whose materials to measure (empty = every mesh) |
+| `bible` | string | 'ashenward' | Art bible name (see ART_BIBLES) or a JSON list of {"name", "hex"} entries |
+| `tolerance` | number | 22.0 | Max distance to the nearest family in ΔE76 — 18 is strict, 26 is permissive |
 
 ### `check.silhouette`
 
@@ -1030,6 +1059,19 @@ Merge materials that render identically into one shared material. Composing a sc
 | `objects` | array | [] | Limit to these objects (empty = whole scene) |
 | `dry_run` | boolean | False | Report what would merge without changing anything |
 
+### `material.detail_normal`
+
+Generate a surface-detail normal map procedurally (cloth weave, hide scales, skin pores, wood grain) and wire it into the object's material. Bake passes only capture GEOMETRY normals, so shader bumps never survive export — this writes the relief into a real normal map, which is what makes cloth/skin/hide read as material instead of flat plastic at close range. Deterministic (seeded), glTF-safe (TEX_IMAGE + NORMAL_MAP only).
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `object` | string | None | Object to detail (must have UVs) |
+| `pattern` | weave \| scales \| pores \| grain | 'weave' | Surface class: weave=cloth, scales=hide/armour, pores=skin/leather, grain=wood |
+| `scale` | number | 24.0 | Pattern frequency across the texture |
+| `strength` | number | 0.6 | Relief intensity 0..1 |
+| `size` | integer | 512 | Texture size (square) |
+| `seed` | integer | 0 | Random seed |
+
 ### `material.face_assign`
 
 Give a subset of faces its own material — trim strips, emissive panels, painted details. Selected by world-space direction or height.
@@ -1123,6 +1165,32 @@ Bake a SEAMLESS PBR texture set and apply it repeating across a surface. This is
 | `out_dir` | string | 'textures' | Directory for the PNGs |
 | `reuse` | boolean | True | If this stem was already baked, assign the existing material instead of baking again. Bake once, apply to every stone surface in a building — same texture, one set of maps, one draw call |
 | `seed` | integer | 0 | Random seed |
+
+## `mesh.*`
+
+### `mesh.clean`
+
+Sweep a neural/scan mesh before retopo: delete floating islands below a size share of the main body, then Taubin-smooth the surface (smooth + counter-smooth, so it denoises without shrinking). Neural soup carries floaters and high-frequency noise that voxel retopo faithfully preserves — clean first or the spikes ship.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `name` | string | None | Mesh object to clean (modified in place) |
+| `island_min_share` | number | 0.02 | Drop disconnected islands smaller than this fraction of the largest island's face count (0.02 = keep anything at least 2% of the main body) |
+| `smooth_iterations` | integer | 2 | Laplacian rounds — 1-3 denoises neural output; 0 keeps the raw surface |
+| `smooth_factor` | number | 0.3 | Step size per round, capped at 0.35: a negative-volume counter-step (Taubin) was tried and SHREDDED voxel-quad meshes — plain small steps are the safe smooth |
+| `despike_iterations` | integer | 2 | Outlier-clamp passes — collapse verts sitting >threshold x the median edge length away from their neighbourhood median (the long thin spikes neural extraction leaves) |
+| `despike_threshold` | number | 4.0 | Spike cutoff as a multiple of the median edge length |
+
+### `mesh.retopo`
+
+Rebuild a dense triangle soup (neural/scan import) as a clean all-quad mesh via voxel remesh, in place. Robust on any input — open seams, overlapping shells, interior garbage all get swallowed by the voxel grid. Destroys UVs and skin weights (unwrap again after; re-rig if it had a rig). Pair with bake.transfer to move the source's textures and detail across.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `name` | string | None | Mesh object to retopologize (modified in place) |
+| `voxel_size` | number | 0.0 | Voxel edge in metres — 0 picks it from the bounds (~1/120 of the longest side). Smaller keeps more detail at more quads |
+| `adaptivity` | number | 0.02 | Quad adaptivity 0..0.2 — higher spends quads only where curvature demands |
+| `strip_rig` | boolean | True | Retopo destroys skin weights: unparent, drop armature modifiers, and apply transforms first (neural/scan inputs arrive unrigged anyway) |
 
 ## `meta.*`
 

@@ -123,11 +123,21 @@ class Impostor(ForgeCase):
     def test_identical_calls_produce_identical_output(self):
         self.forge.call("build.box", name="b", size=[1, 1, 1], bevel=0.0)
         first = self.forge.call(
-            "render.impostor", name="b", out="a.png", views=4, size=64, samples=8,
+            "render.impostor",
+            name="b",
+            out="a.png",
+            views=4,
+            size=64,
+            samples=8,
             _timeout=900,
         )
         second = self.forge.call(
-            "render.impostor", name="b", out="b.png", views=4, size=64, samples=8,
+            "render.impostor",
+            name="b",
+            out="b.png",
+            views=4,
+            size=64,
+            samples=8,
             _timeout=900,
         )
         self.assertEqual(

@@ -159,6 +159,175 @@ browser WebGPU template build. They apply to the official Godot commit in
     a layout against the SHADER, so the scanned declaration wins. Measured on a
     Tesla P40: Sint mismatches 4 -> 0, `GPUValidationError` 26 -> 18.
 
+23. `0023-webgpu-stage-correct-storage-buffers.patch` - keep fragment storage
+    buffers writable, and off the vertex stage. The WGSL post-pass demoted every
+    read_write storage buffer to read-only in BOTH stages; WebGPU only forbids a
+    writable storage buffer in the vertex stage, and the cluster builder is a
+    fragment shader whose entire job is to `atomicOr` into an SSBO, so the
+    demotion rewrote Tint's correct output into a module WGSL rejects outright
+    (atomics in `storage` must be read_write). Demote in the vertex stage only,
+    and never a buffer whose struct contains `atomic<>`; the read-only cache is
+    keyed by (set,binding) and filled once per stage, so read-write now wins over
+    whichever stage was scanned last; and a binding whose resolved type is
+    Storage no longer carries vertex visibility. Measured on a Tesla P40
+    (Chariot, Forward+): WGSL parse failures (atomics) 3 -> 0, ClusterRender
+    layout/pipeline 6 -> 0, read-write-in-vertex-visibility 2 -> 0,
+    `GPUValidationError` 18 -> 14.
+
+24. `0024-webgpu-textureload-identifier-boundary.patch` - match `textureLoad` on
+    a whole identifier, not a prefix. The read-only-storage-to-sampled conversion
+    adds a mip-level argument by searching for `"textureLoad(" + var_name`, and
+    SDFGI's preprocess shader declares both `src_light` and `src_light_aniso`, so
+    the prefix matched the longer name too and it received a second mip argument
+    - a four-argument `textureLoad` that invalidated SdfgiPreprocessShaderRD
+    variant 8. A rewrite for binding x may now only touch a call whose first
+    argument is exactly the identifier x, applied at both the shadow-texture and
+    direct-variable sites, which shared the hazard. Measured on a Tesla P40
+    (Chariot, Forward+): SDFGI WGSL parse failures 1 -> 0, cascading
+    invalid-module 1 -> 0, `GPUValidationError` 14 -> 6 (with 0025).
+
+25. `0025-webgpu-render-pass-needs-an-attachment.patch` - a render pass needs an
+    attachment, so stop claiming side-effects-only is supported. The driver
+    answered `SUPPORTS_FRAGMENT_SHADER_WITH_ONLY_SIDE_EFFECTS` true behind a
+    comment asserting WebGPU render passes work with no color attachments; WebGPU
+    requires at least one color or depth-stencil attachment and reports exactly
+    that ("No attachment was specified."). Godot already has the fallback for
+    APIs that cannot rasterize on side effects alone: answering false makes
+    `cluster_builder_rd.cpp` create a real color attachment and select the
+    `USE_ATTACHMENT` shader variant 0015 added, at the cost of one unused color
+    attachment on the cluster-build pass. Measured on a Tesla P40 (Chariot,
+    Forward+): attachmentless render-pass errors 2 -> 0, `GPUValidationError`
+    14 -> 6 (with 0024).
+
+26. `0026-scene-shader-subgroup-fallback.patch` - give the clustered scene
+    shader the no-subgroups path 0015 gave only the cluster builder.
+    `scene_forward_clustered.glsl` calls `subgroupMin`/`subgroupMax`/
+    `subgroupOr`/`subgroupBroadcastFirst` with no `#ifdef`, and its include
+    enables the subgroup extensions unconditionally, so the scene shader failed
+    translation ('subgroupOr' must only be called from subgroup uniform control
+    flow), no cluster builder was ever created, and `_render_scene` returned
+    early on `current_cluster_builder` null every frame - nothing drawn, and no
+    validation error to point at why. The reductions are a divergence
+    optimisation, not a correctness requirement, so the fallback is four identity
+    macros in `scene_forward_clustered_inc.glsl` behind `USE_SUBGROUPS`, which
+    `render_forward_clustered.cpp` now defines only when the device reports
+    ballot + arithmetic subgroup ops in the fragment stage - the same test
+    `cluster_builder_rd.cpp` already applies.
+
+27. `0027-webgpu-request-depth32float-stencil8.patch` - request the
+    `depth32float-stencil8` device feature. Forward+ allocates its depth-stencil
+    target as `D32_SFLOAT_S8_UINT`, which WebGPU exposes only behind that
+    optional feature, and using it without the feature enabled is not a
+    validation error - `createRenderPipeline` throws a `TypeError` that stops the
+    renderer outright, so nothing after it draws. The JS shell already filters an
+    optional-feature list against `adapter.features`, so this is one entry and
+    adapters without the feature are unaffected. Forward Mobile never requested
+    stencil alongside a 32-bit depth buffer, which is why the gap only surfaces
+    once Forward+ gets far enough to create its depth attachment.
+
+28. `0028-webgpu-depth-support-from-the-device.patch` - answer D32 depth support
+    from the device, not a table; 0027 is only half of the negotiation.
+    `texture_get_usages_supported_by_format()` reported a format supported
+    whenever its `WGPUTextureFormat` enum existed, so on an adapter without
+    `depth32float-stencil8` Godot still selects `D32_SFLOAT_S8_UINT`, never
+    reaches its own `D24_UNORM_S8_UINT` fallback, and texture creation fails with
+    no fallback left. The authority is now the created GPUDevice's enabled
+    feature set, mirroring the BC/ETC2/ASTC gating the same function already
+    applies, and the choice is reported once at device creation under
+    `--verbose`. NOT VERIFIED on hardware lacking the feature - the Tesla P40
+    exposes it, so the fallback branch has never executed here; recorded as
+    unmeasured in `docs/architecture/webgpu-runtime-status.md` rather than
+    claimed.
+
+29. `0029-webgpu-unused-color-targets-are-absent.patch` - an unused color target
+    is absent, not `rgba8unorm`. Unused fragment output locations were filled
+    with a placeholder `WGPUTextureFormat_RGBA8Unorm` plus a None write mask, but
+    masking writes does not make a target absent, and the render-pass path
+    already emitted a null view for the same slot, so pipeline and pass disagreed
+    on every Forward+ scene pipeline. An unused location now emits
+    `WGPUTextureFormat_Undefined`, with holes preserved in place rather than
+    compacted, because Godot reserves stable `@location()`s for optional outputs
+    such as separate specular and motion vectors. Measured on a Tesla P40
+    (Chariot, Forward+): attachment-state incompatibility 1018 -> 0, cascading
+    invalid CommandBuffer 1005 -> 0, `GPUValidationError` 9004 -> 4780 -
+    confirmed by pairing rather than by count (44 distinct pipeline/pass pairs,
+    zero mismatches). Still no frame; the remaining classes are unrelated to
+    attachments: sampler2DMS binding, comparison-sampler-as-non-comparison, and
+    two storage format-promotion mismatches.
+
+30. `0030-webgpu-view-format-follows-the-texture.patch` - a texture view must
+    follow the physical format, not the logical one. R8/RG8/R16/RG16 are not
+    WebGPU storage texel formats, so textures in them are promoted to 32-bit at
+    creation, but `texture_create_shared` and `texture_create_shared_from_slice`
+    took the view format straight from Godot, which supplies the LOGICAL format -
+    an r16float view of an r32float texture. An invalid view is not a local
+    failure: every bind group referencing it goes invalid, and so does the
+    command buffer holding those draws, which is why the 3D scene was black while
+    the separately-encoded 2D canvas kept presenting. `_view_format_for_texture`
+    promotes the requested format the same way the texture was promoted, and
+    passes genuine reinterpretations through unchanged for WebGPU to rule on
+    rather than inventing an answer. Measured on a Tesla P40 (headed
+    Chrome/WebGPU, Chariot, Forward+): distinct bind-group failure classes
+    4 -> 2, R16Float-view-of-R32Float 2 -> 0, [Invalid TextureView] cascades
+    2 -> 0. Still black; the next root failure in command order is the SSAO
+    interleave layout, addressed in 0032.
+
+31. `0031-webgpu-shared-view-physical-format-invariant.patch` - generalise the
+    0030 invariant, which was narrower than it claimed. "Promotes to the same
+    thing" admits reinterpretations the caller never declared, and promotion is
+    not the only physical transformation this driver performs: where
+    `float32-filterable` is unavailable, some logical float32 textures are
+    allocated as float16, and 0030 would have resolved a later shared view of one
+    back to float32 - recreating the exact class of invalid view it was written
+    to eliminate. `_resolve_shared_view_format()` states the rule in both
+    directions: a shared or sliced view of the same logical texture inherits the
+    physical format, whatever transformation produced it, and only a format
+    declared in the texture's viewFormats may differ - exactly one is declared,
+    the linear/sRGB counterpart. The format is also resolved before the WGTexture
+    wrapper is allocated (no leak on the error path), and `tex->format` is now
+    assigned in both paths. No measured change on the Tesla P40, and none
+    expected - it reports texture-formats-tier1 AND float32-filterable, so
+    neither transformation is exercised; the float32-to-float16 case is
+    UNVERIFIED on hardware, recorded as unmeasured exactly like the 0028
+    fallback.
+
+32. `0032-godot-ssao-interleave-r8-backport.patch` - match the SSAO interleave
+    storage image to its R8 AO target. `ssao_interleave.glsl` declares its
+    destination image `rgba8` while `ssao_allocate_buffers()` allocates RB_FINAL
+    as `R8_UNORM`, and WebGPU requires the layout's storage-texture format to
+    equal the bound texture's exactly. Not a missed promotion - the adapter
+    reports texture-formats-tier1, so r8unorm is natively valid for storage and
+    `_promote_storage_format` deliberately preserves it - and not the 0021/0029
+    placeholder defect, because the runtime WGSL faithfully reflects the shader.
+    The declaration itself is stale: upstream Godot already corrected it to
+    `layout(r8, ...)` in d9ea5c261eb6 (2026-05-06), so this is an unconditional
+    backport - the declaration was wrong on every backend - removable once the
+    engine pin moves to a Godot containing that commit. Measured on a Tesla P40
+    (headed Chrome/WebGPU, Chariot, Forward+): R8Unorm-vs-RGBA8Unorm bind-group
+    failures 1 -> 0, distinct bind-group failure classes 2 -> 1. Scene-bearing
+    submissions were still rejected at this point: `commandEncoder.finish` 6708
+    calls / 514 invalid, `queue.submit` 514 rejected, every rejected submission
+    carrying SceneForwardClusteredShaderRD and none carrying Sky/Tonemap/Canvas/
+    Blit.
+
+33. `0033-godot-volumetric-fog-remove-unused-shadow-sampler.patch` - remove the
+    dead `shadow_sampler` that was the last remaining bind-group failure.
+    `volumetric_fog_process.glsl` declares `sampler shadow_sampler` at binding 11
+    and never references it - every real shadow read builds its sampled image
+    from `linear_sampler` - so reflection's ShaderStage::None visibility and
+    filtering sampler type were the right description of a dead resource, while
+    `fog.cpp` nevertheless inserts the renderer's comparison-enabled sampler
+    there, and zero visibility does not exempt an entry from bind-group resource
+    validation. The resource is dead, so the declaration and its uniform block
+    are removed rather than described more accurately; bindings are explicitly
+    numbered, so 11 leaves a hole and WebGPU binding 22 simply ceases to exist.
+    Not a backport - current Godot master still carries the declaration, and
+    removal is a clean upstream-PR candidate because the resource is statically
+    unreachable. With it the failure count reaches 0: first verified Forward+
+    frame, 2026-07-28, Tesla P40, headed Chrome/WebGPU - 59 fps, 188 objects /
+    2,015,266 primitives, 0 rejected command buffers, 0 wasm traps; 0 invalid
+    `commandEncoder.finish` out of 10,842, 0 rejected `queue.submit`.
+
 The WebGPU implementation originated in `dwalter/godotwebgpu`. Studio
 Foundation owns the 4.7.1 port, scoped patch curation, preparation/build tooling,
 and validation. See `../../docs/architecture/webgpu-integration.md` for the
@@ -189,7 +358,7 @@ separately under `engine/toolchain/patches/`. It isolates Dawn's private
 `RefCounted` type from Godot's type of the same name and is independently
 checksum-locked in `engine-lock.toml`.
 
-As of 2026-07-24 the release/debug rebuild and the engine-owned browser WebGPU
-probe (active canvas context + 1.2% visual diff vs the WebGL baseline) both pass;
-the accepted templates are checksum-locked in
-`engine-lock.toml [artifacts.export_templates]`.
+The patch series is 0001-0033. The p0033 export templates render Forward+ with
+zero validation errors - first verified frame 2026-07-28 on an NVIDIA Tesla P40
+under headed Chrome/WebGPU. The accepted template hashes remain checksum-locked
+in `engine-lock.toml [artifacts.export_templates]`.

@@ -11,7 +11,8 @@ path into the engine, automatable by CI and AI agents.
 
 ## Decision
 
-- **Blender** (pinned LTS; currently 5.2.0 LTS) is the master source. `.blend` files in
+- **Blender** (pinned LTS; currently 4.5.12 LTS — the version CI and the
+  byte-identical bench verify against) is the master source. `.blend` files in
   `assets-source/` are the only editable asset truth.
 - All automation uses **Blender background mode + Python API** (`blender -b --python`)
   through `tools/asset-pipeline/` — no GUI-only automation, no arbitrary remote code

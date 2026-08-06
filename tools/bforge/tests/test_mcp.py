@@ -26,7 +26,7 @@ class StubForge:
         self.fail_on = fail_on
         self.daemon_error_on = daemon_error_on
         self.process = None
-        self.info = {"blender": "5.2.0 LTS"}
+        self.info = {"blender": "4.5.12 LTS"}
         self.workdir = Path(".")
         self.out_dir = Path("out")
         self.restarted = False

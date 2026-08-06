@@ -68,8 +68,9 @@ class Humanoid(ForgeCase):
         self.assertEqual(fast["style"], "run")
         self.assertLess(slow["froude"], 0.55)
         self.assertGreater(fast["froude"], 0.55)
-        self.assertGreater(slow["frames"], fast["frames"],
-                           "a slower cadence means more frames per cycle")
+        self.assertGreater(
+            slow["frames"], fast["frames"], "a slower cadence means more frames per cycle"
+        )
 
     def test_explicit_style_and_cadence_math(self):
         rig = self._rig()
@@ -82,8 +83,7 @@ class Humanoid(ForgeCase):
     def test_gait_exports_as_animation(self):
         rig = self._rig()
         FORGE.call("char.gait", rig=rig["armature"], speed=1.4)
-        glb = FORGE.call("export.gltf", out="gait.glb",
-                         objects=[rig["armature"], "warden"])
+        glb = FORGE.call("export.gltf", out="gait.glb", objects=[rig["armature"], "warden"])
         parsed = read_glb_json(Path(glb["path"]))
         names = [a.get("name", "") for a in parsed.get("animations", [])]
         self.assertTrue(any("gait_walk" in n for n in names))
@@ -91,10 +91,10 @@ class Humanoid(ForgeCase):
 
 class Creature(ForgeCase):
     def test_quadruped_transitions_by_froude(self):
-        FORGE.call("char.creature", name="hound", plan="canine", length=1.3,
-                   shoulder=0.85, seed=5)
-        rig = FORGE.call("char.creature_rig", name="hound", plan="canine",
-                         length=1.3, shoulder=0.85)
+        FORGE.call("char.creature", name="hound", plan="canine", length=1.3, shoulder=0.85, seed=5)
+        rig = FORGE.call(
+            "char.creature_rig", name="hound", plan="canine", length=1.3, shoulder=0.85
+        )
         walk = FORGE.call("char.gait", rig=rig["armature"], speed=0.8)
         trot = FORGE.call("char.gait", rig=rig["armature"], speed=2.0)
         gallop = FORGE.call("char.gait", rig=rig["armature"], speed=5.0)
@@ -105,10 +105,12 @@ class Creature(ForgeCase):
         self.assertLess(trot["froude"], gallop["froude"])
 
     def test_hexapod_gets_tripod_gait(self):
-        FORGE.call("char.creature", name="scarab", plan="insect", length=0.9,
-                   shoulder=0.35, seed=17)
-        rig = FORGE.call("char.creature_rig", name="scarab", plan="insect",
-                         length=0.9, shoulder=0.35)
+        FORGE.call(
+            "char.creature", name="scarab", plan="insect", length=0.9, shoulder=0.35, seed=17
+        )
+        rig = FORGE.call(
+            "char.creature_rig", name="scarab", plan="insect", length=0.9, shoulder=0.35
+        )
         result = FORGE.call("char.gait", rig=rig["armature"], speed=0.4)
         self.assertEqual(result["family"], "hexapod")
         self.assertEqual(result["style"], "walk")
@@ -117,10 +119,12 @@ class Creature(ForgeCase):
     def test_determinism(self):
         def build_once(out):
             FORGE.call("session.reset")
-            FORGE.call("char.creature", name="hound", plan="canine", length=1.3,
-                       shoulder=0.85, seed=5)
-            rig = FORGE.call("char.creature_rig", name="hound", plan="canine",
-                             length=1.3, shoulder=0.85)
+            FORGE.call(
+                "char.creature", name="hound", plan="canine", length=1.3, shoulder=0.85, seed=5
+            )
+            rig = FORGE.call(
+                "char.creature_rig", name="hound", plan="canine", length=1.3, shoulder=0.85
+            )
             FORGE.call("char.gait", rig=rig["armature"], speed=2.0)
             return Path(FORGE.call("export.gltf", out=out)["path"]).read_bytes()
 

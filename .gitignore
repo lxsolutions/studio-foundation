@@ -51,6 +51,10 @@ dist/
 engine/.cache/
 engine/artifacts/
 
+# --- bforge content-addressed build cache + bench output (regenerable) ---
+tools/bforge/cache/
+tools/bforge/bench/out/
+
 # --- Rust ---
 target/
 

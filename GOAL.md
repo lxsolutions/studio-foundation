@@ -19,7 +19,11 @@ Official Godot is the only client runtime standardized here. Product code,
 gameplay schemas, product-specific identity policy, and production deployments
 live in consuming repositories. Babylon.js, Capacitor, or any other runtime
 selected by a product does not become a Studio Foundation dependency unless a
-future public ADR explicitly changes that decision.
+future public ADR explicitly changes that decision. Two proposals chart paths
+past this boundary — the TypeScript/Three.js peer-runtime ADR 0017 (open draft,
+PR #50) and [ADR 0018](docs/adr/0018-brief-to-battle-world-compiler.md)
+(World IR-driven adapters). Neither is accepted; until one lands, the boundary
+above holds unchanged.
 
 The optional Rust server establishes sessions and can forward opaque
 application payloads to a handler supplied by a game. Foundation does not define

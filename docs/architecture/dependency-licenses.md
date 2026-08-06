@@ -13,7 +13,7 @@ Exact resolved versions live in the lockfiles (`Cargo.lock`, `uv.lock`,
 | Godot Engine | 4.7.1-stable `a13da4feb…` | MIT | Primary engine | ADR 0001 |
 | Studio Foundation WebGPU integration | official 4.7.1 + local checksummed patches; source lineage `f329e39ce...` | MIT plus included third-party licenses | Browser WebGPU export backend | ADR 0002; beta; see NOTICE.md |
 | Godot export templates (web) | 4.7.1.stable official | MIT | WebGL2 browser export | installed via editor |
-| Blender | 5.2.0 LTS | GPL-2.0-or-later | Master asset tool (standalone process only) | ADR 0006 isolation note |
+| Blender | 4.5.12 LTS | GPL-2.0-or-later | Master asset tool (standalone process only) | ADR 0006 isolation note; the version CI and the byte-identical bench verify against |
 | Emscripten | 4.0.11 | MIT/UIUC | Web engine builds | pinned for the local integration |
 | Emdawn WebGPU port | `v20250531.224602` / Dawn `ea66c0fa…` | MIT/UIUC and BSD-3-Clause | Browser WebGPU C/C++ bindings | Shipped by pinned Emscripten; source and namespace backport are checksum-locked in `engine-lock.toml` |
 | SCons | 4.9.1 | MIT | Godot build system | via uv-managed venv |

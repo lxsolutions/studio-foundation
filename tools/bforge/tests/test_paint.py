@@ -71,8 +71,14 @@ def read_glb(path: Path):
     return gltf, binary
 
 
-_COMPONENT = {5120: ("b", 1, None), 5121: ("B", 1, 255), 5122: ("h", 2, None),
-              5123: ("H", 2, 65535), 5125: ("I", 4, None), 5126: ("f", 4, None)}
+_COMPONENT = {
+    5120: ("b", 1, None),
+    5121: ("B", 1, 255),
+    5122: ("h", 2, None),
+    5123: ("H", 2, 65535),
+    5125: ("I", 4, None),
+    5126: ("f", 4, None),
+}
 _TYPE_LEN = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4}
 
 
@@ -121,7 +127,8 @@ class Fill(ForgeCase):
         for channel in range(3):
             values = [c[channel] for c in colors]
             self.assertLessEqual(
-                max(values) - min(values), 0.02,
+                max(values) - min(values),
+                0.02,
                 "a flat fill must come back uniform",
             )
         # #8899aa is a cool grey: blue channel clearly above red.
@@ -146,7 +153,8 @@ class Height(ForgeCase):
         _gltf, colors = read_colors(Path(exported["path"]))
         luma = [0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2] for c in colors]
         self.assertGreater(
-            max(luma) - min(luma), 0.5,
+            max(luma) - min(luma),
+            0.5,
             f"a black-to-white gradient over 2 m must span most of the range: {min(luma):.3f}..{max(luma):.3f}",
         )
 
@@ -166,8 +174,9 @@ class Noise(ForgeCase):
     def test_noise_is_deterministic_for_a_seed(self):
         def bake(out):
             self.forge.call("build.plane", name="p", size=[4, 4], cuts=8)
-            self.forge.call("paint.noise", name="p", color_a="#000000", color_b="#ffffff",
-                            scale=2.0, seed=7)
+            self.forge.call(
+                "paint.noise", name="p", color_a="#000000", color_b="#ffffff", scale=2.0, seed=7
+            )
             exported = self.forge.call("export.gltf", out=out)
             _gltf, colors = read_colors(Path(exported["path"]))
             return colors
@@ -189,8 +198,9 @@ class Noise(ForgeCase):
 
     def test_noise_actually_varies_across_the_mesh(self):
         self.forge.call("build.plane", name="p", size=[4, 4], cuts=8)
-        self.forge.call("paint.noise", name="p", color_a="#000000", color_b="#ffffff",
-                        scale=2.0, seed=7)
+        self.forge.call(
+            "paint.noise", name="p", color_a="#000000", color_b="#ffffff", scale=2.0, seed=7
+        )
         exported = self.forge.call("export.gltf", out="noise_var.glb")
         _gltf, colors = read_colors(Path(exported["path"]))
         luma = {round(c[0], 2) for c in colors}
@@ -214,8 +224,7 @@ class Cavity(ForgeCase):
     def test_edge_mode_paints_convex_ridges_instead(self):
         self.forge.call("build.box", name="b", size=[1, 1, 1])
         cavity = self.forge.call("paint.cavity", name="b", color="#000000", mode="cavity")
-        edge = self.forge.call("paint.cavity", name="b", color="#ffffff", mode="edge",
-                               layer="wear")
+        edge = self.forge.call("paint.cavity", name="b", color="#ffffff", mode="edge", layer="wear")
         # A bevelled box has both concave-free flats and convex chamfer edges;
         # the two modes must not agree on zero.
         self.assertGreaterEqual(cavity["loops_painted"], 0)

@@ -10,7 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from bforge.client import DaemonError, Forge, ForgeError, find_blender  # noqa: E402
+from bforge.client import DaemonError, Forge, find_blender  # noqa: E402
 
 FORGE: Forge | None = None
 TEMP: tempfile.TemporaryDirectory | None = None
@@ -47,11 +47,19 @@ class ForgeCase(unittest.TestCase):
 
 class Camp(ForgeCase):
     def test_camp_builds_all_structures(self):
-        result = FORGE.call("env.camp", name="homeland", radius=8.0, shelters=5,
-                            well=True, racks=2, seed=42)
+        result = FORGE.call(
+            "env.camp", name="homeland", radius=8.0, shelters=5, well=True, racks=2, seed=42
+        )
         parts = {entry["part"] for entry in result["structures"]}
-        for expected in ("fire_stones", "fire_logs", "embers", "palisade",
-                         "well_stones", "well_frame", "ground"):
+        for expected in (
+            "fire_stones",
+            "fire_logs",
+            "embers",
+            "palisade",
+            "well_stones",
+            "well_frame",
+            "ground",
+        ):
             self.assertIn(expected, parts)
         hides = [p for p in parts if p.startswith("shelter_") and p.endswith("_hide")]
         self.assertEqual(len(hides), 5)
@@ -60,19 +68,26 @@ class Camp(ForgeCase):
 
     def test_gate_leaves_an_opening(self):
         """The palisade ring must skip the gate arc — the one way in."""
-        FORGE.call("env.camp", name="gated", radius=8.0, shelters=2, gate_angle=90.0,
-                   ground=False, seed=7)
+        FORGE.call(
+            "env.camp", name="gated", radius=8.0, shelters=2, gate_angle=90.0, ground=False, seed=7
+        )
         info = FORGE.call("object.inspect", name="gated_palisade")
         # At gate_angle=90 (+Y), no post may sit near (0, radius). Probe by
         # counting palisade triangles: a full ring has ~count*segments*2 tris;
         # the gate arc removes ~11 degrees * 2 of posts.
-        full = FORGE.call("env.camp", name="ungated", radius=8.0, shelters=2,
-                          palisade=True, gate_angle=999.0, ground=False, seed=7)
+        full = FORGE.call(
+            "env.camp",
+            name="ungated",
+            radius=8.0,
+            shelters=2,
+            palisade=True,
+            gate_angle=999.0,
+            ground=False,
+            seed=7,
+        )
         gated_tris = info["triangles"]
-        full_tris = next(e["triangles"] for e in full["structures"]
-                         if e["part"] == "palisade")
-        self.assertLess(gated_tris, full_tris,
-                        "the gate angle must remove posts from the ring")
+        full_tris = next(e["triangles"] for e in full["structures"] if e["part"] == "palisade")
+        self.assertLess(gated_tris, full_tris, "the gate angle must remove posts from the ring")
 
     def test_materials_are_separated(self):
         FORGE.call("env.camp", name="homeland", radius=8.0, shelters=3, seed=42)

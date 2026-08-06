@@ -27,7 +27,9 @@ CAST = [
     {
         "id": "settler",
         "brief": "First Fire settler — hide wrap, work-worn hands, no metal anywhere",
-        "height": 1.68, "build": "stylized", "skin": "#a8795a",
+        "height": 1.68,
+        "build": "stylized",
+        "skin": "#a8795a",
         "outfit": [("pteruges", "cloth"), ("bracers", "leather")],
         "wear_on": [],
         "seed": 11,
@@ -35,7 +37,9 @@ CAST = [
     {
         "id": "scout",
         "brief": "Hunter-scout — lean, leather bracers, cloth wrap, moves first",
-        "height": 1.74, "build": "lithe", "skin": "#8a6248",
+        "height": 1.74,
+        "build": "lithe",
+        "skin": "#8a6248",
         "outfit": [("pteruges", "cloth"), ("bracers", "leather")],
         "wear_on": [],
         "seed": 23,
@@ -43,18 +47,33 @@ CAST = [
     {
         "id": "warden",
         "brief": "Fortification-era bronze guard — cuirass, crested helmet, aspis on the forearm",
-        "height": 1.82, "build": "heroic", "skin": "#b08a68",
-        "outfit": [("cuirass", "bronze"), ("pteruges", "leather"), ("greaves", "bronze"),
-                   ("bracers", "leather"), ("helmet", "bronze"), ("shield", "bronze")],
+        "height": 1.82,
+        "build": "heroic",
+        "skin": "#b08a68",
+        "outfit": [
+            ("cuirass", "bronze"),
+            ("pteruges", "leather"),
+            ("greaves", "bronze"),
+            ("bracers", "leather"),
+            ("helmet", "bronze"),
+            ("shield", "bronze"),
+        ],
         "wear_on": ["cuirass", "helmet", "shield"],
         "seed": 3,
     },
     {
         "id": "raider",
         "brief": "Frontier raider — heavy, dark leather and scavenged iron, shield right",
-        "height": 1.86, "build": "realistic", "skin": "#96684e",
-        "outfit": [("cuirass", "iron"), ("pteruges", "leather"), ("bracers", "leather"),
-                   ("helmet", "iron"), ("shield", "iron")],
+        "height": 1.86,
+        "build": "realistic",
+        "skin": "#96684e",
+        "outfit": [
+            ("cuirass", "iron"),
+            ("pteruges", "leather"),
+            ("bracers", "leather"),
+            ("helmet", "iron"),
+            ("shield", "iron"),
+        ],
         "wear_on": ["cuirass", "helmet", "shield"],
         "seed": 41,
     },
@@ -66,28 +85,36 @@ def build_character(forge: Forge, spec: dict, out_dir: Path) -> dict:
     name = spec["id"]
     height = spec["height"]
 
-    forge.call("char.humanoid", name=name, height=height, build=spec["build"],
-               skin=spec["skin"], seed=spec["seed"])
+    forge.call(
+        "char.humanoid",
+        name=name,
+        height=height,
+        build=spec["build"],
+        skin=spec["skin"],
+        seed=spec["seed"],
+    )
     forge.call("char.face", name=name, height=height, build=spec["build"])
     forge.call("char.hands", name=name, height=height, build=spec["build"])
 
     pieces = []
     for piece, material in spec["outfit"]:
         result = forge.call(
-            "char.outfit", name=name, piece=piece, height=height,
-            build=spec["build"], material=material,
+            "char.outfit",
+            name=name,
+            piece=piece,
+            height=height,
+            build=spec["build"],
+            material=material,
             side="r" if spec["id"] == "raider" and piece == "shield" else "l",
         )
         pieces.append((result["object"], material))
 
     # Wear: grime in the cavities, dust at the hem — on METAL, where it reads.
-    for obj, material in pieces:
+    for obj, _material in pieces:
         if obj.rsplit("_", 1)[-1] in spec["wear_on"]:
             forge.call("paint.fill", name=obj, color="#ffffff")
-            forge.call("paint.cavity", name=obj, color="#3a2c1c",
-                       mode="cavity", strength=0.55)
-            forge.call("paint.height", name=obj, low="#5a4a34", high="#ffffff",
-                       curve="smooth")
+            forge.call("paint.cavity", name=obj, color="#3a2c1c", mode="cavity", strength=0.55)
+            forge.call("paint.height", name=obj, low="#5a4a34", high="#ffffff", curve="smooth")
 
     rig = forge.call("char.rig", name=name, height=height, build=spec["build"])
     for clip in ("idle", "walk"):
@@ -99,13 +126,21 @@ def build_character(forge: Forge, spec: dict, out_dir: Path) -> dict:
         raise SystemExit(f"{name} failed the quality gate: {review['findings']}")
 
     result = forge.call(
-        "export.asset", asset_id=name, out_dir=str(out_dir), objects=objects,
-        engine="threejs", category="character", ai_prompt=spec["brief"],
+        "export.asset",
+        asset_id=name,
+        out_dir=str(out_dir),
+        objects=objects,
+        engine="threejs",
+        category="character",
+        ai_prompt=spec["brief"],
     )
     separation = forge.call("check.materials", objects=objects)["max_delta_e"]
     return {
-        "id": name, "triangles": result["triangles"], "bytes": result["bytes"],
-        "max_delta_e": separation, "pieces": len(pieces),
+        "id": name,
+        "triangles": result["triangles"],
+        "bytes": result["bytes"],
+        "max_delta_e": separation,
+        "pieces": len(pieces),
     }
 
 
