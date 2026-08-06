@@ -1,7 +1,7 @@
 # brief-to-battle scoreboard
 
 Model agents against the frozen battle brief, scored from the compiled world
-and the deterministic run. The reference agent holds the 1/1 control baseline
+and the deterministic run. The reference agent holds the 2/2 control baseline
 (`SUMMARY.md`, CI-diffed). Model runs are dated evidence, not CI-diffed.
 
 ## 2026-08-06 — Claude Code (headless `claude -p`; contracts precomputed by the wrapper)

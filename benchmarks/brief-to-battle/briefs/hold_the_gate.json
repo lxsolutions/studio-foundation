@@ -1,0 +1,21 @@
+{
+  "id": "hold_the_gate",
+  "category": "battle",
+  "text": "hold the main gate for 20 ticks under attack — repair is allowed — while the side gate opens for the escort",
+  "available_entities": {
+    "fortress_gate": "tools/worldc/examples/fortress_gate.json"
+  },
+  "scenario": {
+    "entities": {
+      "gate_main": "fortress_gate",
+      "gate_side": "fortress_gate"
+    },
+    "expect_navigation": {
+      "gate_main": true,
+      "gate_side": false
+    }
+  },
+  "requirements": {
+    "world_ir": "0.1"
+  }
+}
