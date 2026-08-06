@@ -381,6 +381,7 @@ pub struct RunOutput {
     pub final_state: Value,
     pub state_hash: String,
     pub hash_log: Vec<String>,
+    pub snapshots: Vec<Value>,
     pub navigation: Value,
 }
 
@@ -390,6 +391,7 @@ impl RunOutput {
             "final_state": self.final_state,
             "state_hash": self.state_hash,
             "hash_log": self.hash_log,
+            "snapshots": self.snapshots,
             "navigation": self.navigation,
         }))
         .unwrap_or_else(|_| "{\"error\":\"serialization\"}".to_string())
@@ -579,6 +581,7 @@ pub fn run_replay_value(replay: &Value) -> Result<RunOutput, SimError> {
     }
 
     let mut hash_log = Vec::new();
+    let mut snapshots = Vec::new();
     for tick in 0..=ticks {
         if let Some(indices) = by_tick.get(&tick) {
             for &i in indices {
@@ -595,6 +598,7 @@ pub fn run_replay_value(replay: &Value) -> Result<RunOutput, SimError> {
             step_entity(&contracts[name], sim);
         }
         hash_log.push(world_hash(&world));
+        snapshots.push(world_value(&world));
     }
 
     let navigation = Value::Object(
@@ -610,6 +614,7 @@ pub fn run_replay_value(replay: &Value) -> Result<RunOutput, SimError> {
         final_state: world_value(&world),
         state_hash: final_hash,
         hash_log,
+        snapshots,
         navigation,
     })
 }

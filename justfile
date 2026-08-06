@@ -262,6 +262,18 @@ sim-parity:
 briefbench:
     uv run --project tools python benchmarks/brief-to-asset/bench.py --agent "python3 benchmarks/brief-to-asset/agents/scripted_recipe.py"
 
+# Compile the fortress world + wasm kernel, write the viewer config, serve
+# the repo at :8077 — open http://localhost:8077/tools/sim-viewer/
+sim-viewer:
+    uv run --project tools python tools/worldc/worldc.py compile-world tools/worldc/examples/fortress_world.json
+    cd services && cargo build -p sim-kernel --release --target wasm32-unknown-unknown
+    uv run --project tools python tools/sim-viewer/serve_config.py
+    uv run --project tools python -m http.server 8077
+
+# The renderer-observes-only adapter test (node, no DOM, no GPU)
+sim-viewer-test:
+    node tools/sim-viewer/adapter_test.mjs services/target/wasm32-unknown-unknown/release/sim_kernel.wasm tools/worldc/examples/fortress_battle.json tools/worldc/examples/fortress_gate.json
+
 # ------------------------------------------------------------------ exports
 
 # WebGL2 Compatibility export — works with official installed templates

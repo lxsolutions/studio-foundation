@@ -121,6 +121,10 @@ jobs:
           SIM_REQUIRE_PARITY: "1"
         run: uv run --project tools python -m unittest discover -s tools/sim/tests -p "test_parity.py"
 
+      # The renderer observes: viewer frames must equal kernel snapshots
+      - name: runtime adapter (frames == snapshots)
+        run: node tools/sim-viewer/adapter_test.mjs services/target/wasm32-unknown-unknown/release/sim_kernel.wasm tools/worldc/examples/fortress_battle.json tools/worldc/examples/fortress_gate.json
+
   bench:
     name: bforge bench (public number, regenerated and diffed)
     runs-on: ubuntu-latest
