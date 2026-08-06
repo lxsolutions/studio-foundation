@@ -25,3 +25,19 @@ machine-checked outcome.
 Codex (`codex exec`) was unavailable for a second run: the account hit its
 usage limit (retry 2026-08-08). The codex_cli.py wrapper is committed and
 ready; rerun then.
+
+## 2026-08-06 — Claude Code, hold_the_gate (inverted defense brief)
+
+**0/1 — FAIL** (scorecard: `SCOREBOARD-2026-08-06-claude-code-hold-the-gate.json`)
+
+The world document was valid and compiled. The scenario failed the BRIEF's
+tactics, not the API: the brief requires holding the main gate (blocking at
+the end) while opening the side gate for the escort. The model issued
+`unlock` + `open` on the MAIN gate (so it ended open, not blocking) and never
+issued `unlock` on the side gate (so its `open` events were absorbed by the
+lock — it ended closed and blocking). Exactly the inverted outcome the brief
+forbids.
+
+This is the finding the battle half exists for: document-level correctness
+does not imply tactical correctness, and only a deterministic outcome check
+can tell the difference.
