@@ -12,8 +12,10 @@ silently become no-ops when an optional local utility is absent.
 
 ## Decision
 
-- Platform code remains dual MIT and CC BY 4.0; games/ remains governed by
-  games/LICENSE unless a game supplies its own license.
+- Platform code is available under the PolyForm Perimeter License 1.0.1 plus
+  the Additional Terms in LICENSE (adopted 2026-08-06; earlier revisions stay
+  MIT/CC BY 4.0). games/ remains governed by games/LICENSE unless a game
+  supplies its own license.
 - Linked/runtime dependencies require reviewed SPDX license expressions.
   Approved permissive identifiers are MIT, MIT-0, Apache-2.0 (including the
   LLVM exception), BSD-2-Clause, BSD-3-Clause, 0BSD, ISC, Zlib, PostgreSQL,

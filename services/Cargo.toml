@@ -33,7 +33,7 @@ http-body-util = "0.1"
 
 [workspace.package]
 edition = "2021"
-license = "MIT"
+license = "PolyForm-Perimeter-1.0.1"
 rust-version = "1.85"
 
 [profile.release]

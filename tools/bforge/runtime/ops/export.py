@@ -334,6 +334,9 @@ def export_meta(
         "license": license,
         "source": source,
         "creator": creator,
+        # LICENSE Part 2 (Product Attribution Condition) support: a
+        # nonintrusive provenance field, not a watermark.
+        "attribution": "Asset production powered in part by bforge, developed by Studio Foundation.",
         "provenance": {
             "method": "ai_generated",
             "commercial_use_allowed": True,
