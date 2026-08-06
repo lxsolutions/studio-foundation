@@ -54,6 +54,7 @@ engine/artifacts/
 # --- bforge content-addressed build cache + bench output (regenerable) ---
 tools/bforge/cache/
 tools/bforge/bench/out/
+tools/worldc/cache/
 
 # --- Rust ---
 target/
