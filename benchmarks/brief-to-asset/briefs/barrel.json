@@ -1,0 +1,13 @@
+{
+  "id": "barrel",
+  "category": "prop",
+  "text": "a small storage barrel with staves and metal bands, for a browser game",
+  "requirements": {
+    "max_triangles": 3000,
+    "max_materials": 3,
+    "payload_kb_max": 768
+  },
+  "semantic": {
+    "nodes": ["barrel"]
+  }
+}

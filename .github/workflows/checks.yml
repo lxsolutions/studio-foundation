@@ -88,6 +88,9 @@ jobs:
       - name: sim kernel (deterministic replay, golden hashes)
         run: uv run --project tools python -m unittest discover -s tools/sim/tests -p "test_*.py"
 
+      - name: brief-to-asset static checks
+        run: uv run --project tools python -m unittest discover -s benchmarks/brief-to-asset/tests -p "test_*.py"
+
       - name: Protocol golden fixtures
         run: uv run --project tools python tools/asset-pipeline/check_fixtures.py
 
@@ -175,3 +178,13 @@ jobs:
       # which are machine-dependent, so it stays out of the diff.
       - name: the committed number matches a fresh run
         run: git diff --exit-code tools/bforge/bench/SUMMARY.md
+
+      # The frozen public benchmark (ADR 0018 M4): the reference agent must
+      # stay 6/6 and the committed scorecard must match a fresh run.
+      - name: brief-to-asset benchmark (reference agent)
+        env:
+          BLENDER_BIN: /opt/blender/blender
+        run: uv run --project tools python benchmarks/brief-to-asset/bench.py --agent "python3 benchmarks/brief-to-asset/agents/scripted_recipe.py"
+
+      - name: the committed scorecard matches a fresh run
+        run: git diff --exit-code benchmarks/brief-to-asset/SUMMARY.md

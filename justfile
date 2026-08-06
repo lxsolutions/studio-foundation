@@ -257,6 +257,11 @@ sim-replay:
 sim-parity:
     uv run --project tools python -m unittest discover -s tools/sim/tests -p "test_parity.py" -v
 
+# The frozen public benchmark (ADR 0018 M4): reference agent against the frozen
+# brief set, SUMMARY.md regenerated (CI diffs it).
+briefbench:
+    uv run --project tools python benchmarks/brief-to-asset/bench.py --agent "python3 benchmarks/brief-to-asset/agents/scripted_recipe.py"
+
 # ------------------------------------------------------------------ exports
 
 # WebGL2 Compatibility export — works with official installed templates

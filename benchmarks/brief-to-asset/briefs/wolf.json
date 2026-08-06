@@ -1,0 +1,14 @@
+{
+  "id": "wolf",
+  "category": "creature",
+  "text": "a wolf with a rig and a walk and a run clip, for a browser game",
+  "requirements": {
+    "max_triangles": 6000,
+    "max_materials": 3,
+    "payload_kb_max": 2048
+  },
+  "semantic": {
+    "skins_min": 1,
+    "animations_min": 2
+  }
+}

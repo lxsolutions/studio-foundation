@@ -55,6 +55,7 @@ engine/artifacts/
 tools/bforge/cache/
 tools/bforge/bench/out/
 tools/worldc/cache/
+benchmarks/brief-to-asset/out/
 
 # --- Rust ---
 target/

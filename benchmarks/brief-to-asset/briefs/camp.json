@@ -1,0 +1,13 @@
+{
+  "id": "camp",
+  "category": "environment",
+  "text": "a small age-one military camp with a palisade, shelters, a well, and a gate, for a browser game",
+  "requirements": {
+    "max_triangles": 8000,
+    "max_materials": 6,
+    "payload_kb_max": 4096
+  },
+  "semantic": {
+    "meshes_min": 4
+  }
+}
