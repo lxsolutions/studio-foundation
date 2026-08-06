@@ -126,6 +126,12 @@ it works identically on a laptop, in CI, and on a headless build box.
   gate finding, and `export.asset` refuses to export below the bar without an
   explicit override. `check.style`/`check.conformance` score set-level art
   direction and name the axis that breaks it.
+- **A frozen public benchmark, not a self-grade.** `benchmarks/brief-to-asset`
+  holds a frozen brief set and a model-neutral harness: any agent command
+  answers the briefs, and the harness scores the compiled artifacts for
+  validity, semantics, budget, and byte-identical determinism — regenerated
+  and diffed in public CI. The scripted reference agent holds the 6/6
+  baseline; models compete against the same gates, not against vibes.
 - **Characters and creatures, actually rigged and animated.** Humanoids at
   figure-drawing proportions with fitted armour (`char.outfit`), faces, hands;
   quadrupeds and hexapods with real footfall gaits — lateral-sequence walk,

@@ -21,24 +21,44 @@ from registry import OpError, op
 
 PRESETS = {
     "godot": {
-        "export_yup": True, "export_apply": True, "export_cameras": False,
-        "export_lights": False, "export_extras": True, "export_tangents": True,
+        "export_yup": True,
+        "export_apply": True,
+        "export_cameras": False,
+        "export_lights": False,
+        "export_extras": True,
+        "export_tangents": True,
     },
     "unity": {
-        "export_yup": True, "export_apply": True, "export_cameras": False,
-        "export_lights": False, "export_extras": False, "export_tangents": True,
+        "export_yup": True,
+        "export_apply": True,
+        "export_cameras": False,
+        "export_lights": False,
+        "export_extras": False,
+        "export_tangents": True,
     },
     "unreal": {
-        "export_yup": True, "export_apply": True, "export_cameras": False,
-        "export_lights": False, "export_extras": False, "export_tangents": True,
+        "export_yup": True,
+        "export_apply": True,
+        "export_cameras": False,
+        "export_lights": False,
+        "export_extras": False,
+        "export_tangents": True,
     },
     "threejs": {
-        "export_yup": True, "export_apply": True, "export_cameras": True,
-        "export_lights": True, "export_extras": True, "export_tangents": False,
+        "export_yup": True,
+        "export_apply": True,
+        "export_cameras": True,
+        "export_lights": True,
+        "export_extras": True,
+        "export_tangents": False,
     },
     "raw": {
-        "export_yup": True, "export_apply": False, "export_cameras": True,
-        "export_lights": True, "export_extras": True, "export_tangents": False,
+        "export_yup": True,
+        "export_apply": False,
+        "export_cameras": True,
+        "export_lights": True,
+        "export_extras": True,
+        "export_tangents": False,
     },
 }
 
@@ -52,9 +72,21 @@ PRESETS = {
         "engine": (f"enum:{'|'.join(PRESETS)}", "godot", "Target engine preset"),
         "format": ("enum:glb|gltf", "glb", "Binary GLB (one file) or text glTF (separate assets)"),
         "animations": ("bool", True, "Include armature actions"),
-        "draco": ("bool", False, "Draco mesh compression — smaller files, slower load, not all importers support it"),
-        "strict": ("bool", True, "Fail on problems that would corrupt the import instead of warning"),
-        "rename": ("obj", None, "Names to apply IN THE EXPORTED FILE ONLY, e.g. {\"horse\": \"Horse\", \"m_coat\": \"Coat\", \"gallop\": \"Gallop\"}. Game code often looks up nodes and materials by exact name, and those names break the studio's snake_case rule — this satisfies both without renaming the master"),
+        "draco": (
+            "bool",
+            False,
+            "Draco mesh compression — smaller files, slower load, not all importers support it",
+        ),
+        "strict": (
+            "bool",
+            True,
+            "Fail on problems that would corrupt the import instead of warning",
+        ),
+        "rename": (
+            "obj",
+            None,
+            'Names to apply IN THE EXPORTED FILE ONLY, e.g. {"horse": "Horse", "m_coat": "Coat", "gallop": "Gallop"}. Game code often looks up nodes and materials by exact name, and those names break the studio\'s snake_case rule — this satisfies both without renaming the master',
+        ),
     },
     tags=["export", "io"],
 )
@@ -73,6 +105,15 @@ def export_gltf(ctx, out, objects, engine, format, animations, draco, strict, re
         )
     for warning in warnings + (problems if not strict else []):
         ctx.note(warning)
+
+    # Byte-determinism is enforced at the boundary, not hoped for per op:
+    # BMesh face order can flake across processes (bench-caught: prop.barrel),
+    # so every exported mesh gets a canonical polygon order. Vertex order is
+    # untouched, so skins and weights are safe; shape-keyed meshes keep their
+    # own proven-stable paths.
+    for mesh_obj in meshes:
+        if not mesh_obj.data.shape_keys:
+            mesh_lib.canonicalize(mesh_obj)
 
     suffix = ".glb" if format == "glb" else ".gltf"
     path = ctx.out_path(out, suffix)
@@ -206,7 +247,11 @@ def _preflight(meshes):
     params={
         "out": ("path", "asset.blend", "Output .blend path"),
         "compress": ("bool", True, "Compress the file"),
-        "pack_textures": ("bool", True, "Embed image textures in the .blend. A master links textures by RELATIVE path, so the moment it is copied into assets-source those links break and the committed master is useless — `just asset-validate` fails it on missing textures"),
+        "pack_textures": (
+            "bool",
+            True,
+            "Embed image textures in the .blend. A master links textures by RELATIVE path, so the moment it is copied into assets-source those links break and the committed master is useless — `just asset-validate` fails it on missing textures",
+        ),
     },
     tags=["export", "io"],
 )
@@ -246,7 +291,11 @@ def export_blend(ctx, out, compress, pack_textures):
     params={
         "out": ("path", "asset.meta.json", "Output .meta.json path"),
         "asset_id": ("str", None, "snake_case asset identifier"),
-        "category": ("enum:prop|character|environment|weapon|architecture|vfx|ui", "prop", "Asset category"),
+        "category": (
+            "enum:prop|character|environment|weapon|architecture|vfx|ui",
+            "prop",
+            "Asset category",
+        ),
         "license": ("str", "CC-BY-4.0", "Licence identifier"),
         "creator": ("str", "bforge", "Creator name"),
         "source": ("str", "procedural", "Where the asset came from"),
@@ -260,8 +309,22 @@ def export_blend(ctx, out, compress, pack_textures):
     },
     tags=["export", "io"],
 )
-def export_meta(ctx, out, asset_id, category, license, creator, source, ai_tool, ai_model,
-                ai_prompt, triangles, materials, collision_policy, lod_policy):
+def export_meta(
+    ctx,
+    out,
+    asset_id,
+    category,
+    license,
+    creator,
+    source,
+    ai_tool,
+    ai_model,
+    ai_prompt,
+    triangles,
+    materials,
+    collision_policy,
+    lod_policy,
+):
     identifier = scene_lib.sanitize(asset_id)
     meshes = [o for o in scene_lib.mesh_objects()]
     measured = sum(mesh_lib.tri_count(o) for o in meshes)
@@ -291,9 +354,7 @@ def export_meta(ctx, out, asset_id, category, license, creator, source, ai_tool,
         "measured": {
             "triangles": measured,
             "objects": len(meshes),
-            "materials": sorted(
-                {m.name for o in meshes for m in o.data.materials if m}
-            ),
+            "materials": sorted({m.name for o in meshes for m in o.data.materials if m}),
         },
     }
     path = ctx.out_path(out, ".json")
@@ -309,17 +370,30 @@ def export_meta(ctx, out, asset_id, category, license, creator, source, ai_tool,
         "out_dir": ("path", "", "Directory for the outputs (defaults to the session output dir)"),
         "objects": ("str[]", [], "Objects to export (empty = whole scene)"),
         "engine": (f"enum:{'|'.join(PRESETS)}", "godot", "Target engine preset"),
-        "category": ("enum:prop|character|environment|weapon|architecture|vfx|ui", "prop", "Asset category"),
+        "category": (
+            "enum:prop|character|environment|weapon|architecture|vfx|ui",
+            "prop",
+            "Asset category",
+        ),
         "ai_prompt": ("str", "", "What the asset was asked for — recorded in provenance"),
         "contact_sheet": ("bool", True, "Also render a review contact sheet"),
         "strict": ("bool", True, "Block export on problems that would corrupt the import"),
-        "gate": ("bool", True, "Run gameready.review before writing anything; a failed review blocks the hand-off. Set false only for deliberate blockouts"),
-        "style": ("enum:stylized|realistic", "stylized", "Art direction passed to gameready.review when gate=true"),
+        "gate": (
+            "bool",
+            True,
+            "Run gameready.review before writing anything; a failed review blocks the hand-off. Set false only for deliberate blockouts",
+        ),
+        "style": (
+            "enum:stylized|realistic",
+            "stylized",
+            "Art direction passed to gameready.review when gate=true",
+        ),
     },
     tags=["export", "io"],
 )
-def export_asset(ctx, asset_id, out_dir, objects, engine, category, ai_prompt, contact_sheet,
-                 strict, gate, style):
+def export_asset(
+    ctx, asset_id, out_dir, objects, engine, category, ai_prompt, contact_sheet, strict, gate, style
+):
     from . import gameready as gameready_ops
     from . import render as render_ops
 
@@ -342,14 +416,32 @@ def export_asset(ctx, asset_id, out_dir, objects, engine, category, ai_prompt, c
     blend = export_blend(ctx, f"{prefix}.blend", True, True)
     glb = export_gltf(ctx, f"{prefix}.glb", objects, engine, "glb", True, False, strict, None)
     meta = export_meta(
-        ctx, f"{prefix}.meta.json", identifier, category, "CC-BY-4.0", "bforge",
-        "procedural", "bforge", "", ai_prompt, 0, 2, "explicit", "auto",
+        ctx,
+        f"{prefix}.meta.json",
+        identifier,
+        category,
+        "CC-BY-4.0",
+        "bforge",
+        "procedural",
+        "bforge",
+        "",
+        ai_prompt,
+        0,
+        2,
+        "explicit",
+        "auto",
     )
     outputs = {"blend": blend, "glb": glb, "meta": meta}
     if contact_sheet:
         outputs["contact_sheet"] = render_ops.render_contact_sheet(
-            ctx, f"{prefix}_sheet.png", objects, 400, 20, "auto",
-            ["hero", "front", "left", "top", "wireframe", "checker"], 3,
+            ctx,
+            f"{prefix}_sheet.png",
+            objects,
+            400,
+            20,
+            "auto",
+            ["hero", "front", "left", "top", "wireframe", "checker"],
+            3,
         )
     return {
         "asset_id": identifier,

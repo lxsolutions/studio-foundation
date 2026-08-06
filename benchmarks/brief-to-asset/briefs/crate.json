@@ -1,0 +1,14 @@
+{
+  "id": "crate",
+  "category": "prop",
+  "text": "a sturdy one-metre wooden supply crate with collision, for a browser game",
+  "requirements": {
+    "max_triangles": 2000,
+    "max_materials": 2,
+    "require_collision": true,
+    "payload_kb_max": 512
+  },
+  "semantic": {
+    "nodes": ["crate"]
+  }
+}

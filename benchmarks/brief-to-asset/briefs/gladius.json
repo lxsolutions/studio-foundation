@@ -1,0 +1,13 @@
+{
+  "id": "gladius",
+  "category": "weapon",
+  "text": "a roman short sword with a bronze hilt, for a browser game",
+  "requirements": {
+    "max_triangles": 3000,
+    "max_materials": 4,
+    "payload_kb_max": 768
+  },
+  "semantic": {
+    "nodes": ["gladius"]
+  }
+}
