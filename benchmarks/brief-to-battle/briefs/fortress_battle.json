@@ -1,0 +1,21 @@
+{
+  "id": "fortress_battle",
+  "category": "battle",
+  "text": "a fortress with two gates; breach the main gate while the side gate holds — and prove it deterministically",
+  "available_entities": {
+    "fortress_gate": "tools/worldc/examples/fortress_gate.json"
+  },
+  "scenario": {
+    "entities": {
+      "gate_main": "fortress_gate",
+      "gate_side": "fortress_gate"
+    },
+    "expect_navigation": {
+      "gate_main": false,
+      "gate_side": true
+    }
+  },
+  "requirements": {
+    "world_ir": "0.1"
+  }
+}
