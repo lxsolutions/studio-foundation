@@ -1,0 +1,38 @@
+{
+  "benchmark": "brief-to-battle/v0.1",
+  "agent": "uv run --project tools python benchmarks/brief-to-battle/agents/claude_battle.py",
+  "briefs": 1,
+  "passed": 1,
+  "pass_rate": 1.0,
+  "results": [
+    {
+      "id": "fortress_battle",
+      "category": "battle",
+      "agent_seconds": 124.609,
+      "agent_exit": 0,
+      "attempts": 1,
+      "dimensions": {
+        "validity": {
+          "pass": true,
+          "detail": "world document validates"
+        },
+        "semantics": {
+          "pass": true,
+          "detail": "all world-proof checks pass"
+        },
+        "gameplay": {
+          "pass": true,
+          "detail": "outcomes match the brief"
+        },
+        "determinism": {
+          "pass": true,
+          "detail": "identical final state hash"
+        }
+      },
+      "world_cache_key": "f4c9935c36f26c692cf0c54f26a1b67b3c715d01a1a35dbca97fb8c9194a7984",
+      "world_proof": "/tmp/battlebench_qkdh6d3i/fortress_battle/cache/world-cache/f4c9935c36f26c692cf0c54f26a1b67b3c715d01a1a35dbca97fb8c9194a7984/world_proof.json",
+      "state_hash": "d0d038d39137d2aa0dde7b2455f99a73d7f7152930701c379a5b5202ef1016e8",
+      "pass": true
+    }
+  ]
+}

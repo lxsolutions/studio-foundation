@@ -185,6 +185,11 @@ def main(argv=None) -> int:
     parser.add_argument("--agent", required=True)
     parser.add_argument("--brief", default="")
     parser.add_argument("--out", default="")
+    parser.add_argument(
+        "--summary",
+        action="store_true",
+        help="also rewrite SUMMARY.md (only the reference baseline is CI-diffed)",
+    )
     parser.add_argument("--work-root", default="")
     args = parser.parse_args(argv)
 
@@ -227,6 +232,10 @@ def main(argv=None) -> int:
     }
     out = Path(args.out) if args.out else work_root / "scorecard.json"
     out.write_text(json.dumps(scorecard, indent=2) + "\n", encoding="utf-8")
+
+    if not args.summary:
+        print(f"[score] {passed}/{len(results)} briefs passed -> {out}")
+        return 0 if passed == len(results) else 1
 
     agent_label = args.agent.replace(str(REPO) + "/", "").replace(str(REPO), ".")
     lines = [
