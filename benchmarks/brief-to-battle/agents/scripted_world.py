@@ -20,38 +20,9 @@ sys.path.insert(0, str(REPO / "tools" / "bforge"))
 import worldc  # noqa: E402
 from bforge import recipe as recipe_mod  # noqa: E402
 
-
-def main() -> int:
-    workspace = Path(sys.argv[1])
-    brief = json.loads((workspace / "brief.json").read_text())
-
-    doc_path = workspace / "fortress_gate.json"
-    if not doc_path.is_file():
-        print("no staged fortress_gate.json", file=sys.stderr)
-        return 1
-    contract = worldc.sim_contract(worldc.load_entity(doc_path))
-    contract_sha = hashlib.sha256(recipe_mod.canonicalize(contract)).hexdigest()
-
-    world = {
-        "world_ir": "0.1",
+SCENARIOS = {
+    "fortress_battle": {
         "world": "fortress",
-        "entities": {
-            "gate_main": {"doc": "fortress_gate.json"},
-            "gate_side": {"doc": "fortress_gate.json"},
-        },
-        "scenario": "battle.json",
-        "expect_navigation": brief["scenario"]["expect_navigation"],
-    }
-    (workspace / "world.json").write_text(json.dumps(world, indent=2) + "\n")
-
-    battle = {
-        "sim_replay": "0.1",
-        "seed": 0,
-        "ticks": 20,
-        "entities": {
-            "gate_main": {"contract": contract, "contract_sha256": contract_sha},
-            "gate_side": {"contract": contract, "contract_sha256": contract_sha},
-        },
         "initial": {
             "gate_main": {"health": 100, "locked": True},
             "gate_side": {"health": 100, "locked": True},
@@ -64,6 +35,60 @@ def main() -> int:
             [8, "gate_main", "attack", 40],
             [11, "gate_main", "attack", 40],
         ],
+    },
+    "hold_the_gate": {
+        "world": "fortress",
+        "initial": {
+            "gate_main": {"health": 100, "locked": True},
+            "gate_side": {"health": 100, "locked": True},
+        },
+        "events": [
+            [2, "gate_main", "attack", 30],
+            [5, "gate_main", "attack", 30],
+            [8, "gate_main", "attack", 30],
+            [9, "gate_main", "repair", 50],
+            [10, "gate_side", "unlock", None],
+            [11, "gate_side", "open", None],
+        ],
+    },
+}
+
+
+def main() -> int:
+    workspace = Path(sys.argv[1])
+    brief = json.loads((workspace / "brief.json").read_text())
+    scenario = SCENARIOS.get(brief["id"])
+    if scenario is None:
+        print(f"no scripted answer for {brief['id']}", file=sys.stderr)
+        return 1
+
+    doc_path = workspace / "fortress_gate.json"
+    if not doc_path.is_file():
+        print("no staged fortress_gate.json", file=sys.stderr)
+        return 1
+    contract = worldc.sim_contract(worldc.load_entity(doc_path))
+    contract_sha = hashlib.sha256(recipe_mod.canonicalize(contract)).hexdigest()
+
+    names = sorted(brief["scenario"]["entities"])
+    world = {
+        "world_ir": "0.1",
+        "world": scenario["world"],
+        "entities": {name: {"doc": "fortress_gate.json"} for name in names},
+        "scenario": "battle.json",
+        "expect_navigation": brief["scenario"]["expect_navigation"],
+    }
+    (workspace / "world.json").write_text(json.dumps(world, indent=2) + "\n")
+
+    battle = {
+        "sim_replay": "0.1",
+        "seed": 0,
+        "ticks": 20,
+        "entities": {
+            name: {"contract": contract, "contract_sha256": contract_sha}
+            for name in names
+        },
+        "initial": scenario["initial"],
+        "events": scenario["events"],
     }
     (workspace / "battle.json").write_text(json.dumps(battle, indent=2) + "\n")
     (workspace / "metrics.json").write_text(json.dumps({"attempts": 1}) + "\n")
