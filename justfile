@@ -260,7 +260,7 @@ sim-parity:
 # The frozen public benchmark (ADR 0018 M4): reference agent against the frozen
 # brief set, SUMMARY.md regenerated (CI diffs it).
 briefbench:
-    uv run --project tools python benchmarks/brief-to-asset/bench.py --agent "python3 benchmarks/brief-to-asset/agents/scripted_recipe.py"
+    uv run --project tools python benchmarks/brief-to-asset/bench.py --summary --agent "python3 benchmarks/brief-to-asset/agents/scripted_recipe.py"
 
 # The world-level benchmark (ADR 0018 M4): reference agent against the frozen
 # battle brief, SUMMARY.md regenerated (CI diffs it).

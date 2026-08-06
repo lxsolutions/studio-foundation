@@ -177,6 +177,11 @@ def main(argv=None) -> int:
     )
     parser.add_argument("--brief", default="", help="run only this brief id")
     parser.add_argument("--out", default="", help="write the scorecard JSON here")
+    parser.add_argument(
+        "--summary",
+        action="store_true",
+        help="also rewrite SUMMARY.md (only the reference baseline is CI-diffed)",
+    )
     parser.add_argument("--work-root", default="", help="scratch directory for runs")
     args = parser.parse_args(argv)
 
@@ -225,6 +230,10 @@ def main(argv=None) -> int:
     # hashes — the public pass/fail table CI can diff (scorecard.json keeps
     # the machine-dependent detail). The agent string is normalized so a run
     # from any checkout path diffs clean.
+    if not args.summary:
+        print(f"[score] {passed}/{len(results)} briefs passed -> {out}")
+        return 0 if passed == len(results) else 1
+
     agent_label = args.agent.replace(str(REPO) + "/", "").replace(str(REPO), ".")
     lines = [
         "# brief-to-asset scorecard",
