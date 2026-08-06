@@ -243,6 +243,11 @@ bforge-cook:
 worldc-compile:
     uv run --project tools python tools/worldc/worldc.py compile "{{ENTITY}}"
 
+# Compile a whole world (entities + deterministic scenario) to a world proof capsule.
+#   just WORLD=tools/worldc/examples/fortress_world.json worldc-world
+worldc-world:
+    uv run --project tools python tools/worldc/worldc.py compile-world "{{WORLD}}"
+
 # Run a deterministic replay (spec: docs/specs/sim-replay-v0.1.md); exits non-zero on golden mismatch.
 #   just REPLAY=tools/sim/replays/gate_open_destroy.json sim-replay
 sim-replay:

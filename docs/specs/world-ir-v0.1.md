@@ -121,3 +121,34 @@ evidence — but it never satisfies a cache.
   runtime adapters (Godot/Babylon), replay hashes — milestone M3.
 - Geometry synthesis from semantics alone.
 - Multiple entities per document, world graphs, streaming groups.
+
+## Worlds (v0.1, landed)
+
+A **world document** (`world_ir: "0.1"`, `world`, `entities`, `scenario`,
+optional `expect_navigation`) compiles to a world proof capsule:
+
+```text
+worldc compile-world fortress_world.json
+  → entity proof for every entity (shared documents share proofs)
+  → the scenario replay, bound to exactly these entities and their compiled
+     simulation contracts (name set, plus each inline contract must hash to
+     the contract the world's document compiles to, or the world fails)
+  → expect_navigation outcomes checked against the deterministic result
+  → world-cache/<key>/world_proof.json
+```
+
+The world cache key covers the canonical world document, every entity proof's
+SHA-256, the replay's canonical SHA-256, and the worldc compiler fingerprint.
+Simulation semantics enter a world only through worldc.sim_contract — the
+integer-only compiled contract (milli-unit storage, affordances, integer
+parameters) that both kernels consume and the replay pins by hash.
+The capsule carries resolvable entity-proof URIs and hashes, the replay
+fingerprint, the final state hash, and every check result. Publication is
+atomic (staging + rename under a per-key lock); failures go to the failure
+store as evidence.
+
+The example — `tools/worldc/examples/fortress_world.json` — is the fortress
+battle: two gate instances from one entity document; the scenario unlocks,
+opens, and destroys the main gate while the side gate stays locked, and the
+world proof asserts `gate_main` no longer blocks navigation while `gate_side`
+still does.

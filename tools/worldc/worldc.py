@@ -530,6 +530,195 @@ def compile_entity(
     return proof
 
 
+# -------------------------------------------------------------------- worlds
+
+WORLD_SCHEMA = "studio.world.v0.1"
+WORLD_KEYS = {
+    "world_ir",
+    "world",
+    "brief",
+    "entities",
+    "scenario",
+    "expect_navigation",
+    "extensions",
+}
+
+
+def load_world(path: Path) -> dict:
+    try:
+        doc = json.loads(Path(path).read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise WorldIRError(f"{path}: not valid JSON: {exc}") from exc
+    if not isinstance(doc, dict):
+        raise WorldIRError(f"{path}: a world is a JSON object")
+    source = str(path)
+    unknown = sorted(set(doc) - WORLD_KEYS)
+    if unknown:
+        raise WorldIRError(f"{source}: unknown top-level fields {unknown}")
+    if doc.get("world_ir") != WORLD_IR_VERSION:
+        raise WorldIRError(
+            f"{source}: unsupported world_ir {doc.get('world_ir')!r} (want {WORLD_IR_VERSION})"
+        )
+    if not isinstance(doc.get("world"), str) or not IDENTIFIER.match(doc["world"]):
+        raise WorldIRError(f"{source}: world must be a snake_case identifier")
+    entities = doc.get("entities")
+    if not isinstance(entities, dict) or not entities:
+        raise WorldIRError(f"{source}: entities must be a non-empty object")
+    for name, entry in entities.items():
+        if not IDENTIFIER.match(name):
+            raise WorldIRError(f"{source}: bad entity name {name!r}")
+        if not isinstance(entry, dict) or not isinstance(entry.get("doc"), str):
+            raise WorldIRError(f"{source}: entity {name!r} needs an object with a doc path")
+    if not isinstance(doc.get("scenario"), str):
+        raise WorldIRError(f"{source}: scenario (a replay path) is required")
+    expect_nav = doc.get("expect_navigation", {})
+    if not isinstance(expect_nav, dict) or any(
+        k not in entities or not isinstance(v, bool) for k, v in expect_nav.items()
+    ):
+        raise WorldIRError(f"{source}: expect_navigation maps entity names to booleans")
+    return doc
+
+
+def compile_world(
+    world_path,
+    cache_dir: Path | None = None,
+    no_cache: bool = False,
+    forge_factory=None,
+) -> dict:
+    """Compile a world: entity proofs for every entity, then the scenario
+    replay, then one world proof capsule binding both by hash."""
+    world_path = Path(world_path).resolve()
+    doc = load_world(world_path)
+    world_name = doc["world"]
+
+    cache_root = Path(cache_dir) if cache_dir else WORLDC_ROOT / "cache"
+    world_cache = cache_root / "world-cache"
+
+    # 1. entity proofs (each into the entity store; shared docs share proofs)
+    entity_proofs: dict[str, dict] = {}
+    entity_docs: dict[str, dict] = {}
+    for name, entry in doc["entities"].items():
+        entity_doc_path = (world_path.parent / entry["doc"]).resolve()
+        entity_docs[name] = load_entity(entity_doc_path)
+        entity_proofs[name] = compile_entity(
+            entity_doc_path, cache_dir=cache_root, no_cache=no_cache, forge_factory=forge_factory
+        )
+
+    # 2. the scenario replay must name exactly this world's entities, and its
+    #    inline contracts must be the ones these documents compile to
+    replay_path = (world_path.parent / doc["scenario"]).resolve()
+    sim_mod = _sim_kernel()
+    replay = sim_mod.load_replay(replay_path)  # format validation
+    replay_entities = replay.get("entities", {})
+    if set(replay_entities) != set(doc["entities"]):
+        raise WorldIRError(
+            f"{world_path}: scenario entities {sorted(replay_entities)} do not match "
+            f"the world's {sorted(doc['entities'])}"
+        )
+    for name, rent in replay_entities.items():
+        compiled = sim_contract(entity_docs[name], source=str(world_path))
+        compiled_sha = hashlib.sha256(recipe_mod.canonicalize(compiled)).hexdigest()
+        inline_sha = hashlib.sha256(recipe_mod.canonicalize(rent["contract"])).hexdigest()
+        if inline_sha != compiled_sha or rent["contract_sha256"] != compiled_sha:
+            raise WorldIRError(
+                f"{world_path}: scenario's contract for {name} does not match the "
+                f"world's document ({rent['contract_sha256'][:12]}… vs {compiled_sha[:12]}…)"
+            )
+
+    # 3. run the scenario deterministically (self-contained replay)
+    result = sim_mod.run_replay(replay_path)
+
+    # 4. world-level checks
+    checks: list[dict] = []
+    for name, proof in entity_proofs.items():
+        checks.append(
+            {
+                "check": f"entity proof passes: {name}",
+                "ok": proof["status"] == "pass",
+                "detail": f"entity-cache key {proof['entity_cache_key'][:12]}…",
+            }
+        )
+    for name, expected in doc.get("expect_navigation", {}).items():
+        actual = result["navigation"][name]
+        checks.append(
+            {
+                "check": f"navigation outcome: {name} blocks == {expected}",
+                "ok": actual is expected,
+                "detail": f"blocks_navigation == {actual}",
+            }
+        )
+    failures = [c["check"] for c in checks if not c["ok"]]
+
+    # 5. one world proof capsule
+    replay_sha = hashlib.sha256(recipe_mod.canonicalize(replay)).hexdigest()
+    entity_refs = {}
+    for name, proof in entity_proofs.items():
+        proof_file = Path(proof["cache"]["dir"]) / "entity_proof.json"
+        entity_refs[name] = {
+            "entity_cache_key": proof["entity_cache_key"],
+            "entity_proof_sha256": hashlib.sha256(proof_file.read_bytes()).hexdigest(),
+        }
+    envelope = {
+        "schema": WORLD_SCHEMA,
+        "canonicalization": CANONICALIZATION,
+        "world_doc_sha256": hashlib.sha256(recipe_mod.canonicalize(doc)).hexdigest(),
+        "entity_proofs": {name: ref["entity_proof_sha256"] for name, ref in entity_refs.items()},
+        "replay_sha256": replay_sha,
+        "worldc_compiler": worldc_fingerprint(),
+    }
+    key = hashlib.sha256(recipe_mod.canonicalize(envelope)).hexdigest()
+    world_dir = world_cache / key
+    for name, proof in entity_proofs.items():
+        proof_file = Path(proof["cache"]["dir"]) / "entity_proof.json"
+        entity_refs[name]["entity_proof_uri"] = os.path.relpath(proof_file, start=world_dir)
+
+    proof = {
+        "proof_version": PROOF_VERSION,
+        "schema": WORLD_SCHEMA,
+        "world": world_name,
+        "world_cache_key": key,
+        "entities": entity_refs,
+        "scenario": {
+            "replay": doc["scenario"],
+            "replay_sha256": replay_sha,
+            "state_hash": result["state_hash"],
+            "navigation": result["navigation"],
+            "fingerprints": result["fingerprints"],
+        },
+        "worldc_compiler": envelope["worldc_compiler"],
+        "checks": checks,
+        "status": "pass" if not failures else "fail",
+    }
+
+    staging = world_cache / "staging" / f"{key}.{os.getpid()}.{secrets.token_hex(4)}"
+    staging.mkdir(parents=True, exist_ok=False)
+    (staging / "world_proof.json").write_text(json.dumps(proof, indent=2) + "\n", encoding="utf-8")
+    if failures:
+        failure_dir = (
+            world_cache / "failures" / f"{datetime.now(UTC).strftime('%Y%m%dT%H%M%S')}-{key[:12]}"
+        )
+        failure_dir.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(staging), str(failure_dir))
+        raise WorldIRError(
+            f"{world_name}: world contract broken — {failures} "
+            f"(proof: {failure_dir / 'world_proof.json'})"
+        )
+    with recipe_mod._KeyLock(world_cache, key):
+        if not world_dir.is_dir():
+            os.rename(staging, world_dir)
+        else:
+            shutil.rmtree(staging)
+    proof["cache"] = {"hit": False, "dir": str(world_dir)}
+    return proof
+
+
+def _sim_kernel():
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "sim"))
+    import kernel
+
+    return kernel
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="worldc", description=__doc__.split("\n")[1])
     sub = parser.add_subparsers(dest="command", required=True)
@@ -537,14 +726,27 @@ def main(argv=None) -> int:
     comp.add_argument("file")
     comp.add_argument("--cache-dir", default=None)
     comp.add_argument("--no-cache", action="store_true")
+    world = sub.add_parser(
+        "compile-world", help="Compile a world document (entities + scenario) to a world proof"
+    )
+    world.add_argument("file")
+    world.add_argument("--cache-dir", default=None)
+    world.add_argument("--no-cache", action="store_true")
     args = parser.parse_args(argv)
 
     try:
-        proof = compile_entity(
-            args.file,
-            cache_dir=args.cache_dir,
-            no_cache=args.no_cache,
-        )
+        if args.command == "compile-world":
+            proof = compile_world(
+                args.file,
+                cache_dir=args.cache_dir,
+                no_cache=args.no_cache,
+            )
+        else:
+            proof = compile_entity(
+                args.file,
+                cache_dir=args.cache_dir,
+                no_cache=args.no_cache,
+            )
     except (WorldIRError, recipe_mod.RecipeError) as exc:
         print(json.dumps({"error": str(exc)}, indent=2), file=sys.stderr)
         return 1
