@@ -76,9 +76,17 @@ RULES:
   (nonnegative integer amount).
 - A locked gate ignores open/close. At health 0 a gate is destroyed and hangs
   open. openness integrates at 250 milli-units per tick toward its target.
-- Use ticks 0..20 only. Your scenario must end with: the main gate destroyed
-  or open (not blocking), the side gate intact and closed (blocking).
+- Use ticks 0..20 only. Your scenario must end with: {goal_line}
 """
+
+# A gate "blocks navigation" when it is intact and shut. The goal sentence is
+# derived from the brief's expect_navigation so the wrapper stays brief-neutral
+# — a hardcoded goal would tell the model the answer to one brief and the wrong
+# answer to every other one.
+def goal_clause(name: str, blocks: bool) -> str:
+    if blocks:
+        return f"{name} intact and closed (blocking)"
+    return f"{name} destroyed or open (not blocking)"
 
 
 def main() -> int:
@@ -94,7 +102,15 @@ def main() -> int:
         print("this wrapper expects exactly two scenario entities", file=sys.stderr)
         return 1
 
+    expect = brief["scenario"]["expect_navigation"]
+    main_name = names[0] if "main" in names[0] else names[1]
+    side_name = names[1] if "main" in names[0] else names[0]
+    goal_line = ", ".join(
+        goal_clause(n, expect[n]) for n in (main_name, side_name) if n in expect
+    )
+
     prompt = PROMPT.format(
+        goal_line=goal_line,
         workspace=workspace,
         brief_text=brief["text"],
         expect_navigation=json.dumps(brief["scenario"]["expect_navigation"]),
