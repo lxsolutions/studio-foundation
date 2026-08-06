@@ -1,9 +1,9 @@
 # Studio Foundation
 
-**An AI-native, open-source game-dev toolkit: the deterministic asset forge,
-the verification substrate, and the pipelines that let AI agents build, prove,
-and ship real games — engine-neutral at the asset boundary (glTF/GLB into
-Godot, Babylon.js, three.js), with Godot as the standardized runtime and
+**An AI-native, source-available game-dev toolkit: the deterministic asset
+forge, the verification substrate, and the pipelines that let AI agents build,
+prove, and ship real games — engine-neutral at the asset boundary (glTF/GLB
+into Godot, Babylon.js, three.js), with Godot as the standardized runtime and
 Rust services behind.**
 
 The pillars:
@@ -238,7 +238,7 @@ render path can be re-verified without any game content. Live at
 </details>
 
 
-## Our lane: AI-native, open-source game development
+## Our lane: AI-native, source-available game development
 
 Godot does not accept AI-generated code contributions, and has stated it does not
 intend to add AI features to the engine. That is a deliberate choice — and it
@@ -466,6 +466,11 @@ Material engine changes require tests, updated evidence, and the relevant ADR.
 Contributor workflow is in
 [WORKING_AGREEMENTS.md](docs/agents/WORKING_AGREEMENTS.md). Security scope and private
 reporting instructions are in [SECURITY.md](SECURITY.md).
+
+This project is **source-available, not open source.** PolyForm Perimeter
+restricts use in a competing product, which the Open Source Definition does not
+permit, so calling it "open source" would be inaccurate. The source is public,
+auditable, and free to build commercial games with — under the terms below.
 
 Foundation code, tooling, templates, documentation, and infrastructure are
 available under the **PolyForm Perimeter License 1.0.1** plus the Additional
