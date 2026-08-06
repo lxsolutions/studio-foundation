@@ -1,0 +1,23 @@
+{
+  "id": "three_gates",
+  "category": "battle",
+  "text": "three gates ring the keep; the sally port opens to let the cavalry out, and both the main gate and the postern must still be standing and shut when the horns sound at tick 20",
+  "available_entities": {
+    "fortress_gate": "tools/worldc/examples/fortress_gate.json"
+  },
+  "scenario": {
+    "entities": {
+      "gate_main": "fortress_gate",
+      "gate_postern": "fortress_gate",
+      "gate_sally": "fortress_gate"
+    },
+    "expect_navigation": {
+      "gate_main": true,
+      "gate_postern": true,
+      "gate_sally": false
+    }
+  },
+  "requirements": {
+    "world_ir": "0.1"
+  }
+}

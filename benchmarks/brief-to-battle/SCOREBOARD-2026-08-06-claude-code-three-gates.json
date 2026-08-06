@@ -1,0 +1,38 @@
+{
+  "benchmark": "brief-to-battle/v0.1",
+  "agent": "uv run --project tools python benchmarks/brief-to-battle/agents/claude_battle.py",
+  "briefs": 1,
+  "passed": 1,
+  "pass_rate": 1.0,
+  "results": [
+    {
+      "id": "three_gates",
+      "category": "battle",
+      "agent_seconds": 106.956,
+      "agent_exit": 0,
+      "attempts": 1,
+      "dimensions": {
+        "validity": {
+          "pass": true,
+          "detail": "world document validates"
+        },
+        "semantics": {
+          "pass": true,
+          "detail": "all world-proof checks pass"
+        },
+        "gameplay": {
+          "pass": true,
+          "detail": "outcomes match the brief"
+        },
+        "determinism": {
+          "pass": true,
+          "detail": "identical final state hash"
+        }
+      },
+      "world_cache_key": "84db82076224e802e75a8cdf18217ed6e0b29420a1d73cbbc52a5cbe5afecf5b",
+      "world_proof": "/tmp/tg/three_gates/cache/world-cache/84db82076224e802e75a8cdf18217ed6e0b29420a1d73cbbc52a5cbe5afecf5b/world_proof.json",
+      "state_hash": "7cb185280d7090f7c9b60a58201ff60ed781a5c90586c9bfda36550a54409cb9",
+      "pass": true
+    }
+  ]
+}

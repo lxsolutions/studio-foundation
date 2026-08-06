@@ -105,3 +105,23 @@ It locks the defended gate so stray `open` events are absorbed, opens the
 escort route, and sustains the repair cadence the brief permits for the full
 20 ticks. Main gate ends intact and blocking; side gate ends open. That is the
 brief, exactly.
+
+## 2026-08-06 — Claude Code, three_gates (first three-entity brief)
+
+**1/1 — PASS** (scorecard:
+`SCOREBOARD-2026-08-06-claude-code-three-gates.json`)
+
+First attempt, 107.0s, 4/4. The old wrapper could not have run this brief at
+all — it rejected any scenario that was not exactly two entities, which
+silently capped the corpus at gate pairs. The model's scenario:
+
+    [1, gate_sally, unlock]   [2, gate_sally, open]
+    [6, gate_main, attack 40] [8, gate_postern, attack 25]
+    [10, gate_main, repair 40][12, gate_postern, repair 25]
+    [18, gate_main, lock]     [18, gate_postern, lock]
+
+Unlock precedes open on the sally port (the reverse order is absorbed by the
+lock), the two gates that must hold take and repair the siege, and both are
+re-locked before the horns. Two holds and one open, with distractor pressure
+from a third entity — a materially different shape from the 1-hold/1-open
+pairs, and the first evidence that the loop is not hardcoded to two gates.

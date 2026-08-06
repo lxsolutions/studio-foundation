@@ -51,6 +51,25 @@ SCENARIOS = {
             [11, "gate_side", "open", None],
         ],
     },
+    "three_gates": {
+        "world": "fortress",
+        "initial": {
+            "gate_main": {"health": 100, "locked": True},
+            "gate_postern": {"health": 100, "locked": True},
+            "gate_sally": {"health": 100, "locked": True},
+        },
+        "events": [
+            # the sally port opens for the cavalry: unlock first or the lock
+            # absorbs the open, then 3+ ticks to integrate past the 700 threshold
+            [0, "gate_sally", "unlock", None],
+            [1, "gate_sally", "open", None],
+            # the two that must hold stay locked and simply take the siege
+            [4, "gate_main", "attack", 40],
+            [7, "gate_postern", "attack", 40],
+            [10, "gate_main", "repair", 25],
+            [13, "gate_postern", "repair", 25],
+        ],
+    },
 }
 
 
