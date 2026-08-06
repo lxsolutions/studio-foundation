@@ -1,6 +1,6 @@
 # brief-to-asset scorecard
 
-agent: `python3 /home/kwebb/sf-bench/benchmarks/brief-to-asset/agents/scripted_recipe.py`
+agent: `python3 benchmarks/brief-to-asset/agents/scripted_recipe.py`
 
 verdict: **6/6 briefs passed**
 

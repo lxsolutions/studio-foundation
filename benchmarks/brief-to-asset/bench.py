@@ -223,11 +223,13 @@ def main(argv=None) -> int:
 
     # The committed summary is deterministic-only: no timings, no paths, no
     # hashes — the public pass/fail table CI can diff (scorecard.json keeps
-    # the machine-dependent detail).
+    # the machine-dependent detail). The agent string is normalized so a run
+    # from any checkout path diffs clean.
+    agent_label = args.agent.replace(str(REPO) + "/", "").replace(str(REPO), ".")
     lines = [
         "# brief-to-asset scorecard",
         "",
-        f"agent: `{args.agent}`",
+        f"agent: `{agent_label}`",
         "",
         f"verdict: **{passed}/{len(results)} briefs passed**",
         "",
