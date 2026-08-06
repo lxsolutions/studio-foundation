@@ -35,6 +35,7 @@ Usage: python tools/sim/kernel.py replay FILE [--update-golden] [--full]
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
 import re
@@ -356,6 +357,7 @@ def run_replay(replay_path, contracts=None) -> dict:
 
     ticks = replay["ticks"]
     hash_log = []
+    snapshots = []
     for tick in range(ticks + 1):
         for i in by_tick.get(tick, []):
             _, entity, verb, arg = events[i]
@@ -363,6 +365,7 @@ def run_replay(replay_path, contracts=None) -> dict:
         for name, contract in contracts.items():
             step_entity(contract, name, world)
         hash_log.append(state_hash(world))
+        snapshots.append(copy.deepcopy(world))
 
     entity_hashes = {
         name: hashlib.sha256(canonical(contract)).hexdigest()
@@ -374,6 +377,7 @@ def run_replay(replay_path, contracts=None) -> dict:
         "final_state": world,
         "state_hash": state_hash(world),
         "hash_log": hash_log,
+        "snapshots": snapshots,
         "navigation": {
             name: blocks_navigation(contract, world[name]["state"])
             for name, contract in contracts.items()
@@ -399,6 +403,11 @@ def main(argv=None) -> int:
         action="store_true",
         help="Print final_state, hash_log, navigation, state_hash (for parity harnesses)",
     )
+    replay.add_argument(
+        "--snapshots",
+        action="store_true",
+        help="Print the per-tick world snapshots a runtime adapter may observe",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -406,6 +415,10 @@ def main(argv=None) -> int:
     except SimError as exc:
         print(json.dumps({"error": str(exc), "code": exc.code}), file=sys.stderr)
         return 1
+
+    if args.snapshots:
+        print(json.dumps({"snapshots": result["snapshots"], "state_hash": result["state_hash"]}))
+        return 0
 
     if args.full:
         print(

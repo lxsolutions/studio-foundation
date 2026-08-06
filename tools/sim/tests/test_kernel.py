@@ -189,6 +189,18 @@ class VerbSemantics(unittest.TestCase):
         with self.assertRaises(kernel.SimError):
             run_with_doc(replay)
 
+    def test_snapshots_cover_every_tick_and_chain_to_the_final_hash(self):
+        replay = base_replay()
+        replay["events"] = [[0, "gate", "open", None], [6, "gate", "attack", 25]]
+        result = run_with_doc(replay)
+        snaps = result["snapshots"]
+        self.assertEqual(len(snaps), replay["ticks"] + 1)
+        self.assertEqual(snaps[-1], result["final_state"])
+        # every snapshot hashes to its hash_log entry — an adapter observing
+        # the stream sees exactly the states the kernel hashed
+        for snap, logged in zip(snaps, result["hash_log"], strict=True):
+            self.assertEqual(kernel.state_hash(snap), logged)
+
     def test_fingerprints_cover_kernel_entities_and_replay(self):
         result = run_with_doc(base_replay())
         fp = result["fingerprints"]

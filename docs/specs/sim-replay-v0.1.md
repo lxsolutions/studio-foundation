@@ -89,6 +89,17 @@ native Rust kernel       ─┼─→ gate_open_destroy.json → identical hash
 wasm32 Rust kernel (node)─┘
 ```
 
-The wasm build exports a raw ABI (`sim_alloc`/`sim_run`), so parity needs no
-wasm-bindgen layer and no new JavaScript dependencies. Generic multi-entity
-worlds remain deferred to the M3 proper milestones.
+The wasm build exports a raw ABI (`sim_alloc`/`sim_run`/`sim_free`), so
+parity needs no wasm-bindgen layer and no new JavaScript dependencies.
+Generic multi-entity worlds remain deferred to the M3 proper milestones.
+
+## Snapshots and observers
+
+Every run also produces `snapshots`: the complete world state after each
+tick, in the same canonical form the hash covers. A runtime adapter may
+OBSERVE snapshots — map them to animation, UI, sound — but it has no path to
+write simulation state. `tools/sim-viewer/` is the reference adapter: the
+wasm kernel in a browser tab, the forged gate GLB as geometry, and
+`adapter.js` mapping openness to hinge rotation. Its node test
+(`adapter_test.mjs`, run in CI) proves every rendered frame is derived from
+a kernel snapshot, never invented.
