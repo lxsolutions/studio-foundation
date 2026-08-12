@@ -22,9 +22,38 @@ static func extract_token(query: String) -> String:
 ## order, no leading "?". Feeds history.replaceState so tokens never linger
 ## in the address bar or history.
 static func scrubbed_query(query: String) -> String:
+	return _scrubbed(query, "t")
+
+
+## Pull the challenge-ghost id out of a raw query string ("?ghost=g-7").
+## Empty when absent. First ghost wins, same as the token.
+static func extract_ghost_id(query: String) -> String:
+	for pair in _pairs(query):
+		if str(pair.get("key")) == "ghost":
+			return str(pair.get("value")).strip_edges()
+	return ""
+
+
+## The same query with every ghost removed — the deep link is one-shot, so it
+## leaves the address bar exactly like the token does.
+static func scrubbed_ghost_query(query: String) -> String:
+	return _scrubbed(query, "ghost")
+
+
+## The shareable challenge link for a ghost: this page's origin carrying
+## ?ghost=<id> and nothing else. Off the web (no origin to read) it points at
+## the racing origin, the same fallback recovery_url takes.
+static func ghost_challenge_url(page_origin: String, ghost_id: String) -> String:
+	var origin := page_origin.strip_edges().trim_suffix("/")
+	if not origin.begins_with("http://") and not origin.begins_with("https://"):
+		origin = "https://racing.ashaarena.com"
+	return origin + "/?ghost=" + ghost_id.uri_encode()
+
+
+static func _scrubbed(query: String, banned_key: String) -> String:
 	var kept: PackedStringArray = []
 	for pair in _pairs(query):
-		if str(pair.get("key")) != "t":
+		if str(pair.get("key")) != banned_key:
 			kept.append(str(pair.get("raw")))
 	return "&".join(kept)
 

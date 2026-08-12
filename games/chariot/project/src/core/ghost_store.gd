@@ -5,11 +5,13 @@ extends RefCounted
 ## under user://ghosts/, following StudioReplay's user:// convention.
 ##
 ## The sharing path is the in-repo game server's ghost_submit / ghost_fetch
-## application payloads. The client speaks no studio protocol yet, so the
-## transport is a seam: inject a Callable(payload: Dictionary) -> Dictionary
-## that answers those kinds and saves submit, loads fetch (a server copy is
-## mirrored locally so the run still loads offline). Unset means local-only —
-## today's behavior.
+## application payloads, carried by the studio bridge (StudioClient) when a
+## server is reachable. The transport is a seam: inject a Callable(payload:
+## Dictionary) -> Dictionary that answers those kinds and saves submit, loads
+## fetch (a server copy is mirrored locally so the run still loads offline).
+## The callable MAY be a coroutine — the bridge's round trip is one — so both
+## call sites await it; a synchronous callable resolves without suspending and
+## save/load_ghost stay synchronous themselves. Unset means local-only.
 
 const GHOST_DIR := "user://ghosts"
 const LOCAL_PREFIX := "ghost_"
@@ -18,12 +20,13 @@ var transport := Callable()
 
 
 ## Save a validated run, returning its ghost id ("" when the run is no ghost
-## at all). Server-first when a transport is wired, local otherwise.
+## at all). Server-first when a transport is wired, local otherwise. Awaits
+## the transport's answer: with the live bridge this is a coroutine.
 func save(run: GhostRun) -> String:
 	if run == null or not run.is_valid():
 		return ""
 	if transport.is_valid():
-		var reply: Dictionary = transport.call({
+		var reply: Dictionary = await transport.call({
 			"kind": "ghost_submit",
 			"member": run.handle,
 			"faction": run.faction,
@@ -42,13 +45,14 @@ func save(run: GhostRun) -> String:
 
 
 ## Load a run by id: the local mirror first, the server when wired. null when
-## no ghost answers to the id (or the stored run fails its bounds).
+## no ghost answers to the id (or the stored run fails its bounds). Awaits the
+## transport's answer on a local miss, exactly like save.
 func load_ghost(id: String) -> GhostRun:
 	var run := _load_local(id)
 	if run != null:
 		return run
 	if transport.is_valid():
-		var reply: Dictionary = transport.call({"kind": "ghost_fetch", "id": id})
+		var reply: Dictionary = await transport.call({"kind": "ghost_fetch", "id": id})
 		if bool(reply.get("ok", false)):
 			var fetched := GhostRun.from_dict(reply.get("ghost", {}))
 			if fetched != null and fetched.is_valid():

@@ -10,6 +10,7 @@
 //! otherwise so the endpoint still answers offline and in tests.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::sync::Mutex;
 
 use serde::Deserialize;
@@ -21,6 +22,7 @@ use crate::factions::{
     self, Finishing, DEFAULT_SEASON,
 };
 use crate::ghosts::{self, GhostTick};
+use crate::identity::PlazaVerifier;
 
 #[derive(Default)]
 struct MemoryState {
@@ -54,6 +56,9 @@ impl StoredGhost {
     fn summary(&self) -> Value {
         json!({
             "id": self.id,
+            // The client's storage schema marker (ghost_run.gd SCHEMA), so a
+            // fetched run parses and persists there exactly like a local one.
+            "schema": 1,
             "member": self.member,
             "faction": self.faction,
             "handle": self.handle,
@@ -71,19 +76,31 @@ enum FactionStore {
 
 pub struct ChariotApplication {
     store: FactionStore,
+    /// Plaza token verifier for ghost submits. None means the server keys
+    /// ghosts by the client claim — the pre-bridge behavior, still right for
+    /// dev and for any deployment without a Plaza to verify against.
+    verifier: Option<Arc<dyn PlazaVerifier>>,
 }
 
 impl ChariotApplication {
     pub fn in_memory() -> Self {
         Self {
             store: FactionStore::Memory(Mutex::new(MemoryState::default())),
+            verifier: None,
         }
     }
 
     pub fn postgres(pool: PgPool) -> Self {
         Self {
             store: FactionStore::Postgres(pool),
+            verifier: None,
         }
+    }
+
+    /// Attach the Plaza verifier the binary builds from PLAZA_BASE_URL.
+    pub fn with_verifier(mut self, verifier: Arc<dyn PlazaVerifier>) -> Self {
+        self.verifier = Some(verifier);
+        self
     }
 
     async fn join(&self, member: &str, faction: &str) -> Result<(), String> {
@@ -274,6 +291,9 @@ enum ChariotRequest {
         member: String,
         faction: String,
         handle: String,
+        /// Plaza bearer token from the identity bridge. Optional: absent means
+        /// the member field is a bare claim (dev, offline-shaped clients).
+        token: Option<String>,
         #[serde(rename = "totalMs")]
         total_ms: u32,
         #[serde(rename = "distanceM", default)]
@@ -387,16 +407,55 @@ impl ApplicationHandler for ChariotApplication {
                     member,
                     faction,
                     handle,
+                    token,
                     total_ms,
                     distance_m,
                     ticks,
                 } => {
-                    let member = member.trim();
-                    if member.is_empty() {
-                        return rejected("ghost.submit needs a member key");
-                    }
-                    let handle = handle.trim();
-                    if let Err(err) = ghosts::validate(handle, &faction, total_ms, &ticks) {
+                    // Identity resolution. A presented token is verified
+                    // against the Plaza and the run keys by the VERIFIED
+                    // stable identity, never the client claim; a token that
+                    // fails verification fails the submit. Without a token —
+                    // or without a verifier wired at all (dev, tests) — the
+                    // claimed member stands, the pre-bridge behavior.
+                    let claimed_handle = handle.trim().to_string();
+                    let (member_key, handle) = match token.as_deref().map(str::trim) {
+                        Some(presented) if !presented.is_empty() => match &self.verifier {
+                            Some(verifier) => match verifier.verify(presented).await {
+                                Ok(identity) => {
+                                    // The Plaza handle is authoritative
+                                    // (Minerals): clipped to the plate, the
+                                    // client claim only fills a blank one.
+                                    let handle = if identity.handle.is_empty() {
+                                        claimed_handle
+                                    } else {
+                                        identity
+                                            .handle
+                                            .chars()
+                                            .take(ghosts::MAX_HANDLE)
+                                            .collect()
+                                    };
+                                    (identity.member_key, handle)
+                                }
+                                Err(err) => return rejected(err),
+                            },
+                            None => {
+                                let claimed = member.trim();
+                                if claimed.is_empty() {
+                                    return rejected("ghost.submit needs a member key");
+                                }
+                                (claimed.to_string(), claimed_handle)
+                            }
+                        },
+                        _ => {
+                            let claimed = member.trim();
+                            if claimed.is_empty() {
+                                return rejected("ghost.submit needs a member key");
+                            }
+                            (claimed.to_string(), claimed_handle)
+                        }
+                    };
+                    if let Err(err) = ghosts::validate(&handle, &faction, total_ms, &ticks) {
                         return rejected(err);
                     }
                     if !(distance_m > 0.0 && distance_m <= ghosts::MAX_POS_M) {
@@ -404,9 +463,9 @@ impl ApplicationHandler for ChariotApplication {
                     }
                     let run = StoredGhost {
                         id: String::new(),
-                        member: member.to_string(),
+                        member: member_key,
                         faction: faction.clone(),
-                        handle: handle.to_string(),
+                        handle,
                         total_ms,
                         distance_m,
                         ticks,
@@ -577,6 +636,7 @@ mod tests {
         assert!(fetched.accepted, "fetch rejected: {}", fetched.summary);
         let ghost = summary(&fetched)["ghost"].clone();
         assert_eq!(ghost["id"], json!(id));
+        assert_eq!(ghost["schema"], 1, "fetched runs carry the client's storage schema");
         assert_eq!(ghost["handle"], "Xanthos");
         assert_eq!(ghost["faction"], "blue");
         assert_eq!(ghost["member"], "STABLE-1");
@@ -626,5 +686,55 @@ mod tests {
         let app = ChariotApplication::in_memory();
         assert!(!handle(&app, r#"{"kind":"ghost_fetch","id":"g-99"}"#).await.accepted);
         assert!(!handle(&app, r#"{"kind":"ghost_fetch","id":""}"#).await.accepted);
+    }
+
+    fn ghost_payload_with_token(token: &str) -> String {
+        let mut payload: Value = serde_json::from_str(&ghost_payload(92_000)).unwrap();
+        payload["token"] = json!(token);
+        payload.to_string()
+    }
+
+    #[tokio::test]
+    async fn ghost_submit_with_a_verified_token_keys_by_the_plaza_identity() {
+        use crate::identity::{member_key_for, StubPlazaVerifier};
+        let app = ChariotApplication::in_memory().with_verifier(Arc::new(StubPlazaVerifier));
+        let submitted = handle(&app, &ghost_payload_with_token("stub:stable-key-1:Balios")).await;
+        assert!(submitted.accepted, "submit rejected: {}", submitted.summary);
+        let id = summary(&submitted)["id"].as_str().unwrap().to_string();
+
+        let fetched = handle(&app, &format!(r#"{{"kind":"ghost_fetch","id":"{id}"}}"#)).await;
+        assert!(fetched.accepted);
+        let ghost = summary(&fetched)["ghost"].clone();
+        // The stored member key is the verified stable identity, hashed into
+        // the plaza namespace — never the client-claimed "STABLE-1".
+        assert_eq!(ghost["member"], json!(member_key_for("stable-key-1")));
+        assert_ne!(ghost["member"], json!("STABLE-1"));
+        // The verified Plaza handle is authoritative over the client claim.
+        assert_eq!(ghost["handle"], "Balios");
+        assert_eq!(ghost["schema"], 1, "fetched runs carry the client's storage schema");
+    }
+
+    #[tokio::test]
+    async fn ghost_submit_with_a_refused_token_stores_nothing() {
+        use crate::identity::StubPlazaVerifier;
+        let app = ChariotApplication::in_memory().with_verifier(Arc::new(StubPlazaVerifier));
+        let submitted = handle(&app, &ghost_payload_with_token("forged-token")).await;
+        assert!(!submitted.accepted, "a token the plaza refuses fails the submit");
+        let fetched = handle(&app, r#"{"kind":"ghost_fetch","id":"g-1"}"#).await;
+        assert!(!fetched.accepted, "no run was ever stored");
+    }
+
+    #[tokio::test]
+    async fn ghost_submit_with_a_token_but_no_verifier_keeps_the_claim() {
+        // Dev posture: no PLAZA_BASE_URL, no verifier — a token cannot be
+        // proven, so the claimed member stands (the pre-bridge behavior).
+        let app = ChariotApplication::in_memory();
+        let submitted = handle(&app, &ghost_payload_with_token("stub:stable-key-1:Balios")).await;
+        assert!(submitted.accepted, "submit rejected: {}", submitted.summary);
+        let id = summary(&submitted)["id"].as_str().unwrap().to_string();
+        let fetched = handle(&app, &format!(r#"{{"kind":"ghost_fetch","id":"{id}"}}"#)).await;
+        let ghost = summary(&fetched)["ghost"].clone();
+        assert_eq!(ghost["member"], "STABLE-1", "the claim stands when nothing can verify it");
+        assert_eq!(ghost["handle"], "Xanthos", "and the claimed handle with it");
     }
 }

@@ -46,3 +46,28 @@ static func take_token() -> String:
 		true
 	)
 	return token
+
+
+## The challenge-ghost half of the handoff: ?ghost=<id> opens the game with
+## that ghost armed on the sand. Taken once and scrubbed from the address bar
+## exactly like the token; RACING_GHOST_ID serves headless checks. Deep links
+## survive the token scrub (each take removes only its own key), so a link can
+## carry both a sign-in and a challenge.
+static func take_ghost_id() -> String:
+	var env_id := OS.get_environment("RACING_GHOST_ID")
+	if not env_id.is_empty():
+		return env_id.strip_edges()
+	if not OS.has_feature("web"):
+		return ""
+	var query := str(JavaScriptBridge.eval("window.location.search||''", true))
+	var ghost_id := SsoExchange.extract_ghost_id(query)
+	if ghost_id.is_empty():
+		return ""
+	var scrubbed := SsoExchange.scrubbed_ghost_query(query)
+	var suffix := "" if scrubbed.is_empty() else "?" + scrubbed
+	JavaScriptBridge.eval(
+		"window.history.replaceState(null,'',window.location.pathname+%s+window.location.hash);"
+			% JSON.stringify(suffix),
+		true
+	)
+	return ghost_id

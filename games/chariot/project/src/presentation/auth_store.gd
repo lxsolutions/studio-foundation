@@ -62,8 +62,9 @@ static func _web_read() -> String:
 
 
 ## The rider's circus faction. Local-only for now: the racing wire has no
-## faction key yet, so the choice persists here and the faction payloads on
-## the in-repo game server pick it up when the identity bridge lands.
+## faction key yet. The identity bridge (StudioClient) already carries the
+## ghost payloads; the server's faction payloads pick the choice up when the
+## client sends them.
 static func saved_faction() -> String:
 	var web := _web_read_faction()
 	if not web.is_empty():

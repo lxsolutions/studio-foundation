@@ -100,8 +100,10 @@ against its replay on the sand.
   or change neither.
 - `project/src/core/ghost_store.gd` keeps ghosts under `user://ghosts/`
   (schema-versioned JSON, the StudioReplay convention). Its `transport` seam
-  takes a Callable answering the server's payloads; unset means local-only,
-  which is today's wiring — the client speaks no studio protocol yet.
+  takes a Callable answering the server's payloads — the studio bridge wires
+  it (see below); unset or parked means local-only. The callable may be a
+  coroutine, so the store's call sites await it; a synchronous transport
+  resolves without suspending, which is how the test suite drives it.
 - The rider view records every race you ride. The laurel board offers
   **SAVE AS A CHALLENGE GHOST** after a finish; the stable's GHOSTS desk lists
   your ghosts, loads one by id, and arms it. An armed ghost replays as a
@@ -112,3 +114,47 @@ against its replay on the sand.
 - The Rust server stores and returns runs verbatim via `ghost_submit` /
   `ghost_fetch` (`server/migrations/0003_ghost_runs.sql`): it applies the
   shared bounds and derives nothing else from a client's claims.
+
+## The identity bridge, and ghosts by URL
+
+The client now speaks the studio protocol, so a ghost can leave the machine
+that set it.
+
+- `project/src/presentation/studio_client.gd` is the websocket client for the
+  in-repo Rust server, built on studio_core's `StudioWsTransport` +
+  `StudioProtocol` (the addon stays untouched). The rider and stands views
+  wire `GhostStore.transport` to its `transport_mapping` (`ghost_submit` →
+  `submit`, `ghost_fetch` → `fetch`). The protocol carries no correlation
+  ids, so in-flight requests settle through one FIFO queue. The bridge is
+  opportunistic: no server URL, a failed connect, or a dropped socket parks
+  it for the session, and every request then answers an immediate
+  offline-shaped refusal — the store falls back to local-only, exactly as
+  before the bridge. `RACING_STUDIO_URL` overrides the server address (set
+  but empty parks the bridge); the default `wss://racing.ashaarena.com/studio`
+  is the mount the deploy is expected to expose.
+- Identity rides the submit, not the handshake. The token source is the plaza
+  handoff: a fresh `?t=` token captured at the sign-in gate, else the
+  same-origin `arb_token` localStorage key (what the plaza writes and the
+  Minerals bridge reads). The owner code is deliberately NOT a token — the
+  club has no verify endpoint for it — so code-signed riders submit under the
+  claimed member, as before the bridge.
+- Server side, `server/src/identity.rs` verifies a presented token the way
+  the Minerals satellite does (`siege/PLAZA_INTEGRATION.md`): bearer against
+  `{PLAZA_BASE_URL}/api/siege/loadout`, which answers the stable plaza `key`
+  and authoritative `handle`; the ghost's `member_key` becomes
+  `plaza:<sha256(key) truncated>`, never the raw key or token, and the
+  verified handle wins over the client claim. `PLAZA_BASE_URL` unset means no
+  verifier and the claimed member stands (dev, tests). A presented token that
+  fails verification fails the submit outright. The verifier is a trait
+  (`PlazaVerifier`); tests use `StubPlazaVerifier`. What remains for a live
+  deploy: set `PLAZA_BASE_URL` on the server (the plaza origin, e.g.
+  `https://platosplaza.com`; `http://127.0.0.1:8091` in dev, mirroring
+  Minerals' `ARENA_API`) and confirm the plaza accepts the stables handoff
+  token as a session at that endpoint — no live plaza was reachable from this
+  environment, so the HTTP verifier is exercised only by contract, not
+  against the real service.
+- Ghosts are links now: `?ghost=<id>` on the game URL is read at boot by the
+  rider and the stands (and scrubbed from the address bar like the token),
+  loaded through the store, and armed on the sand. The GHOSTS desk's LINK
+  button copies `<origin>/?ghost=<id>` to the clipboard; a server `g-…` id
+  travels, a local `ghost_…` id only resolves where it was saved.

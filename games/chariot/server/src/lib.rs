@@ -5,3 +5,4 @@
 pub mod application;
 pub mod factions;
 pub mod ghosts;
+pub mod identity;

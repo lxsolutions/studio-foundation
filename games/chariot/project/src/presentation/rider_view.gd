@@ -101,7 +101,16 @@ func _ready() -> void:
 	_build_training_overlay()
 	_build_stable_overlay()
 	_build_post_line()
+	# The studio bridge: ghost saves/fetches ride the game server when it is
+	# reachable, with the plaza token as the rider's identity. The same-origin
+	# arb_token seeds it; a fresh ?t= handoff token overrides at the gate.
+	_studio = StudioClient.new()
+	_studio.name = "StudioClient"
+	_studio.token = StudioClient.discover_plaza_token()
+	add_child(_studio)
+	ghost_store.transport = _studio.transport_mapping
 	_boot_sign_in()
+	await _boot_ghost_challenge()
 
 
 ## The Derby-cabinet answer to "what now": under the idle caption, name the
@@ -257,6 +266,9 @@ func _boot_sign_in() -> void:
 		return
 	var token := WebHandoff.take_token()
 	if not token.is_empty():
+		# The fresh handoff token is the bridge's identity: the same plaza
+		# session the SSO exchange spends, spent here for ghost submits.
+		_studio.token = token
 		_begin_sso(token)
 		return
 	var saved := AuthStore.saved_code()
@@ -576,10 +588,11 @@ var _dam_pick: OptionButton
 # ── Ghost duels ──────────────────────────────────────────────────────────────
 # "Beat my lap": a finished race's tick stream saves as a challenge ghost; an
 # armed ghost replays on the sand (broadcast_view owns the spectral biga) and
-# the next race I finish settles against its time. Local store today; the
-# server's ghost_submit / ghost_fetch payloads take over when the client
-# grows a studio-protocol transport (GhostStore.transport is the seam).
+# the next race I finish settles against its time. The studio bridge carries
+# saves and fetches to the game server (GhostStore.transport); parked or
+# absent, the store stays local-only, exactly as before the bridge.
 var ghost_store: GhostStore = GhostStore.new()
+var _studio: StudioClient = null
 var _recorder: GhostRun = null
 var _last_run: GhostRun = null
 var _last_verdict: Dictionary = {}
@@ -872,8 +885,8 @@ func _picked_id(pick: OptionButton) -> String:
 # ── Ghost duels: save, arm, settle ───────────────────────────────────────────
 
 ## The GHOSTS desk: the armed ghost with its stand-down, every locally held
-## ghost with a RACE button, and a load-by-id row (local ids today, server
-## ids once the identity bridge wires GhostStore.transport).
+## ghost with RACE and LINK (copy the challenge URL) buttons, and a
+## load-by-id row — local ghost_… ids and server g-… ids alike.
 func _render_ghosts() -> void:
 	var ghost := armed_ghost()
 	if ghost != null:
@@ -908,8 +921,13 @@ func _render_ghosts() -> void:
 		race.text = "RACE"
 		race.focus_mode = Control.FOCUS_NONE
 		var ghost_id := str(entry.get("id", ""))
-		race.pressed.connect(func() -> void: _race_ghost(ghost_id))
+		race.pressed.connect(func() -> void: await _race_ghost(ghost_id))
 		row.add_child(race)
+		var link := Button.new()
+		link.text = "LINK"
+		link.focus_mode = Control.FOCUS_NONE
+		link.pressed.connect(func() -> void: _copy_challenge_link(ghost_id))
+		row.add_child(link)
 		_section_box.add_child(row)
 	var load_row := HBoxContainer.new()
 	load_row.add_theme_constant_override("separation", 8)
@@ -920,7 +938,7 @@ func _render_ghosts() -> void:
 	var load := Button.new()
 	load.text = "LOAD"
 	load.focus_mode = Control.FOCUS_NONE
-	load.pressed.connect(func() -> void: _race_ghost(_ghost_id_edit.text.strip_edges()))
+	load.pressed.connect(func() -> void: await _race_ghost(_ghost_id_edit.text.strip_edges()))
 	load_row.add_child(load)
 	_section_box.add_child(load_row)
 	if not _ghost_status.is_empty():
@@ -929,11 +947,12 @@ func _render_ghosts() -> void:
 
 ## Arm a ghost and close the desk: the sand is where the duel happens. The
 ## ghost replays with the exhibition until post time, then runs against the
-## live race clock; my next finish settles it.
+## live race clock; my next finish settles it. The load rides the bridge when
+## the id is a server id, so this is a coroutine.
 func _race_ghost(id: String) -> void:
 	if id.is_empty():
 		return
-	var run := ghost_store.load_ghost(id)
+	var run := await ghost_store.load_ghost(id)
 	if run == null:
 		_ghost_status = "No ghost answers to %s." % id
 		_refresh_stable()
@@ -943,6 +962,30 @@ func _race_ghost(id: String) -> void:
 	_ghost_status = ""
 	audio.oneshot("ui_tick")
 	_stable_panel.visible = false
+
+
+## The challenge link onto the clipboard: this page's origin carrying
+## ?ghost=<id> (the racing origin off the web). A server id travels; a local
+## ghost_… id only resolves where it was saved.
+func _copy_challenge_link(ghost_id: String) -> void:
+	DisplayServer.clipboard_set(SsoExchange.ghost_challenge_url(WebHandoff.page_origin(), ghost_id))
+	_ghost_status = "Challenge link copied — %s" % ghost_id
+	audio.oneshot("ui_tick")
+	_refresh_stable()
+
+
+## A challenge link (?ghost=<id>) arms its ghost straight from the URL, over
+## the bridge when the id only lives server-side. The id is scrubbed from the
+## address bar exactly like the handoff token.
+func _boot_ghost_challenge() -> void:
+	var ghost_id := WebHandoff.take_ghost_id()
+	if ghost_id.is_empty():
+		return
+	var run := await ghost_store.load_ghost(ghost_id)
+	if run == null:
+		_ghost_status = "No ghost answers to %s." % ghost_id
+		return
+	arm_ghost(run)
 
 
 ## Every race I ride is recorded from the same tick stream the broadcast
@@ -1012,7 +1055,9 @@ func _my_result() -> Dictionary:
 func _save_challenge_ghost() -> void:
 	if _last_run == null:
 		return
-	var id := ghost_store.save(_last_run)
+	_ghost_save_notice = "Sending the ghost to the stewards…"
+	_rebuild_results_board()
+	var id := await ghost_store.save(_last_run)
 	if id.is_empty():
 		_ghost_save_notice = "The stewards could not keep that ghost."
 	else:

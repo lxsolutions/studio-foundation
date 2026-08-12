@@ -11,6 +11,12 @@ const RIDER_SCENE := "res://scenes/rider.tscn"
 ## Tests pin this false to exercise the broadcast without boot routing.
 var boot_route_enabled := true
 
+## The challenge-ghost arm for spectators: a ?ghost=<id> link loads over the
+## studio bridge (tokenless — a ghost is public to anyone holding the id) and
+## replays on the sand, the local store as the fallback.
+var ghost_store: GhostStore = GhostStore.new()
+var _studio: StudioClient = null
+
 
 func _ready() -> void:
 	if boot_route_enabled and FrontGate.boot_destination(
@@ -21,6 +27,23 @@ func _ready() -> void:
 		return
 	super()
 	_build_reins_door()
+	_studio = StudioClient.new()
+	_studio.name = "StudioClient"
+	add_child(_studio)
+	ghost_store.transport = _studio.transport_mapping
+	await _boot_ghost_challenge()
+
+
+## The inbound half of a shared challenge: read the id out of the URL
+## (scrubbing it like the handoff token), load the run, arm it. A miss stays
+## quiet — the stands simply show the exhibition.
+func _boot_ghost_challenge() -> void:
+	var ghost_id := WebHandoff.take_ghost_id()
+	if ghost_id.is_empty():
+		return
+	var run := await ghost_store.load_ghost(ghost_id)
+	if run != null:
+		arm_ghost(run)
 
 
 func _build_reins_door() -> void:

@@ -5,6 +5,7 @@
 use std::sync::Arc;
 
 use chariot_server::application::ChariotApplication;
+use chariot_server::identity;
 use tracing_subscriber::EnvFilter;
 static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");
 
@@ -40,6 +41,15 @@ async fn main() -> anyhow::Result<()> {
             ChariotApplication::postgres(pool)
         }
         Err(_) => ChariotApplication::in_memory(),
+    };
+    // Ghost submits key by a verified Plaza identity when the Plaza base URL
+    // is configured; without it the client-claimed member stands (dev).
+    let application = match std::env::var("PLAZA_BASE_URL") {
+        Ok(base_url) => {
+            tracing::info!(game = "chariot", %base_url, "plaza token verification on");
+            application.with_verifier(Arc::new(identity::HttpPlazaVerifier::new(base_url)))
+        }
+        Err(_) => application,
     };
     let addr = std::env::var("STUDIO_DEDICATED_ADDR")
         .unwrap_or_else(|_| "127.0.0.1:8081".into())

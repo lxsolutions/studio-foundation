@@ -151,10 +151,10 @@ func test_bounds_reject_implausible_runs() -> void:
 func test_store_save_load_round_trip() -> void:
 	var store := GhostStore.new()
 	var run := _recorded_run()
-	var id := store.save(run)
+	var id := await store.save(run)
 	assert_ne(id, "", "a valid run saves")
 	assert_true(id.begins_with("ghost_"), "a local id carries the local prefix")
-	var loaded := store.load_ghost(id)
+	var loaded := await store.load_ghost(id)
 	assert_true(loaded != null)
 	assert_eq(loaded.handle, "Xanthos")
 	assert_eq(loaded.total_ms, 92000)
@@ -165,10 +165,10 @@ func test_store_save_load_round_trip() -> void:
 
 func test_store_lists_newest_first() -> void:
 	var store := GhostStore.new()
-	var first := store.save(_recorded_run())
+	var first := await store.save(_recorded_run())
 	var second_run := _recorded_run()
 	second_run.handle = "Balios"
-	var second := store.save(second_run)
+	var second := await store.save(second_run)
 	var listed := store.list_local()
 	var ids: Array = []
 	for entry in listed:
@@ -183,16 +183,17 @@ func test_store_refuses_the_invalid_and_the_unknown() -> void:
 	var store := GhostStore.new()
 	var run := _recorded_run()
 	run.total_ms = 100
-	assert_eq(store.save(run), "", "an invalid run never reaches the shelf")
-	assert_eq(store.load_ghost("ghost_nope"), null, "no ghost answers to an unknown id")
-	assert_eq(store.load_ghost("../rider"), null, "an id is never a path")
-	assert_eq(store.load_ghost(""), null)
+	assert_eq(await store.save(run), "", "an invalid run never reaches the shelf")
+	assert_eq(await store.load_ghost("ghost_nope"), null, "no ghost answers to an unknown id")
+	assert_eq(await store.load_ghost("../rider"), null, "an id is never a path")
+	assert_eq(await store.load_ghost(""), null)
 
 
 func test_store_transport_seam_submits_and_fetches() -> void:
-	# The server path lands when the client grows a studio-protocol transport;
-	# a fake one proves the seam: saves take the server id, loads fall through
-	# to fetch, and a server copy mirrors locally.
+	# The studio bridge (StudioClient) plugs into this seam in the rider view;
+	# a fake synchronous one proves the seam's shape: saves take the server id,
+	# loads fall through to fetch, and a server copy mirrors locally. The fake
+	# answers without suspending, so the awaits below resolve in-line.
 	var submitted: Array = []
 	var store := GhostStore.new()
 	store.transport = func(payload: Dictionary) -> Dictionary:
@@ -202,12 +203,12 @@ func test_store_transport_seam_submits_and_fetches() -> void:
 		if str(payload.get("kind", "")) == "ghost_fetch" and str(payload.get("id", "")) == "g-9":
 			return {"ok": true, "ghost": _recorded_run().to_dict()}
 		return {"ok": false}
-	var id := store.save(_recorded_run())
+	var id := await store.save(_recorded_run())
 	assert_eq(id, "g-7", "the server's id wins when the transport answers")
 	assert_eq(submitted.size(), 1)
 	assert_eq(str((submitted[0] as Dictionary).get("kind", "")), "ghost_submit")
 	assert_true(FileAccess.file_exists("user://ghosts/g-7.json"), "the server copy mirrors locally")
-	var fetched := store.load_ghost("g-9")
+	var fetched := await store.load_ghost("g-9")
 	assert_true(fetched != null, "a fetch miss locally falls through to the server")
 	assert_true(fetched.is_valid())
 	DirAccess.remove_absolute("user://ghosts/g-7.json")
