@@ -57,6 +57,14 @@ var scene_switcher: Callable = Callable()
 var exhibition_enabled := true
 var _ex_horses: Array[Dictionary] = []
 var _ex_t := 0.0
+# The armed challenge ghost: a recorded run replaying on the sand. Held OUT of
+# _horses and _ex_horses on purpose — the live field, the tally, and the
+# exhibition leader logic must never feel it (nothing here collides; every
+# body on the track is transform-driven, so sharing no collection is the whole
+# non-interference story).
+var _ghost_run: GhostRun = null
+var _ghost: Dictionary = {}
+var _ghost_t := 0.0
 ## The rider view sets this to its own horse id: no banner in your own face.
 var plate_hidden_id := ""
 var _track_scene: PackedScene
@@ -497,6 +505,7 @@ func _process(delta: float) -> void:
 	_seconds_since_tick += delta
 	_update_horses(delta)
 	_update_exhibition(delta)
+	_update_ghost(delta)
 	_update_infield_show(delta)
 	_update_camera(delta)
 	_update_plates()
@@ -515,6 +524,8 @@ func _update_plates() -> void:
 		_update_plate(_horses[horse_id], str(horse_id) == plate_hidden_id)
 	for horse in _ex_horses:
 		_update_plate(horse, false)
+	if not _ghost.is_empty():
+		_update_plate(_ghost, false)
 
 
 func _update_plate(horse: Dictionary, force_hidden: bool) -> void:
@@ -604,6 +615,143 @@ func _end_exhibition() -> void:
 		(horse["node"] as Node3D).queue_free()
 	_ex_horses.clear()
 	_ex_t = 0.0
+
+
+# ── The ghost ────────────────────────────────────────────────────────────────
+# An armed challenge ghost replays a recorded run on the sand: spectral (tint
+# only, no new art), scored by nobody, never in the live field's collections.
+# During a race it runs against the live tick clock; between races it loops
+# its lap with the exhibition so there is always something to chase.
+
+## The spectral wash: the ghost's faction color, lifted toward white and
+## mostly see-through, with a faint self-glow so it reads at distance.
+const GHOST_ALPHA := 0.45
+const GHOST_GLOW := 0.6
+
+
+## Arm a recorded run (the rider view's "race a ghost"). Invalid runs are
+## refused silently — the caller validated before offering the button.
+func arm_ghost(run: GhostRun) -> void:
+	stand_down_ghost()
+	if run == null or not run.is_valid():
+		return
+	_ghost_run = run
+	_spawn_ghost()
+
+
+func stand_down_ghost() -> void:
+	_ghost_run = null
+	_ghost_t = 0.0
+	if not _ghost.is_empty():
+		(_ghost["node"] as Node3D).queue_free()
+		_ghost = {}
+
+
+func armed_ghost() -> GhostRun:
+	return _ghost_run
+
+
+func _spawn_ghost() -> void:
+	var horse_node: Node3D = _horse_scene.instantiate()
+	horse_node.name = "Ghost"
+	add_child(horse_node)
+	var chariot_node: Node3D = _chariot_scene.instantiate()
+	chariot_node.name = "Chariot"
+	horse_node.add_child(chariot_node)
+	chariot_node.position = Vector3(0.0, 0.0, CHARIOT_HITCH_M)
+	_tint_ghost(horse_node)
+	var plate := Label3D.new()
+	plate.text = "GHOST · %s" % _ghost_run.handle
+	plate.font_size = 64
+	plate.pixel_size = 0.012
+	plate.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	plate.no_depth_test = true
+	plate.modulate = _ghost_color()
+	plate.outline_size = 18
+	plate.outline_modulate = Color(0.071, 0.063, 0.043, 0.9)
+	plate.position = Vector3(0.0, 2.9, 0.0)
+	horse_node.add_child(plate)
+	_ghost = {
+		"node": horse_node,
+		"pos": 0.0,
+		"lane": 1.0,
+		"speed": 0.0,
+		"finished": false,
+		"anim": _find_animation(horse_node),
+		"plate": plate,
+		"wheel_l": chariot_node.find_child("WheelL", true, false) as Node3D,
+		"wheel_r": chariot_node.find_child("WheelR", true, false) as Node3D,
+		"driver": chariot_node.find_child("Charioteer", true, false) as Node3D,
+		"wheel_spin": 0.0,
+		"lean": 0.0,
+	}
+	horse_node.visible = false
+
+
+## Every surface of horse and biga takes the spectral wash — the faction color
+## of the rider who set the run, so a Blues ghost can never pass for a Reds
+## one. Shadows off: the dead do not cast them.
+func _tint_ghost(horse_node: Node3D) -> void:
+	var spectral := _ghost_color()
+	for mesh_instance in horse_node.find_children("*", "MeshInstance3D", true, false):
+		var mesh := mesh_instance as MeshInstance3D
+		mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		if mesh.mesh == null:
+			continue
+		for surface in range(mesh.mesh.get_surface_count()):
+			var base := mesh.mesh.surface_get_material(surface) as BaseMaterial3D
+			var override := (base.duplicate() as BaseMaterial3D) if base != null else StandardMaterial3D.new()
+			override.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			override.albedo_color = Color(spectral, GHOST_ALPHA)
+			override.emission_enabled = true
+			override.emission = spectral
+			override.emission_energy_multiplier = GHOST_GLOW
+			mesh.set_surface_override_material(surface, override)
+
+
+func _ghost_color() -> Color:
+	if _ghost_run != null and CircusFactions.is_valid_id(_ghost_run.faction):
+		return CircusFactions.color_for(_ghost_run.faction).lightened(0.45)
+	return Color(0.75, 0.9, 1.0)
+
+
+func _update_ghost(delta: float) -> void:
+	if _ghost.is_empty() or _ghost_run == null:
+		return
+	var node: Node3D = _ghost["node"]
+	var t_ms := -1.0
+	var distance := _ghost_run.distance_m
+	if state.phase == RaceState.PHASE_RUNNING:
+		# Live: run the ghost against the same race clock the field answers to.
+		t_ms = state.tick_t * _ghost_run.tick_scale_ms
+		if state.race_distance() > 0.0:
+			distance = state.race_distance()
+	else:
+		var resting: bool = state.phase in [RaceState.PHASE_IDLE, RaceState.PHASE_FINISHED] \
+			and state.race.is_empty()
+		if resting and exhibition_enabled:
+			_ghost_t = fmod(_ghost_t + delta, _ghost_run.total_s())
+			t_ms = _ghost_t * 1000.0
+	if t_ms < 0.0:
+		node.visible = false
+		return
+	var mark: Dictionary = _ghost_run.position_at(t_ms)
+	node.visible = true
+	_ghost["pos"] = float(mark.get("pos", 0.0))
+	_ghost["lane"] = float(mark.get("lane", 1.0))
+	_ghost["speed"] = float(mark.get("speed", 0.0))
+	node.transform = TrackGeometry.horse_transform(float(_ghost["pos"]), float(_ghost["lane"]), distance)
+	var s := TrackGeometry.start_offset(distance) + float(_ghost["pos"])
+	var moving := float(_ghost["speed"]) > 0.5
+	_update_chariot(_ghost, float(_ghost["speed"]) if moving else 0.0, s, moving, delta)
+	var anim: AnimationPlayer = _ghost["anim"]
+	if anim != null:
+		if moving:
+			if not anim.is_playing():
+				anim.play("Gallop")
+			anim.speed_scale = clampf(float(_ghost["speed"]) / TYPICAL_SPEED_MPS, 0.5, 1.8)
+		else:
+			anim.stop()
 
 
 ## Parade progress → position relative to the start line: the march covers

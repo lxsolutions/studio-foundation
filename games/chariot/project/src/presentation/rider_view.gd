@@ -561,7 +561,7 @@ func _dismiss_training() -> void:
 
 # ── The stable ───────────────────────────────────────────────────────────────
 
-const STABLE_SECTIONS: Array[String] = ["YARD", "BLOODSTOCK", "EXCHANGE", "HONOURS", "CIRCUIT"]
+const STABLE_SECTIONS: Array[String] = ["YARD", "BLOODSTOCK", "EXCHANGE", "HONOURS", "CIRCUIT", "GHOSTS"]
 const CONFIRM_WINDOW_MS := 4000
 
 var _stable_section: String = "YARD"
@@ -572,6 +572,20 @@ var _armed_key: String = ""
 var _armed_deadline_ms: int = 0
 var _sire_pick: OptionButton
 var _dam_pick: OptionButton
+
+# ── Ghost duels ──────────────────────────────────────────────────────────────
+# "Beat my lap": a finished race's tick stream saves as a challenge ghost; an
+# armed ghost replays on the sand (broadcast_view owns the spectral biga) and
+# the next race I finish settles against its time. Local store today; the
+# server's ghost_submit / ghost_fetch payloads take over when the client
+# grows a studio-protocol transport (GhostStore.transport is the seam).
+var ghost_store: GhostStore = GhostStore.new()
+var _recorder: GhostRun = null
+var _last_run: GhostRun = null
+var _last_verdict: Dictionary = {}
+var _ghost_save_notice: String = ""
+var _ghost_status: String = ""
+var _ghost_id_edit: LineEdit
 
 
 func _build_stable_overlay() -> void:
@@ -715,6 +729,8 @@ func _refresh_stable() -> void:
 			_render_yard()
 		"BLOODSTOCK":
 			_render_bloodstock()
+		"GHOSTS":
+			_render_ghosts()
 		_:
 			pass
 
@@ -851,6 +867,208 @@ func _picked_id(pick: OptionButton) -> String:
 	if pick == null or pick.selected <= 0:
 		return ""
 	return str(pick.get_item_metadata(pick.selected))
+
+
+# ── Ghost duels: save, arm, settle ───────────────────────────────────────────
+
+## The GHOSTS desk: the armed ghost with its stand-down, every locally held
+## ghost with a RACE button, and a load-by-id row (local ids today, server
+## ids once the identity bridge wires GhostStore.transport).
+func _render_ghosts() -> void:
+	var ghost := armed_ghost()
+	if ghost != null:
+		_section_line("Armed: %s's ghost  ·  %s  ·  the %s" % [
+			ghost.handle, RaceState.format_time_ms(ghost.total_ms),
+			CircusFactions.name_for(ghost.faction),
+		], true)
+		var stand_down := Button.new()
+		stand_down.name = "StandDownGhost"
+		stand_down.text = "STAND DOWN"
+		stand_down.focus_mode = Control.FOCUS_NONE
+		stand_down.pressed.connect(func() -> void:
+			stand_down_ghost()
+			_last_verdict = {}
+			audio.oneshot("ui_tick")
+			_refresh_stable())
+		_section_box.add_child(stand_down)
+	var ghosts := ghost_store.list_local()
+	if ghosts.is_empty():
+		_section_line("No ghosts yet — save one from the laurel board after a race you finish.")
+	for entry in ghosts:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		var line := Label.new()
+		line.text = "%s  ·  %s  ·  %s" % [
+			str(entry.get("handle", "?")), RaceState.format_time_ms(int(entry.get("totalMs", 0))),
+			CircusFactions.name_for(str(entry.get("faction", ""))),
+		]
+		line.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(line)
+		var race := Button.new()
+		race.text = "RACE"
+		race.focus_mode = Control.FOCUS_NONE
+		var ghost_id := str(entry.get("id", ""))
+		race.pressed.connect(func() -> void: _race_ghost(ghost_id))
+		row.add_child(race)
+		_section_box.add_child(row)
+	var load_row := HBoxContainer.new()
+	load_row.add_theme_constant_override("separation", 8)
+	_ghost_id_edit = LineEdit.new()
+	_ghost_id_edit.placeholder_text = "Ghost id (ghost_… or g-…)"
+	_ghost_id_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	load_row.add_child(_ghost_id_edit)
+	var load := Button.new()
+	load.text = "LOAD"
+	load.focus_mode = Control.FOCUS_NONE
+	load.pressed.connect(func() -> void: _race_ghost(_ghost_id_edit.text.strip_edges()))
+	load_row.add_child(load)
+	_section_box.add_child(load_row)
+	if not _ghost_status.is_empty():
+		_section_line(_ghost_status)
+
+
+## Arm a ghost and close the desk: the sand is where the duel happens. The
+## ghost replays with the exhibition until post time, then runs against the
+## live race clock; my next finish settles it.
+func _race_ghost(id: String) -> void:
+	if id.is_empty():
+		return
+	var run := ghost_store.load_ghost(id)
+	if run == null:
+		_ghost_status = "No ghost answers to %s." % id
+		_refresh_stable()
+		return
+	arm_ghost(run)
+	_last_verdict = {}
+	_ghost_status = ""
+	audio.oneshot("ui_tick")
+	_stable_panel.visible = false
+
+
+## Every race I ride is recorded from the same tick stream the broadcast
+## renders; finishing closes the run with the official time. A new card
+## (parade or gate) retires the last run and the last settle with it.
+func _track_ghost_recording(event_name: String) -> void:
+	match event_name:
+		"spectate:hello", "race:phase":
+			match state.phase:
+				RaceState.PHASE_RUNNING:
+					if rider.riding() and _recorder == null:
+						_recorder = GhostRun.new()
+						_recorder.begin(rider.stable_name(), _faction_id, state.race_distance())
+				RaceState.PHASE_FINISHED:
+					_finish_recording()
+				RaceState.PHASE_PARADING, RaceState.PHASE_GATE:
+					_recorder = null
+					_last_run = null
+					_last_verdict = {}
+					_ghost_save_notice = ""
+		"race:tick":
+			if _recorder != null and rider.riding():
+				_recorder.sample(state.tick_t, state.tick_horses, rider.my_race_horse_id)
+
+
+func _finish_recording() -> void:
+	if _recorder == null:
+		return
+	var run := _recorder
+	_recorder = null
+	var mine := _my_result()
+	if mine.is_empty():
+		return
+	run.finish(int(mine.get("timeMs", 0)))
+	if not run.is_valid():
+		return
+	_last_run = run
+	_ghost_save_notice = ""
+	var ghost := armed_ghost()
+	if ghost != null:
+		_last_verdict = GhostRun.verdict(run.total_ms, ghost.total_ms)
+		_last_verdict["handle"] = ghost.handle
+	# The board was already rebuilt by the phase fold, before the run settled.
+	if _results_panel.visible:
+		_rebuild_results_board()
+
+
+## My row of the official result, joined the way RaceState tags finishers:
+## horseId first, the parade entry's name second.
+func _my_result() -> Dictionary:
+	if rider.my_race_horse_id.is_empty():
+		return {}
+	for result in state.results:
+		if typeof(result) != TYPE_DICTIONARY:
+			continue
+		if str((result as Dictionary).get("horseId", "")) == rider.my_race_horse_id:
+			return result
+	var my_name := str(state.entry_for(rider.my_race_horse_id).get("horseName", ""))
+	if my_name.is_empty():
+		return {}
+	for result in state.results:
+		if typeof(result) == TYPE_DICTIONARY and str((result as Dictionary).get("horseName", "")) == my_name:
+			return result
+	return {}
+
+
+func _save_challenge_ghost() -> void:
+	if _last_run == null:
+		return
+	var id := ghost_store.save(_last_run)
+	if id.is_empty():
+		_ghost_save_notice = "The stewards could not keep that ghost."
+	else:
+		_ghost_save_notice = "Challenge ghost saved — %s" % id
+		audio.oneshot("ui_confirm")
+	_rebuild_results_board()
+
+
+func _verdict_line() -> String:
+	var ghost_handle := str(_last_verdict.get("handle", ""))
+	var margin := RaceState.format_time_ms(int(_last_verdict.get("marginMs", 0)))
+	match str(_last_verdict.get("outcome", "")):
+		"win":
+			return "You held off %s's ghost by %s" % [ghost_handle, margin]
+		"loss":
+			return "%s's ghost took it by %s" % [ghost_handle, margin]
+		_:
+			return "A dead heat with %s's ghost" % ghost_handle
+
+
+## The laurel board carries the duel: the settle line when a ghost was armed,
+## and the save offer whenever a finished run is sitting on the rail.
+func _rebuild_results_board() -> void:
+	super._rebuild_results_board()
+	if not _last_verdict.is_empty():
+		var duel_title := Label.new()
+		duel_title.text = "THE GHOST DUEL"
+		duel_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		duel_title.add_theme_font_size_override("font_size", 18)
+		duel_title.add_theme_color_override("font_color", Color(0.957, 0.808, 0.463))
+		_results_box.add_child(duel_title)
+		var duel_line := Label.new()
+		duel_line.text = _verdict_line()
+		duel_line.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		duel_line.add_theme_font_size_override("font_size", 16)
+		var won := str(_last_verdict.get("outcome", "")) == "win"
+		duel_line.add_theme_color_override("font_color", Color(0.98, 0.88, 0.55) if won else Color(0.949, 0.925, 0.847))
+		_results_box.add_child(duel_line)
+	if _last_run != null and _last_run.is_valid():
+		if _ghost_save_notice.is_empty():
+			var save := Button.new()
+			save.name = "SaveChallengeGhost"
+			save.text = "SAVE AS A CHALLENGE GHOST"
+			save.custom_minimum_size = Vector2(0.0, 60.0)
+			save.focus_mode = Control.FOCUS_NONE
+			save.add_to_group("qa_hud")
+			save.add_to_group("qa_tap")
+			save.pressed.connect(_save_challenge_ghost)
+			_results_box.add_child(save)
+		else:
+			var note := Label.new()
+			note.text = _ghost_save_notice
+			note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			note.add_theme_font_size_override("font_size", 14)
+			note.add_theme_color_override("font_color", Color(0.847, 0.780, 0.635))
+			_results_box.add_child(note)
 
 
 # ── Projections: exchange, honours, circuit ──────────────────────────────────
@@ -1226,6 +1444,7 @@ func _on_spectate_event(event_name: String, data: Variant) -> void:
 			if typeof(data) == TYPE_DICTIONARY:
 				_refresh_rider_line(rider.my_remaining_m(data))
 			_energy_bar.value = rider.my_energy()
+	_track_ghost_recording(event_name)
 
 
 func _refresh_rider_line(remaining_m: float = -1.0) -> void:

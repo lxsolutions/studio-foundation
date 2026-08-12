@@ -1,11 +1,13 @@
 //! Game-owned application payloads (studio protocol `ApplicationRequest`).
-//! The faction surface: stables join a faction, race results record points
-//! per faction, and the standings fetch returns the season tally. Payload
-//! schema is game-owned by design — the foundation transports opaque JSON.
+//! Two surfaces: the factions (stables join, race results record points per
+//! faction, standings fetch returns the season tally) and the ghost runs
+//! (submit stores a time-trial run, fetch returns it by id — "beat my lap").
+//! Payload schema is game-owned by design — the foundation transports opaque
+//! JSON.
 //!
 //! Persistence follows the boot wiring: PostgreSQL when `DATABASE_URL` was
-//! set (game_chariot schema, migration 0002), an in-memory store otherwise so
-//! the endpoint still answers offline and in tests.
+//! set (game_chariot schema, migrations 0002 and 0003), an in-memory store
+//! otherwise so the endpoint still answers offline and in tests.
 
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -18,11 +20,13 @@ use studio_dedicated_server::{ApplicationFuture, ApplicationHandler, Application
 use crate::factions::{
     self, Finishing, DEFAULT_SEASON,
 };
+use crate::ghosts::{self, GhostTick};
 
 #[derive(Default)]
 struct MemoryState {
     memberships: HashMap<String, String>,
     points: Vec<RecordedPoint>,
+    ghosts: Vec<StoredGhost>,
 }
 
 struct RecordedPoint {
@@ -31,6 +35,33 @@ struct RecordedPoint {
     faction: String,
     place: u32,
     points: u32,
+}
+
+/// A stored ghost run. The tick stream is the payload; everything else is a
+/// projection the fetch response is built from.
+#[derive(Clone)]
+struct StoredGhost {
+    id: String,
+    member: String,
+    faction: String,
+    handle: String,
+    total_ms: u32,
+    distance_m: f64,
+    ticks: Vec<GhostTick>,
+}
+
+impl StoredGhost {
+    fn summary(&self) -> Value {
+        json!({
+            "id": self.id,
+            "member": self.member,
+            "faction": self.faction,
+            "handle": self.handle,
+            "totalMs": self.total_ms,
+            "distanceM": self.distance_m,
+            "ticks": self.ticks,
+        })
+    }
 }
 
 enum FactionStore {
@@ -153,11 +184,84 @@ impl ChariotApplication {
         ordered.sort_by(|a, b| b.1.cmp(&a.1));
         Ok(ordered)
     }
+
+    /// Store a validated run and return its public id. Postgres ids come from
+    /// the identity column; the memory store numbers its own — both carry the
+    /// "g-" prefix so a client cannot tell which store answered.
+    async fn ghost_save(&self, run: &StoredGhost) -> Result<String, String> {
+        match &self.store {
+            FactionStore::Memory(state) => {
+                let mut state = state.lock().map_err(|_| "store poisoned".to_string())?;
+                let id = format!("g-{}", state.ghosts.len() + 1);
+                let mut stored = run.clone();
+                stored.id = id.clone();
+                state.ghosts.push(stored);
+                Ok(id)
+            }
+            FactionStore::Postgres(pool) => {
+                let row: (i64,) = sqlx::query_as(
+                    "INSERT INTO game_chariot.ghost_runs \
+                     (member_key, faction, handle, total_ms, payload) \
+                     VALUES ($1, $2, $3, $4, $5) RETURNING id",
+                )
+                .bind(&run.member)
+                .bind(&run.faction)
+                .bind(&run.handle)
+                .bind(run.total_ms as i32)
+                .bind(json!({ "distanceM": run.distance_m, "ticks": run.ticks }))
+                .fetch_one(pool)
+                .await
+                .map_err(|err| format!("ghost write failed: {err}"))?;
+                Ok(format!("g-{}", row.0))
+            }
+        }
+    }
+
+    async fn ghost_load(&self, id: &str) -> Result<Option<StoredGhost>, String> {
+        match &self.store {
+            FactionStore::Memory(state) => {
+                let state = state.lock().map_err(|_| "store poisoned".to_string())?;
+                Ok(state.ghosts.iter().find(|ghost| ghost.id == id).cloned())
+            }
+            FactionStore::Postgres(pool) => {
+                let Some(row_id) = id.strip_prefix("g-").and_then(|raw| raw.parse::<i64>().ok())
+                else {
+                    return Ok(None);
+                };
+                let row: Option<(String, String, String, i32, Value)> = sqlx::query_as(
+                    "SELECT member_key, faction, handle, total_ms, payload \
+                     FROM game_chariot.ghost_runs WHERE id = $1",
+                )
+                .bind(row_id)
+                .fetch_optional(pool)
+                .await
+                .map_err(|err| format!("ghost read failed: {err}"))?;
+                let Some((member, faction, handle, total_ms, payload)) = row else {
+                    return Ok(None);
+                };
+                let ticks: Vec<GhostTick> =
+                    serde_json::from_value(payload.get("ticks").cloned().unwrap_or(json!([])))
+                        .map_err(|err| format!("stored ghost payload is malformed: {err}"))?;
+                Ok(Some(StoredGhost {
+                    id: id.to_string(),
+                    member,
+                    faction,
+                    handle,
+                    total_ms: total_ms.max(0) as u32,
+                    distance_m: payload
+                        .get("distanceM")
+                        .and_then(Value::as_f64)
+                        .unwrap_or(0.0),
+                    ticks,
+                }))
+            }
+        }
+    }
 }
 
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
-enum FactionRequest {
+enum ChariotRequest {
     FactionJoin { member: String, faction: String },
     RaceRecord {
         season: Option<String>,
@@ -166,6 +270,17 @@ enum FactionRequest {
         results: Vec<FinishingRow>,
     },
     StandingsFetch { season: Option<String> },
+    GhostSubmit {
+        member: String,
+        faction: String,
+        handle: String,
+        #[serde(rename = "totalMs")]
+        total_ms: u32,
+        #[serde(rename = "distanceM", default)]
+        distance_m: f64,
+        ticks: Vec<GhostTick>,
+    },
+    GhostFetch { id: String },
 }
 
 #[derive(Deserialize)]
@@ -191,12 +306,12 @@ fn rejected(message: impl Into<String>) -> ApplicationOutcome {
 impl ApplicationHandler for ChariotApplication {
     fn handle<'a>(&'a self, payload_json: &'a str) -> ApplicationFuture<'a> {
         Box::pin(async move {
-            let request: FactionRequest = match serde_json::from_str(payload_json) {
+            let request: ChariotRequest = match serde_json::from_str(payload_json) {
                 Ok(request) => request,
-                Err(err) => return rejected(format!("unknown faction payload: {err}")),
+                Err(err) => return rejected(format!("unknown chariot payload: {err}")),
             };
             match request {
-                FactionRequest::FactionJoin { member, faction } => {
+                ChariotRequest::FactionJoin { member, faction } => {
                     let member = member.trim();
                     if member.is_empty() {
                         return rejected("faction.join needs a member key");
@@ -214,7 +329,7 @@ impl ApplicationHandler for ChariotApplication {
                         Err(err) => rejected(err),
                     }
                 }
-                FactionRequest::RaceRecord {
+                ChariotRequest::RaceRecord {
                     season,
                     race_id,
                     results,
@@ -250,7 +365,7 @@ impl ApplicationHandler for ChariotApplication {
                         Err(err) => rejected(err),
                     }
                 }
-                FactionRequest::StandingsFetch { season } => {
+                ChariotRequest::StandingsFetch { season } => {
                     let season = season.unwrap_or_else(|| DEFAULT_SEASON.to_string());
                     match self.standings(&season).await {
                         Ok(standings) => ok(json!({
@@ -265,6 +380,58 @@ impl ApplicationHandler for ChariotApplication {
                                 }))
                                 .collect::<Vec<_>>(),
                         })),
+                        Err(err) => rejected(err),
+                    }
+                }
+                ChariotRequest::GhostSubmit {
+                    member,
+                    faction,
+                    handle,
+                    total_ms,
+                    distance_m,
+                    ticks,
+                } => {
+                    let member = member.trim();
+                    if member.is_empty() {
+                        return rejected("ghost.submit needs a member key");
+                    }
+                    let handle = handle.trim();
+                    if let Err(err) = ghosts::validate(handle, &faction, total_ms, &ticks) {
+                        return rejected(err);
+                    }
+                    if !(distance_m > 0.0 && distance_m <= ghosts::MAX_POS_M) {
+                        return rejected("ghost.submit needs a plausible distanceM");
+                    }
+                    let run = StoredGhost {
+                        id: String::new(),
+                        member: member.to_string(),
+                        faction: faction.clone(),
+                        handle: handle.to_string(),
+                        total_ms,
+                        distance_m,
+                        ticks,
+                    };
+                    match self.ghost_save(&run).await {
+                        Ok(id) => ok(json!({
+                            "ok": true,
+                            "kind": "ghost.submit",
+                            "id": id,
+                        })),
+                        Err(err) => rejected(err),
+                    }
+                }
+                ChariotRequest::GhostFetch { id } => {
+                    let id = id.trim();
+                    if id.is_empty() {
+                        return rejected("ghost.fetch needs an id");
+                    }
+                    match self.ghost_load(id).await {
+                        Ok(Some(run)) => ok(json!({
+                            "ok": true,
+                            "kind": "ghost.fetch",
+                            "ghost": run.summary(),
+                        })),
+                        Ok(None) => rejected(format!("no such ghost: {id}")),
                         Err(err) => rejected(err),
                     }
                 }
@@ -369,5 +536,95 @@ mod tests {
         let app = ChariotApplication::in_memory();
         assert!(!handle(&app, "{nope").await.accepted);
         assert!(!handle(&app, r#"{"kind":"something_else"}"#).await.accepted);
+    }
+
+    fn ghost_payload(total_ms: u32) -> String {
+        let ticks: Vec<Value> = (0..12)
+            .map(|i| {
+                json!({
+                    "t": i as f64 * 200.0,
+                    "pos": i as f64 * 3.3,
+                    "lane": 2.0,
+                    "speed": 16.5,
+                })
+            })
+            .collect();
+        json!({
+            "kind": "ghost_submit",
+            "member": "STABLE-1",
+            "faction": "blue",
+            "handle": "Xanthos",
+            "totalMs": total_ms,
+            "distanceM": 1800.0,
+            "ticks": ticks,
+        })
+        .to_string()
+    }
+
+    #[tokio::test]
+    async fn ghost_submit_then_fetch_round_trips() {
+        let app = ChariotApplication::in_memory();
+        let submitted = handle(&app, &ghost_payload(92_000)).await;
+        assert!(submitted.accepted, "submit rejected: {}", submitted.summary);
+        let id = summary(&submitted)["id"].as_str().unwrap().to_string();
+        assert!(id.starts_with("g-"), "ids carry the ghost prefix: {id}");
+
+        let fetched = handle(
+            &app,
+            &format!(r#"{{"kind":"ghost_fetch","id":"{id}"}}"#),
+        )
+        .await;
+        assert!(fetched.accepted, "fetch rejected: {}", fetched.summary);
+        let ghost = summary(&fetched)["ghost"].clone();
+        assert_eq!(ghost["id"], json!(id));
+        assert_eq!(ghost["handle"], "Xanthos");
+        assert_eq!(ghost["faction"], "blue");
+        assert_eq!(ghost["member"], "STABLE-1");
+        assert_eq!(ghost["totalMs"], 92_000);
+        assert_eq!(ghost["distanceM"], 1800.0);
+        let ticks = ghost["ticks"].as_array().unwrap();
+        assert_eq!(ticks.len(), 12, "the tick stream survives verbatim");
+        assert_eq!(ticks[0]["t"], 0.0);
+        assert_eq!(ticks[11]["pos"], 11.0_f64 * 3.3);
+    }
+
+    #[tokio::test]
+    async fn ghost_submit_enforces_the_bounds() {
+        let app = ChariotApplication::in_memory();
+        let too_quick = handle(&app, &ghost_payload(5_000)).await;
+        assert!(!too_quick.accepted, "a five-second lap is not a race");
+
+        let mut sparse: Value = serde_json::from_str(&ghost_payload(92_000)).unwrap();
+        sparse["ticks"] = json!([{"t": 0.0, "pos": 0.0, "lane": 1.0, "speed": 16.0}]);
+        let thin = handle(&app, &sparse.to_string()).await;
+        assert!(!thin.accepted, "a lone sample is not a run");
+
+        let mut backwards: Value = serde_json::from_str(&ghost_payload(92_000)).unwrap();
+        backwards["ticks"][4]["t"] = json!(0.0);
+        let reversed = handle(&app, &backwards.to_string()).await;
+        assert!(!reversed.accepted, "tick times never run backwards");
+
+        let mut factionless: Value = serde_json::from_str(&ghost_payload(92_000)).unwrap();
+        factionless["faction"] = json!("gold");
+        assert!(!handle(&app, &factionless.to_string()).await.accepted);
+
+        let mut memberless: Value = serde_json::from_str(&ghost_payload(92_000)).unwrap();
+        memberless["member"] = json!("  ");
+        assert!(!handle(&app, &memberless.to_string()).await.accepted);
+
+        let mut distanceless: Value = serde_json::from_str(&ghost_payload(92_000)).unwrap();
+        distanceless["distanceM"] = json!(0.0);
+        assert!(!handle(&app, &distanceless.to_string()).await.accepted);
+
+        // Rejections write nothing: the store stays empty behind them.
+        let fetched = handle(&app, r#"{"kind":"ghost_fetch","id":"g-1"}"#).await;
+        assert!(!fetched.accepted, "no run was ever stored");
+    }
+
+    #[tokio::test]
+    async fn ghost_fetch_rejects_unknown_ids() {
+        let app = ChariotApplication::in_memory();
+        assert!(!handle(&app, r#"{"kind":"ghost_fetch","id":"g-99"}"#).await.accepted);
+        assert!(!handle(&app, r#"{"kind":"ghost_fetch","id":""}"#).await.accepted);
     }
 }

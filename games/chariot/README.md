@@ -87,3 +87,28 @@ Veneta/Prasina/Russata/Albata). The layer is deliberately thin:
   application payloads over the studio protocol: `faction_join`,
   `race_record` (server derives points from places), and `standings_fetch`
   (the season tally per faction).
+
+## Ghost time-trial duels ("beat my lap")
+
+The async 1v1 settle: save a finished race as a challenge ghost, then race
+against its replay on the sand.
+
+- `project/src/core/ghost_run.gd` owns the run: recording from the spectate
+  tick stream (normalized to a millisecond race clock against the official
+  timeMs), serialization, replay interpolation, the win/loss verdict, and the
+  plausibility bounds. `server/src/ghosts.rs` mirrors the bounds — change both
+  or change neither.
+- `project/src/core/ghost_store.gd` keeps ghosts under `user://ghosts/`
+  (schema-versioned JSON, the StudioReplay convention). Its `transport` seam
+  takes a Callable answering the server's payloads; unset means local-only,
+  which is today's wiring — the client speaks no studio protocol yet.
+- The rider view records every race you ride. The laurel board offers
+  **SAVE AS A CHALLENGE GHOST** after a finish; the stable's GHOSTS desk lists
+  your ghosts, loads one by id, and arms it. An armed ghost replays as a
+  spectral biga (faction-tinted translucency, no shadows, no new art) — with
+  the exhibition between races, against the live tick clock during one. It
+  lives outside the live field's collections, so nothing can collide with it
+  or score it. Your next finish settles the duel on the laurel board.
+- The Rust server stores and returns runs verbatim via `ghost_submit` /
+  `ghost_fetch` (`server/migrations/0003_ghost_runs.sql`): it applies the
+  shared bounds and derives nothing else from a client's claims.
