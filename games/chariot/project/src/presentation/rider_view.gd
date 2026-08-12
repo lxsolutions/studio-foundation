@@ -590,7 +590,9 @@ var _dam_pick: OptionButton
 # armed ghost replays on the sand (broadcast_view owns the spectral biga) and
 # the next race I finish settles against its time. The studio bridge carries
 # saves and fetches to the game server (GhostStore.transport); parked or
-# absent, the store stays local-only, exactly as before the bridge.
+# absent, the store stays local-only, exactly as before the bridge. A settle
+# also reports to the server (duel_record, _record_duel) so the winner's
+# faction scores the stake — same bridge, same offline silence.
 var ghost_store: GhostStore = GhostStore.new()
 var _studio: StudioClient = null
 var _recorder: GhostRun = null
@@ -599,6 +601,10 @@ var _last_verdict: Dictionary = {}
 var _ghost_save_notice: String = ""
 var _ghost_status: String = ""
 var _ghost_id_edit: LineEdit
+## The id the armed ghost was loaded under ("g-…" server-side, "ghost_…"
+## local): the duel_record payload names it so the server can pull the run it
+## is settling against.
+var _armed_ghost_id: String = ""
 
 
 func _build_stable_overlay() -> void:
@@ -958,6 +964,7 @@ func _race_ghost(id: String) -> void:
 		_refresh_stable()
 		return
 	arm_ghost(run)
+	_armed_ghost_id = id
 	_last_verdict = {}
 	_ghost_status = ""
 	audio.oneshot("ui_tick")
@@ -986,6 +993,14 @@ func _boot_ghost_challenge() -> void:
 		_ghost_status = "No ghost answers to %s." % ghost_id
 		return
 	arm_ghost(run)
+	_armed_ghost_id = ghost_id
+
+
+## Standing the ghost down also forgets its id: without an armed ghost there
+## is no duel to record.
+func stand_down_ghost() -> void:
+	_armed_ghost_id = ""
+	super.stand_down_ghost()
 
 
 ## Every race I ride is recorded from the same tick stream the broadcast
@@ -1028,9 +1043,43 @@ func _finish_recording() -> void:
 	if ghost != null:
 		_last_verdict = GhostRun.verdict(run.total_ms, ghost.total_ms)
 		_last_verdict["handle"] = ghost.handle
+		_record_duel(run, _armed_ghost_id, _last_verdict)
 	# The board was already rebuilt by the phase fold, before the run settled.
 	if _results_panel.visible:
 		_rebuild_results_board()
+
+
+## The faction-war half of a settle. My run goes on file server-side through
+## the bridge — the duel's evidence, NOT a shelf ghost: the local store keeps
+## only what I chose to save — then one duel_record payload names both runs
+## and my claim; the server derives the winner from the stored runs and scores
+## the stake (CircusFactions.DUEL_POINTS) to the winner's faction. Fire and
+## forget: the laurel board already shows the local verdict, and a parked
+## bridge answers not-ok before anything crosses the wire, so offline the
+## settle stays local and silent — exactly today's behavior.
+func _record_duel(run: GhostRun, ghost_id: String, verdict: Dictionary) -> void:
+	if _studio == null or ghost_id.is_empty():
+		return
+	var submitted: Dictionary = await _studio.submit({
+		"kind": "ghost_submit",
+		"member": run.handle,
+		"faction": run.faction,
+		"handle": run.handle,
+		"totalMs": run.total_ms,
+		"distanceM": run.distance_m,
+		"ticks": run.ticks,
+	})
+	var run_id := str(submitted.get("id", "")) if bool(submitted.get("ok", false)) else ""
+	if run_id.is_empty():
+		return
+	_studio.submit_now({
+		"kind": "duel_record",
+		"ghostId": ghost_id,
+		"runId": run_id,
+		"winner": { "win": "me", "loss": "ghost" }.get(str(verdict.get("outcome", "")), "tie"),
+		"faction": AuthStore.saved_faction(),
+		"marginMs": int(verdict.get("marginMs", 0)),
+	}, func(_reply: Dictionary) -> void: pass)
 
 
 ## My row of the official result, joined the way RaceState tags finishers:

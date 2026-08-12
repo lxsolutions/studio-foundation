@@ -10,6 +10,11 @@ pub const FACTION_IDS: [&str; 4] = ["blue", "green", "red", "white"];
 /// First four home score; the rest of the field does not.
 pub const POINTS_BY_PLACE: [u32; 4] = [9, 6, 4, 2];
 
+/// The ghost-duel stake: a settled duel scores this to the winner's faction,
+/// flat; a dead heat scores nobody. Mirrors the client's
+/// `project/src/core/circus_factions.gd` — change both or change neither.
+pub const DUEL_POINTS: u32 = 5;
+
 /// Season tally bucket when a payload does not name one.
 pub const DEFAULT_SEASON: &str = "s1";
 
@@ -79,6 +84,11 @@ mod tests {
         assert_eq!(points_for_place(4), 2);
         assert_eq!(points_for_place(5), 0, "fifth home scores nothing");
         assert_eq!(points_for_place(0), 0);
+    }
+
+    #[test]
+    fn duel_stake() {
+        assert_eq!(DUEL_POINTS, 5, "mirrors circus_factions.gd DUEL_POINTS");
     }
 
     #[test]

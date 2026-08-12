@@ -19,6 +19,11 @@ const FACTIONS: Array[Dictionary] = [
 ## not. Mirrors server/src/factions.rs — change both or change neither.
 const POINTS_BY_PLACE: Array[int] = [9, 6, 4, 2]
 
+## The ghost-duel stake: a settled duel scores this to the winner's faction,
+## flat; a dead heat scores nobody. Mirrors server/src/factions.rs — change
+## both or change neither.
+const DUEL_POINTS := 5
+
 ## Fallback silks when the wire sends no color: the four factions first, then
 ## the wider stable palette (what broadcast_view painted before factions had
 ## names). RaceState assigns these to colorless entries in gate order, so the
@@ -175,8 +180,9 @@ static func points_for_place(place: int) -> int:
 
 
 ## Fold one race's faction-tagged finishers into points per faction. Input
-## rows carry "faction" and "pos"; unknown factions and unscored places add
-## nothing, and all four factions always appear (zero is a real standing).
+## rows carry "faction" and "pos" — or "duel": true for a settled ghost-duel
+## win, which scores DUEL_POINTS flat. Unknown factions and unscored places
+## add nothing, and all four factions always appear (zero is a real standing).
 static func tally(tagged_results: Array) -> Dictionary:
 	var points: Dictionary = {}
 	for faction_id in ids():
@@ -186,6 +192,9 @@ static func tally(tagged_results: Array) -> Dictionary:
 			continue
 		var faction_id := str((result as Dictionary).get("faction", ""))
 		if not is_valid_id(faction_id):
+			continue
+		if bool((result as Dictionary).get("duel", false)):
+			points[faction_id] = int(points[faction_id]) + DUEL_POINTS
 			continue
 		points[faction_id] = int(points[faction_id]) + points_for_place(int((result as Dictionary).get("pos", 0)))
 	return points

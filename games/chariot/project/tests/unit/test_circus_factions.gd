@@ -60,6 +60,21 @@ func test_points_table() -> void:
 	assert_eq(CircusFactions.points_for_place(0), 0)
 
 
+func test_duel_stake_scores_flat() -> void:
+	assert_eq(CircusFactions.DUEL_POINTS, 5, "mirrors server/src/factions.rs")
+	var points: Dictionary = CircusFactions.tally([
+		{ "faction": "blue", "pos": 1 },
+		{ "faction": "red", "duel": true },
+		{ "faction": "red", "duel": true },
+		{ "faction": "gold", "duel": true },
+		{ "duel": true },
+	])
+	assert_eq(int(points.get("red", -1)), 10, "two duel wins, five each, no place needed")
+	assert_eq(int(points.get("blue", -1)), 9, "duel rows do not disturb the race table")
+	assert_eq(int(points.get("green", -1)), 0, "all four factions always appear")
+	assert_eq(int(points.get("white", -1)), 0, "unknown and factionless duel rows feed nobody")
+
+
 func test_tally_folds_one_race() -> void:
 	var points: Dictionary = CircusFactions.tally([
 		{ "faction": "blue", "pos": 1 },

@@ -81,12 +81,14 @@ Veneta/Prasina/Russata/Albata). The layer is deliberately thin:
 - A rider declares for a faction at the sign-in gate; `AuthStore` persists it
   (`user://rider.cfg`, localStorage `arc_faction` on the web). It is
   local-only until the racing wire carries a faction key.
-- The Rust server persists membership + per-race faction points
-  (`server/migrations/0002_circus_factions.sql`, PostgreSQL when
-  `DATABASE_URL` is set, in-memory otherwise) and answers three game-owned
+- The Rust server persists membership + per-race and per-duel faction points
+  (`server/migrations/0002_circus_factions.sql`,
+  `server/migrations/0004_faction_duel_points.sql`, PostgreSQL when
+  `DATABASE_URL` is set, in-memory otherwise) and answers four game-owned
   application payloads over the studio protocol: `faction_join`,
-  `race_record` (server derives points from places), and `standings_fetch`
-  (the season tally per faction).
+  `race_record` (server derives points from places), `duel_record` (server
+  derives the winner from the two stored runs), and `standings_fetch` (the
+  season tally per faction — races and duels together).
 
 ## Ghost time-trial duels ("beat my lap")
 
@@ -158,3 +160,34 @@ that set it.
   loaded through the store, and armed on the sand. The GHOSTS desk's LINK
   button copies `<origin>/?ghost=<id>` to the clipboard; a server `g-…` id
   travels, a local `ghost_…` id only resolves where it was saved.
+
+## Faction tallies from ghost duels
+
+A settled duel scores: the winner's faction takes the stake (5, flat — a dead
+heat scores nobody) into the season tally, closing the faction-war loop.
+
+- The verdict the laurel board shows is still computed locally. With the
+  bridge live, `_finish_recording` also fires `_record_duel`: my run is
+  submitted through the same `ghost_submit` path so the server holds both
+  sides of the duel (server-side only — it is the duel's evidence, not a
+  shelf ghost), then one `duel_record` payload names the two runs and the
+  claim: `{kind, ghostId, runId, winner: me|ghost|tie, faction, marginMs}`.
+  The faction is AuthStore's saved choice — `""` when the rider never
+  declared, and an undeclared winner feeds nobody. A parked bridge answers
+  not-ok before anything crosses the wire and nothing more is sent; offline,
+  the settle stays local and silent, exactly as before.
+- The server never trusts the claim. It loads both runs, derives the winner
+  from the stored `total_ms` (lower takes it, equal times are a dead heat)
+  and its own margin, and awards `factions::DUEL_POINTS` — mirrored by the
+  client's `CircusFactions.DUEL_POINTS`; change both or change neither. The
+  challenger side scores the declared faction; the ghost side scores the
+  faction its own run was stored under.
+- The divergence rule is refusal. A duel the server cannot verify — either
+  run id unknown, which covers every duel against a local-only `ghost_…`
+  ghost — is rejected and records nothing; the ledger only holds what the
+  server can prove. (Half points for unverified duels was the alternative;
+  the ledger is integers, and half-believing claims is how a tally stops
+  meaning anything.) `UNIQUE (ghost_id, run_id)` on
+  `server/migrations/0004_faction_duel_points.sql` makes a resent record
+  idempotent, and `standings_fetch` folds duel points into the season tally
+  alongside race points.

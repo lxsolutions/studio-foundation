@@ -1,13 +1,14 @@
 //! Game-owned application payloads (studio protocol `ApplicationRequest`).
 //! Two surfaces: the factions (stables join, race results record points per
-//! faction, standings fetch returns the season tally) and the ghost runs
-//! (submit stores a time-trial run, fetch returns it by id — "beat my lap").
+//! faction, ghost duels record the winner's stake, standings fetch returns
+//! the season tally) and the ghost runs (submit stores a time-trial run,
+//! fetch returns it by id — "beat my lap").
 //! Payload schema is game-owned by design — the foundation transports opaque
 //! JSON.
 //!
 //! Persistence follows the boot wiring: PostgreSQL when `DATABASE_URL` was
-//! set (game_chariot schema, migrations 0002 and 0003), an in-memory store
-//! otherwise so the endpoint still answers offline and in tests.
+//! set (game_chariot schema, migrations 0002, 0003, and 0004), an in-memory
+//! store otherwise so the endpoint still answers offline and in tests.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -29,6 +30,7 @@ struct MemoryState {
     memberships: HashMap<String, String>,
     points: Vec<RecordedPoint>,
     ghosts: Vec<StoredGhost>,
+    duel_points: Vec<RecordedDuel>,
 }
 
 struct RecordedPoint {
@@ -36,6 +38,16 @@ struct RecordedPoint {
     race_id: String,
     faction: String,
     place: u32,
+    points: u32,
+}
+
+/// A scored ghost duel: the derived winner's faction and the stake, keyed by
+/// the two runs that settled it so a resent record never scores twice.
+struct RecordedDuel {
+    season: String,
+    ghost_id: String,
+    run_id: String,
+    faction: String,
     points: u32,
 }
 
@@ -169,6 +181,56 @@ impl ChariotApplication {
         }
     }
 
+    /// Write one duel's stake to the winner's faction. Returns false when the
+    /// (ghost, run) pair is already on the ledger — a resent record is an
+    /// idempotent no-op, never a second scoring.
+    async fn duel_record(
+        &self,
+        season: &str,
+        ghost_id: &str,
+        run_id: &str,
+        faction: &str,
+        points: u32,
+    ) -> Result<bool, String> {
+        match &self.store {
+            FactionStore::Memory(state) => {
+                let mut state = state.lock().map_err(|_| "store poisoned".to_string())?;
+                if state
+                    .duel_points
+                    .iter()
+                    .any(|row| row.ghost_id == ghost_id && row.run_id == run_id)
+                {
+                    return Ok(false);
+                }
+                state.duel_points.push(RecordedDuel {
+                    season: season.to_string(),
+                    ghost_id: ghost_id.to_string(),
+                    run_id: run_id.to_string(),
+                    faction: faction.to_string(),
+                    points,
+                });
+                Ok(true)
+            }
+            FactionStore::Postgres(pool) => {
+                let result = sqlx::query(
+                    "INSERT INTO game_chariot.faction_duel_point \
+                     (season, ghost_id, run_id, faction, points) \
+                     VALUES ($1, $2, $3, $4, $5) \
+                     ON CONFLICT (ghost_id, run_id) DO NOTHING",
+                )
+                .bind(season)
+                .bind(ghost_id)
+                .bind(run_id)
+                .bind(faction)
+                .bind(points as i32)
+                .execute(pool)
+                .await
+                .map_err(|err| format!("duel points write failed: {err}"))?;
+                Ok(result.rows_affected() > 0)
+            }
+        }
+    }
+
     async fn standings(&self, season: &str) -> Result<Vec<(String, u32)>, String> {
         let mut totals = factions::zeroed_standings();
         match &self.store {
@@ -179,11 +241,22 @@ impl ChariotApplication {
                         *total += row.points;
                     }
                 }
+                for row in state.duel_points.iter().filter(|row| row.season == season) {
+                    if let Some(total) = totals.get_mut(&row.faction) {
+                        *total += row.points;
+                    }
+                }
             }
             FactionStore::Postgres(pool) => {
+                // The season tally is races and duels together.
                 let rows: Vec<(String, i64)> = sqlx::query_as(
-                    "SELECT faction, SUM(points) FROM game_chariot.faction_race_point \
-                     WHERE season = $1 GROUP BY faction",
+                    "SELECT faction, SUM(points) FROM ( \
+                         SELECT faction, points FROM game_chariot.faction_race_point \
+                         WHERE season = $1 \
+                         UNION ALL \
+                         SELECT faction, points FROM game_chariot.faction_duel_point \
+                         WHERE season = $1 \
+                     ) season_points GROUP BY faction",
                 )
                 .bind(season)
                 .fetch_all(pool)
@@ -301,6 +374,24 @@ enum ChariotRequest {
         ticks: Vec<GhostTick>,
     },
     GhostFetch { id: String },
+    DuelRecord {
+        season: Option<String>,
+        #[serde(rename = "ghostId")]
+        ghost_id: String,
+        #[serde(rename = "runId")]
+        run_id: String,
+        /// The client's claim: "me" (the challenger), "ghost", or "tie".
+        /// Carried for the audit trail, never trusted — the result is derived
+        /// from the two stored runs.
+        winner: String,
+        /// The challenger's declared faction (AuthStore). Empty means
+        /// unaffiliated: a winner with no colors feeds nobody.
+        faction: String,
+        /// The client's claimed gap; shape-checked only, the server derives
+        /// its own margin from the stored runs.
+        #[serde(rename = "marginMs")]
+        margin_ms: u32,
+    },
 }
 
 #[derive(Deserialize)]
@@ -493,6 +584,93 @@ impl ApplicationHandler for ChariotApplication {
                         Ok(None) => rejected(format!("no such ghost: {id}")),
                         Err(err) => rejected(err),
                     }
+                }
+                ChariotRequest::DuelRecord {
+                    season,
+                    ghost_id,
+                    run_id,
+                    winner,
+                    faction,
+                    margin_ms,
+                } => {
+                    let ghost_id = ghost_id.trim();
+                    if ghost_id.is_empty() {
+                        return rejected("duel.record needs a ghostId");
+                    }
+                    let run_id = run_id.trim();
+                    if run_id.is_empty() {
+                        return rejected("duel.record needs a runId");
+                    }
+                    let claimed = winner.trim();
+                    if !["me", "ghost", "tie"].contains(&claimed) {
+                        return rejected("duel.record winner is me, ghost, or tie");
+                    }
+                    let faction = faction.trim();
+                    if !faction.is_empty() && !factions::is_valid_faction(faction) {
+                        return rejected(format!("no such faction: {faction}"));
+                    }
+                    let season = season.unwrap_or_else(|| DEFAULT_SEASON.to_string());
+                    // The claimed winner and margin never decide anything: the
+                    // result is derived from the two stored runs, and a duel
+                    // the server cannot verify — either run missing — is
+                    // refused outright. The ledger only holds what the server
+                    // can prove; an unverifiable claim scores nothing.
+                    let ghost = match self.ghost_load(ghost_id).await {
+                        Ok(Some(run)) => run,
+                        Ok(None) => return rejected(format!("no such ghost: {ghost_id}")),
+                        Err(err) => return rejected(err),
+                    };
+                    let challenger = match self.ghost_load(run_id).await {
+                        Ok(Some(run)) => run,
+                        Ok(None) => return rejected(format!("no such run: {run_id}")),
+                        Err(err) => return rejected(err),
+                    };
+                    let outcome = if challenger.total_ms < ghost.total_ms {
+                        "me"
+                    } else if challenger.total_ms > ghost.total_ms {
+                        "ghost"
+                    } else {
+                        "tie"
+                    };
+                    let scoring_faction = match outcome {
+                        // The challenger's side scores the DECLARED faction
+                        // ("" feeds nobody); the ghost's side scores the
+                        // faction its run was stored under.
+                        "me" => faction,
+                        "ghost" => ghost.faction.as_str(),
+                        _ => "",
+                    };
+                    let awarded = if scoring_faction.is_empty() {
+                        0
+                    } else {
+                        match self
+                            .duel_record(
+                                &season,
+                                ghost_id,
+                                run_id,
+                                scoring_faction,
+                                factions::DUEL_POINTS,
+                            )
+                            .await
+                        {
+                            Ok(true) => factions::DUEL_POINTS,
+                            Ok(false) => 0, // a resent record: scored the first time
+                            Err(err) => return rejected(err),
+                        }
+                    };
+                    ok(json!({
+                        "ok": true,
+                        "kind": "duel.record",
+                        "season": season,
+                        "ghostId": ghost_id,
+                        "runId": run_id,
+                        "outcome": outcome,
+                        "claimed": claimed,
+                        "marginMs": challenger.total_ms.abs_diff(ghost.total_ms),
+                        "claimedMarginMs": margin_ms,
+                        "faction": scoring_faction,
+                        "points": awarded,
+                    }))
                 }
             }
         })
@@ -736,5 +914,175 @@ mod tests {
         let ghost = summary(&fetched)["ghost"].clone();
         assert_eq!(ghost["member"], "STABLE-1", "the claim stands when nothing can verify it");
         assert_eq!(ghost["handle"], "Xanthos", "and the claimed handle with it");
+    }
+
+    // ── Ghost-duel records ───────────────────────────────────────────────────
+
+    async fn submit_run(app: &ChariotApplication, faction: &str, total_ms: u32) -> String {
+        let mut payload: Value = serde_json::from_str(&ghost_payload(total_ms)).unwrap();
+        payload["faction"] = json!(faction);
+        let submitted = handle(app, &payload.to_string()).await;
+        assert!(submitted.accepted, "submit rejected: {}", submitted.summary);
+        summary(&submitted)["id"].as_str().unwrap().to_string()
+    }
+
+    fn duel_payload(ghost_id: &str, run_id: &str, winner: &str, faction: &str) -> String {
+        json!({
+            "kind": "duel_record",
+            "ghostId": ghost_id,
+            "runId": run_id,
+            "winner": winner,
+            "faction": faction,
+            "marginMs": 250,
+        })
+        .to_string()
+    }
+
+    async fn standings_points(app: &ChariotApplication) -> Value {
+        let fetched = handle(app, r#"{"kind":"standings_fetch","season":"s1"}"#).await;
+        assert!(fetched.accepted);
+        summary(&fetched)["standings"].clone()
+    }
+
+    fn points_of(standings: &Value, faction: &str) -> u64 {
+        standings
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|row| row["faction"] == faction)
+            .map(|row| row["points"].as_u64().unwrap())
+            .unwrap_or(0)
+    }
+
+    #[tokio::test]
+    async fn duel_record_derives_the_winner_and_scores_the_stake() {
+        let app = ChariotApplication::in_memory();
+        let ghost_id = submit_run(&app, "green", 92_000).await;
+        let run_id = submit_run(&app, "blue", 91_500).await;
+
+        let settled = handle(&app, &duel_payload(&ghost_id, &run_id, "me", "blue")).await;
+        assert!(settled.accepted, "settle rejected: {}", settled.summary);
+        let body = summary(&settled);
+        assert_eq!(body["kind"], "duel.record");
+        assert_eq!(body["outcome"], "me", "the challenger was the faster stored run");
+        assert_eq!(body["marginMs"], 500, "the margin is derived, not claimed");
+        assert_eq!(body["faction"], "blue");
+        assert_eq!(body["points"], 5, "the duel stake");
+
+        // The season tally folds duel points and race points together.
+        let race = r#"{"kind":"race_record","season":"s1","raceId":"r-1","results":[{"faction":"green","place":1}]}"#;
+        assert!(handle(&app, race).await.accepted);
+        let standings = standings_points(&app).await;
+        assert_eq!(points_of(&standings, "blue"), 5, "the duel win");
+        assert_eq!(points_of(&standings, "green"), 9, "the race win");
+        assert_eq!(points_of(&standings, "red"), 0);
+        assert_eq!(points_of(&standings, "white"), 0);
+    }
+
+    #[tokio::test]
+    async fn duel_record_server_truth_beats_a_lying_client() {
+        let app = ChariotApplication::in_memory();
+        let ghost_id = submit_run(&app, "green", 92_000).await;
+        // The challenger's run is SLOWER — the client claims the win anyway.
+        let run_id = submit_run(&app, "blue", 93_000).await;
+
+        let settled = handle(&app, &duel_payload(&ghost_id, &run_id, "me", "blue")).await;
+        assert!(settled.accepted, "an honest-shaped lie is still a valid payload");
+        let body = summary(&settled);
+        assert_eq!(body["outcome"], "ghost", "the stored runs decide, never the claim");
+        assert_eq!(body["faction"], "green", "the ghost's faction scores");
+        assert_eq!(body["points"], 5);
+        let standings = standings_points(&app).await;
+        assert_eq!(points_of(&standings, "green"), 5);
+        assert_eq!(points_of(&standings, "blue"), 0, "the liar's claim feeds nobody");
+    }
+
+    #[tokio::test]
+    async fn duel_record_refuses_a_duel_it_cannot_verify() {
+        let app = ChariotApplication::in_memory();
+        let run_id = submit_run(&app, "blue", 91_500).await;
+
+        let no_ghost = handle(&app, &duel_payload("g-99", &run_id, "me", "blue")).await;
+        assert!(!no_ghost.accepted, "an unknown ghost refuses the record");
+
+        let ghost_id = submit_run(&app, "green", 92_000).await;
+        let no_run = handle(&app, &duel_payload(&ghost_id, "g-98", "me", "blue")).await;
+        assert!(!no_run.accepted, "an unknown challenger run refuses the record");
+
+        let standings = standings_points(&app).await;
+        for faction in ["blue", "green", "red", "white"] {
+            assert_eq!(points_of(&standings, faction), 0, "a refused duel scores nothing");
+        }
+    }
+
+    #[tokio::test]
+    async fn duel_record_unaffiliated_feeds_nobody() {
+        let app = ChariotApplication::in_memory();
+        let ghost_id = submit_run(&app, "green", 92_000).await;
+        let run_id = submit_run(&app, "blue", 91_500).await;
+
+        // The challenger wins but declared no faction (AuthStore empty).
+        let settled = handle(&app, &duel_payload(&ghost_id, &run_id, "me", "")).await;
+        assert!(settled.accepted, "an unaffiliated duel is still a duel");
+        let body = summary(&settled);
+        assert_eq!(body["outcome"], "me");
+        assert_eq!(body["points"], 0, "no colors, no stake");
+        let standings = standings_points(&app).await;
+        for faction in ["blue", "green", "red", "white"] {
+            assert_eq!(points_of(&standings, faction), 0);
+        }
+    }
+
+    #[tokio::test]
+    async fn duel_record_dead_heat_scores_nobody() {
+        let app = ChariotApplication::in_memory();
+        let ghost_id = submit_run(&app, "green", 92_000).await;
+        let run_id = submit_run(&app, "blue", 92_000).await;
+
+        let settled = handle(&app, &duel_payload(&ghost_id, &run_id, "tie", "blue")).await;
+        assert!(settled.accepted);
+        let body = summary(&settled);
+        assert_eq!(body["outcome"], "tie", "equal stored times are a dead heat");
+        assert_eq!(body["marginMs"], 0);
+        assert_eq!(body["points"], 0, "a dead heat splits nothing");
+        let standings = standings_points(&app).await;
+        for faction in ["blue", "green", "red", "white"] {
+            assert_eq!(points_of(&standings, faction), 0);
+        }
+    }
+
+    #[tokio::test]
+    async fn duel_record_is_idempotent() {
+        let app = ChariotApplication::in_memory();
+        let ghost_id = submit_run(&app, "green", 92_000).await;
+        let run_id = submit_run(&app, "blue", 91_500).await;
+        let payload = duel_payload(&ghost_id, &run_id, "me", "blue");
+
+        assert!(handle(&app, &payload).await.accepted);
+        let resent = handle(&app, &payload).await;
+        assert!(resent.accepted, "a resend is a no-op, not an error");
+        assert_eq!(summary(&resent)["points"], 0, "the stake scored the first time");
+        let standings = standings_points(&app).await;
+        assert_eq!(points_of(&standings, "blue"), 5, "one duel, one stake");
+    }
+
+    #[tokio::test]
+    async fn duel_record_validates_the_shape() {
+        let app = ChariotApplication::in_memory();
+        let ghost_id = submit_run(&app, "green", 92_000).await;
+        let run_id = submit_run(&app, "blue", 91_500).await;
+
+        let bad_winner = handle(&app, &duel_payload(&ghost_id, &run_id, "everyone", "blue")).await;
+        assert!(!bad_winner.accepted, "winner is me, ghost, or tie");
+        let bad_faction = handle(&app, &duel_payload(&ghost_id, &run_id, "me", "gold")).await;
+        assert!(!bad_faction.accepted, "a declared faction must be a real one");
+        let empty_ghost = handle(&app, &duel_payload(" ", &run_id, "me", "blue")).await;
+        assert!(!empty_ghost.accepted);
+        let empty_run = handle(&app, &duel_payload(&ghost_id, "", "me", "blue")).await;
+        assert!(!empty_run.accepted);
+        let standings = standings_points(&app).await;
+        for faction in ["blue", "green", "red", "white"] {
+            assert_eq!(points_of(&standings, faction), 0, "rejections write nothing");
+        }
     }
 }
