@@ -27,6 +27,8 @@ const IDLE_ORBIT_UP_M := 46.0
 
 const EXHIBITION_FIELD := 6
 const EXHIBITION_NAMES: Array[String] = ["Xanthos", "Balios", "Aithon", "Phlegon", "Podargos", "Kyllaros"]
+# The exhibition field leads with the four faction silks (CircusFactions
+# FACTIONS colors), then gold and purple from the shared fallback palette.
 const EXHIBITION_SILKS: Array[String] = ["#285a9e", "#2f7e43", "#c92b28", "#e8e2d3", "#e8ba32", "#843c8b"]
 const EXHIBITION_BASE_MPS := 14.8
 const EXHIBITION_CHASE_S := 22.0
@@ -42,14 +44,10 @@ const COAT_TINTS: Array[Color] = [
 	Color(0.396, 0.263, 0.157), Color(0.243, 0.169, 0.118), Color(0.545, 0.402, 0.235),
 	Color(0.639, 0.612, 0.576), Color(0.176, 0.153, 0.141), Color(0.545, 0.271, 0.153),
 ]
-# Fallback liveries when the server sends no color: the four circus factions
-# first — Blue, Green, Red, White — then the wider palette.
-const LIVERY_FALLBACKS: Array[Color] = [
-	Color(0.157, 0.353, 0.620), Color(0.184, 0.494, 0.263), Color(0.788, 0.169, 0.157),
-	Color(0.910, 0.886, 0.827), Color(0.910, 0.729, 0.196), Color(0.518, 0.235, 0.545),
-	Color(0.906, 0.451, 0.137), Color(0.129, 0.129, 0.141), Color(0.208, 0.639, 0.612),
-	Color(0.686, 0.302, 0.482),
-]
+# Fallback liveries when the server sends no color live in CircusFactions
+# (SILK_FALLBACKS): the four circus factions first, then the wider palette.
+# The tally resolves from the same palette, so the color a horse wears and
+# the faction it scores for can never disagree.
 
 var state := RaceState.new()
 var client: SpectatorClient
@@ -284,6 +282,23 @@ func _rebuild_results_board() -> void:
 		row.add_theme_font_size_override("font_size", 17)
 		row.add_theme_color_override("font_color", Color(0.949, 0.925, 0.847) if int(result.get("pos", 0)) > 1 else Color(0.98, 0.88, 0.55))
 		_results_box.add_child(row)
+	# The faction tally closes the board: every race accrues to the four.
+	if not state.results.is_empty():
+		var faction_title := Label.new()
+		faction_title.text = "THE FACTIONS"
+		faction_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		faction_title.add_theme_font_size_override("font_size", 18)
+		faction_title.add_theme_color_override("font_color", Color(0.957, 0.808, 0.463))
+		_results_box.add_child(faction_title)
+		for faction_id in CircusFactions.ordered_ids(state.faction_points):
+			var faction_row := Label.new()
+			faction_row.text = "%s  ·  %d" % [
+				CircusFactions.name_for(faction_id), int(state.faction_points.get(faction_id, 0)),
+			]
+			faction_row.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			faction_row.add_theme_font_size_override("font_size", 16)
+			faction_row.add_theme_color_override("font_color", CircusFactions.color_for(faction_id).lightened(0.25))
+			_results_box.add_child(faction_row)
 
 
 func _on_connection_state(connection: String) -> void:
@@ -364,6 +379,8 @@ func _tabula_detail() -> String:
 				if int(result.get("timeMs", 0)) > 0:
 					piece += "   " + RaceState.format_time_ms(int(result.get("timeMs", 0)))
 				lines.append(piece)
+			if not state.results.is_empty():
+				lines.append(CircusFactions.tally_line(state.faction_points))
 			return "
 ".join(lines)
 		_:
@@ -420,24 +437,27 @@ func _rebuild_field() -> void:
 
 func _tint_entry(horse_node: Node3D, chariot_node: Node3D, entry: Dictionary, index: int) -> void:
 	var coat := COAT_TINTS[int(entry.get("tint", index)) % COAT_TINTS.size()]
-	var livery_value := str(entry.get("silk", ""))
-	var livery := Color.from_string(livery_value, LIVERY_FALLBACKS[index % LIVERY_FALLBACKS.size()])
+	var livery := Color.from_string(str(entry.get("silk", "")), CircusFactions.fallback_livery(index))
+	# The big readable surfaces wear the faction kit (nearest faction to the
+	# stable's silk — the same resolution the points tally uses); the plume
+	# and crest keep the stable's own color as the accent.
+	var faction := CircusFactions.color_for(CircusFactions.nearest_to_color(livery))
 	var horse_mesh := horse_node.find_child("Horse", true, false) as MeshInstance3D
 	if horse_mesh != null:
 		_tint_mesh(horse_mesh, {
 			"Coat": coat,
 			"Sock": coat.darkened(0.25),
-			"Cloth": livery,
+			"Cloth": faction,
 			"Plume": livery,
 		})
-	# The livery rides the chariot: tunic, helmet crest, and the car's front
-	# panel all take the stable color.
+	# The livery rides the chariot: tunic and the car's front panel take the
+	# faction color, the helmet crest keeps the stable silk.
 	for mesh_name in ["Car", "Charioteer"]:
 		var mesh := chariot_node.find_child(mesh_name, true, false) as MeshInstance3D
 		if mesh != null:
 			_tint_mesh(mesh, {
-				"CarFront": livery,
-				"Tunic": livery,
+				"CarFront": faction,
+				"Tunic": faction,
 				"Crest": livery,
 			})
 

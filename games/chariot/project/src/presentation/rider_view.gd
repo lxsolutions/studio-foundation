@@ -20,6 +20,8 @@ var _code_edit: LineEdit
 var _code_error: Label
 var _recovery_button: LinkButton
 var _stands_button: LinkButton
+var _faction_id: String = ""
+var _faction_buttons: Array[Button] = []
 var _post_label: Label
 var _post_tick_s: float = 0.0
 var _join_button: Button
@@ -148,7 +150,9 @@ func _build_code_panel() -> void:
 	_code_panel.add_to_group("qa_hud")
 	(get_node("Hud") as CanvasLayer).add_child(_code_panel)
 	var box := VBoxContainer.new()
-	box.custom_minimum_size = Vector2(340.0, 0.0)
+	# 400, not 340: the faction row below needs 4 × 90 + separations = 384,
+	# and a phone canvas still clears it inside the 520-unit must-fit width.
+	box.custom_minimum_size = Vector2(400.0, 0.0)
 	_code_panel.add_child(box)
 	var title := Label.new()
 	title.text = "Drive for your stable"
@@ -182,6 +186,37 @@ func _build_code_panel() -> void:
 	_join_button.add_to_group("qa_hud")
 	_join_button.add_to_group("qa_tap")
 	box.add_child(_join_button)
+	# First entry is where a rider declares for a faction: four buttons, one
+	# choice, persisted by AuthStore. Local-only until the wire carries a
+	# faction key — see AuthStore.saved_faction.
+	_faction_id = AuthStore.saved_faction()
+	if _faction_id.is_empty():
+		_faction_id = CircusFactions.ids()[0]
+	var faction_label := Label.new()
+	faction_label.text = "Ride for a faction"
+	faction_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	faction_label.add_theme_font_size_override("font_size", 14)
+	faction_label.add_theme_color_override("font_color", Color(0.847, 0.780, 0.635))
+	box.add_child(faction_label)
+	var faction_row := HBoxContainer.new()
+	faction_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	faction_row.add_theme_constant_override("separation", 8)
+	box.add_child(faction_row)
+	for faction_id in CircusFactions.ids():
+		var button := Button.new()
+		button.name = "Faction%s" % CircusFactions.name_for(faction_id)
+		button.text = CircusFactions.name_for(faction_id).to_upper()
+		button.toggle_mode = true
+		button.custom_minimum_size = Vector2(90.0, 60.0)
+		button.focus_mode = Control.FOCUS_NONE
+		button.add_theme_color_override("font_color", CircusFactions.color_for(faction_id).lightened(0.25))
+		var picked: String = faction_id
+		button.pressed.connect(func() -> void: _pick_faction(picked))
+		button.add_to_group("qa_hud")
+		button.add_to_group("qa_tap")
+		faction_row.add_child(button)
+		_faction_buttons.append(button)
+	_refresh_faction_buttons()
 	_code_error = Label.new()
 	_code_error.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_code_error.add_theme_font_size_override("font_size", 14)
@@ -335,6 +370,24 @@ func _restore_gate(error_line: String) -> void:
 
 func _save_code(code: String) -> void:
 	AuthStore.save(code)
+
+
+## Declaring for a faction is one tap, persisted immediately; the rider's
+## line wears it from then on. The pick survives a forgotten owner code on
+## purpose — the code was rejected, not the colors.
+func _pick_faction(faction_id: String) -> void:
+	if not CircusFactions.is_valid_id(faction_id):
+		return
+	_faction_id = faction_id
+	AuthStore.save_faction(faction_id)
+	audio.oneshot("ui_tick")
+	_refresh_faction_buttons()
+	_refresh_rider_line()
+
+
+func _refresh_faction_buttons() -> void:
+	for i in range(_faction_buttons.size()):
+		_faction_buttons[i].button_pressed = CircusFactions.ids()[i] == _faction_id
 
 
 # ── Rider HUD and inputs ─────────────────────────────────────────────────────
@@ -1179,7 +1232,9 @@ func _refresh_rider_line(remaining_m: float = -1.0) -> void:
 	if not rider.riding():
 		if rider.signed_in():
 			_my_line.visible = true
-			_my_line.text = "%s · waiting for your race" % rider.stable_name()
+			_my_line.text = "%s · the %s · waiting for your race" % [
+				rider.stable_name(), CircusFactions.name_for(_faction_id),
+			]
 		return
 	var entry := state.entry_for(rider.my_race_horse_id)
 	var pieces: Array[String] = ["%s %s" % [str(entry.get("number", "")), str(entry.get("horseName", ""))]]

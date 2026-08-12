@@ -93,6 +93,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801"
 
 [[package]]
+name = "chariot-server"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "futures-util",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "studio-dedicated-server",
+ "studio-protocol",
+ "tokio",
+ "tokio-tungstenite",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "concurrent-queue"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1346,9 +1363,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "futures-util",
- "serde_json",
  "studio-protocol",
- "studio-world-sim",
  "thiserror 2.0.19",
  "tokio",
  "tokio-tungstenite",
@@ -1364,32 +1379,6 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.19",
  "uuid",
-]
-
-[[package]]
-name = "studio-world-sim"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "thiserror 2.0.19",
- "uuid",
-]
-
-[[package]]
-name = "chariot-server"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "futures-util",
- "serde_json",
- "sqlx",
- "studio-dedicated-server",
- "studio-protocol",
- "tokio",
- "tokio-tungstenite",
- "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]

@@ -60,3 +60,30 @@ compilation.
 | `server/` | the Rust game server (`cargo test` under `server/`) |
 | `assets-source/` | authoring sources for generated assets |
 | `docs/` | design notes |
+
+## The four circus factions
+
+Every race accrues to a faction: Blues, Greens, Reds, Whites (the Byzantine
+Veneta/Prasina/Russata/Albata). The layer is deliberately thin:
+
+- `project/src/core/circus_factions.gd` owns the faction data, membership
+  validation, silk→faction resolution, and the 9/6/4/2 points table.
+  `server/src/factions.rs` mirrors it — change both or change neither.
+- `RaceState` tags each finisher with a faction (explicit wire key, else the
+  entry's silk resolved to its nearest faction; colorless entries take the
+  faction-first fallback palette in gate order — the same palette the
+  broadcast tints from, so the color a horse wears is the faction it scores
+  for) and folds the race's `faction_points` tally.
+- The broadcast paints the faction kit on the big readable surfaces (saddle
+  cloth, car front, charioteer tunic); the plume and crest keep the stable's
+  own silk. The laurel board and the tabula close a settled race with the
+  four-faction tally.
+- A rider declares for a faction at the sign-in gate; `AuthStore` persists it
+  (`user://rider.cfg`, localStorage `arc_faction` on the web). It is
+  local-only until the racing wire carries a faction key.
+- The Rust server persists membership + per-race faction points
+  (`server/migrations/0002_circus_factions.sql`, PostgreSQL when
+  `DATABASE_URL` is set, in-memory otherwise) and answers three game-owned
+  application payloads over the studio protocol: `faction_join`,
+  `race_record` (server derives points from places), and `standings_fetch`
+  (the season tally per faction).

@@ -18,6 +18,8 @@ var tick_horses: Array = []
 var tick_t: float = 0.0
 var starts_in_ms: int = -1
 var results: Array = []
+## Points per faction for the settled race, all four always present.
+var faction_points: Dictionary = CircusFactions.tally([])
 
 
 func apply(event_name: String, data: Variant) -> bool:
@@ -54,6 +56,7 @@ func apply(event_name: String, data: Variant) -> bool:
 func _set_race(new_race: Variant) -> void:
 	entries_by_horse.clear()
 	results = []
+	faction_points = CircusFactions.tally([])
 	if typeof(new_race) != TYPE_DICTIONARY:
 		race = {}
 		tick_horses = []
@@ -63,9 +66,31 @@ func _set_race(new_race: Variant) -> void:
 		results = race.get("results")
 	var entries: Variant = race.get("entries")
 	if typeof(entries) == TYPE_ARRAY:
-		for entry in entries:
-			if typeof(entry) == TYPE_DICTIONARY and entry.has("horseId"):
-				entries_by_horse[str(entry["horseId"])] = entry
+		var index := 0
+		for raw_entry in entries:
+			if typeof(raw_entry) != TYPE_DICTIONARY:
+				continue
+			var entry: Dictionary = raw_entry
+			if not entry.has("horseId"):
+				continue
+			# Every horse wears a color: the wire's silk, or the fallback
+			# palette in gate order. The tally then always has a faction to
+			# resolve, and it is the one the broadcast paints.
+			CircusFactions.effective_silk(entry, index)
+			entries_by_horse[str(entry["horseId"])] = entry
+			index += 1
+	_tag_finishers()
+
+
+## Every finisher carries their faction ("faction" key added to the result
+## row) and the race's points tally folds from that. Resolution lives in
+## CircusFactions: explicit wire key, then silk, then the parade entry.
+func _tag_finishers() -> void:
+	for result in results:
+		if typeof(result) != TYPE_DICTIONARY:
+			continue
+		(result as Dictionary)["faction"] = CircusFactions.result_faction(result, entries_by_horse)
+	faction_points = CircusFactions.tally(results)
 
 
 func race_name() -> String:
