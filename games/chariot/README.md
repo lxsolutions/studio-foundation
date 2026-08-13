@@ -87,6 +87,31 @@ deflected out of the spina's footprint (`tests/unit/test_spina_keepout.gd`).
 Legal lanes (0.5..16) never come within 35 m of it; the clamp exists for the
 day the wire misbehaves.
 
+## The Emperor's Box (the pulvinar)
+
+The royal seat sits where it historically did: cut into the front of the
+cavea at the home straight's midpoint, above the spina line. It is built at
+scene level, not in the generator — the cavea is one continuous oval sweep in
+`build_hippodrome.py`, so a masonry notch would mean splitting that sweep and
+rebuilding the whole venue; `project/src/presentation/pulvinar_box.gd` instead
+builds the box from primitives (raised platform, gold-capped parapet, purple
+drapes and cloth of honour, columns, a canopied gable) in the venue's own
+travertine/gold/purple palette, with every placement number derived from
+`track_spec.json` through `TrackGeometry` — the same sharing rule the crowd
+follows — so a spec move moves the box too. The crowd honours the same
+arithmetic: `CrowdDirector` asks `PulvinarBox.blocks_seat` for every seat, so
+the front rows break exactly where the platform stands.
+
+The emperor is the crowd's own seated/standing figures in purple with a gold
+laurel, a head and a half taller than the house around him. The figures are
+swept statics — no rig, no arm bone — so the verdict is a pose swap: on the
+finish (the wire carries no wreck signal) the seated figure steps down, the
+standing figure rises, and a composited arm sweeps out with the thumb held
+down, once per race, re-armed when the next race parades, settled back to the
+throne after a few seconds. The trigger is one line in
+`BroadcastView._on_spectate_event`; placement and the once-per-race state
+machine are pinned by `tests/unit/test_pulvinar_box.gd`.
+
 ## Layout
 
 | | |
@@ -112,10 +137,10 @@ travels to every other Asha surface, then the exchange. A remembered stable
 code re-enters straight from boot through `POST /api/login`, and a fresh
 `?t=TOKEN` handoff still wins over everything. There is no owner-code field
 and nothing to type; the recovery link ("Returning rider?") opens the stables
-office, and "Watch from the stands instead" stays. The faction pick row
-stays; the single seam for the plaza's faction auto-assignment follow-up is
-`RiderView._gate_faction()` — the follow-up changes that one function and
-nothing else.
+office, and "Watch from the stands instead" stays. Faction is never asked
+for: entry deals one from the stable code's hash, and when the plaza session
+answers `GET /api/me` with a faction id the gate re-deals from it instead —
+both inside `RiderView._assign_faction()`, the one seam for the policy.
 
 Honest degradation, no dead ends: if the plaza guest mint or the SSO exchange
 cannot be reached at all, the gate falls back to the local one-tap mint —

@@ -30,22 +30,21 @@ func _replay(view: RiderView, flow: String, result: int, status: int, body_text:
 	view._on_gate_request_completed(result, status, PackedStringArray(), body_text.to_utf8_buffer())
 
 
-func test_one_tap_mints_stores_shows_and_registers_the_card() -> void:
+func test_the_fallback_mint_stores_and_registers_silently() -> void:
 	var old_offline := OS.get_environment("RACING_SPECTATE_OFFLINE")
 	OS.set_environment("RACING_SPECTATE_OFFLINE", "1")
 	var view := _make_gate()
 	assert_true(view != null, "the rider scene is a RiderView")
 
-	assert_eq(view._minted_card, "", "no card before the tap")
-	view._mint_button.pressed.emit()
+	assert_eq(view._minted_card, "", "no code before the fallback fires")
+	view._mint_new_stable()
 
 	var card := view._minted_card
-	assert_true(SsoExchange.is_code_shape(card), "the minted card has the server's shape")
+	assert_true(SsoExchange.is_code_shape(card), "the minted code has the server's shape")
 	assert_eq(card.length(), SsoExchange.CODE_LENGTH, "six glyphs, like the server's minter")
-	assert_eq(AuthStore.saved_code(), card, "the card is stored silently for the next boot")
-	assert_true(view._gate_status.text.contains(card),
-		"the gate says the one thing a new stable must hear: " + view._gate_status.text)
-	assert_true(view._mint_button.disabled, "the mint button rides out the trip disabled")
+	assert_eq(AuthStore.saved_code(), card, "the code is stored silently for the next boot")
+	assert_true(not view._gate_status.text.contains(card),
+		"the gate never speaks in codes: no card line on the busy line")
 	assert_true(view._reins_button.disabled, "the reins button rides out the trip disabled")
 
 	assert_eq(view.handoff_captured.size(), 1, "exactly one request leaves the gate")
@@ -54,7 +53,7 @@ func test_one_tap_mints_stores_shows_and_registers_the_card() -> void:
 		assert_eq(str(request.get("path")), "/api/login",
 			"the register call is the login call")
 		assert_eq(str(request.get("body")), JSON.stringify({ "code": card }),
-			"carrying the minted card verbatim")
+			"carrying the minted code verbatim")
 
 	view.free()
 	OS.set_environment("RACING_SPECTATE_OFFLINE", old_offline)
@@ -149,7 +148,8 @@ func test_an_unreachable_guest_mint_falls_back_to_a_local_stable() -> void:
 	assert_eq(AuthStore.saved_code(), card, "and it is stored like any minted card")
 	assert_true(view._gate_status.text.contains("The Plaza is out of reach"),
 		"the note says what happened: " + view._gate_status.text)
-	assert_true(view._gate_status.text.contains(card), "the note carries the card too")
+	assert_true(not view._gate_status.text.contains(card),
+		"the note never speaks the code — the gate carries no card language")
 	assert_eq(view.handoff_captured.size(), 2, "the register call follows the fallback")
 	if view.handoff_captured.size() == 2:
 		assert_eq(str((view.handoff_captured[1] as Dictionary).get("path")), "/api/login")
@@ -173,7 +173,6 @@ func test_an_sso_refusal_shows_the_servers_message_and_keeps_the_gate_up() -> vo
 
 	assert_eq(view._code_error.text, "Unknown arena token.", "the server's own words, verbatim")
 	assert_false(view._reins_button.disabled, "the gate is back up: Take the reins retries")
-	assert_false(view._mint_button.disabled, "and the local door stands")
 	assert_eq(client.started_code, "", "no entry on a refusal")
 	assert_eq(view.handoff_captured.size(), 1, "and no silent local mint behind the rider's back")
 
@@ -250,27 +249,23 @@ func test_a_plaza_faction_assigns_the_silk_and_the_code_deals_one_otherwise() ->
 	OS.set_environment("RACING_SSO_TOKEN", old_token)
 
 
-func test_the_card_line_survives_a_gate_restore() -> void:
+func test_a_gate_restore_never_shows_card_language() -> void:
 	var old_offline := OS.get_environment("RACING_SPECTATE_OFFLINE")
 	OS.set_environment("RACING_SPECTATE_OFFLINE", "1")
 	var view := _make_gate()
-	var client := view.client as RecordingRiderClient
 
 	view._mint_new_stable()
-	var card := view._minted_card
-	# A server answer — any answer — repaints the gate; the card line is the
-	# one thing the repaint must not eat (the busy/restore cycle is where a
-	# status line usually goes to die).
-	view._restore_gate("The club turned us away. Check the code and try again.")
-	assert_true(view._gate_status.text.contains(card),
-		"the card line survives an error repaint")
-	assert_eq(view._code_error.text, "The club turned us away. Check the code and try again.",
-		"and the server's verdict still shows beneath it")
+	view._restore_gate("The club turned us away. Try again.")
+	assert_true(not view._gate_status.text.contains("card"),
+		"no card language on the gate, ever")
+	assert_eq(view._code_error.text, "The club turned us away. Try again.",
+		"the refusal shows, code-free")
 
-	# The register call answering — whatever it answers — enters with the card:
+	# The register call answering — whatever it answers — enters with the code:
 	# the socket is the truth channel.
 	_replay(view, "mint", HTTPRequest.RESULT_SUCCESS, 401, JSON.stringify({ "error": "Invalid stable code." }))
-	assert_eq(client.started_code, card, "whatever the office answered, the card rides in")
+	var client := view.client as RecordingRiderClient
+	assert_eq(client.started_code, view._minted_card, "whatever the office answered, the code rides in")
 	assert_eq(view._gate_status.text, "Taking the reins…")
 
 	view.free()

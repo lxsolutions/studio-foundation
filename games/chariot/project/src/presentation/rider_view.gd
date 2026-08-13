@@ -29,8 +29,8 @@ var _gate_status: Label
 var _gate_http: HTTPRequest
 var _gate_flow: String = ""
 var _pending_code: String = ""
-## The card a "Raise a new stable" tap minted, while it travels: kept on the
-## gate through busy/restore cycles and surfaced once after the first entry.
+## The card a one-tap mint produced, while it travels: kept on the
+## gate through busy/restore cycles and never surfaced to the rider.
 var _minted_card: String = ""
 var handoff_captured: Array = []
 var _input_bar: HBoxContainer
@@ -192,26 +192,8 @@ func _build_code_panel() -> void:
 	_reins_button.add_to_group("qa_hud")
 	_reins_button.add_to_group("qa_tap")
 	box.add_child(_reins_button)
-	# The local door, unchanged: one tap mints a stable card in the server's
-	# own format, stores it silently, registers it through the login call, and
-	# enters. It is also where the gate lands on its own when the Plaza or the
-	# racing API cannot be reached — honest degradation, never a dead end.
-	var or_label := Label.new()
-	or_label.text = "— or —"
-	or_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	or_label.add_theme_font_size_override("font_size", 13)
-	or_label.add_theme_color_override("font_color", Color(0.847, 0.780, 0.635))
-	box.add_child(or_label)
-	_mint_button = Button.new()
-	_mint_button.name = "NewStable"
-	_mint_button.text = "Raise a new stable"
-	_mint_button.custom_minimum_size = Vector2(0.0, 60.0)
-	_mint_button.add_theme_font_size_override("font_size", 18)
-	_mint_button.add_theme_color_override("font_color", Color(0.957, 0.808, 0.463))
-	_mint_button.pressed.connect(_mint_new_stable)
-	_mint_button.add_to_group("qa_hud")
-	_mint_button.add_to_group("qa_tap")
-	box.add_child(_mint_button)
+	# No code door at all: the plaza identity carries entry, and the silent
+	# local mint is only the automatic fallback when the plaza is out of reach.
 	# First entry is where a rider declares for a faction: four buttons, one
 	# choice, persisted by AuthStore. Local-only until the wire carries a
 	# faction key — see AuthStore.saved_faction.
@@ -311,18 +293,18 @@ func _begin_auto_login(code: String) -> void:
 	_send_gate_request("auto", SsoExchange.login_request(code))
 
 
-## The stranger's one tap: mint a stable card in the server's own format,
+## The stranger's one tap: mint a code in the server's own format,
 ## store it silently (a remembered code walks straight to this gate on the
 ## next visit), and register it through the login call — on a create-on-login
-## deploy that one request makes the stable real. The card is shown the whole
-## trip and once more after the first entry; the faction pick stands.
+## deploy that one request makes the stable real. The code never surfaces:
+## the rider just enters, and the faction comes from the Arena identity.
 func _mint_new_stable() -> void:
 	_raise_local_stable("")
 
 
 ## Honest degradation, the same mint with the note on it: the Plaza guest
 ## mint or the SSO exchange could not be reached (or the Plaza declined the
-## guest), so the gate raises a local stable card instead of leaving the
+## guest), so the gate raises a local stable silently instead of leaving the
 ## rider stranded. Never a dead end.
 func _fallback_local_mint() -> void:
 	_raise_local_stable("The Plaza is out of reach — raised a local stable instead.\n")
@@ -332,13 +314,9 @@ func _raise_local_stable(note: String) -> void:
 	var code := SsoExchange.mint_code()
 	AuthStore.save(code)
 	_minted_card = code
-	_set_gate_busy(note + _card_line(code))
+	_set_gate_busy(note)
 	audio.oneshot("ui_confirm")
 	_send_gate_request("mint", SsoExchange.register_request(code))
-
-
-func _card_line(code: String) -> String:
-	return "Your stable card: %s — save it." % code
 
 
 func _send_gate_request(flow: String, request: Dictionary) -> void:
@@ -455,17 +433,17 @@ func _open_recovery() -> void:
 func _set_gate_busy(line: String) -> void:
 	_code_panel.visible = true
 	_reins_button.disabled = true
-	_mint_button.disabled = true
+	if _mint_button:
+		_mint_button.disabled = true
 	_gate_status.text = line
 	_code_error.text = ""
 
 
 func _restore_gate(error_line: String) -> void:
 	_reins_button.disabled = false
-	_mint_button.disabled = false
-	# A minted card outlives busy/restore cycles: it is the one thing a new
-	# stable must not lose to an error repaint.
-	_gate_status.text = "" if _minted_card.is_empty() else _card_line(_minted_card)
+	if _mint_button:
+		_mint_button.disabled = false
+	_gate_status.text = ""
 	_code_error.text = error_line
 
 
@@ -1595,7 +1573,7 @@ func _on_connection_state(connection: String) -> void:
 		_code_panel.visible = true
 		var line := _code_error.text
 		if line.is_empty():
-			line = "The club turned us away. Check the code and try again."
+			line = "The club turned us away. Try again."
 		_restore_gate(line)
 
 
@@ -1615,13 +1593,8 @@ func _on_spectate_event(event_name: String, data: Variant) -> void:
 				_code_panel.visible = false
 				_save_code(_rider_client().code)
 				_stable_button.visible = true
-				if not _minted_card.is_empty():
-					# The card's one surfacing past the gate: a single caption,
-					# retired by the next phase change — it is the rider's to
-					# write down, not a permanent fixture.
-					_phase_notice = _card_line(_minted_card)
-					_minted_card = ""
-					_apply_phase_visuals()
+				_minted_card = ""
+				_apply_phase_visuals()
 			"auth:error":
 				_code_panel.visible = true
 				_restore_gate(rider.auth_error)

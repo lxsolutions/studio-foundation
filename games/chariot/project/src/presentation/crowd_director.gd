@@ -199,6 +199,11 @@ func build() -> void:
 				if rng.randf() < EMPTY_SEAT_ODDS:
 					continue
 				var s := fmod((float(i) + rng.randf() * 0.4) / float(count) * loop, loop)
+				# The pulvinar stands where the home straight's front rows
+				# would be: the Emperor's Box, not spectators. Same arithmetic
+				# as the platform, so the notch and the masonry never drift.
+				if PulvinarBox.blocks_seat(s, off):
+					continue
 				# normal_at points OUTWARD — lanes grow along +normal — so the
 				# house ADDS it to sit on the risers. The first ship subtracted
 				# and floated ten thousand souls over the sand; the suite now

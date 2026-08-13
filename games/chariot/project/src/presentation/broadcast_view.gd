@@ -74,6 +74,7 @@ var _chariot_scene: PackedScene
 
 var _camera: Camera3D
 var _crowd: CrowdDirector
+var _pulvinar: PulvinarBox
 var _tabula: TabulaBoard
 var _leader_called := ""
 var _stretch_called := false
@@ -171,6 +172,9 @@ func _build_world() -> void:
 	_crowd = CrowdDirector.new()
 	_crowd.name = "Crowd"
 	add_child(_crowd)
+	_pulvinar = PulvinarBox.new()
+	_pulvinar.name = "Pulvinar"
+	add_child(_pulvinar)
 	_tabula = TabulaBoard.new()
 	_tabula.name = "Tabula"
 	# The board stands on the infield by the finish and faces the stands:
@@ -325,6 +329,9 @@ func _on_spectate_event(event_name: String, data: Variant) -> void:
 	if event_name != "race:tick" and (state.phase != was_phase or event_name == "spectate:hello"):
 		_rebuild_field()
 	if state.phase != was_phase:
+		# The Emperor's Box answers every transition: the verdict on the
+		# finish, the re-arm when a new race parades.
+		_pulvinar.note_phase(state.phase)
 		var cues := AudioCues.for_transition(state.phase, was_phase)
 		audio.apply(cues)
 		for cue in cues:

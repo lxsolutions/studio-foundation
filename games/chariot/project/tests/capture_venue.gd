@@ -11,6 +11,13 @@ extends SceneTree
 ##   farend — outside the far turn looking back at its cavea from the east.
 ##   spina  — driver's eye on the home straight, spina wall on the left.
 ##   top    — straight down from above the centre: plan view of track vs stands.
+##   boxwide — the Emperor's Box in context, from over the sand at mid-straight.
+##   box    — medium on the pulvinar: platform, drapes, canopy, the seated emperor.
+##   boxclose — close on the emperor; pass --verdict for the thumbs-down pose.
+##
+## Flags:
+##   --verdict — strike the emperor's thumbs-down pose (held frozen) after the
+##               scene settles.
 
 var _out_path := "user://captures/venue.png"
 var _instance: Node = null
@@ -35,6 +42,15 @@ func _process(_delta: float) -> bool:
 		if "boot_route_enabled" in _instance:
 			_instance.set("boot_route_enabled", false)
 		root.add_child(_instance)
+		return false
+	if _instance != null and _frames == 3:
+		# Drive the verdict pose straight into the box — no race needed, and
+		# held frozen: at headless frame rates the live sweep-and-settle would
+		# be over long before the save frame.
+		if OS.get_cmdline_user_args().has("--verdict"):
+			var box := _instance.find_child("Pulvinar", true, false)
+			if box != null and box.has_method("strike_verdict_pose"):
+				box.strike_verdict_pose()
 		return false
 	if _instance != null and _frames == 2 + _settle:
 		_place_camera()
@@ -88,6 +104,19 @@ func _place_camera() -> void:
 			# Plan view straight down over the centre.
 			eye = Vector3(0.0, 320.0, 0.0)
 			target = Vector3(0.0, 0.0, 0.01)
+		"boxwide":
+			# The pulvinar in its context: from over the sand at mid-straight,
+			# looking into the home-straight cavea it breaks.
+			eye = Vector3(0.0, 16.0, -28.0)
+			target = Vector3(0.0, 6.0, -79.0)
+		"box":
+			# Medium on the box: platform, parapet, drapes, canopy, emperor.
+			eye = Vector3(6.0, 7.5, -60.0)
+			target = Vector3(0.0, 6.3, -79.5)
+		"boxclose":
+			# Close on the emperor — pair with --verdict for the thumbs-down.
+			eye = Vector3(2.2, 6.3, -71.5)
+			target = Vector3(-0.2, 6.1, -79.2)
 		_:
 			eye = Vector3(0.0, 150.0, -radius - 150.0)
 			target = Vector3(0.0, 0.0, 20.0)
