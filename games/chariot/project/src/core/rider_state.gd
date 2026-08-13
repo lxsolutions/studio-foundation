@@ -111,6 +111,31 @@ func open_races() -> Array:
 	return out
 
 
+## The yard's working string: horses the club will still train, feed, and
+## enter. The server keeps sold and retired horses on the owner's list — the
+## sale is a record, not an erasure — so the yard filters here; without it the
+## first tap on ENTER meets "This horse is no longer active."
+func active_horses() -> Array:
+	var out: Array = []
+	for horse in my_horses:
+		if typeof(horse) == TYPE_DICTIONARY and str(horse.get("status", "active")) == "active":
+			out.append(horse)
+	return out
+
+
+## The horse the yard's actions ride on: the current pick while it is still
+## active, the first active horse when the pick sold or retired out from
+## under the rider, or "" when the string is empty.
+func pick_active(current_id: String) -> String:
+	var active := active_horses()
+	for horse in active:
+		if str(horse.get("id", "")) == current_id:
+			return current_id
+	if active.is_empty():
+		return ""
+	return str((active[0] as Dictionary).get("id", ""))
+
+
 ## The raceId this horse is entered in, or "" — only open races count, because
 ## locked and later phases can no longer be withdrawn from.
 func entered_open_race(horse_id: String) -> String:

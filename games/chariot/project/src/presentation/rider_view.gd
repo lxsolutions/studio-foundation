@@ -830,8 +830,10 @@ func _refresh_stable() -> void:
 		child.queue_free()
 	for child in _stable_races_box.get_children():
 		child.queue_free()
-	if _selected_horse_id.is_empty() and not rider.my_horses.is_empty():
-		_selected_horse_id = str((rider.my_horses[0] as Dictionary).get("id", ""))
+	# The pick rides only active horses: a sold or retired horse stays on the
+	# server's list as a record, and entering it is the server's "no longer
+	# active" refusal — re-deal the pick the moment the string changes.
+	_selected_horse_id = rider.pick_active(_selected_horse_id)
 	match _stable_section:
 		"YARD":
 			_render_yard()
@@ -844,7 +846,7 @@ func _refresh_stable() -> void:
 
 
 func _render_yard() -> void:
-	for horse in rider.my_horses:
+	for horse in rider.active_horses():
 		_stable_horses_box.add_child(_horse_row(horse))
 	var open := rider.open_races()
 	if open.is_empty():
