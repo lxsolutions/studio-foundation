@@ -77,6 +77,18 @@ static func exchange_request(token: String) -> Dictionary:
 	}
 
 
+## Who a plaza session marches for: GET /api/me on the plaza's own base.
+## The gate reads the faction off the answer; the token never persists here.
+static func me_request(token: String, page_origin: String) -> Dictionary:
+	return {
+		"method": HTTPClient.METHOD_GET,
+		"base": plaza_base(page_origin),
+		"path": "/api/me",
+		"token": token,
+		"body": "",
+	}
+
+
 ## The remembered-code re-entry that pairs with the handoff.
 static func login_request(code: String) -> Dictionary:
 	return {

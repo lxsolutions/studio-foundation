@@ -218,31 +218,8 @@ func _build_code_panel() -> void:
 	_faction_id = AuthStore.saved_faction()
 	if _faction_id.is_empty():
 		_faction_id = CircusFactions.ids()[0]
-	var faction_label := Label.new()
-	faction_label.text = "Ride for a faction"
-	faction_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	faction_label.add_theme_font_size_override("font_size", 14)
-	faction_label.add_theme_color_override("font_color", Color(0.847, 0.780, 0.635))
-	box.add_child(faction_label)
-	var faction_row := HBoxContainer.new()
-	faction_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	faction_row.add_theme_constant_override("separation", 8)
-	box.add_child(faction_row)
-	for faction_id in CircusFactions.ids():
-		var button := Button.new()
-		button.name = "Faction%s" % CircusFactions.name_for(faction_id)
-		button.text = CircusFactions.name_for(faction_id).to_upper()
-		button.toggle_mode = true
-		button.custom_minimum_size = Vector2(90.0, 60.0)
-		button.focus_mode = Control.FOCUS_NONE
-		button.add_theme_color_override("font_color", CircusFactions.color_for(faction_id).lightened(0.25))
-		var picked: String = faction_id
-		button.pressed.connect(func() -> void: _pick_faction(picked))
-		button.add_to_group("qa_hud")
-		button.add_to_group("qa_tap")
-		faction_row.add_child(button)
-		_faction_buttons.append(button)
-	_refresh_faction_buttons()
+	# Faction is never asked for: the arena identity carries it (auto-assigned on entry).
+
 	_code_error = Label.new()
 	_code_error.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_code_error.add_theme_font_size_override("font_size", 14)
@@ -375,9 +352,12 @@ func _send_gate_request(flow: String, request: Dictionary) -> void:
 	if base.is_empty():
 		base = SsoExchange.http_base(_rider_client().base_url)
 	var url := base + str(request.get("path", ""))
+	var headers := PackedStringArray(["Content-Type: application/json"])
+	if request.has("token"):
+		headers.append("Authorization: Bearer " + str(request["token"]))
 	var error := _gate_http.request(
 		url,
-		PackedStringArray(["Content-Type: application/json"]),
+		headers,
 		int(request.get("method", HTTPClient.METHOD_POST)),
 		str(request.get("body", "")),
 	)
@@ -423,6 +403,10 @@ func _on_gate_request_completed(
 		if reachable and bool(exchange.get("ok")):
 			var code := str(exchange.get("code"))
 			AuthStore.save(code)
+			_assign_faction("", code)
+			var plaza_token := WebHandoff.plaza_token()
+			if not plaza_token.is_empty():
+				_send_gate_request("me", SsoExchange.me_request(plaza_token, WebHandoff.page_origin()))
 			_enter_with_code(code)
 		elif not reachable:
 			_fallback_local_mint()
@@ -430,6 +414,15 @@ func _on_gate_request_completed(
 			# The club answered and refused: its own words on the gate, which
 			# stays up — Take the reins retries, the recovery link stands.
 			_restore_gate(str(exchange.get("error")))
+		return
+	if flow == "me":
+		if reachable:
+			var parsed: Variant = JSON.parse_string(body_text)
+			if typeof(parsed) == TYPE_DICTIONARY:
+				var faction: Variant = parsed.get("faction")
+				if typeof(faction) == TYPE_DICTIONARY and faction.get("id") != null:
+					var ids := CircusFactions.ids()
+					_assign_faction(ids[abs(int(faction["id"])) % ids.size()], "")
 		return
 	if not reachable:
 		# Network trouble on a remembered-code login keeps the code, silently.
@@ -483,6 +476,20 @@ func _save_code(code: String) -> void:
 ## Declaring for a faction is one tap, persisted immediately; the rider's
 ## line wears it from then on. The pick survives a forgotten owner code on
 ## purpose — the code was rejected, not the colors.
+## The faction is dealt, never asked. A plaza faction (the caller's
+## largest-share side on the arena map) wins; without one the stable code
+## deals a color deterministically — the same stable rides the same colors
+## forever, and nobody is ever asked.
+func _assign_faction(preferred: String, code: String) -> void:
+	var ids := CircusFactions.ids()
+	var chosen := preferred
+	if chosen.is_empty() or not ids.has(chosen):
+		chosen = ids[abs(code.hash()) % ids.size()]
+	_faction_id = chosen
+	AuthStore.save_faction(chosen)
+	_refresh_faction_buttons()
+
+
 func _pick_faction(faction_id: String) -> void:
 	if not CircusFactions.is_valid_id(faction_id):
 		return

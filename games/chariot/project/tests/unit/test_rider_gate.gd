@@ -227,6 +227,29 @@ func test_an_sso_success_enters_with_the_arena_stable() -> void:
 	OS.set_environment("RACING_SSO_TOKEN", old_token)
 
 
+func test_a_plaza_faction_assigns_the_silk_and_the_code_deals_one_otherwise() -> void:
+	var old_offline := OS.get_environment("RACING_SPECTATE_OFFLINE")
+	var old_token := OS.get_environment("RACING_SSO_TOKEN")
+	OS.set_environment("RACING_SPECTATE_OFFLINE", "1")
+	OS.set_environment("RACING_SSO_TOKEN", "tok-env")
+	var view := _make_gate()
+	view._reins_button.pressed.emit()
+
+	_replay(view, "sso", HTTPRequest.RESULT_SUCCESS, 200,
+		JSON.stringify({ "ok": true, "code": "ABC234", "created": true }))
+	var ids := CircusFactions.ids()
+	var hashed := ids[abs("ABC234".hash()) % ids.size()]
+	assert_eq(view._faction_id, hashed, "the stable code deals a silk at once")
+	_replay(view, "me", HTTPRequest.RESULT_SUCCESS, 200,
+		JSON.stringify({ "faction": { "id": 3, "name": "The Open Inquirers" } }))
+	assert_eq(view._faction_id, ids[3 % ids.size()], "the plaza faction's color wins")
+	assert_eq(AuthStore.saved_faction(), ids[3 % ids.size()], "and it persists for the next boot")
+
+	view.free()
+	OS.set_environment("RACING_SPECTATE_OFFLINE", old_offline)
+	OS.set_environment("RACING_SSO_TOKEN", old_token)
+
+
 func test_the_card_line_survives_a_gate_restore() -> void:
 	var old_offline := OS.get_environment("RACING_SPECTATE_OFFLINE")
 	OS.set_environment("RACING_SPECTATE_OFFLINE", "1")
