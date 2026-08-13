@@ -5,8 +5,11 @@ extends RefCounted
 ## with ?t=TOKEN; we lift the token out of the page URL and scrub it from the
 ## address bar and history immediately, exactly like the DOM stables do.
 ## RACING_SSO_TOKEN serves the same token to headless checks, where there is
-## no page. Parsing lives in SsoExchange so the policy is testable offline;
-## this file only touches the browser.
+## no page. Served same-origin with the plaza (ashaarena.com/racing/), the
+## build also reads the plaza's own localStorage session straight out of the
+## browser — plaza_token below — so a visitor who already carries an Arena
+## identity never meets a code at all. Parsing lives in SsoExchange so the
+## policy is testable offline; this file only touches the browser.
 
 
 ## The page origin on the web, empty elsewhere; recovery_url turns it into
@@ -46,6 +49,40 @@ static func take_token() -> String:
 		true
 	)
 	return token
+
+
+## The plaza's own session: localStorage "arb_token", the key the plaza
+## writes and every Asha surface reads (the Minerals bridge reads the same
+## key). Same-origin at ashaarena.com/racing/ this build shares that store,
+## so a visitor carrying an Arena identity is already known here. Unlike
+## take_token this is a READ, never a consume: the session is the visitor's
+## everywhere, not a one-shot handoff. RACING_SSO_TOKEN is the env/test path
+## off the web, the same override take_token honours.
+static func plaza_token() -> String:
+	var env_token := OS.get_environment("RACING_SSO_TOKEN")
+	if not env_token.is_empty():
+		return env_token.strip_edges()
+	if not OS.has_feature("web"):
+		return ""
+	var raw: Variant = JavaScriptBridge.eval(
+		"(function(){try{return window.localStorage.getItem('arb_token')||'';}catch(e){return '';}})()",
+		true
+	)
+	return str(raw).strip_edges()
+
+
+## Write a freshly minted plaza guest session back under the plaza's own key,
+## so the identity travels to every other Asha surface the visitor meets.
+## Off the web there is no shared store; the gate still spends the token once
+## at /api/sso for this session's entry.
+static func store_plaza_session(token: String) -> void:
+	var trimmed := token.strip_edges()
+	if trimmed.is_empty() or not OS.has_feature("web"):
+		return
+	JavaScriptBridge.eval(
+		"try{window.localStorage.setItem('arb_token',%s);}catch(e){}" % JSON.stringify(trimmed),
+		true
+	)
 
 
 ## The challenge-ghost half of the handoff: ?ghost=<id> opens the game with

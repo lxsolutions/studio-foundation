@@ -1,15 +1,22 @@
 class_name SsoExchange
 extends RefCounted
 
-## The no-typing gate paths. Plato's Plaza opens the stables with ?t=TOKEN in
-## the URL (the same handoff the DOM stables accept); POST /api/sso exchanges
-## that token for the stable's owner code, creating the stable on first
-## arrival. A remembered code re-enters through POST /api/login. A stranger
-## with neither taps once and the gate mints a code in the server's own
-## format (mint_code below), registering it through the same login call.
-## Everything here is pure string work so the whole gate policy is testable
-## offline; the tokens themselves are single-purpose and never stored, only
-## the code is.
+## The no-typing gate paths. The gate rides the visitor's Arena identity:
+## served same-origin with Plato's Plaza (ashaarena.com/racing/), it reads
+## the plaza's own localStorage session (arb_token) and POST /api/sso
+## exchanges that token for the stable's owner code, creating the stable on
+## first arrival. A visitor with no session yet gets one from the plaza's
+## guest mint (POST /api/session — the same call and handle shape the arena's
+## studio page uses), which then resolves on every Asha surface. A remembered
+## code re-enters through POST /api/login, and a fresh ?t=TOKEN handoff still
+## wins over everything (the same handoff the DOM stables accept). When the
+## plaza path cannot be reached at all, the one-tap local mint stands as the
+## fallback: the gate mints a code in the server's own format (mint_code
+## below), registering it through the same login call. Everything here is
+## pure string work so the whole gate policy is testable offline; the ?t=
+## handoff tokens are single-purpose and never stored, the plaza session
+## token lives under the plaza's own localStorage keys, and only the stable
+## code goes into AuthStore.
 
 
 ## Pull t out of a raw query string ("?t=X&y=1" or "t=X&y=1"). Empty when
@@ -77,6 +84,62 @@ static func login_request(code: String) -> Dictionary:
 		"path": "/api/login",
 		"body": JSON.stringify({ "code": code }),
 	}
+
+
+# ── New identities: the plaza guest mint ──────────────────────────────────────
+
+## Where the guest mint lives: the plaza's own API. Same origin when the
+## plaza served this build (ashaarena.com/racing/ — the whole point of the
+## same-origin mount is that the page and /api share an origin and a
+## localStorage); the plaza origin as the fallback everywhere else. A build
+## served anywhere else finds no session endpoint there and the gate's
+## local-mint fallback takes over — honest, never a dead end.
+static func plaza_base(page_origin: String) -> String:
+	var origin := page_origin.strip_edges().trim_suffix("/")
+	if origin.begins_with("http://") or origin.begins_with("https://"):
+		return origin
+	return "https://ashaarena.com"
+
+
+## A guest handle in the arena studio page's own shape: a plain name plus a
+## random suffix ("Rider-XXXX"; studio.html picks from a name list, the gate
+## keeps its own theme and a four-digit draw). The RNG is injectable so the
+## suite can pin determinism.
+static func guest_handle(rng: RandomNumberGenerator = null) -> String:
+	if rng == null:
+		rng = RandomNumberGenerator.new()
+		rng.randomize()
+	return "Rider-%04d" % (rng.randi() % 10000)
+
+
+## The guest mint: POST /api/session {handle}, throttled 30/hour/IP on the
+## plaza's side. The answer's token resolves the same identity on every Asha
+## surface — the gate stores it under the plaza's own localStorage keys
+## (WebHandoff.store_plaza_session) and spends it once at /api/sso.
+static func guest_session_request(handle: String, page_origin: String) -> Dictionary:
+	return {
+		"method": HTTPClient.METHOD_POST,
+		"base": plaza_base(page_origin),
+		"path": "/api/session",
+		"body": JSON.stringify({ "handle": handle }),
+	}
+
+
+## Fold the guest mint's answer into { ok, token, handle, key, error }.
+static func fold_guest_session(status: int, body_text: String) -> Dictionary:
+	var parsed: Variant = JSON.parse_string(body_text)
+	var body: Dictionary = parsed if typeof(parsed) == TYPE_DICTIONARY else {}
+	var token := str(body.get("token", "")).strip_edges()
+	if status >= 200 and status < 300 and not token.is_empty():
+		return {
+			"ok": true, "token": token,
+			"handle": str(body.get("handle", "")), "key": str(body.get("key", "")),
+			"error": "",
+		}
+	var message := str(body.get("error", ""))
+	if message.is_empty():
+		message = "The Plaza did not answer (HTTP %d)." % status
+	return { "ok": false, "token": "", "handle": "", "key": "", "error": message }
 
 
 # ── New stables: the one-tap mint ─────────────────────────────────────────────

@@ -16,7 +16,6 @@ var training := TrainingState.new()
 var stable_client: StableClient
 
 var _code_panel: PanelContainer
-var _code_edit: LineEdit
 var _code_error: Label
 var _recovery_button: LinkButton
 var _stands_button: LinkButton
@@ -24,7 +23,7 @@ var _faction_id: String = ""
 var _faction_buttons: Array[Button] = []
 var _post_label: Label
 var _post_tick_s: float = 0.0
-var _join_button: Button
+var _reins_button: Button
 var _mint_button: Button
 var _gate_status: Label
 var _gate_http: HTTPRequest
@@ -178,9 +177,31 @@ func _build_code_panel() -> void:
 	_gate_status.add_theme_font_size_override("font_size", 14)
 	_gate_status.add_theme_color_override("font_color", Color(0.957, 0.808, 0.463))
 	box.add_child(_gate_status)
-	# The stranger's door, and the primary action: one tap mints a stable card
-	# in the server's own format, stores it silently, registers it through the
-	# login call, and enters. No code, no email, no plaza account.
+	# The primary action, and the whole flow behind one tap: the plaza session
+	# already in this browser (localStorage arb_token) exchanges at /api/sso;
+	# no session yet mints a plaza guest identity first (POST /api/session,
+	# stored back under arb_token so it travels to every other Asha surface),
+	# then exchanges. No code, no typing — the Arena identity IS the entry.
+	_reins_button = Button.new()
+	_reins_button.name = "TakeTheReins"
+	_reins_button.text = "Take the reins"
+	_reins_button.custom_minimum_size = Vector2(0.0, 60.0)
+	_reins_button.add_theme_font_size_override("font_size", 18)
+	_reins_button.add_theme_color_override("font_color", Color(0.957, 0.808, 0.463))
+	_reins_button.pressed.connect(_take_the_reins)
+	_reins_button.add_to_group("qa_hud")
+	_reins_button.add_to_group("qa_tap")
+	box.add_child(_reins_button)
+	# The local door, unchanged: one tap mints a stable card in the server's
+	# own format, stores it silently, registers it through the login call, and
+	# enters. It is also where the gate lands on its own when the Plaza or the
+	# racing API cannot be reached — honest degradation, never a dead end.
+	var or_label := Label.new()
+	or_label.text = "— or —"
+	or_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	or_label.add_theme_font_size_override("font_size", 13)
+	or_label.add_theme_color_override("font_color", Color(0.847, 0.780, 0.635))
+	box.add_child(or_label)
 	_mint_button = Button.new()
 	_mint_button.name = "NewStable"
 	_mint_button.text = "Raise a new stable"
@@ -191,33 +212,6 @@ func _build_code_panel() -> void:
 	_mint_button.add_to_group("qa_hud")
 	_mint_button.add_to_group("qa_tap")
 	box.add_child(_mint_button)
-	var returning := Label.new()
-	returning.text = "— or ride again with your stable code —"
-	returning.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	returning.add_theme_font_size_override("font_size", 13)
-	returning.add_theme_color_override("font_color", Color(0.847, 0.780, 0.635))
-	box.add_child(returning)
-	_code_edit = LineEdit.new()
-	_code_edit.name = "OwnerCode"
-	_code_edit.placeholder_text = "Owner code"
-	_code_edit.max_length = 12
-	_code_edit.alignment = HORIZONTAL_ALIGNMENT_CENTER
-	# 60 design units keeps every sign-in control above the 44 px touch floor
-	# at the ~0.75 px/unit a phone window settles at (measured by the QA
-	# gate, not eyeballed).
-	_code_edit.custom_minimum_size = Vector2(0.0, 60.0)
-	_code_edit.text_submitted.connect(func(_text: String) -> void: _submit_code())
-	_code_edit.add_to_group("qa_hud")
-	_code_edit.add_to_group("qa_tap")
-	box.add_child(_code_edit)
-	_join_button = Button.new()
-	_join_button.name = "TakeTheReins"
-	_join_button.text = "Take the reins"
-	_join_button.custom_minimum_size = Vector2(0.0, 60.0)
-	_join_button.pressed.connect(_submit_code)
-	_join_button.add_to_group("qa_hud")
-	_join_button.add_to_group("qa_tap")
-	box.add_child(_join_button)
 	# First entry is where a rider declares for a faction: four buttons, one
 	# choice, persisted by AuthStore. Local-only until the wire carries a
 	# faction key — see AuthStore.saved_faction.
@@ -256,7 +250,7 @@ func _build_code_panel() -> void:
 	box.add_child(_code_error)
 	_recovery_button = LinkButton.new()
 	_recovery_button.name = "RecoverCode"
-	_recovery_button.text = "Lost your code? Recover at the stables office"
+	_recovery_button.text = "Returning rider? Recover at the stables office"
 	_recovery_button.underline = LinkButton.UNDERLINE_MODE_ON_HOVER
 	_recovery_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_recovery_button.add_theme_font_size_override("font_size", 13)
@@ -278,14 +272,15 @@ func _build_code_panel() -> void:
 	box.add_child(_stands_button)
 
 
-## Priority at the gate: an explicit env code, then a Plaza handoff token,
-## then the remembered code (auto-entered on the web like the DOM stables,
-## prefilled elsewhere), then the empty code box.
+## Priority at the gate: an explicit env code, then a fresh Plaza handoff
+## token (?t= still wins over everything), then the plaza's own session
+## (arb_token, read on gate load), then the remembered code — re-entered
+## straight away, there is no code box to prefill anymore. A stranger meets
+## the one-tap gate.
 func _boot_sign_in() -> void:
 	var env_code := OS.get_environment("RACING_CODE")
 	if not env_code.is_empty():
-		_code_edit.text = env_code
-		_submit_code()
+		_enter_with_code(env_code)
 		return
 	var token := WebHandoff.take_token()
 	if not token.is_empty():
@@ -294,17 +289,38 @@ func _boot_sign_in() -> void:
 		_studio.token = token
 		_begin_sso(token)
 		return
+	var plaza := WebHandoff.plaza_token()
+	if not plaza.is_empty():
+		_studio.token = plaza
+		_begin_sso(plaza)
+		return
 	var saved := AuthStore.saved_code()
 	if saved.is_empty():
 		return
-	if OS.has_feature("web"):
-		_begin_auto_login(saved)
-	else:
-		_code_edit.text = saved
+	_begin_auto_login(saved)
 
 
-## Exchange the Plaza token for our owner code. On failure the gate simply
-## reopens (an expired token is routine); the rider can still type a code.
+## The one tap behind "Take the reins": a plaza session already in this
+## browser exchanges straight away; without one the gate mints a plaza guest
+## identity first (the same POST /api/session the arena's studio page uses),
+## stores it under arb_token, and then exchanges. Either way the rider enters
+## on their Arena identity and never meets a code.
+func _take_the_reins() -> void:
+	var token := WebHandoff.plaza_token()
+	if not token.is_empty():
+		_studio.token = token
+		_begin_sso(token)
+		return
+	_set_gate_busy("Meeting the Plaza…")
+	audio.oneshot("ui_confirm")
+	_send_gate_request(
+		"guest", SsoExchange.guest_session_request(SsoExchange.guest_handle(), WebHandoff.page_origin())
+	)
+
+
+## Exchange the Plaza token for our owner code. A refusal shows the server's
+## own message and keeps the gate up; an unreachable Plaza or racing API
+## degrades to the local one-tap mint, with the note saying so.
 func _begin_sso(token: String) -> void:
 	_set_gate_busy("Signing you in from the Plaza…")
 	_send_gate_request("sso", SsoExchange.exchange_request(token))
@@ -324,11 +340,22 @@ func _begin_auto_login(code: String) -> void:
 ## deploy that one request makes the stable real. The card is shown the whole
 ## trip and once more after the first entry; the faction pick stands.
 func _mint_new_stable() -> void:
+	_raise_local_stable("")
+
+
+## Honest degradation, the same mint with the note on it: the Plaza guest
+## mint or the SSO exchange could not be reached (or the Plaza declined the
+## guest), so the gate raises a local stable card instead of leaving the
+## rider stranded. Never a dead end.
+func _fallback_local_mint() -> void:
+	_raise_local_stable("The Plaza is out of reach — raised a local stable instead.\n")
+
+
+func _raise_local_stable(note: String) -> void:
 	var code := SsoExchange.mint_code()
 	AuthStore.save(code)
 	_minted_card = code
-	_code_edit.text = code
-	_set_gate_busy(_card_line(code))
+	_set_gate_busy(note + _card_line(code))
 	audio.oneshot("ui_confirm")
 	_send_gate_request("mint", SsoExchange.register_request(code))
 
@@ -342,7 +369,12 @@ func _send_gate_request(flow: String, request: Dictionary) -> void:
 		handoff_captured.append(request)
 		return
 	_gate_flow = flow
-	var url := SsoExchange.http_base(_rider_client().base_url) + str(request.get("path", ""))
+	# A request that names its own base (the plaza guest mint) goes there;
+	# everything else rides the racing server's own REST mount.
+	var base := str(request.get("base", ""))
+	if base.is_empty():
+		base = SsoExchange.http_base(_rider_client().base_url)
+	var url := base + str(request.get("path", ""))
 	var error := _gate_http.request(
 		url,
 		PackedStringArray(["Content-Type: application/json"]),
@@ -370,25 +402,45 @@ func _on_gate_request_completed(
 			return
 		_enter_with_code(minted)
 		return
-	if result != HTTPRequest.RESULT_SUCCESS:
-		_restore_gate("")
-		return
+	var reachable := result == HTTPRequest.RESULT_SUCCESS and status > 0
 	var body_text := body.get_string_from_utf8()
+	if flow == "guest":
+		# The plaza guest mint: the answer's token crosses to the plaza's own
+		# localStorage key (so every other Asha surface knows this visitor) and
+		# spends once at /api/sso. Any failure — unreachable, throttled — and
+		# the local one-tap mint stands in, with the note saying so.
+		var session: Dictionary = SsoExchange.fold_guest_session(status, body_text) if reachable else {}
+		if reachable and bool(session.get("ok")):
+			var token := str(session.get("token"))
+			WebHandoff.store_plaza_session(token)
+			_studio.token = token
+			_begin_sso(token)
+		else:
+			_fallback_local_mint()
+		return
 	if flow == "sso":
-		var exchange := SsoExchange.fold_exchange(status, body_text)
-		if bool(exchange.get("ok")):
+		var exchange: Dictionary = SsoExchange.fold_exchange(status, body_text) if reachable else {}
+		if reachable and bool(exchange.get("ok")):
 			var code := str(exchange.get("code"))
 			AuthStore.save(code)
 			_enter_with_code(code)
+		elif not reachable:
+			_fallback_local_mint()
 		else:
-			_restore_gate("")
+			# The club answered and refused: its own words on the gate, which
+			# stays up — Take the reins retries, the recovery link stands.
+			_restore_gate(str(exchange.get("error")))
+		return
+	if not reachable:
+		# Network trouble on a remembered-code login keeps the code, silently.
+		_restore_gate("")
+		_pending_code = ""
 		return
 	var login := StableActions.fold_response(status, body_text)
 	if bool(login.get("ok")):
 		_enter_with_code(_pending_code)
 	elif SsoExchange.should_forget(status):
 		AuthStore.forget()
-		_code_edit.text = ""
 		_restore_gate("")
 	else:
 		_restore_gate(str(login.get("error")))
@@ -396,9 +448,9 @@ func _on_gate_request_completed(
 
 
 func _enter_with_code(code: String) -> void:
-	_code_edit.text = code
-	_restore_gate("")
-	_submit_code()
+	_set_gate_busy("Taking the reins…")
+	_rider_client().start_with_code(code)
+	stable_client.configure(_rider_client().base_url, _rider_client().code)
 
 
 ## D2-A: recovery is the DOM stables' own reset flow, one tap away. The
@@ -407,33 +459,16 @@ func _open_recovery() -> void:
 	OS.shell_open(SsoExchange.recovery_url(WebHandoff.page_origin()))
 
 
-func _submit_code() -> void:
-	var code := _code_edit.text.strip_edges()
-	if code != _minted_card:
-		# Typing over the minted card retires it: the gate speaks for the code
-		# that is actually going out.
-		_minted_card = ""
-	if code.is_empty():
-		_code_error.text = "The stable code is on your card."
-		return
-	_code_error.text = ""
-	_set_gate_busy("Taking the reins…")
-	_rider_client().start_with_code(code)
-	stable_client.configure(_rider_client().base_url, _rider_client().code)
-
-
 func _set_gate_busy(line: String) -> void:
 	_code_panel.visible = true
-	_code_edit.editable = false
-	_join_button.disabled = true
+	_reins_button.disabled = true
 	_mint_button.disabled = true
 	_gate_status.text = line
 	_code_error.text = ""
 
 
 func _restore_gate(error_line: String) -> void:
-	_code_edit.editable = true
-	_join_button.disabled = false
+	_reins_button.disabled = false
 	_mint_button.disabled = false
 	# A minted card outlives busy/restore cycles: it is the one thing a new
 	# stable must not lose to an error repaint.
@@ -461,6 +496,14 @@ func _pick_faction(faction_id: String) -> void:
 func _refresh_faction_buttons() -> void:
 	for i in range(_faction_buttons.size()):
 		_faction_buttons[i].button_pressed = CircusFactions.ids()[i] == _faction_id
+
+
+## THE seam for the plaza's faction auto-assignment follow-up: the one
+## function that answers "which faction does this entry ride for". Today it
+## is the rider's own pick on the gate row above; the follow-up swaps this
+## body for the plaza-assigned faction and nothing else in the gate moves.
+func _gate_faction() -> String:
+	return _faction_id
 
 
 # ── Rider HUD and inputs ─────────────────────────────────────────────────────
@@ -1074,7 +1117,7 @@ func _track_ghost_recording(event_name: String) -> void:
 				RaceState.PHASE_RUNNING:
 					if rider.riding() and _recorder == null:
 						_recorder = GhostRun.new()
-						_recorder.begin(rider.stable_name(), _faction_id, state.race_distance())
+						_recorder.begin(rider.stable_name(), _gate_faction(), state.race_distance())
 				RaceState.PHASE_FINISHED:
 					_finish_recording()
 				RaceState.PHASE_PARADING, RaceState.PHASE_GATE:
@@ -1614,7 +1657,7 @@ func _refresh_rider_line(remaining_m: float = -1.0) -> void:
 		if rider.signed_in():
 			_my_line.visible = true
 			_my_line.text = "%s · the %s · waiting for your race" % [
-				rider.stable_name(), CircusFactions.name_for(_faction_id),
+				rider.stable_name(), CircusFactions.name_for(_gate_faction()),
 			]
 		return
 	var entry := state.entry_for(rider.my_race_horse_id)

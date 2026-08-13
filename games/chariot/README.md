@@ -98,17 +98,35 @@ day the wire misbehaves.
 
 ## One tap into a stable
 
-A first-time visitor never meets a code they do not have. The gate offers
-**Raise a new stable** as the primary action: one tap mints a stable card in
-the racing server's own code format (six glyphs from the 32 unambiguous
-characters its minter uses — `SsoExchange.mint_code`, pinned by
-`tests/unit/test_sso_mint.gd`), stores it silently through `AuthStore` (so
-the next boot walks straight to the rider's gate), registers it through the
-login call — `POST /api/login` carrying the minted code, so a deploy that
-creates on login makes the stable real with that one request — and enters.
-The card is surfaced once, on the gate and in a single caption after the
-first entry: "Your stable card: XXXX — save it." The owner-code field stays
-for returning riders; the faction pick stays for everyone.
+A first-time visitor never meets a code they do not have — they never meet a
+code at all. The gate's one primary action is **Take the reins**: served
+same-origin with Plato's Plaza (`ashaarena.com/racing/`), the build reads the
+plaza's own session out of the page's localStorage (`arb_token`, the key
+every Asha surface shares) and exchanges it at the racing server's
+`POST /api/sso`, which returns the visitor's stable — creating it on first
+arrival — and the gate enters with it. A visitor with no session yet gets one
+from the plaza's guest mint first: `POST /api/session` with
+`{"handle":"Rider-XXXX"}` (the same call and handle shape the arena's studio
+page uses), the returned token stored back under `arb_token` so the identity
+travels to every other Asha surface, then the exchange. A remembered stable
+code re-enters straight from boot through `POST /api/login`, and a fresh
+`?t=TOKEN` handoff still wins over everything. There is no owner-code field
+and nothing to type; the recovery link ("Returning rider?") opens the stables
+office, and "Watch from the stands instead" stays. The faction pick row
+stays; the single seam for the plaza's faction auto-assignment follow-up is
+`RiderView._gate_faction()` — the follow-up changes that one function and
+nothing else.
+
+Honest degradation, no dead ends: if the plaza guest mint or the SSO exchange
+cannot be reached at all, the gate falls back to the local one-tap mint —
+**Raise a new stable**, which also stays on the gate as its own door — minting
+a stable card in the racing server's own code format (six glyphs from the 32
+unambiguous characters its minter uses — `SsoExchange.mint_code`), storing it
+through `AuthStore`, and registering it through the login call, with a
+visible note saying the Plaza is out of reach. If `/api/sso` answers and
+refuses, the gate shows the server's own message and stays up. The card is
+surfaced once, on the gate and in a single caption after the first entry:
+"Your stable card: XXXX — save it."
 
 What the live server accepts, verified against its source
 (archer-racing-club's `server/api.js` + `server/sockets.js`) and by probing
@@ -120,7 +138,8 @@ is the only reachable auth channel). The minted card therefore becomes real
 server-side when the deploy wires creation (create-on-login or a register
 endpoint); until then the gate answers the server's refusal honestly and the
 card stays the rider's to keep. The flow, the failure modes, and the card's
-persistence through them are pinned by `tests/unit/test_rider_gate.gd`.
+persistence through them are pinned by `tests/unit/test_rider_gate.gd` and
+`tests/unit/test_sso_mint.gd`.
 
 ## The four circus factions
 

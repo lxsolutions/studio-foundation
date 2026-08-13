@@ -6,7 +6,9 @@ extends StudioTestCase
 ## rider_view (_on_gate_request_completed, flow "mint": always enter with the
 ## card, never forget it) — the transport is stubbed there by
 ## RACING_SPECTATE_OFFLINE's handoff_captured seam; what is pinned here is
-## everything the wire sees.
+## everything the wire sees. The plaza half of the gate is pinned here too:
+## the guest mint's request and answer shape (POST /api/session, the arena
+## studio page's own call) and the /api/sso exchange the session spends at.
 
 
 func test_minted_codes_have_the_servers_shape() -> void:
@@ -86,3 +88,79 @@ func test_a_minted_card_routes_the_next_boot_to_the_rider() -> void:
 		"a handoff token still wins on its own")
 	assert_eq(FrontGate.boot_destination(false, false), FrontGate.DEST_STANDS,
 		"a stranger with neither still lands in the stands, one door away")
+
+
+# ── The plaza identity: guest mint and SSO exchange ───────────────────────────
+
+func test_guest_handles_wear_the_rider_shape() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 11
+	for n in 50:
+		var handle := SsoExchange.guest_handle(rng)
+		assert_true(handle.begins_with("Rider-"), "the gate's own theme: " + handle)
+		var suffix := handle.trim_prefix("Rider-")
+		assert_eq(suffix.length(), 4, "a four-digit draw: " + handle)
+		assert_true(suffix.is_valid_int(), "digits only: " + handle)
+
+
+func test_guest_handle_is_deterministic_under_a_seed() -> void:
+	var first := RandomNumberGenerator.new()
+	first.seed = 5
+	var second := RandomNumberGenerator.new()
+	second.seed = 5
+	assert_eq(SsoExchange.guest_handle(first), SsoExchange.guest_handle(second),
+		"same seed, same guest — the suite can pin the mint")
+
+
+func test_plaza_base_table() -> void:
+	assert_eq(SsoExchange.plaza_base(""), "https://ashaarena.com",
+		"off the web the plaza origin stands")
+	assert_eq(SsoExchange.plaza_base("https://ashaarena.com/"), "https://ashaarena.com",
+		"same-origin when the plaza served this build, trailing slash trimmed")
+	assert_eq(SsoExchange.plaza_base("  http://localhost:9000 "), "http://localhost:9000",
+		"a serving origin is kept, whitespace trimmed")
+	assert_eq(SsoExchange.plaza_base("racing.ashaarena.com"), "https://ashaarena.com",
+		"no scheme is no origin")
+
+
+func test_the_guest_mint_posts_the_handle_to_the_plaza_session_desk() -> void:
+	var request := SsoExchange.guest_session_request("Rider-0042", "")
+	assert_eq(int(request.get("method")), HTTPClient.METHOD_POST)
+	assert_eq(str(request.get("base")), "https://ashaarena.com")
+	assert_eq(str(request.get("path")), "/api/session")
+	assert_eq(str(request.get("body")), JSON.stringify({ "handle": "Rider-0042" }),
+		"the same call and handle shape the arena's studio page uses")
+
+
+func test_the_guest_mints_answer_folds() -> void:
+	var ok := SsoExchange.fold_guest_session(200,
+		JSON.stringify({ "token": "tok-1", "handle": "Rider-0042", "key": "k" }))
+	assert_true(bool(ok.get("ok")), "a token answers ok")
+	assert_eq(str(ok.get("token")), "tok-1")
+	assert_eq(str(ok.get("handle")), "Rider-0042")
+	var tokenless := SsoExchange.fold_guest_session(200, JSON.stringify({ "handle": "Rider-0042" }))
+	assert_false(bool(tokenless.get("ok")), "a 200 without a token is not a session")
+	var throttled := SsoExchange.fold_guest_session(429, JSON.stringify({ "error": "Too many guests." }))
+	assert_false(bool(throttled.get("ok")))
+	assert_eq(str(throttled.get("error")), "Too many guests.", "the plaza's own words travel")
+	var silent := SsoExchange.fold_guest_session(0, "{}")
+	assert_false(bool(silent.get("ok")))
+	assert_eq(str(silent.get("error")), "The Plaza did not answer (HTTP 0).")
+
+
+func test_the_exchange_posts_the_token_to_sso() -> void:
+	var request := SsoExchange.exchange_request("tok-9")
+	assert_eq(int(request.get("method")), HTTPClient.METHOD_POST)
+	assert_eq(str(request.get("path")), "/api/sso")
+	assert_eq(str(request.get("body")), JSON.stringify({ "t": "tok-9" }))
+
+
+func test_an_sso_refusal_keeps_the_servers_words() -> void:
+	var ok := SsoExchange.fold_exchange(200, JSON.stringify({ "ok": true, "code": "ABC234", "created": true }))
+	assert_true(bool(ok.get("ok")))
+	assert_eq(str(ok.get("code")), "ABC234")
+	assert_true(bool(ok.get("created")), "a first arrival says so")
+	var refused := SsoExchange.fold_exchange(401, JSON.stringify({ "error": "Unknown arena token." }))
+	assert_false(bool(refused.get("ok")))
+	assert_eq(str(refused.get("error")), "Unknown arena token.",
+		"the gate shows the server's message, not a paraphrase")
