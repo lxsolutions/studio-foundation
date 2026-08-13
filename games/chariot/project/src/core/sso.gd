@@ -4,9 +4,12 @@ extends RefCounted
 ## The no-typing gate paths. Plato's Plaza opens the stables with ?t=TOKEN in
 ## the URL (the same handoff the DOM stables accept); POST /api/sso exchanges
 ## that token for the stable's owner code, creating the stable on first
-## arrival. A remembered code re-enters through POST /api/login. Everything
-## here is pure string work so the whole gate policy is testable offline; the
-## tokens themselves are single-purpose and never stored, only the code is.
+## arrival. A remembered code re-enters through POST /api/login. A stranger
+## with neither taps once and the gate mints a code in the server's own
+## format (mint_code below), registering it through the same login call.
+## Everything here is pure string work so the whole gate policy is testable
+## offline; the tokens themselves are single-purpose and never stored, only
+## the code is.
 
 
 ## Pull t out of a raw query string ("?t=X&y=1" or "t=X&y=1"). Empty when
@@ -74,6 +77,54 @@ static func login_request(code: String) -> Dictionary:
 		"path": "/api/login",
 		"body": JSON.stringify({ "code": code }),
 	}
+
+
+# ── New stables: the one-tap mint ─────────────────────────────────────────────
+
+## The stable-code shape the racing server's own minter uses (server/models.js
+## randomCode in archer-racing-club: 32 unambiguous glyphs — no I/O/0/1 —
+## six long; the socket auth clamps at twelve). The club exposes NO public
+## register endpoint: /api/sso mints only from a Plaza arena token, /api/login
+## validates. So a stranger's first tap mints client-side in the server's
+## format, then REGISTERS THROUGH THE LOGIN CALL — a deploy that creates on
+## login makes the code real with that one request, and the card is the
+## rider's from the first tap either way.
+const CODE_ALPHABET := "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+const CODE_LENGTH := 6
+## The server's own clamp (socket auth and REST login both slice to 12).
+const CODE_MAX_LENGTH := 12
+
+
+## A fresh stable code in the server's format. The RNG is injectable so the
+## suite can pin determinism; production passes nothing and gets a random one.
+static func mint_code(rng: RandomNumberGenerator = null) -> String:
+	if rng == null:
+		rng = RandomNumberGenerator.new()
+		rng.randomize()
+	var code := ""
+	for i in CODE_LENGTH:
+		code += CODE_ALPHABET[rng.randi() % CODE_ALPHABET.length()]
+	return code
+
+
+## Whether a typed or minted code has the server's shape: 1–12 glyphs from
+## the mint alphabet, case-insensitive (auth upcases before it looks).
+static func is_code_shape(code: String) -> bool:
+	var trimmed := code.strip_edges()
+	if trimmed.is_empty() or trimmed.length() > CODE_MAX_LENGTH:
+		return false
+	for i in trimmed.length():
+		if CODE_ALPHABET.find(trimmed[i].to_upper()) < 0:
+			return false
+	return true
+
+
+## The minted code's registration IS the login call: on a create-on-login
+## deploy this answers ok and the stable exists from that moment; on a
+## validate-only deploy it answers like any unknown code and the socket's
+## verdict stands. Either way the gate enters with the card.
+static func register_request(code: String) -> Dictionary:
+	return login_request(code)
 
 
 ## Fold the exchange response into { ok, code, created, error }.

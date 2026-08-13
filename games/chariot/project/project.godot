@@ -13,6 +13,11 @@ config/description="Game project generated from the studio-foundation template."
 run/main_scene="res://scenes/spectator.tscn"
 config/features=PackedStringArray("4.7")
 config/icon="res://icon.svg"
+; The boot shows the house mark, never the engine's: the web export ships this
+; as index.png, the loading screen's status-splash. The Asha Arena lockup
+; (gold on transparent) sits on the gate's own near-black.
+boot_splash/image="res://assets/brand/asha-lockup-v1.png"
+boot_splash/bg_color=Color(0.071, 0.063, 0.043, 1)
 
 [autoload]
 

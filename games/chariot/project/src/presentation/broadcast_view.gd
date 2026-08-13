@@ -79,6 +79,9 @@ var _leader_called := ""
 var _stretch_called := false
 var _banner: Label
 var _phase_label: Label
+## A one-shot caption override (the minted stable card after a first entry),
+## consumed by the next _apply_phase_visuals.
+var _phase_notice: String = ""
 var _rank_strip: PanelContainer
 var _rank_labels: Array[Label] = []
 var _connection_label: Label
@@ -1011,6 +1014,11 @@ func _apply_phase_visuals() -> void:
 	for i in range(_rank_labels.size()):
 		_rank_labels[i].visible = order_live
 	_apply_caption_text()
+	# A one-shot caption (the minted stable card after a first entry): shown
+	# here, then retired — the next phase change repaints the caption as usual.
+	if not _phase_notice.is_empty():
+		_phase_label.text = _phase_notice
+		_phase_notice = ""
 
 
 func _apply_caption_text() -> void:

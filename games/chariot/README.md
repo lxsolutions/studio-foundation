@@ -1,15 +1,24 @@
 # The Chariot Club
 
-The game behind the live demo at
-<https://lxsolutions.github.io/studio-foundation/> — a Roman colosseum with
+The game live at <https://racing.ashaarena.com> — a Roman colosseum with
 crowded stands, chariot teams, and real-time shadows, running in a browser
-through Godot 4.7.1 on this repository's patched WebGPU backend.
+through Godot 4.7.1 on this repository's patched WebGPU backend (a WebGL
+export rides along as the fallback; the index page routes on `navigator.gpu`).
 
 It is published here so the demo can be rebuilt and audited rather than taken on
 trust. **That is not a relicense.** Per [`../LICENSE`](../LICENSE), a game
 directory without its own LICENSE file is all rights reserved; this one has none.
 Read it, build it, verify the claims — but it is not open source, and the
 Foundation's own licence does not extend to it.
+
+## The boot splash
+
+The boot screen shows the Asha Arena lockup, never the engine's logo:
+`application/boot_splash/image` in `project/project.godot` points at
+`project/assets/brand/asha-lockup-v1.png` (gold on transparent, over the
+gate's near-black `bg_color`), and the web export ships that same image as
+`index.png`, the loading page's `status-splash` — one setting brands both
+halves of the boot.
 
 ## Build it
 
@@ -60,6 +69,32 @@ compilation.
 | `server/` | the Rust game server (`cargo test` under `server/`) |
 | `assets-source/` | authoring sources for generated assets |
 | `docs/` | design notes |
+
+## One tap into a stable
+
+A first-time visitor never meets a code they do not have. The gate offers
+**Raise a new stable** as the primary action: one tap mints a stable card in
+the racing server's own code format (six glyphs from the 32 unambiguous
+characters its minter uses — `SsoExchange.mint_code`, pinned by
+`tests/unit/test_sso_mint.gd`), stores it silently through `AuthStore` (so
+the next boot walks straight to the rider's gate), registers it through the
+login call — `POST /api/login` carrying the minted code, so a deploy that
+creates on login makes the stable real with that one request — and enters.
+The card is surfaced once, on the gate and in a single caption after the
+first entry: "Your stable card: XXXX — save it." The owner-code field stays
+for returning riders; the faction pick stays for everyone.
+
+What the live server accepts, verified against its source
+(archer-racing-club's `server/api.js` + `server/sockets.js`) and by probing
+the deployment: the socket.io main namespace authenticates owner codes and
+rejects unknown ones ("Unknown stable code."), `/api/sso` mints stables from
+a Plaza arena token only, and there is NO public register endpoint — the
+REST surface is not even mounted at racing.ashaarena.com today (the socket
+is the only reachable auth channel). The minted card therefore becomes real
+server-side when the deploy wires creation (create-on-login or a register
+endpoint); until then the gate answers the server's refusal honestly and the
+card stays the rider's to keep. The flow, the failure modes, and the card's
+persistence through them are pinned by `tests/unit/test_rider_gate.gd`.
 
 ## The four circus factions
 
@@ -132,8 +167,13 @@ that set it.
   it for the session, and every request then answers an immediate
   offline-shaped refusal — the store falls back to local-only, exactly as
   before the bridge. `RACING_STUDIO_URL` overrides the server address (set
-  but empty parks the bridge); the default `wss://racing.ashaarena.com/studio`
-  is the mount the deploy is expected to expose.
+  but empty parks the bridge). The default follows the page that served the
+  game (`StudioClient.derive_ws_url`, the whole table pinned in
+  `tests/unit/test_studio_url.gd`): `/studio` on the same origin at a domain
+  root — racing.ashaarena.com, where `/webgpu` and `/webgl` are the export's
+  own mounts — and `/racing/studio` when the game is served under a `/racing`
+  path (ashaarena.com/racing/…). Off the web the
+  `wss://racing.ashaarena.com/studio` mount stands.
 - Identity rides the submit, not the handshake. The token source is the plaza
   handoff: a fresh `?t=` token captured at the sign-in gate, else the
   same-origin `arb_token` localStorage key (what the plaza writes and the

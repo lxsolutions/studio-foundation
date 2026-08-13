@@ -78,15 +78,21 @@ func _report() -> void:
 	var stands: Dictionary = director.stands_spec()
 	var podium: float = director.podium_offset()
 	var back: float = podium + float(stands.tiers) * float(stands.tier_depth_m)
-	var top: float = float(stands.podium_height_m) \
-		+ float(stands.tiers) * (float(stands.tier_rise_m) + float(stands.tier_riser_m))
+	# The seating surface tops out at the last tread, one row-step below the
+	# cavea's structural top (the arcade rises from there). A seat above it is
+	# floating over the back wall — exactly the ship that made the house read
+	# as hovering in mid-air.
+	var top_tread: float = float(stands.podium_height_m) \
+		+ float(stands.tiers) * (float(stands.tier_rise_m) + float(stands.tier_riser_m)) \
+		- float(stands.tier_rise_m) / float(stands.rows_per_tier)
 	print("[crowd] spectators=%d" % seats.size())
-	print("[crowd] seat height  %.1f .. %.1f m   (stands 0 .. %.1f m)" % [lo_h, hi_h, top])
+	print("[crowd] seat height  %.1f .. %.1f m   (treads %.1f .. %.1f m)"
+		% [lo_h, hi_h, float(stands.podium_height_m) + float(stands.tier_riser_m), top_tread])
 	print("[crowd] seat depth   %.1f .. %.1f m   (stands %.1f .. %.1f m from centre)"
 		% [lo_r, hi_r, podium, back])
-	if hi_h > top + 1.0:
+	if hi_h > top_tread + 0.3:
 		printerr("[crowd] SEATS ABOVE THE STANDS by %.1f m — spectators are floating"
-			% [hi_h - top])
+			% [hi_h - top_tread])
 
 
 func _place_camera() -> void:

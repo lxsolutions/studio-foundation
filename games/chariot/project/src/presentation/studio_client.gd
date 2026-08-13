@@ -17,7 +17,11 @@ extends Node
 ## and every request then answers an immediate offline-shaped refusal —
 ## GhostStore falls back to local-only, exactly as without a bridge.
 ## RACING_STUDIO_URL overrides the server address (set but empty parks the
-## bridge); the default is the mount the deploy is expected to expose.
+## bridge). Otherwise the bridge follows the page that served the game:
+## /studio on the same origin at a domain root (racing.ashaarena.com, where
+## /webgpu and /webgl are the export's own mounts, not game prefixes), and
+## /racing/studio when the game is served under a /racing path
+## (ashaarena.com/racing/…). Off the web DEFAULT_BASE_URL stands.
 
 const DEFAULT_BASE_URL := "wss://racing.ashaarena.com/studio"
 const CLIENT_NAME := "chariot"
@@ -83,7 +87,10 @@ func _process(delta: float) -> void:
 
 ## Resolve the server URL once. An explicitly set base_url (tests, embedders)
 ## always wins; RACING_STUDIO_URL overrides the default verbatim — set but
-## empty parks the bridge — and the offline flag parks it too.
+## empty parks the bridge — and the offline flag parks it too. On the web the
+## default is derived from the page's own origin and path so the same export
+## answers at racing.ashaarena.com and at ashaarena.com/racing; anywhere else
+## the DEFAULT_BASE_URL mount stands.
 func _configure() -> void:
 	if _configured:
 		return
@@ -95,7 +102,54 @@ func _configure() -> void:
 		return
 	if OS.get_environment("RACING_SPECTATE_OFFLINE") == "1":
 		return
+	if OS.has_feature("web"):
+		var derived := derive_ws_url(_page_url())
+		if not derived.is_empty():
+			base_url = derived
+			return
 	base_url = DEFAULT_BASE_URL
+
+
+## The studio socket's address for a page at `page_url` (origin + path, e.g.
+## "https://ashaarena.com/racing/webgpu/index.html"): same origin, /studio at
+## a domain root, /racing/studio under a /racing path. Pure string work so
+## the whole derivation table is testable offline; anything unparseable
+## answers "" and the caller falls back to the default mount.
+static func derive_ws_url(page_url: String) -> String:
+	var rest := page_url.strip_edges()
+	var scheme := ""
+	if rest.begins_with("https://"):
+		scheme = "wss://"
+	elif rest.begins_with("http://"):
+		scheme = "ws://"
+	else:
+		return ""
+	rest = rest.substr(rest.find("://") + 3)
+	var slash := rest.find("/")
+	var host := rest if slash < 0 else rest.substr(0, slash)
+	if host.is_empty():
+		return ""
+	var path := "" if slash < 0 else rest.substr(slash)
+	# pathname carries neither, but a hand-typed URL might.
+	var cut := path.find("?")
+	if cut >= 0:
+		path = path.substr(0, cut)
+	cut = path.find("#")
+	if cut >= 0:
+		path = path.substr(0, cut)
+	var prefix := ""
+	if path == "/racing" or path.begins_with("/racing/"):
+		prefix = "/racing"
+	return scheme + host + prefix + "/studio"
+
+
+## origin + pathname from the browser, "" off the web; derivation lives in
+## derive_ws_url so the policy never touches JavaScriptBridge directly.
+static func _page_url() -> String:
+	if not OS.has_feature("web"):
+		return ""
+	return str(JavaScriptBridge.eval(
+		"window.location.origin+window.location.pathname", true))
 
 
 ## The same-origin plaza session, when the plaza itself served this build:

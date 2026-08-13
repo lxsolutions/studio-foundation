@@ -5,9 +5,12 @@ extends MultiMeshInstance3D
 ## house looks the same every raceday, tinted in the four circus factions
 ## with the wider palette sprinkled thin, breathing gently at rest and
 ## rising as one when the wire's crowd_swell moment lands. Seat math mirrors
-## art_source/blender/generate_assets.py exactly: the podium ring at
-## (rail_outer − 1) · lane_width + 15, five tiers of depth 7.0 rising 4.2
-## with 2.2 risers, first course at podium height + 1.
+## the tread surfaces the mesh generator sweeps from the same spec in
+## art_source/build_hippodrome.py (cavea_profile): the podium wall at
+## (rail_outer − 1) · lane_width + podium_extra_m, each tier climbing one
+## riser before rows_per_tier treads of depth/rows × rise/rows. A spectator
+## sits at a tread's CENTER with the figure origin — the mesh's bottom pivot
+## (build_spectators.py, gameready.pivot "bottom") — resting ON the stone.
 ##
 ## Three things decide whether a stand reads as an audience or as confetti,
 ## and the first version of this got all three wrong:
@@ -129,6 +132,8 @@ func podium_offset() -> float:
 ## tests build this director in isolation, and a silently empty colosseum would
 ## be a much worse failure than an over-budget one.
 func crowd_density() -> float:
+	if not is_inside_tree():
+		return 1.0
 	var studio: Node = get_node_or_null(^"/root/Studio")
 	if studio == null:
 		return 1.0
@@ -149,9 +154,19 @@ func build() -> void:
 	var tier_rise := float(stands.tier_rise_m)
 	var tier_riser := float(stands.tier_riser_m)
 	var n_tiers := int(stands.tiers)
+	var n_rows := int(stands.rows_per_tier)
 	var loop: float = TrackGeometry.loop_length()
-	var base_off := podium_offset() + 1.2
-	var base_h := float(stands.podium_height_m) + 1.0
+	# These two used to carry their own offsets (+1.2 out, +1.0 up) instead of
+	# the spec's, and the row height added a half-row fraction mismatch plus a
+	# 0.55 m lift left over from the capsule-origin era. Every figure floated
+	# ~0.9 m above its tread and past its front edge — ten thousand people
+	# hovering in front of the cavea, the top row clean over the back wall.
+	# The surface is the generator's: tread centers at podium_offset + tier·depth
+	# + (row + ½)·depth/rows, tread tops at podium_height + (tier+1)·riser
+	# + tier·rise + row·rise/rows. tests/unit/test_crowd_seating.gd pins every
+	# seat to exactly one of those treads.
+	var base_off := podium_offset()
+	var base_h := float(stands.podium_height_m)
 
 	# The crowd is the single largest triangle contributor in the game, and until
 	# now it was built identically on every render profile -- a phone drew the same
@@ -171,10 +186,14 @@ func build() -> void:
 
 	var fractions := row_fractions()
 	for tier in n_tiers:
-		var h_lo := base_h + tier * (tier_rise + tier_riser) + tier_riser - 1.0
+		# The praecinctio wall: the generator climbs one riser into each tier
+		# before cutting its treads.
+		var tier_floor := base_h + tier * (tier_rise + tier_riser) + tier_riser
 		for f in fractions:
 			var off := base_off + tier * tier_depth + float(f) * tier_depth
-			var h := h_lo + float(f) * tier_rise + 0.55
+			# f is the row's center fraction, (row + ½)/rows; the tread top is
+			# row·rise/rows up the tier's slope.
+			var h := tier_floor + (float(f) - 0.5 / n_rows) * tier_rise
 			var count := int((loop + TAU * off) / spacing)
 			for i in count:
 				if rng.randf() < EMPTY_SEAT_ODDS:
