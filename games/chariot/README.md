@@ -61,6 +61,32 @@ composite the canvas, so pixel readback proves nothing. Expect roughly 13 s from
 cold load to first rendered frame; the ~45 MB wasm download dominates, not shader
 compilation.
 
+## The venue mesh is generated — rebuild it when the spec moves
+
+`project/assets/models/colosseum_track.glb` is the output of
+`art_source/build_hippodrome.py`, swept from `project/assets/track_spec.json`,
+the same file every runtime (`track_geometry.gd`, `crowd_director.gd`) reads.
+Change the spec without rebuilding the mesh and the building is simply
+somewhere else than the math: this shipped once — a 380 m/110 m build against
+the 95 m/42 m spec — and read as the crowd floating in mid-air at the far end
+and chariots passing through the spina, while near-side cameras framed the
+crowd against distant stone and looked fine. Rebuild after any spec touch:
+
+```sh
+python3 games/chariot/art_source/build_hippodrome.py --pbr --install
+```
+
+`tests/unit/test_crowd_seating.gd::test_shipped_mesh_matches_the_spec_oval`
+pins the shipped GLB's footprint to the spec, so a stale mesh fails the suite
+loudly instead of shipping quietly.
+
+There is no physics in the client — every runner is transform-driven from
+wire lanes — so `TrackGeometry.deflect_from_spina` is the only thing between
+a corrupt lane and a chariot through the central barrier: placement is
+deflected out of the spina's footprint (`tests/unit/test_spina_keepout.gd`).
+Legal lanes (0.5..16) never come within 35 m of it; the clamp exists for the
+day the wire misbehaves.
+
 ## Layout
 
 | | |

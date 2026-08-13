@@ -142,3 +142,115 @@ func test_first_and_last_tread_match_the_generator_profile() -> void:
 		"no spectator above the cavea's seating surface (highest %.3f, top tread %.3f)"
 			% [highest, last_tread])
 	director.free()
+
+
+## Which arm of the loop a world point belongs to: the near straight runs at
+## z=-radius, the far at +radius, and each turn wraps its own centre at
+## x=±half the straight — never the origin.
+func _segment_of(p: Vector3) -> String:
+	var half: float = TrackGeometry.straight_length() / 2.0
+	if absf(p.x) <= half:
+		return "near_straight" if p.z < 0.0 else "far_straight"
+	return "east_turn" if p.x > 0.0 else "west_turn"
+
+
+func test_house_rings_the_whole_loop() -> void:
+	# The far-end float shipped because only the near straight was ever
+	# eyeballed: seat math and mesh must agree on ALL FOUR arms of the loop.
+	# Bucket every seat by arm; each arm must hold its share of the house and
+	# every seat in it must sit on a tread inside that tread's lateral span.
+	var director := _build_director()
+	var treads := _treads(director)
+	var buckets := {
+		"near_straight": 0, "far_straight": 0, "east_turn": 0, "west_turn": 0,
+	}
+	var astray := {}
+	for segment in buckets:
+		astray[segment] = 0
+	for seat in director.seat_positions:
+		var segment := _segment_of(seat)
+		buckets[segment] = int(buckets[segment]) + 1
+		var on_tread := false
+		for tread in treads:
+			if absf(seat.y - float(tread.height)) <= HEIGHT_EPS:
+				var off := _lateral_offset(seat)
+				on_tread = off >= float(tread.lo) - DEPTH_EPS and off <= float(tread.hi) + DEPTH_EPS
+				break
+		if not on_tread:
+			astray[segment] = int(astray[segment]) + 1
+	var total := director.seat_positions.size()
+	for segment in buckets:
+		var share := float(buckets[segment]) / float(total)
+		# Straights are 21% of the loop each, the turns 29%; demand 15%+
+		# everywhere so a whole arm can never silently lose its house again.
+		assert_true(share > 0.15,
+			"%s holds %.1f%% of the house — a whole arm of the loop is unseated"
+				% [segment, share * 100.0])
+		assert_eq(int(astray[segment]), 0,
+			"%s: spectators off every tread on this arm of the loop" % segment)
+	director.free()
+
+
+func test_every_seat_lies_within_the_cavea_span() -> void:
+	# The reported bug in one assertion: the seating surface runs from the
+	# podium front to the back wall — a seat outside that span floats over the
+	# sand or behind the building, wherever on the loop it sits.
+	var director := _build_director()
+	var stands: Dictionary = director.stands_spec()
+	var podium: float = director.podium_offset()
+	var back := podium + float(stands.tiers) * float(stands.tier_depth_m)
+	var outside := 0
+	var worst_lo := INF
+	var worst_hi := -INF
+	for seat in director.seat_positions:
+		var off := _lateral_offset(seat)
+		worst_lo = minf(worst_lo, off)
+		worst_hi = maxf(worst_hi, off)
+		if off < podium - DEPTH_EPS or off > back + DEPTH_EPS:
+			outside += 1
+	assert_eq(outside, 0,
+		"seats outside the cavea span (%.1f .. %.1f m): depth %.1f .. %.1f m"
+			% [podium, back, worst_lo, worst_hi])
+	director.free()
+
+
+func test_shipped_mesh_matches_the_spec_oval() -> void:
+	# The root cause of the floating crowd: the mesh was built from an OLD
+	# track_spec (380 m straight / 110 m turn) while every runtime read the
+	# new one (95/42) — seat math was right and the building was simply
+	# somewhere else. Pin the shipped GLB's footprint to the spec so a stale
+	# rebuild can never ship quietly again.
+	var packed: PackedScene = load("res://assets/models/colosseum_track.glb")
+	assert_true(packed != null, "colosseum_track.glb must load")
+	var node: Node = packed.instantiate()
+	var mesh_instance := node.find_child("*", true, false) as MeshInstance3D
+	if mesh_instance == null and node is MeshInstance3D:
+		mesh_instance = node
+	assert_true(mesh_instance != null, "the track scene carries a mesh")
+	var aabb: AABB = mesh_instance.get_aabb()
+	node.free()
+	var spec: Dictionary = TrackGeometry.spec()
+	var stands: Dictionary = spec.get("stands", {})
+	var podium := (float(spec.rail_outer_offset_lanes) - 1.0) * float(spec.lane_width_m) \
+		+ float(stands.get("podium_extra_m", 15.0))
+	var stand_back := podium \
+		+ float(stands.get("tiers", 5)) * float(stands.get("tier_depth_m", 7.0))
+	var back_wall := float(stands.get("back_thickness_m", 3.4))
+	# The outermost stone in each axis is the cavea's back wall: half the
+	# straight plus turn radius plus the full stand depth down x, turn radius
+	# plus the full stand depth across z. A stale mesh misses by hundreds of
+	# meters; the tolerance only absorbs the arcade's decorative flare.
+	var radius: float = TrackGeometry.turn_radius()
+	var expected_x := TrackGeometry.straight_length() / 2.0 + radius + stand_back + back_wall
+	var expected_z := radius + stand_back + back_wall
+	assert_true(absf(aabb.size.x / 2.0 - expected_x) <= 4.0,
+		"mesh x half-extent %.1f vs the spec's %.1f m — rebuild build_hippodrome.py"
+			% [aabb.size.x / 2.0, expected_x])
+	assert_true(absf(aabb.size.z / 2.0 - expected_z) <= 4.0,
+		"mesh z half-extent %.1f vs the spec's %.1f m — rebuild build_hippodrome.py"
+			% [aabb.size.z / 2.0, expected_z])
+	assert_true(absf(aabb.get_center().x) <= 1.0 and absf(aabb.get_center().z) <= 1.0,
+		"the arena is centred on the origin")
+	var height := aabb.position.y + aabb.size.y
+	assert_true(height > 45.0 and height < 75.0,
+		"mesh height %.1f m — the cavea plus arcade plus masts stands ~61 m" % height)

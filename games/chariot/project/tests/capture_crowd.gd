@@ -68,13 +68,21 @@ func _report() -> void:
 	var hi_h := -INF
 	var lo_r := INF
 	var hi_r := -INF
+	var radius: float = TrackGeometry.turn_radius()
+	var half: float = TrackGeometry.straight_length() / 2.0
 	for seat in seats:
 		var p: Vector3 = seat
 		lo_h = minf(lo_h, p.y)
 		hi_h = maxf(hi_h, p.y)
-		var radial := Vector2(p.x, p.z).length()
-		lo_r = minf(lo_r, radial)
-		hi_r = maxf(hi_r, radial)
+		# Lateral distance from the lane-1 centerline, NOT radial distance from
+		# the origin: a stadium is not a circle. On the turns the centre sits at
+		# ±half the straight, so an origin-radial metric reads up to ~90 m too
+		# deep at the far end and reports a correctly-seated house as floating.
+		var x := absf(p.x)
+		var off := absf(p.z) - radius if x <= half \
+			else Vector2(x - half, p.z).length() - radius
+		lo_r = minf(lo_r, off)
+		hi_r = maxf(hi_r, off)
 	var stands: Dictionary = director.stands_spec()
 	var podium: float = director.podium_offset()
 	var back: float = podium + float(stands.tiers) * float(stands.tier_depth_m)
@@ -88,11 +96,14 @@ func _report() -> void:
 	print("[crowd] spectators=%d" % seats.size())
 	print("[crowd] seat height  %.1f .. %.1f m   (treads %.1f .. %.1f m)"
 		% [lo_h, hi_h, float(stands.podium_height_m) + float(stands.tier_riser_m), top_tread])
-	print("[crowd] seat depth   %.1f .. %.1f m   (stands %.1f .. %.1f m from centre)"
+	print("[crowd] seat depth   %.1f .. %.1f m   (cavea treads span %.1f .. %.1f m from the centerline)"
 		% [lo_r, hi_r, podium, back])
 	if hi_h > top_tread + 0.3:
 		printerr("[crowd] SEATS ABOVE THE STANDS by %.1f m — spectators are floating"
 			% [hi_h - top_tread])
+	if lo_r < podium - 0.3 or hi_r > back + 0.3:
+		printerr("[crowd] SEATS OFF THE CAVEA: depth %.1f .. %.1f m vs the swept %.1f .. %.1f m"
+			% [lo_r, hi_r, podium, back])
 
 
 func _place_camera() -> void:
