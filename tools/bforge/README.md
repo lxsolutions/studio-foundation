@@ -241,8 +241,8 @@ wrong" that no metric shows.
   pivots, attachment sockets
 - **`render.*` / `check.*` / `export.*`** — contact sheets, turntables,
   **`render.camera`** (explicit position/target/lens), auto-framed cinematic
-  shots, **`render.sprite`** (silhouette-fitted, linear-light, supersampled game
-  icons and directional sheets with clean alpha), **`render.impostor`**
+  shots, **`render.sprite`** (shared silhouette-safe framing, linear-light,
+  supersampled game icons and stable-scale directional sheets), **`render.impostor`**
   (billboard sprite sheets + normal sheets + JSON sidecar — the distant-LOD
   technique), studio validation,
   critique, **`check.materials`** (perceptual material separation, the mud-blob
@@ -250,6 +250,46 @@ wrong" that no metric shows.
 - **`session.import`** — pull in an existing GLB/glTF/OBJ/FBX/blend to inspect,
   critique, fix or extend assets a game already ships. This is how the Chariot
   audit above was done.
+
+### Sprite resource and directional contract
+
+`render.sprite` rejects unsafe work before scene lookup, numpy image
+allocation, Blender datablock creation, or Cycles rendering. After the public
+clamps (`size=32..2048`, `supersample=1..4`, internal render axis at most 4096,
+`views=1..64`, and `samples=8..256`), let:
+
+- `P = size²` be one output frame;
+- `Q = (size × supersample)²` be one Cycles frame;
+- `cols = ceil(sqrt(views))`, `rows = ceil(views / cols)`; and
+- `S = (cols × size) × (rows × size)` be the output sheet.
+
+Both aggregate caps must pass:
+
+```text
+float-buffer bytes = 16 × (3S + 2Q + 16P) <= 512 MiB
+pixel-work         = views × (Q × samples + 16P) + S <= 1,681,915,904
+sheet width, height <= 8192 px
+```
+
+The buffer terms conservatively cover the sheet/save/Blender image copies, the
+render result plus EXR readback, and the linear post-processing temporaries.
+Pixel-work charges every sample at supersampled resolution, every view, the
+post chain, and the final sheet. The standard `size=512, supersample=2,
+views=16, samples=96` profile is the exact work boundary and is accepted;
+raising only `samples` to 97 is rejected. The result and directional JSON
+include the calculated budget so callers can trade resolution, views,
+supersampling, or samples deliberately.
+
+Every directional yaw shares one world-space target, camera distance,
+ground anchor, and pixels-per-metre scale. `framing` records that common
+contract; each `camera_frames` row adds the projected ground anchor plus
+foreground-alpha `content_bounds_px` (right/bottom exclusive), clearance in
+left/top/right/bottom order, clipping status, and a bottom-centre content
+anchor. These measurements remain subject-only even for solid/gradient
+backdrops. Alpha PNGs carry dilated hidden RGB for clean filtering/mipmaps.
+Directional JSON is atomically replaced, a successful single-view rerender
+removes stale JSON, and `_sprite` EXR intermediates never survive a completed
+or failed call.
 
 ---
 

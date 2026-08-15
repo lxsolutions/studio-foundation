@@ -67,15 +67,61 @@ def unpremultiply(rgba, epsilon=1e-6):
     return out
 
 
+def bleed_transparent_rgb(rgba, radius=8, epsilon=1.0 / 255.0):
+    """Dilate straight RGB through transparent pixels without changing alpha.
+
+    Straight-alpha PNGs whose hidden RGB is black acquire a dark seam when a
+    GPU filters or builds ordinary mipmaps across the silhouette. Eight local
+    dilation steps preserve nearby edge colour; the remaining empty field gets
+    the visible mean so even the smallest mip never averages against black.
+    """
+    numpy = require_numpy()
+    out = rgba.copy()
+    alpha = out[..., 3]
+    known = alpha > epsilon
+    if not known.any():
+        return out
+
+    rgb = out[..., :3]
+    for _ in range(max(0, int(radius))):
+        accumulated = numpy.zeros_like(rgb)
+        counts = numpy.zeros(alpha.shape, dtype=numpy.float32)
+
+        accumulated[1:] += rgb[:-1] * known[:-1, :, None]
+        counts[1:] += known[:-1]
+        accumulated[:-1] += rgb[1:] * known[1:, :, None]
+        counts[:-1] += known[1:]
+        accumulated[:, 1:] += rgb[:, :-1] * known[:, :-1, None]
+        counts[:, 1:] += known[:, :-1]
+        accumulated[:, :-1] += rgb[:, 1:] * known[:, 1:, None]
+        counts[:, :-1] += known[:, 1:]
+
+        fill = (~known) & (counts > 0.0)
+        if not fill.any():
+            break
+        rgb[fill] = accumulated[fill] / counts[fill, None]
+        known |= fill
+
+    # Distant transparent pixels only matter in coarse mip levels. A visible
+    # mean is deterministic, non-black, and avoids inventing a directional
+    # colour gradient where no nearest edge exists.
+    fallback = rgb[alpha > epsilon].mean(axis=0, dtype=numpy.float32)
+    rgb[~known] = fallback
+    return out
+
+
 def save(array, path, name="_bforge_post", premultiplied=False):
     """Write a display-referred linear RGBA array (top-down) as a PNG.
 
     Blender applies the sRGB transfer on save. PNG stores straight alpha while
     Cycles EXR returns premultiplied alpha, so callers carrying render data must
-    opt into the conversion or antialiased edges are saved with dark fringes.
+    opt into conversion. Transparent RGB is then dilated from the silhouette so
+    filtered/mipmapped straight-alpha textures do not acquire dark fringes.
     """
     numpy = require_numpy()
     pixels = unpremultiply(array) if premultiplied else array
+    if premultiplied:
+        pixels = bleed_transparent_rgb(pixels)
     height, width = pixels.shape[:2]
     image = bpy.data.images.new(name, width=width, height=height, alpha=True)
     try:

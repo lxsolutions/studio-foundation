@@ -1724,15 +1724,15 @@ Bake an object into a billboard impostor sprite sheet: N orthographic views orbi
 
 ### `render.sprite`
 
-Render a GAME ICON, not a screenshot: a silhouette-fitted three-quarter hero angle on a long lens, a warm-key/cool-fill/bright-kicker rig anchored to the camera so a whole set matches, a real contact shadow, supersampled edges, a radial backdrop or clean alpha, and a linear-light post chain (highlight bloom, ACES tonemap, grade, vignette). Pass views>1 for a directional sprite sheet lit identically at every angle.
+Render a GAME ICON, not a screenshot: silhouette-safe shared framing on a long lens, a warm-key/cool-fill/bright-kicker rig anchored to the camera so a whole set matches, a real contact shadow, supersampled edges, a radial backdrop or clean alpha, and a linear-light post chain (highlight bloom, ACES tonemap, grade, vignette). Pass views>1 for a directional sheet with stable world scale and ground anchor at every angle.
 
 | parameter | type | default | description |
 | --- | --- | --- | --- |
 | `name` | string | None | Object to shoot; its children come with it. Omit to frame every mesh in the scene |
 | `out` | string | 'sprite.png' | PNG output path. With views>1 a <stem>.json sidecar describing the grid is written next to it |
-| `size` | integer | 512 | Output size in pixels per frame (square). 256-1024 is the useful icon range |
-| `supersample` | integer | 2 | Render each axis at 1-4x then area-downsample in premultiplied linear light for cleaner silhouette edges. The internal render is capped at 4096 px per axis |
-| `views` | integer | 1 | How many yaw angles to shoot. 1 is an icon; 8 or 16 packs a directional sprite sheet for a 2D game |
+| `size` | integer | 512 | Output size in pixels per square frame, clamped to 32-2048. Sheet dimensions participate in the aggregate resource preflight; 256-1024 is the useful icon range |
+| `supersample` | integer | 2 | Render each axis at 1-4x then area-downsample in premultiplied linear light for cleaner silhouette edges. The internal render is capped at 4096 px per axis and all supersampled pixels participate in the resource preflight |
+| `views` | integer | 1 | How many yaw angles to shoot, clamped to 1-64. 1 is an icon; 8 or 16 packs a stable-scale directional sheet. Every view participates in the aggregate resource preflight |
 | `azimuth` | number | -47.0 | Camera compass angle in degrees. -47 is the standard three-quarter view that shows a front and a side at once |
 | `elevation` | number | 24.0 | Camera height above the horizon in degrees. 20-30 reads as 'held up in front of you'; 45+ becomes a map marker |
 | `lens` | number | 85.0 | Focal length in mm. Long lenses flatten perspective, which is why product and icon work uses them — 85-135 keeps the far side of the object from tapering away |
@@ -1754,7 +1754,7 @@ Render a GAME ICON, not a screenshot: a silhouette-fitted three-quarter hero ang
 | `vignette` | number | 0.22 | Corner darkening. Ignored when background=alpha, which must stay compositable |
 | `look` | aces \| punchy \| linear | 'aces' | Tonemap. aces is the film-style curve games ship; punchy adds saturation in the curve; linear clips, for data |
 | `shadow` | boolean | True | Cast a real contact shadow onto an invisible ground plane so the subject sits on something |
-| `samples` | integer | 96 | Path-tracing samples. Icons are small and seen close; 96-256 is the honest range |
+| `samples` | integer | 96 | Path-tracing samples, clamped to 8-256 and charged per supersampled pixel/view by the aggregate resource preflight. Icons are small and seen close; 96-256 is the honest range |
 
 ### `render.turntable`
 
