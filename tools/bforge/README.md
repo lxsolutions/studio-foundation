@@ -266,18 +266,34 @@ clamps (`size=32..2048`, `supersample=1..4`, internal render axis at most 4096,
 Both aggregate caps must pass:
 
 ```text
-float-buffer bytes = 16 × (3S + 2Q + 16P) <= 512 MiB
-pixel-work         = views × (Q × samples + 16P) + S <= 1,681,915,904
+render phase = 16 × (S + 2Q + 16P)
+bounded save = 96S + 32 MiB
+save phase   = bounded save + 32Q + 32P
+working set  = max(render phase, save phase) <= 512 MiB
+
+pixel-work = views × (Q × samples + 16P) + S <= 1,681,915,904
 sheet width, height <= 8192 px
 ```
 
-The buffer terms conservatively cover the sheet/save/Blender image copies, the
-render result plus EXR readback, and the linear post-processing temporaries.
+The render phase covers the resident sheet, render result plus EXR readback,
+and the linear post chain. The worst-case alpha save consumes that sheet in
+place: unpremultiplication, hidden-RGB dilation, clipping and vertical flipping
+reuse bounded numpy buffers, then `foreach_set` transfers the contiguous
+float32 storage to Blender without creating one Python float per channel.
+`96S + 32 MiB` conservatively covers those buffers, Blender's float image/PNG
+encoder, allocator variance, and fixed overhead; the save phase also retains
+two render-frame and two output-frame equivalents.
+
 Pixel-work charges every sample at supersampled resolution, every view, the
 post chain, and the final sheet. The standard `size=512, supersample=2,
-views=16, samples=96` profile is the exact work boundary and is accepted;
-raising only `samples` to 97 is rejected. The result and directional JSON
-include the calculated budget so callers can trade resolution, views,
+views=16, samples=96` profile is the exact work boundary and is accepted; its
+save phase is 456 MiB. Raising only `samples` to 97 is rejected. At low work,
+`size=560, supersample=1, views=16, samples=8` is the adjacent accepted memory
+case at 535,314,432 bytes; raising only `size` to 561 is rejected at
+537,108,032 bytes. An isolated Linux regression runs the accepted 2048-square
+alpha save through pinned Blender 4.5.12 and requires its measured peak-RSS
+increase to stay within the 416 MiB save allowance. The result and directional
+JSON include every phase estimate so callers can trade resolution, views,
 supersampling, or samples deliberately.
 
 Every directional yaw shares one world-space target, camera distance,

@@ -1,21 +1,21 @@
 """Pure resource preflight for :mod:`render.sprite`.
 
-This module deliberately imports neither ``bpy`` nor numpy.  The render op calls
+This module deliberately imports neither ``bpy`` nor numpy. The render op calls
 it before looking up scene objects, allocating image arrays, creating Blender
 datablocks, or starting Cycles, so an unsafe request fails cheaply.
 
 The budget has two complementary caps:
 
-* peak float-buffer storage accounts for three sheet-sized buffers (the numpy
-  sheet, straight-alpha save copy, and Blender image), two full-resolution
-  render buffers, and sixteen output-frame equivalents for the linear post
-  chain;
+* peak incremental memory is the larger of the render/post phase and the
+  bounded PNG-save phase. The save path consumes the sheet in place and passes
+  its float32 buffer through Blender's ``foreach_set`` API, so it never creates
+  one Python object per channel;
 * pixel-work accounts for every Cycles sample at supersampled resolution,
   sixteen output-resolution post passes per view, and the final sheet.
 
 The work ceiling is intentionally the exact cost of the documented largest
 standard directional profile: 16 views at 512 px, 2x supersampling, and 96
-samples.  Callers can trade any of those dimensions against the others.
+samples. Callers can trade any of those dimensions against the others.
 """
 
 from __future__ import annotations
@@ -34,10 +34,18 @@ MAX_SAMPLES = 256
 MAX_SHEET_AXIS_PX = 8192
 
 RGBA_FLOAT_BYTES = 4 * 4
-SHEET_BUFFER_EQUIVALENTS = 3
 RENDER_BUFFER_EQUIVALENTS = 2
 POST_BUFFER_EQUIVALENTS = 16
+SAVE_FRAME_BUFFER_EQUIVALENTS = 2
 POST_WORK_EQUIVALENTS = 16
+
+# The bounded save implementation uses a fixed set of per-pixel numpy buffers
+# and passes the contiguous float32 sheet directly to Blender. The 96-byte
+# allowance per pixel plus 32 MiB fixed overhead covers those buffers, Blender's
+# float image/PNG encoder, allocator variance, and future compatible Blender
+# 4.5.x patch releases without pretending Python-float materialisation is cheap.
+SAVE_BYTES_PER_SHEET_PIXEL = 96
+SAVE_FIXED_BYTES = 32 * 1024 * 1024
 MAX_WORKING_SET_BYTES = 512 * 1024 * 1024
 
 # 16 * (1024^2 * 96 + 512^2 * 16) + 2048^2
@@ -79,12 +87,17 @@ def plan_sprite_request(size: int, supersample: int, views: int, samples: int) -
     post_pixel_work = effective_views * frame_pixels * POST_WORK_EQUIVALENTS
     pixel_work = sample_pixel_work + post_pixel_work + sheet_pixels
 
-    working_pixel_slots = (
-        sheet_pixels * SHEET_BUFFER_EQUIVALENTS
+    render_phase_bytes = RGBA_FLOAT_BYTES * (
+        sheet_pixels
         + render_frame_pixels * RENDER_BUFFER_EQUIVALENTS
         + frame_pixels * POST_BUFFER_EQUIVALENTS
     )
-    working_set_bytes = working_pixel_slots * RGBA_FLOAT_BYTES
+    save_buffer_bytes = sheet_pixels * SAVE_BYTES_PER_SHEET_PIXEL + SAVE_FIXED_BYTES
+    save_phase_bytes = save_buffer_bytes + RGBA_FLOAT_BYTES * (
+        render_frame_pixels * RENDER_BUFFER_EQUIVALENTS
+        + frame_pixels * SAVE_FRAME_BUFFER_EQUIVALENTS
+    )
+    working_set_bytes = max(render_phase_bytes, save_phase_bytes)
 
     budget = {
         "sheet_px": [sheet_width_px, sheet_height_px],
@@ -94,6 +107,9 @@ def plan_sprite_request(size: int, supersample: int, views: int, samples: int) -
         "post_pixel_work": post_pixel_work,
         "pixel_work": pixel_work,
         "max_pixel_work": MAX_PIXEL_WORK,
+        "render_phase_bytes": render_phase_bytes,
+        "save_buffer_bytes": save_buffer_bytes,
+        "save_phase_bytes": save_phase_bytes,
         "working_set_bytes": working_set_bytes,
         "max_working_set_bytes": MAX_WORKING_SET_BYTES,
         "max_sheet_axis_px": MAX_SHEET_AXIS_PX,
@@ -102,18 +118,15 @@ def plan_sprite_request(size: int, supersample: int, views: int, samples: int) -
     reasons = []
     if sheet_width_px > MAX_SHEET_AXIS_PX or sheet_height_px > MAX_SHEET_AXIS_PX:
         reasons.append(
-            f"sheet {sheet_width_px}x{sheet_height_px} exceeds "
-            f"{MAX_SHEET_AXIS_PX}px per axis"
+            f"sheet {sheet_width_px}x{sheet_height_px} exceeds {MAX_SHEET_AXIS_PX}px per axis"
         )
     if working_set_bytes > MAX_WORKING_SET_BYTES:
         reasons.append(
-            f"estimated float buffers {working_set_bytes / (1024 * 1024):.1f} MiB exceed "
+            f"estimated working set {working_set_bytes / (1024 * 1024):.1f} MiB exceed "
             f"{MAX_WORKING_SET_BYTES // (1024 * 1024)} MiB"
         )
     if pixel_work > MAX_PIXEL_WORK:
-        reasons.append(
-            f"aggregate work {pixel_work:,} exceeds {MAX_PIXEL_WORK:,} pixel-work units"
-        )
+        reasons.append(f"aggregate work {pixel_work:,} exceeds {MAX_PIXEL_WORK:,} pixel-work units")
     if reasons:
         raise SpriteBudgetError(
             "render.sprite resource budget rejected the effective request before Blender "

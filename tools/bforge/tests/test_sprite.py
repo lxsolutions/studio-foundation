@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import struct
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -119,6 +120,52 @@ class ForgeCase(unittest.TestCase):
 
 
 class Sprite(ForgeCase):
+    @unittest.skipUnless(sys.platform.startswith("linux"), "ru_maxrss is KiB on Linux")
+    def test_boundary_alpha_sheet_save_peak_stays_within_budget(self):
+        output = self.out_file("memory_boundary.png")
+        probe = Path(__file__).with_name("sprite_memory_probe.py")
+        completed = subprocess.run(
+            [
+                find_blender(),
+                "--background",
+                "--factory-startup",
+                "--python-exit-code",
+                "1",
+                "-P",
+                str(probe),
+                "--",
+                str(output),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=180,
+            check=False,
+        )
+        diagnostic = completed.stdout + "\n" + completed.stderr
+        self.assertEqual(completed.returncode, 0, diagnostic)
+        reports = [
+            line.removeprefix("BFORGE_MEMORY ")
+            for line in completed.stdout.splitlines()
+            if line.startswith("BFORGE_MEMORY ")
+        ]
+        self.assertEqual(len(reports), 1, diagnostic)
+        report = json.loads(reports[0])
+
+        self.assertEqual(report["blender_version"], [4, 5, 12])
+        self.assertEqual(report["sheet_px"], [2048, 2048])
+        self.assertEqual(report["working_set_bytes"], 456 * 1024 * 1024)
+        self.assertLessEqual(
+            report["delta_bytes"],
+            report["save_buffer_bytes"],
+            report,
+        )
+        self.assertLessEqual(
+            report["delta_bytes"],
+            report["max_working_set_bytes"],
+            report,
+        )
+        self.assertEqual(png_size(output), (2048, 2048))
+
     def test_alpha_icon_is_clean_and_byte_deterministic(self):
         self.forge.call(
             "build.box",

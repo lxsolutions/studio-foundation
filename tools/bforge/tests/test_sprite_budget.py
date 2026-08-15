@@ -20,11 +20,15 @@ class SpriteBudget(unittest.TestCase):
             views=16,
             samples=96,
         )
+        budget = plan["budget"]
 
-        self.assertEqual(plan["budget"]["sheet_px"], [2048, 2048])
-        self.assertEqual(plan["budget"]["pixel_work"], sprite_budget.MAX_PIXEL_WORK)
+        self.assertEqual(budget["sheet_px"], [2048, 2048])
+        self.assertEqual(budget["pixel_work"], sprite_budget.MAX_PIXEL_WORK)
+        self.assertEqual(budget["save_buffer_bytes"], 416 * 1024 * 1024)
+        self.assertEqual(budget["save_phase_bytes"], 456 * 1024 * 1024)
+        self.assertEqual(budget["working_set_bytes"], budget["save_phase_bytes"])
         self.assertLessEqual(
-            plan["budget"]["working_set_bytes"],
+            budget["working_set_bytes"],
             sprite_budget.MAX_WORKING_SET_BYTES,
         )
 
@@ -46,15 +50,27 @@ class SpriteBudget(unittest.TestCase):
         self.assertEqual(low["samples"], sprite_budget.MIN_SAMPLES)
         self.assertEqual(high["samples"], sprite_budget.MAX_SAMPLES)
 
-    def test_frame_and_post_buffer_cap_is_enforced(self):
+    def test_adjacent_frame_sizes_straddle_the_memory_cap(self):
+        accepted = sprite_budget.plan_sprite_request(
+            size=560,
+            supersample=1,
+            views=16,
+            samples=8,
+        )
+        self.assertEqual(accepted["budget"]["working_set_bytes"], 535_314_432)
+        self.assertLessEqual(
+            accepted["budget"]["working_set_bytes"],
+            sprite_budget.MAX_WORKING_SET_BYTES,
+        )
+
         with self.assertRaisesRegex(
             sprite_budget.SpriteBudgetError,
-            r"estimated float buffers .* exceed 512 MiB",
+            r"estimated working set 512\.2 MiB exceed 512 MiB",
         ):
             sprite_budget.plan_sprite_request(
-                size=2048,
+                size=561,
                 supersample=1,
-                views=1,
+                views=16,
                 samples=8,
             )
 
