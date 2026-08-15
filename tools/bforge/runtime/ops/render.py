@@ -22,16 +22,16 @@ import bpy
 from lib import mesh as mesh_lib
 from lib import scene as scene_lib
 from mathutils import Euler, Vector
-from registry import OpError, op
+from registry import REQUIRED, OpError, op
 
 VIEWS = {
-    "hero":  (math.radians(62), math.radians(0), math.radians(43)),
+    "hero": (math.radians(62), math.radians(0), math.radians(43)),
     "front": (math.radians(90), 0.0, 0.0),
-    "back":  (math.radians(90), 0.0, math.radians(180)),
-    "left":  (math.radians(90), 0.0, math.radians(-90)),
+    "back": (math.radians(90), 0.0, math.radians(180)),
+    "left": (math.radians(90), 0.0, math.radians(-90)),
     "right": (math.radians(90), 0.0, math.radians(90)),
-    "top":   (0.0, 0.0, 0.0),
-    "low":   (math.radians(102), 0.0, math.radians(30)),
+    "top": (0.0, 0.0, 0.0),
+    "low": (math.radians(102), 0.0, math.radians(30)),
 }
 
 
@@ -115,7 +115,7 @@ def _setup_lights(centre, radius):
         # dark albedo render as pale stone — and cost several rounds of "fixing"
         # a material that was correct all along. Re-run the calibration after
         # touching anything here.
-        data.energy = power_scale * 105.0 * (radius ** 2) + 6.0
+        data.energy = power_scale * 105.0 * (radius**2) + 6.0
         light = bpy.data.objects.new(f"_bforge_{name}", data)
         bpy.context.scene.collection.objects.link(light)
         offset = Vector(direction).normalized() * distance
@@ -232,7 +232,7 @@ def _camera_is_buried(eye, target):
     it faces the SAME way we are looking, we are seeing a backface, which means
     we started inside the mesh.
     """
-    direction = (Vector(target) - Vector(eye))
+    direction = Vector(target) - Vector(eye)
     if direction.length < 1e-6:
         return None
     direction.normalize()
@@ -256,8 +256,7 @@ def _analyse(ctx, path):
     from .check import check_image
 
     try:
-        report = check_image(ctx, path=str(path), colors=4,
-                             background=[0.05, 0.055, 0.065, 1.0])
+        report = check_image(ctx, path=str(path), colors=4, background=[0.05, 0.055, 0.065, 1.0])
     except Exception as exc:  # noqa: BLE001 — diagnostics must never fail a render
         return {"error": str(exc)}
     return {
@@ -298,9 +297,17 @@ def _hide_others(keep):
         "view": ("enum:hero|front|back|left|right|top|low", "hero", "Camera angle"),
         "resolution": ("int", 512, "Square render resolution in pixels"),
         "samples": ("int", 24, "Render samples — 24 is enough to judge form"),
-        "engine": ("enum:auto|cycles|eevee", "auto", "Render engine. 'auto' means Cycles/CPU, which is the only one that works without a GPU context; 'eevee' is faster but crashes headless on machines with no display server"),
+        "engine": (
+            "enum:auto|cycles|eevee",
+            "auto",
+            "Render engine. 'auto' means Cycles/CPU, which is the only one that works without a GPU context; 'eevee' is faster but crashes headless on machines with no display server",
+        ),
         "ortho": ("bool", False, "Orthographic projection (right for front/side/top reference)"),
-        "world_light": ("num", 0.32, "Ambient dome strength. Higher fills shadows but piles white specular sheen onto every surface, which washes out saturated albedo"),
+        "world_light": (
+            "num",
+            0.32,
+            "Ambient dome strength. Higher fills shadows but piles white specular sheen onto every surface, which washes out saturated albedo",
+        ),
     },
     tags=["render"],
 )
@@ -320,8 +327,12 @@ def render_view(ctx, out, objects, view, resolution, samples, engine, ortho, wor
         for obj in hidden:
             obj.hide_render = False
     return {
-        "path": str(path), "rel": ctx.rel(path), "view": view, "engine": used,
-        "resolution": resolution, "subject_radius_m": round(radius, 4),
+        "path": str(path),
+        "rel": ctx.rel(path),
+        "view": view,
+        "engine": used,
+        "resolution": resolution,
+        "subject_radius_m": round(radius, 4),
         "analysis": _analyse(ctx, path),
     }
 
@@ -331,7 +342,11 @@ def render_view(ctx, out, objects, view, resolution, samples, engine, ortho, wor
     summary="Render from an explicit camera position and target. Auto-framing always fits the WHOLE subject, which is useless on a 700 m stadium or a 40 m terrain — this is how you get a close-up, an eye-level gameplay view, or a hero shot.",
     params={
         "out": ("path", "shot.png", "PNG output path"),
-        "position": ("vec3", None, "Camera position in metres"),
+        "position": (
+            "vec3",
+            REQUIRED,
+            "Camera position in metres. This op exists to place the camera by hand; use render.cinematic or render.view when you want the framing fitted for you",
+        ),
         "target": ("vec3", [0.0, 0.0, 0.0], "Point to look at"),
         "lens": ("num", 50.0, "Focal length in mm — 24 is wide, 50 neutral, 105 compressed"),
         "resolution": ("int", 640, "Width in pixels"),
@@ -339,12 +354,27 @@ def render_view(ctx, out, objects, view, resolution, samples, engine, ortho, wor
         "samples": ("int", 32, "Render samples"),
         "engine": ("enum:auto|cycles|eevee", "auto", "Render engine"),
         "light_distance": ("num", 0.0, "Light rig scale in metres; 0 fits it to the whole scene"),
-        "world_light": ("num", 0.32, "Ambient dome strength. Higher fills shadows but piles white specular sheen onto every surface, which washes out saturated albedo"),
+        "world_light": (
+            "num",
+            0.32,
+            "Ambient dome strength. Higher fills shadows but piles white specular sheen onto every surface, which washes out saturated albedo",
+        ),
     },
     tags=["render"],
 )
-def render_camera(ctx, out, position, target, lens, resolution, aspect, samples, engine,
-                  light_distance, world_light):
+def render_camera(
+    ctx,
+    out,
+    position,
+    target,
+    lens,
+    resolution,
+    aspect,
+    samples,
+    engine,
+    light_distance,
+    world_light,
+):
     if not [o for o in bpy.context.scene.objects if o.type == "MESH"]:
         raise OpError("nothing to render — the scene has no mesh objects")
     centre = Vector(target)
@@ -379,11 +409,45 @@ def render_camera(ctx, out, position, target, lens, resolution, aspect, samples,
     finally:
         _cleanup_rig(lights + [camera])
     return {
-        "path": str(path), "rel": ctx.rel(path), "engine": used,
-        "position": [round(v, 3) for v in eye], "target": [round(v, 3) for v in centre],
-        "lens_mm": lens, "resolution": [scene.render.resolution_x, scene.render.resolution_y],
+        "path": str(path),
+        "rel": ctx.rel(path),
+        "engine": used,
+        "position": [round(v, 3) for v in eye],
+        "target": [round(v, 3) for v in centre],
+        "lens_mm": lens,
+        "resolution": [scene.render.resolution_x, scene.render.resolution_y],
         "analysis": _analyse(ctx, path),
     }
+
+
+def _frame_distance(radius, lens, aspect, margin, sensor=36.0):
+    """How far back a `lens` mm camera must sit to fit a sphere of `radius`.
+
+    Framing on the horizontal FOV alone crops the subject's head off at 2.39:1,
+    because the vertical field is 2.39x narrower. Fit whichever axis is tighter.
+    """
+    half_x = math.atan(sensor / (2.0 * max(8.0, lens)))
+    half_y = math.atan(math.tan(half_x) / max(0.1, aspect))
+    return (max(1e-6, radius) * max(1.0, margin)) / max(math.sin(min(half_x, half_y)), 1e-4)
+
+
+def _cinematic_eye(centre, radius, lens, aspect, margin=1.35, elevation=22.0, azimuth=-47.0):
+    """A three-quarter beauty angle scaled to the subject.
+
+    Slightly lower and looser than the review rig's `hero` view: a beauty shot
+    wants some sky under the horizon line and air around the silhouette, where
+    a review frame wants the subject as large as it can legibly be.
+    """
+    distance = _frame_distance(radius, lens, aspect, margin)
+    el, az = math.radians(elevation), math.radians(azimuth)
+    direction = Vector(
+        (
+            math.cos(el) * math.cos(az),
+            math.cos(el) * math.sin(az),
+            math.sin(el),
+        )
+    )
+    return centre + direction * distance
 
 
 @op(
@@ -391,38 +455,94 @@ def render_camera(ctx, out, position, target, lens, resolution, aspect, samples,
     summary="A film-grade beauty render: physical sun and sky, global illumination, atmospheric haze, depth of field and a filmic tonemap. render.view and render.camera are flat REVIEW rigs built to judge albedo honestly; this one is built to show the asset at its best, and it is the render that tells you whether the art actually holds up.",
     params={
         "out": ("path", "hero.png", "PNG output path"),
-        "position": ("vec3", None, "Camera position in metres"),
-        "target": ("vec3", [0.0, 0.0, 0.0], "Point to look at"),
+        "position": (
+            "vec3",
+            None,
+            "Camera position in metres. Omit it and a three-quarter beauty angle is fitted to the subject — set it for a close-up or a specific composition",
+        ),
+        "target": (
+            "vec3",
+            None,
+            "Point to look at. When both camera position and target are omitted, the camera aims at the subject's own centre so assets built off-origin are still framed. An explicit position with no target keeps the established world-origin target",
+        ),
         "lens": ("num", 40.0, "Focal length in mm"),
         "resolution": ("int", 1280, "Width in pixels"),
         "aspect": ("num", 2.39, "Width / height. 2.39 is anamorphic, 1.78 is 16:9"),
         "samples": ("int", 96, "Path-tracing samples. This is a beauty render; it costs time"),
         "sun_energy": ("num", 4.0, "Sun strength in W/m2. 3-6 reads as hard daylight"),
-        "sun_angle": ("vec2", [52.0, 35.0], "Sun elevation and azimuth in degrees. Low sun = long shadows"),
+        "sun_angle": (
+            "vec2",
+            [52.0, 35.0],
+            "Sun elevation and azimuth in degrees. Low sun = long shadows",
+        ),
         "sun_color": ("colorref", "#fff2dc", "Sunlight colour; warmer at low elevation"),
         "sky_color": ("colorref", "#6fa3dc", "Zenith sky colour, which is also the fill light"),
         "horizon_color": ("colorref", "#e8dcc0", "Horizon haze colour"),
         "sky_strength": ("num", 1.1, "Sky/ambient strength"),
-        "haze": ("num", 0.0, "Volumetric atmosphere density. 0.0005-0.004 separates distant forms; costs render time"),
+        "haze": (
+            "num",
+            0.0,
+            "Volumetric atmosphere density. 0.0005-0.004 separates distant forms; costs render time",
+        ),
         "focus": ("num", 0.0, "Depth of field focus distance; 0 measures it to the target"),
         "aperture": ("num", 0.0, "f-stop. 0 disables depth of field. 2.8 is shallow, 8 is deep"),
         "bounces": ("int", 6, "Light bounces. GI is most of what makes a render look expensive"),
         "exposure": ("num", 0.0, "Exposure compensation in stops"),
-        "look": ("enum:filmic|agx|standard|contrast", "agx", "View transform. Filmic/AgX roll off highlights like film; standard clips them"),
+        "look": (
+            "enum:filmic|agx|standard|contrast",
+            "agx",
+            "View transform. Filmic/AgX roll off highlights like film; standard clips them",
+        ),
     },
     tags=["render"],
 )
-def render_cinematic(ctx, out, position, target, lens, resolution, aspect, samples, sun_energy,
-                     sun_angle, sun_color, sky_color, horizon_color, sky_strength, haze, focus,
-                     aperture, bounces, exposure, look):
+def render_cinematic(
+    ctx,
+    out,
+    position,
+    target,
+    lens,
+    resolution,
+    aspect,
+    samples,
+    sun_energy,
+    sun_angle,
+    sun_color,
+    sky_color,
+    horizon_color,
+    sky_strength,
+    haze,
+    focus,
+    aperture,
+    bounces,
+    exposure,
+    look,
+):
     from lib import mat as mat_lib
 
     if not [o for o in bpy.context.scene.objects if o.type == "MESH"]:
         raise OpError("nothing to render — the scene has no mesh objects")
 
     scene = bpy.context.scene
-    centre = Vector(target)
-    eye = Vector(position)
+    # `position` has no sensible fixed default — a camera at a hardcoded point is
+    # either inside a stadium or a speck away from a gem. Omitting it means "frame
+    # the subject for me", which is what every other render op does; without this
+    # the documented default of None reached Vector(None) and raised.
+    auto_framed = position is None
+    subject_radius = None
+    if auto_framed:
+        subject_centre, subject_radius = _bounding_sphere(_targets(None))
+        centre = subject_centre if target is None else Vector(target)
+        # A caller can aim away from the subject centre for a deliberate
+        # composition. Fit the sphere around that aim point as well, otherwise
+        # an off-centre target can put part of the asset outside the frame.
+        frame_radius = subject_radius + (subject_centre - centre).length
+        eye = _cinematic_eye(centre, frame_radius, lens, aspect)
+    else:
+        # Preserve the original explicit-camera contract: before auto-framing,
+        # an omitted target meant world origin.
+        centre = Vector((0.0, 0.0, 0.0)) if target is None else Vector(target)
+        eye = Vector(position)
 
     # --- sky: a real gradient environment, not a flat backdrop -----------
     if scene.world is None:
@@ -463,11 +583,13 @@ def render_cinematic(ctx, out, position, target, lens, resolution, aspect, sampl
     scene.collection.objects.link(sun)
     elevation = math.radians(max(2.0, min(88.0, sun_angle[0])))
     azimuth = math.radians(sun_angle[1])
-    direction = Vector((
-        math.cos(elevation) * math.cos(azimuth),
-        math.cos(elevation) * math.sin(azimuth),
-        math.sin(elevation),
-    ))
+    direction = Vector(
+        (
+            math.cos(elevation) * math.cos(azimuth),
+            math.cos(elevation) * math.sin(azimuth),
+            math.sin(elevation),
+        )
+    )
     sun.rotation_euler = (-direction).to_track_quat("-Z", "Y").to_euler()
 
     # --- atmosphere -------------------------------------------------------
@@ -475,8 +597,9 @@ def render_cinematic(ctx, out, position, target, lens, resolution, aspect, sampl
     if haze > 0.0:
         extent = max(200.0, (eye - centre).length * 8.0)
         haze_bm = mesh_lib.new_bmesh()
-        mesh_lib.add_box(haze_bm, size=(extent, extent, extent * 0.5),
-                         center=(centre.x, centre.y, centre.z))
+        mesh_lib.add_box(
+            haze_bm, size=(extent, extent, extent * 0.5), center=(centre.x, centre.y, centre.z)
+        )
         haze_volume = mesh_lib.to_object(haze_bm, "_bforge_haze")
         material = bpy.data.materials.new("_bforge_haze")
         material.use_nodes = True
@@ -494,11 +617,21 @@ def render_cinematic(ctx, out, position, target, lens, resolution, aspect, sampl
     camera = bpy.data.objects.new("_bforge_cine", camera_data)
     scene.collection.objects.link(camera)
     scene.camera = camera
-    camera_data.lens = max(8.0, lens)
+    focal_length = max(8.0, lens)
+    camera_data.lens = focal_length
+    if auto_framed:
+        # `_frame_distance` uses the 36 mm horizontal sensor. Lock Blender to
+        # that same fit so portrait and landscape outputs obey identical math.
+        camera_data.sensor_fit = "HORIZONTAL"
     camera.location = eye
     camera.rotation_euler = (centre - eye).to_track_quat("-Z", "Y").to_euler()
     distance = max(0.1, (eye - centre).length)
-    camera_data.clip_start = max(0.01, distance * 0.001)
+    # A fixed 1 cm near plane erases millimetre-scale jewellery. Auto-framing
+    # knows its distance is safe, so scale the near plane with it. Keep the
+    # established explicit-camera value unchanged.
+    camera_data.clip_start = (
+        max(1e-5, distance * 0.001) if auto_framed else max(0.01, distance * 0.001)
+    )
     camera_data.clip_end = distance * 40.0
     if aperture > 0.0:
         camera_data.dof.use_dof = True
@@ -523,8 +656,9 @@ def render_cinematic(ctx, out, position, target, lens, resolution, aspect, sampl
     scene.render.image_settings.color_mode = "RGB"
 
     view = scene.view_settings
-    transform = {"filmic": "Filmic", "agx": "AgX", "standard": "Standard",
-                 "contrast": "Standard"}[look]
+    transform = {"filmic": "Filmic", "agx": "AgX", "standard": "Standard", "contrast": "Standard"}[
+        look
+    ]
     for candidate in (transform, "AgX", "Filmic", "Standard"):
         try:
             view.view_transform = candidate
@@ -532,8 +666,10 @@ def render_cinematic(ctx, out, position, target, lens, resolution, aspect, sampl
         except TypeError:
             continue
     try:
-        view.look = "AgX - Punchy" if look == "agx" else (
-            "Medium High Contrast" if look == "contrast" else "None"
+        view.look = (
+            "AgX - Punchy"
+            if look == "agx"
+            else ("Medium High Contrast" if look == "contrast" else "None")
         )
     except TypeError:
         pass
@@ -556,10 +692,19 @@ def render_cinematic(ctx, out, position, target, lens, resolution, aspect, sampl
         _cleanup_rig([sun, camera] + ([haze_volume] if haze_volume else []))
 
     return {
-        "path": str(path), "rel": ctx.rel(path),
+        "path": str(path),
+        "rel": ctx.rel(path),
         "resolution": [scene.render.resolution_x, scene.render.resolution_y],
-        "samples": samples, "bounces": bounces, "look": view.view_transform,
-        "haze": haze, "depth_of_field": aperture > 0.0,
+        "samples": samples,
+        "bounces": bounces,
+        "look": view.view_transform,
+        "haze": haze,
+        "depth_of_field": aperture > 0.0,
+        "auto_framed": auto_framed,
+        "position": [round(v, 5) for v in eye],
+        "target": [round(v, 5) for v in centre],
+        "lens_mm": focal_length,
+        "subject_radius_m": (round(subject_radius, 5) if subject_radius is not None else None),
         "analysis": _analyse(ctx, path),
     }
 
@@ -573,7 +718,11 @@ def render_cinematic(ctx, out, position, target, lens, resolution, aspect, sampl
         "tile": ("int", 400, "Pixel size of each tile"),
         "samples": ("int", 20, "Render samples per tile"),
         "engine": ("enum:auto|cycles|eevee", "auto", "Render engine"),
-        "panels": ("str[]", ["hero", "front", "left", "top", "wireframe", "checker"], "Which panels to include"),
+        "panels": (
+            "str[]",
+            ["hero", "front", "left", "top", "wireframe", "checker"],
+            "Which panels to include",
+        ),
         "columns": ("int", 3, "Tiles per row"),
     },
     tags=["render", "inspect"],
@@ -582,7 +731,9 @@ def render_contact_sheet(ctx, out, objects, tile, samples, engine, panels, colum
     try:
         import numpy
     except ImportError as exc:  # pragma: no cover - Blender bundles numpy
-        raise OpError("numpy is unavailable in this Blender build; use render.view instead") from exc
+        raise OpError(
+            "numpy is unavailable in this Blender build; use render.view instead"
+        ) from exc
 
     targets = _targets(objects)
     hidden = _hide_others(targets) if objects else []
@@ -723,8 +874,8 @@ def _wireframe_material():
     mix = tree.nodes.new("ShaderNodeMix")
     mix.data_type = "RGBA"
     mix.location = (-320, 0)
-    mix.inputs["A"].default_value = (0.30, 0.32, 0.36, 1.0)   # surface
-    mix.inputs["B"].default_value = (0.02, 0.85, 0.65, 1.0)   # wire
+    mix.inputs["A"].default_value = (0.30, 0.32, 0.36, 1.0)  # surface
+    mix.inputs["B"].default_value = (0.02, 0.85, 0.65, 1.0)  # wire
     tree.links.new(wire.outputs["Fac"], mix.inputs["Factor"])
     tree.links.new(mix.outputs["Result"], bsdf.inputs["Base Color"])
     # Emission carries the wire so it stays legible in unlit areas.
@@ -796,13 +947,16 @@ def render_turntable(ctx, out_dir, objects, frames, resolution, samples, elevati
         for index in range(frames):
             azimuth = math.tau * index / frames
             tilt = math.radians(elevation)
-            offset = Vector(
-                (
-                    math.cos(azimuth) * math.cos(tilt),
-                    math.sin(azimuth) * math.cos(tilt),
-                    math.sin(tilt),
+            offset = (
+                Vector(
+                    (
+                        math.cos(azimuth) * math.cos(tilt),
+                        math.sin(azimuth) * math.cos(tilt),
+                        math.sin(tilt),
+                    )
                 )
-            ) * distance
+                * distance
+            )
             camera.location = centre + offset
             camera.rotation_euler = (-offset).to_track_quat("-Z", "Y").to_euler()
             path = base / f"frame_{index:03d}.png"
@@ -814,8 +968,11 @@ def render_turntable(ctx, out_dir, objects, frames, resolution, samples, elevati
             obj.hide_render = False
 
     return {
-        "directory": str(base), "rel": ctx.rel(base), "frames": len(paths),
-        "files": paths, "engine": used,
+        "directory": str(base),
+        "rel": ctx.rel(base),
+        "frames": len(paths),
+        "files": paths,
+        "engine": used,
     }
 
 
@@ -867,13 +1024,41 @@ def _save_sheet_png(numpy, grid, path, cols, rows, size):
     "render.impostor",
     summary="Bake an object into a billboard impostor sprite sheet: N orthographic views orbiting it, packed left-to-right then top-to-bottom into ONE transparent PNG, plus a JSON sidecar (grid layout, yaw angles, bounds) with everything a game engine needs to billboard it. This is THE distant-LOD technique — swap the real mesh for a camera-facing quad with this sheet beyond a few hundred metres and a browser can show thousands of instances at full frame rate. Pass normals=True to also bake a world-space normal sheet so the billboard can react to scene lighting.",
     params={
-        "name": ("str", None, "Object to bake; its children are baked with it. Use object.list if you are unsure of the exact name"),
-        "out": ("path", "impostor.png", "Sprite-sheet PNG path. The JSON sidecar is written next to it as <stem>.json"),
-        "views": ("int", 8, "Yaw angles around the object, evenly spaced over 360 degrees. 8 is the standard for props; 4 is enough for near-symmetric ones and halves the bake time"),
-        "size": ("int", 128, "Pixel size of each frame (frames are square). Billboards are only ever seen at distance, so 64-256 is the useful range — bigger just costs render time"),
-        "normals": ("bool", False, "Also write <stem>_normal.png: world-space normals packed into 0..1 colour, so the billboard can be lit instead of looking pasted on. Doubles render cost"),
-        "samples": ("int", 16, "Cycles samples per frame. 16 is plenty at these sizes; raise only if the sprites look grainy"),
-        "elevation": ("num", 0.0, "Camera height above the horizon in degrees, the same for every view. Ground props read best at 0-15; high values waste frame area on the top face"),
+        "name": (
+            "str",
+            None,
+            "Object to bake; its children are baked with it. Use object.list if you are unsure of the exact name",
+        ),
+        "out": (
+            "path",
+            "impostor.png",
+            "Sprite-sheet PNG path. The JSON sidecar is written next to it as <stem>.json",
+        ),
+        "views": (
+            "int",
+            8,
+            "Yaw angles around the object, evenly spaced over 360 degrees. 8 is the standard for props; 4 is enough for near-symmetric ones and halves the bake time",
+        ),
+        "size": (
+            "int",
+            128,
+            "Pixel size of each frame (frames are square). Billboards are only ever seen at distance, so 64-256 is the useful range — bigger just costs render time",
+        ),
+        "normals": (
+            "bool",
+            False,
+            "Also write <stem>_normal.png: world-space normals packed into 0..1 colour, so the billboard can be lit instead of looking pasted on. Doubles render cost",
+        ),
+        "samples": (
+            "int",
+            16,
+            "Cycles samples per frame. 16 is plenty at these sizes; raise only if the sprites look grainy",
+        ),
+        "elevation": (
+            "num",
+            0.0,
+            "Camera height above the horizon in degrees, the same for every view. Ground props read best at 0-15; high values waste frame area on the top face",
+        ),
     },
     tags=["render"],
 )
@@ -947,13 +1132,16 @@ def render_impostor(ctx, name, out, views, size, normals, samples, elevation):
             # The camera orbits while the light rig stays fixed — the sprite
             # lighting is then consistent across frames, as if the object spun.
             yaw = math.tau * index / views
-            offset = Vector(
-                (
-                    math.cos(yaw) * math.cos(tilt),
-                    math.sin(yaw) * math.cos(tilt),
-                    math.sin(tilt),
+            offset = (
+                Vector(
+                    (
+                        math.cos(yaw) * math.cos(tilt),
+                        math.sin(yaw) * math.cos(tilt),
+                        math.sin(tilt),
+                    )
                 )
-            ) * distance
+                * distance
+            )
             camera.location = centre + offset
             camera.rotation_euler = (-offset).to_track_quat("-Z", "Y").to_euler()
             _render_to(scratch / f"{stem}_{index:03d}.png")
@@ -1008,3 +1196,656 @@ def render_impostor(ctx, name, out, views, size, normals, samples, elevation):
     if normals:
         result["normal_sheet"] = ctx.rel(normal_path)
     return result
+
+
+# ==========================================================================
+# render.sprite — the icon rig
+# ==========================================================================
+#
+# render.view judges albedo, render.cinematic judges whether the art holds up
+# in a world, and neither produces something you can put in an inventory grid.
+# An icon has requirements those two do not: every asset must occupy the same
+# fraction of its frame however big it is, the silhouette must separate from
+# the backdrop without relying on the subject happening to be lighter than it,
+# the alpha has to survive being composited onto a UI nobody has designed yet,
+# and forty of them shot on different days have to look like one set.
+
+ICON_KEY = "#fff1d6"  # warm key — the sun side
+ICON_FILL = "#b9d0f2"  # cool fill — the sky side. Warm/cool split is most
+ICON_RIM = "#dcecff"  # of what separates a lit object from a coloured one.
+
+
+def _camera_basis(view_dir):
+    """Right/up/forward for a camera looking along `view_dir`."""
+    forward = Vector(view_dir).normalized()
+    world_up = Vector((0.0, 0.0, 1.0))
+    if abs(forward.dot(world_up)) > 0.999:  # looking straight down: pick any right
+        world_up = Vector((0.0, 1.0, 0.0))
+    right = forward.cross(world_up).normalized()
+    up = right.cross(forward).normalized()
+    return right, up, forward
+
+
+def _fit_subject(meshes, view_dir, lens, aspect, fill, sensor=36.0):
+    """Frame the subject to occupy `fill` of the frame, whatever shape it is.
+
+    Bounding-sphere framing is why generated icon sets look untidy: a sword and
+    a shield with the same bounding radius fill wildly different fractions of
+    the frame, so in a grid one floats and the other crowds. Project the real
+    corners onto the camera's own axes instead and fit that rectangle, which
+    also recentres a subject whose pivot is not its visual centre.
+    """
+    bpy.context.view_layer.update()
+    corners = [o.matrix_world @ Vector(c) for o in meshes for c in o.bound_box]
+    if not corners:
+        raise OpError("nothing to frame — the subject has no geometry")
+    centre = sum(corners, Vector((0.0, 0.0, 0.0))) / len(corners)
+    right, up, forward = _camera_basis(view_dir)
+
+    us = [(p - centre).dot(right) for p in corners]
+    vs = [(p - centre).dot(up) for p in corners]
+    ws = [(p - centre).dot(forward) for p in corners]
+    half_u = max(1e-4, (max(us) - min(us)) * 0.5)
+    half_v = max(1e-4, (max(vs) - min(vs)) * 0.5)
+    # Aim at the middle of the projected rectangle, not at the pivot.
+    target = centre + right * ((max(us) + min(us)) * 0.5) + up * ((max(vs) + min(vs)) * 0.5)
+
+    half_x = math.atan(sensor / (2.0 * max(8.0, lens)))
+    half_y = math.atan(math.tan(half_x) / max(0.1, aspect))
+    fill = max(0.05, min(0.98, fill))
+    distance = max(half_u / (math.tan(half_x) * fill), half_v / (math.tan(half_y) * fill))
+    # The near face projects larger than the centre plane. Pushing back by the
+    # nearest corner's depth is exact, not a safety fudge.
+    distance -= min(ws)
+    radius = max(half_u, half_v, (max(ws) - min(ws)) * 0.5)
+    return target, max(distance, radius * 1.05), radius
+
+
+def _icon_lights(
+    target,
+    radius,
+    right,
+    up,
+    forward,
+    key_color,
+    fill_color,
+    rim_color,
+    rim,
+    key_energy,
+    fill_energy,
+):
+    """A three-point rig defined in CAMERA space, not world space.
+
+    World-space lights mean an asset modelled facing +X and one facing -Y light
+    differently, so a set shot over several sessions never matches. Anchoring
+    the rig to the camera makes the lighting a property of the shot.
+    """
+    for obj in [o for o in bpy.context.scene.objects if o.type == "LIGHT"]:
+        scene_lib.delete(obj)
+    # Distance and light size both scale with the subject, so the rig subtends a
+    # constant solid angle and energy proportional to radius^2 holds exposure
+    # fixed from a gem to a stadium. No additive floor term: a constant watt is
+    # the one thing in this expression that would break that invariance.
+    #
+    # 420 is an icon-specific baseline, intentionally ~4x the calibrated
+    # review-rig constant: a review render preserves albedo, while an icon puts
+    # mid-tones high and leaves enough highlight energy for the bloom pass.
+    distance = radius * 3.2
+    base = 420.0 * (radius**2)
+    rig = [
+        # name    direction (camera space: right, up, -forward=towards camera)
+        ("key", (-0.85, 0.95, 1.15), key_energy, radius * 2.4, key_color),
+        # Big, soft, and slightly BELOW the lens axis. The shadow side of a
+        # three-quarter view is half the icon; letting it fall to black reads as
+        # a rendering fault rather than as shape.
+        ("fill", (1.25, -0.15, 0.85), fill_energy, radius * 4.5, fill_color),
+        # The kicker sits BEHIND the subject and rakes across it. This is the
+        # separation light: it draws a bright line down the silhouette so the
+        # shape reads against any backdrop, which is the single biggest
+        # difference between a render and an icon.
+        ("rim", (0.75, 0.85, -1.35), 0.85 * rim, radius * 1.1, rim_color),
+    ]
+    made = []
+    for name, (dr, du, dt), power, size, color in rig:
+        if power <= 0.0:
+            continue
+        data = bpy.data.lights.new(f"_bforge_icon_{name}", type="AREA")
+        data.size = max(0.05, size)
+        data.energy = power * base
+        data.color = color[:3]
+        light = bpy.data.objects.new(f"_bforge_icon_{name}", data)
+        bpy.context.scene.collection.objects.link(light)
+        offset = (right * dr + up * du + (-forward) * dt).normalized() * distance
+        light.location = target + offset
+        light.rotation_euler = (-offset).to_track_quat("-Z", "Y").to_euler()
+        made.append(light)
+    return made
+
+
+def _shadow_catcher(meshes, radius):
+    """A ground plane that renders only the shadow falling on it.
+
+    An icon with no contact shadow floats. One with a painted-on ellipse looks
+    like a sticker. A real shadow catcher costs one plane and stays correct when
+    the subject changes shape.
+    """
+    bpy.context.view_layer.update()
+    corners = [o.matrix_world @ Vector(c) for o in meshes for c in o.bound_box]
+    floor = min(p.z for p in corners)
+    centre = sum(corners, Vector((0.0, 0.0, 0.0))) / len(corners)
+    bm = mesh_lib.new_bmesh()
+    mesh_lib.add_plane(
+        bm,
+        size=(radius * 14.0, radius * 14.0),
+        center=(centre.x, centre.y, floor - max(1e-5, radius * 1e-4)),
+    )
+    plane = mesh_lib.to_object(bm, "_bforge_icon_floor")
+    plane.is_shadow_catcher = True
+    return plane
+
+
+@op(
+    "render.sprite",
+    summary="Render a GAME ICON, not a screenshot: a silhouette-fitted three-quarter hero angle on a long lens, a warm-key/cool-fill/bright-kicker rig anchored to the camera so a whole set matches, a real contact shadow, supersampled edges, a radial backdrop or clean alpha, and a linear-light post chain (highlight bloom, ACES tonemap, grade, vignette). Pass views>1 for a directional sprite sheet lit identically at every angle.",
+    params={
+        "name": (
+            "str",
+            None,
+            "Object to shoot; its children come with it. Omit to frame every mesh in the scene",
+        ),
+        "out": (
+            "path",
+            "sprite.png",
+            "PNG output path. With views>1 a <stem>.json sidecar describing the grid is written next to it",
+        ),
+        "size": (
+            "int",
+            512,
+            "Output size in pixels per frame (square). 256-1024 is the useful icon range",
+        ),
+        "supersample": (
+            "int",
+            2,
+            "Render each axis at 1-4x then area-downsample in premultiplied linear light for cleaner silhouette edges. The internal render is capped at 4096 px per axis",
+        ),
+        "views": (
+            "int",
+            1,
+            "How many yaw angles to shoot. 1 is an icon; 8 or 16 packs a directional sprite sheet for a 2D game",
+        ),
+        "azimuth": (
+            "num",
+            -47.0,
+            "Camera compass angle in degrees. -47 is the standard three-quarter view that shows a front and a side at once",
+        ),
+        "elevation": (
+            "num",
+            24.0,
+            "Camera height above the horizon in degrees. 20-30 reads as 'held up in front of you'; 45+ becomes a map marker",
+        ),
+        "lens": (
+            "num",
+            85.0,
+            "Focal length in mm. Long lenses flatten perspective, which is why product and icon work uses them — 85-135 keeps the far side of the object from tapering away",
+        ),
+        "fill": (
+            "num",
+            0.86,
+            "Fraction of the frame the subject spans at its widest. Hold this constant across a set and the icons line up; that is the whole trick",
+        ),
+        "background": (
+            "enum:gradient|solid|alpha",
+            "gradient",
+            "gradient is a radial backdrop that separates the silhouette everywhere; alpha leaves it transparent for compositing into a UI; solid is a flat fill",
+        ),
+        "bg_inner": ("colorref", "#4a5a72", "Backdrop colour behind the subject"),
+        "bg_outer": ("colorref", "#1a2130", "Backdrop colour at the corners (gradient only)"),
+        "key_color": ("colorref", ICON_KEY, "Key light colour — warm reads as sunlight"),
+        "fill_color": (
+            "colorref",
+            ICON_FILL,
+            "Fill light colour — cool reads as sky, and the warm/cool split is most of what makes a surface look lit rather than painted",
+        ),
+        "rim_color": ("colorref", ICON_RIM, "Kicker colour; the light that draws the silhouette"),
+        "rim": (
+            "num",
+            1.0,
+            "Kicker strength. 0 turns separation off, 1.5-2 is a hero/legendary treatment",
+        ),
+        "key_energy": (
+            "num",
+            1.0,
+            "Key light strength multiplier. 1.0 puts an 18% grey card near the top of the mid-tones, which is where an icon wants to sit",
+        ),
+        "fill_energy": (
+            "num",
+            0.38,
+            "Fill light strength multiplier. Raise it when the analysis reports crushed shadows — the shadow side of a three-quarter view is half the icon",
+        ),
+        "exposure": (
+            "num",
+            0.0,
+            "Exposure compensation in stops, clamped to -16..16 and applied in linear light before the tonemap",
+        ),
+        "bloom": (
+            "num",
+            0.3,
+            "Highlight glow strength. 0 disables it; above ~0.8 the asset starts to dissolve",
+        ),
+        "bloom_threshold": ("num", 0.85, "Linear luminance a pixel must exceed to bloom"),
+        "contrast": ("num", 1.06, "Contrast multiplier about mid-grey, applied after the tonemap"),
+        "saturation": (
+            "num",
+            1.04,
+            "Saturation multiplier. Stylised game icons run hot; 1.0 is neutral",
+        ),
+        "vignette": (
+            "num",
+            0.22,
+            "Corner darkening. Ignored when background=alpha, which must stay compositable",
+        ),
+        "look": (
+            "enum:aces|punchy|linear",
+            "aces",
+            "Tonemap. aces is the film-style curve games ship; punchy adds saturation in the curve; linear clips, for data",
+        ),
+        "shadow": (
+            "bool",
+            True,
+            "Cast a real contact shadow onto an invisible ground plane so the subject sits on something",
+        ),
+        "samples": (
+            "int",
+            96,
+            "Path-tracing samples. Icons are small and seen close; 96-256 is the honest range",
+        ),
+    },
+    tags=["render"],
+)
+def render_sprite(
+    ctx,
+    name,
+    out,
+    size,
+    supersample,
+    views,
+    azimuth,
+    elevation,
+    lens,
+    fill,
+    background,
+    bg_inner,
+    bg_outer,
+    key_color,
+    fill_color,
+    rim_color,
+    rim,
+    key_energy,
+    fill_energy,
+    exposure,
+    bloom,
+    bloom_threshold,
+    contrast,
+    saturation,
+    vignette,
+    look,
+    shadow,
+    samples,
+):
+    from lib import mat as mat_lib
+    from lib import post
+
+    try:
+        numpy = post.require_numpy()
+    except RuntimeError as exc:
+        raise OpError(str(exc)) from exc
+
+    if name:
+        try:
+            root = scene_lib.get_object(name)
+        except ValueError as exc:
+            raise OpError(f"{exc} Run 'object.list' to see the names in the scene.") from exc
+        meshes = [o for o in [root, *root.children_recursive] if o.type == "MESH"]
+        if not meshes:
+            raise OpError(
+                f"'{name}' has no mesh geometry to shoot — it and its children are "
+                "empties, armatures or lights. Run 'session.info' to see what is there."
+            )
+        object_name = root.name
+    else:
+        meshes = [o for o in bpy.context.scene.objects if o.type == "MESH"]
+        if not meshes:
+            raise OpError("nothing to render — the scene has no mesh objects")
+        object_name = ""
+
+    try:
+        inner = mat_lib.resolve_color(bg_inner)
+        outer = mat_lib.resolve_color(bg_outer)
+        resolved_key = mat_lib.resolve_color(key_color)
+        resolved_fill = mat_lib.resolve_color(fill_color)
+        resolved_rim = mat_lib.resolve_color(rim_color)
+    except ValueError as exc:
+        raise OpError(str(exc)) from exc
+
+    size = max(32, min(2048, size))
+    supersample = max(1, min(4, supersample, 4096 // size))
+    render_size = size * supersample
+    views = max(1, min(64, views))
+    elevation = max(-85.0, min(85.0, elevation))
+    lens = max(8.0, lens)
+    fill = max(0.05, min(0.98, fill))
+    exposure = max(-16.0, min(16.0, exposure))
+    samples = max(8, samples)
+    cols = math.ceil(math.sqrt(views))
+    rows = math.ceil(views / cols)
+    el = math.radians(elevation)
+    az = math.radians(azimuth)
+
+    def _view_dir(yaw):
+        """Unit vector FROM the camera TOWARDS the subject."""
+        return -Vector(
+            (
+                math.cos(el) * math.cos(yaw),
+                math.cos(el) * math.sin(yaw),
+                math.sin(el),
+            )
+        )
+
+    yaws = [az + (math.tau * index / views if views > 1 else 0.0) for index in range(views)]
+    rigs = []
+    for yaw in yaws:
+        direction = _view_dir(yaw)
+        target, distance, frame_radius = _fit_subject(meshes, direction, lens, 1.0, fill)
+        right, up, forward = _camera_basis(direction)
+        rigs.append((yaw, direction, target, distance, frame_radius, right, up, forward))
+    _subject_centre, subject_radius = _bounding_sphere(meshes)
+
+    scene = bpy.context.scene
+    settings = scene.render.image_settings
+    view = scene.view_settings
+    previous_render = {
+        "resolution_x": scene.render.resolution_x,
+        "resolution_y": scene.render.resolution_y,
+        "resolution_percentage": scene.render.resolution_percentage,
+        "film_transparent": scene.render.film_transparent,
+        "filepath": scene.render.filepath,
+    }
+    previous_image = {
+        "file_format": settings.file_format,
+        "color_mode": settings.color_mode,
+        "color_depth": settings.color_depth,
+        "exr_codec": settings.exr_codec,
+    }
+    previous_view = {
+        "transform": view.view_transform,
+        "look": view.look,
+        "exposure": view.exposure,
+        "gamma": view.gamma,
+    }
+
+    hidden = _hide_others(meshes)
+    path = ctx.out_path(out, ".png")
+    scratch = ctx.out_dir / "_sprite"
+    scratch.mkdir(parents=True, exist_ok=True)
+    sheet = numpy.zeros((rows * size, cols * size, 4), dtype=numpy.float32)
+    floor = None
+    camera = None
+    lights = []
+    frame_metrics = []
+    try:
+        floor = _shadow_catcher(meshes, subject_radius) if shadow else None
+
+        camera_data = bpy.data.cameras.new("_bforge_sprite")
+        camera = bpy.data.objects.new("_bforge_sprite", camera_data)
+        scene.collection.objects.link(camera)
+        scene.camera = camera
+        camera_data.lens = lens
+        camera_data.sensor_width = 36.0
+        camera_data.sensor_fit = "HORIZONTAL"
+
+        if scene.world is None:
+            scene.world = bpy.data.worlds.new("World")
+        scene.world.use_nodes = True
+        world_tree = scene.world.node_tree
+        world_tree.nodes.clear()
+        world_output = world_tree.nodes.new("ShaderNodeOutputWorld")
+        dome = world_tree.nodes.new("ShaderNodeBackground")
+        dome.inputs["Color"].default_value = (0.05, 0.055, 0.07, 1.0)
+        dome.inputs["Strength"].default_value = 0.35
+        world_tree.links.new(dome.outputs["Background"], world_output.inputs["Surface"])
+
+        scene.render.engine = "CYCLES"
+        scene.cycles.device = "CPU"
+        scene.cycles.samples = samples
+        scene.cycles.seed = 0
+        scene.cycles.use_denoising = True
+        scene.cycles.max_bounces = 4
+        scene.cycles.diffuse_bounces = 4
+        scene.cycles.glossy_bounces = 4
+        scene.cycles.transmission_bounces = 4
+        scene.cycles.caustics_reflective = False
+        scene.cycles.caustics_refractive = False
+        scene.render.resolution_x = render_size
+        scene.render.resolution_y = render_size
+        scene.render.resolution_percentage = 100
+        scene.render.film_transparent = True
+
+        # EXR preserves the scene-linear highlights that bloom needs. PNG would
+        # clip and display-transform them before the post chain ever saw them.
+        settings.file_format = "OPEN_EXR"
+        settings.color_mode = "RGBA"
+        settings.color_depth = "32"
+        settings.exr_codec = "ZIP"
+        for candidate in ("Raw", "Standard"):
+            try:
+                view.view_transform = candidate
+                break
+            except TypeError:
+                continue
+        try:
+            view.look = "None"
+        except TypeError:
+            pass
+        view.exposure = 0.0
+        view.gamma = 1.0
+
+        for index, rig_data in enumerate(rigs):
+            yaw, direction, target, distance, frame_radius, right, up, forward = rig_data
+            camera.location = target - direction * distance
+            camera.rotation_euler = direction.to_track_quat("-Z", "Y").to_euler()
+            nearest = max(1e-5, distance - subject_radius * 1.1)
+            camera_data.clip_start = max(1e-5, min(distance * 0.001, nearest))
+            camera_data.clip_end = max(distance * 8.0, distance + subject_radius * 2.0)
+
+            _cleanup_rig(lights)
+            lights = _icon_lights(
+                target,
+                subject_radius,
+                right,
+                up,
+                forward,
+                resolved_key,
+                resolved_fill,
+                resolved_rim,
+                rim,
+                key_energy,
+                fill_energy,
+            )
+            bpy.context.view_layer.update()
+
+            exr = scratch / f"frame_{index:03d}.exr"
+            _render_to(exr)
+            raw = post.load(exr)
+            frame = _compose_sprite(
+                post,
+                numpy,
+                raw,
+                size,
+                background,
+                inner,
+                outer,
+                exposure,
+                bloom,
+                bloom_threshold,
+                look,
+                contrast,
+                saturation,
+                vignette,
+            )
+            row, column = divmod(index, cols)
+            sheet[row * size : (row + 1) * size, column * size : (column + 1) * size] = frame
+            frame_metrics.append(
+                {
+                    "index": index,
+                    "yaw_degrees": round(math.degrees(yaw) % 360.0, 6),
+                    "target_m": [round(value, 5) for value in target],
+                    "distance_m": round(distance, 5),
+                    "frame_radius_m": round(frame_radius, 5),
+                }
+            )
+
+        post.save(
+            sheet,
+            path,
+            name="_bforge_sprite_out",
+            premultiplied=background == "alpha",
+        )
+        saved = post.load(path)
+        for record in frame_metrics:
+            row, column = divmod(record["index"], cols)
+            frame = saved[
+                row * size : (row + 1) * size,
+                column * size : (column + 1) * size,
+            ]
+            record.update(_alpha_metrics(numpy, frame))
+    finally:
+        _cleanup_rig(lights + [camera] + ([floor] if floor is not None else []))
+        for obj in hidden:
+            obj.hide_render = False
+        view.view_transform = previous_view["transform"]
+        try:
+            view.look = previous_view["look"]
+        except TypeError:
+            pass
+        view.exposure = previous_view["exposure"]
+        view.gamma = previous_view["gamma"]
+        for key, value in previous_image.items():
+            setattr(settings, key, value)
+        for key, value in previous_render.items():
+            setattr(scene.render, key, value)
+
+    result = {
+        "path": str(path),
+        "rel": ctx.rel(path),
+        "object": object_name,
+        "frames": views,
+        "cols": cols,
+        "rows": rows,
+        "frame_px": size,
+        "render_px": render_size,
+        "supersample": supersample,
+        "samples": samples,
+        "fill_target": round(fill, 4),
+        "subject_radius_m": round(subject_radius, 5),
+        "camera": {
+            "azimuth": azimuth,
+            "elevation": elevation,
+            "lens_mm": lens,
+            "distance_m": frame_metrics[0]["distance_m"],
+        },
+        "frame_metrics": frame_metrics,
+        "background": background,
+        "exposure": exposure,
+        "bytes": path.stat().st_size,
+    }
+    if views > 1:
+        sidecar = path.with_suffix(".json")
+        sidecar.write_text(
+            json.dumps(
+                {
+                    "frames": views,
+                    "cols": cols,
+                    "rows": rows,
+                    "frame_px": size,
+                    "render_px": render_size,
+                    "supersample": supersample,
+                    "samples": samples,
+                    "fill_target": round(fill, 4),
+                    "background": background,
+                    "exposure": exposure,
+                    "elevation": elevation,
+                    "lens_mm": lens,
+                    "object": object_name,
+                    "camera_frames": frame_metrics,
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        result["sidecar"] = ctx.rel(sidecar)
+    result["analysis"] = _analyse(ctx, path)
+    return result
+
+
+def _compose_sprite(
+    post,
+    numpy,
+    raw,
+    size,
+    background,
+    inner,
+    outer,
+    exposure,
+    bloom,
+    bloom_threshold,
+    look,
+    contrast,
+    saturation,
+    vignette,
+):
+    """Scene-referred premultiplied RGBA -> a finished icon frame."""
+    raw = post.downsample(raw, size, size)
+
+    frame = post.bloom(
+        raw,
+        threshold=bloom_threshold,
+        strength=bloom,
+        radius=0.045,
+        premultiplied=True,
+    )
+
+    # Colour curves are nonlinear, so apply them to straight RGB and then
+    # premultiply again. Applying ACES directly to premultiplied antialiasing
+    # values creates bright or dark fringes around the cut-out.
+    straight = post.unpremultiply(frame)
+    straight[..., :3] = post.tonemap(straight[..., :3], look=look, exposure=exposure)
+
+    if background == "alpha":
+        straight[..., :3] = post.saturate(post.contrast(straight[..., :3], contrast), saturation)
+        return numpy.clip(post.premultiply(straight), 0.0, 1.0)
+
+    frame = post.premultiply(straight)
+    height, width = frame.shape[:2]
+    if background == "solid":
+        backdrop = numpy.broadcast_to(
+            numpy.array(inner[:3], dtype=numpy.float32), (height, width, 3)
+        ).copy()
+    else:
+        backdrop = post.radial_backdrop(width, height, inner, outer)
+    composed = post.over(frame, backdrop, premultiplied=True)
+    composed[..., :3] = post.saturate(post.contrast(composed[..., :3], contrast), saturation)
+    composed[..., :3] = post.vignette(composed[..., :3], vignette)
+    return numpy.clip(composed, 0.0, 1.0)
+
+
+def _alpha_metrics(numpy, frame):
+    """Small saved-file proof that transparency survived the PNG path."""
+    alpha = frame[..., 3]
+    edge = numpy.concatenate((alpha[0, :], alpha[-1, :], alpha[:, 0], alpha[:, -1]))
+    return {
+        "alpha_min": round(float(alpha.min()), 5),
+        "alpha_max": round(float(alpha.max()), 5),
+        "alpha_coverage": round(float((alpha > (1.0 / 255.0)).mean()), 5),
+        "edge_alpha_max": round(float(edge.max()), 5),
+    }

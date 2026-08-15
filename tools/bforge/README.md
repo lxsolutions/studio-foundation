@@ -130,7 +130,7 @@ tools/bforge/
     daemon.py          JSON-line RPC loop
     registry.py        @op decorator: types, coercion, schema generation
     lib/               mesh, uvs, materials, scene-graph, finishing pass
-    ops/               the 137 operations, grouped by namespace
+    ops/               the 138 operations, grouped by namespace
   catalog.json       committed op snapshot (so tools/list needs no Blender)
   tests/             unit + live-integration + visual gallery
 ```
@@ -165,7 +165,7 @@ in this repo's `.mcp.json`:
 ```
 
 Five tools by default — `bforge_ops`, `bforge_describe`, `bforge_run`,
-`bforge_run_batch`, `bforge_session` — because 89 individual MCP tools swamps
+`bforge_run_batch`, `bforge_session` — because 138 individual MCP tools swamp
 most clients' tool lists. `bforge_run_batch` builds a whole asset in one round
 trip. Pass `--tools full` to expose every op as its own MCP tool instead.
 
@@ -211,7 +211,7 @@ wrong" that no metric shows.
 
 ## What it can make
 
-137 ops across 21 namespaces. Full reference: [`docs/bforge/OPS.md`](../../docs/bforge/OPS.md).
+138 ops across 21 namespaces. Full reference: [`docs/bforge/OPS.md`](../../docs/bforge/OPS.md).
 
 - **`prop.*`** — crate, barrel, chest, sack, rock, crystal, tree, pillar, torch,
   fence, furniture, weapon, banner, debris
@@ -240,9 +240,11 @@ wrong" that no metric shows.
 - **`gameready.*`** — LOD chains, collision proxies, platform budgets, atlasing,
   pivots, attachment sockets
 - **`render.*` / `check.*` / `export.*`** — contact sheets, turntables,
-  **`render.camera`** (explicit position/target/lens, because auto-framing is
-  useless on a 700 m stadium), **`render.impostor`** (billboard sprite sheets +
-  normal sheets + JSON sidecar — the distant-LOD technique), studio validation,
+  **`render.camera`** (explicit position/target/lens), auto-framed cinematic
+  shots, **`render.sprite`** (silhouette-fitted, linear-light, supersampled game
+  icons and directional sheets with clean alpha), **`render.impostor`**
+  (billboard sprite sheets + normal sheets + JSON sidecar — the distant-LOD
+  technique), studio validation,
   critique, **`check.materials`** (perceptual material separation, the mud-blob
   detector), silhouette scoring, gated glTF/blend/meta export
 - **`session.import`** — pull in an existing GLB/glTF/OBJ/FBX/blend to inspect,

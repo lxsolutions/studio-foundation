@@ -5739,7 +5739,11 @@
             "default": "color"
           }
         },
-        "additionalProperties": false
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "color"
+        ]
       }
     },
     {
@@ -5779,7 +5783,11 @@
             "default": "color"
           }
         },
-        "additionalProperties": false
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "color"
+        ]
       }
     },
     {
@@ -5862,7 +5870,12 @@
             "default": "color"
           }
         },
-        "additionalProperties": false
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "low",
+          "high"
+        ]
       }
     },
     {
@@ -5933,7 +5946,12 @@
             "default": "color"
           }
         },
-        "additionalProperties": false
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "color_a",
+          "color_b"
+        ]
       }
     },
     {
@@ -7078,7 +7096,7 @@
             },
             "minItems": 3,
             "maxItems": 3,
-            "description": "Camera position in metres"
+            "description": "Camera position in metres. This op exists to place the camera by hand; use render.cinematic or render.view when you want the framing fitted for you"
           },
           "target": {
             "type": "array",
@@ -7135,7 +7153,10 @@
             "default": 0.32
           }
         },
-        "additionalProperties": false
+        "additionalProperties": false,
+        "required": [
+          "position"
+        ]
       }
     },
     {
@@ -7161,7 +7182,7 @@
             },
             "minItems": 3,
             "maxItems": 3,
-            "description": "Camera position in metres"
+            "description": "Camera position in metres. Omit it and a three-quarter beauty angle is fitted to the subject \u2014 set it for a close-up or a specific composition"
           },
           "target": {
             "type": "array",
@@ -7170,12 +7191,7 @@
             },
             "minItems": 3,
             "maxItems": 3,
-            "description": "Point to look at",
-            "default": [
-              0.0,
-              0.0,
-              0.0
-            ]
+            "description": "Point to look at. When both camera position and target are omitted, the camera aims at the subject's own centre so assets built off-origin are still framed. An explicit position with no target keeps the established world-origin target"
           },
           "lens": {
             "type": "number",
@@ -7424,6 +7440,225 @@
             "type": "number",
             "description": "Camera height above the horizon in degrees, the same for every view. Ground props read best at 0-15; high values waste frame area on the top face",
             "default": 0.0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "render.sprite",
+      "summary": "Render a GAME ICON, not a screenshot: a silhouette-fitted three-quarter hero angle on a long lens, a warm-key/cool-fill/bright-kicker rig anchored to the camera so a whole set matches, a real contact shadow, supersampled edges, a radial backdrop or clean alpha, and a linear-light post chain (highlight bloom, ACES tonemap, grade, vignette). Pass views>1 for a directional sprite sheet lit identically at every angle.",
+      "tags": [
+        "render"
+      ],
+      "mutates": true,
+      "returns": "object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Object to shoot; its children come with it. Omit to frame every mesh in the scene"
+          },
+          "out": {
+            "type": "string",
+            "description": "PNG output path. With views>1 a <stem>.json sidecar describing the grid is written next to it",
+            "default": "sprite.png"
+          },
+          "size": {
+            "type": "integer",
+            "description": "Output size in pixels per frame (square). 256-1024 is the useful icon range",
+            "default": 512
+          },
+          "supersample": {
+            "type": "integer",
+            "description": "Render each axis at 1-4x then area-downsample in premultiplied linear light for cleaner silhouette edges. The internal render is capped at 4096 px per axis",
+            "default": 2
+          },
+          "views": {
+            "type": "integer",
+            "description": "How many yaw angles to shoot. 1 is an icon; 8 or 16 packs a directional sprite sheet for a 2D game",
+            "default": 1
+          },
+          "azimuth": {
+            "type": "number",
+            "description": "Camera compass angle in degrees. -47 is the standard three-quarter view that shows a front and a side at once",
+            "default": -47.0
+          },
+          "elevation": {
+            "type": "number",
+            "description": "Camera height above the horizon in degrees. 20-30 reads as 'held up in front of you'; 45+ becomes a map marker",
+            "default": 24.0
+          },
+          "lens": {
+            "type": "number",
+            "description": "Focal length in mm. Long lenses flatten perspective, which is why product and icon work uses them \u2014 85-135 keeps the far side of the object from tapering away",
+            "default": 85.0
+          },
+          "fill": {
+            "type": "number",
+            "description": "Fraction of the frame the subject spans at its widest. Hold this constant across a set and the icons line up; that is the whole trick",
+            "default": 0.86
+          },
+          "background": {
+            "type": "string",
+            "enum": [
+              "gradient",
+              "solid",
+              "alpha"
+            ],
+            "description": "gradient is a radial backdrop that separates the silhouette everywhere; alpha leaves it transparent for compositing into a UI; solid is a flat fill",
+            "default": "gradient"
+          },
+          "bg_inner": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 4
+              }
+            ],
+            "description": "Backdrop colour behind the subject",
+            "default": "#4a5a72"
+          },
+          "bg_outer": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 4
+              }
+            ],
+            "description": "Backdrop colour at the corners (gradient only)",
+            "default": "#1a2130"
+          },
+          "key_color": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 4
+              }
+            ],
+            "description": "Key light colour \u2014 warm reads as sunlight",
+            "default": "#fff1d6"
+          },
+          "fill_color": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 4
+              }
+            ],
+            "description": "Fill light colour \u2014 cool reads as sky, and the warm/cool split is most of what makes a surface look lit rather than painted",
+            "default": "#b9d0f2"
+          },
+          "rim_color": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 4
+              }
+            ],
+            "description": "Kicker colour; the light that draws the silhouette",
+            "default": "#dcecff"
+          },
+          "rim": {
+            "type": "number",
+            "description": "Kicker strength. 0 turns separation off, 1.5-2 is a hero/legendary treatment",
+            "default": 1.0
+          },
+          "key_energy": {
+            "type": "number",
+            "description": "Key light strength multiplier. 1.0 puts an 18% grey card near the top of the mid-tones, which is where an icon wants to sit",
+            "default": 1.0
+          },
+          "fill_energy": {
+            "type": "number",
+            "description": "Fill light strength multiplier. Raise it when the analysis reports crushed shadows \u2014 the shadow side of a three-quarter view is half the icon",
+            "default": 0.38
+          },
+          "exposure": {
+            "type": "number",
+            "description": "Exposure compensation in stops, clamped to -16..16 and applied in linear light before the tonemap",
+            "default": 0.0
+          },
+          "bloom": {
+            "type": "number",
+            "description": "Highlight glow strength. 0 disables it; above ~0.8 the asset starts to dissolve",
+            "default": 0.3
+          },
+          "bloom_threshold": {
+            "type": "number",
+            "description": "Linear luminance a pixel must exceed to bloom",
+            "default": 0.85
+          },
+          "contrast": {
+            "type": "number",
+            "description": "Contrast multiplier about mid-grey, applied after the tonemap",
+            "default": 1.06
+          },
+          "saturation": {
+            "type": "number",
+            "description": "Saturation multiplier. Stylised game icons run hot; 1.0 is neutral",
+            "default": 1.04
+          },
+          "vignette": {
+            "type": "number",
+            "description": "Corner darkening. Ignored when background=alpha, which must stay compositable",
+            "default": 0.22
+          },
+          "look": {
+            "type": "string",
+            "enum": [
+              "aces",
+              "punchy",
+              "linear"
+            ],
+            "description": "Tonemap. aces is the film-style curve games ship; punchy adds saturation in the curve; linear clips, for data",
+            "default": "aces"
+          },
+          "shadow": {
+            "type": "boolean",
+            "description": "Cast a real contact shadow onto an invisible ground plane so the subject sits on something",
+            "default": true
+          },
+          "samples": {
+            "type": "integer",
+            "description": "Path-tracing samples. Icons are small and seen close; 96-256 is the honest range",
+            "default": 96
           }
         },
         "additionalProperties": false

@@ -60,6 +60,33 @@ class Catalog(unittest.TestCase):
         names = [op["name"] for op in self.ops]
         self.assertEqual(len(names), len(set(names)))
 
+    def test_explicit_camera_position_is_required(self):
+        camera = next(op for op in self.ops if op["name"] == "render.camera")
+        self.assertIn("position", camera["inputSchema"].get("required", []))
+
+    def test_cinematic_camera_position_and_target_are_optional(self):
+        cinematic = next(op for op in self.ops if op["name"] == "render.cinematic")
+        required = cinematic["inputSchema"].get("required", [])
+        self.assertNotIn("position", required)
+        self.assertNotIn("target", required)
+        self.assertNotIn("default", cinematic["inputSchema"]["properties"]["position"])
+        self.assertNotIn("default", cinematic["inputSchema"]["properties"]["target"])
+
+    def test_sprite_supersampling_is_explicit(self):
+        sprite = next(op for op in self.ops if op["name"] == "render.sprite")
+        self.assertEqual(sprite["inputSchema"]["properties"]["supersample"]["default"], 2)
+
+    def test_paint_operations_declare_their_real_required_inputs(self):
+        expected = {
+            "paint.fill": {"name", "color"},
+            "paint.height": {"name", "low", "high"},
+            "paint.cavity": {"name", "color"},
+            "paint.noise": {"name", "color_a", "color_b"},
+        }
+        for name, required in expected.items():
+            operation = next(op for op in self.ops if op["name"] == name)
+            self.assertEqual(set(operation["inputSchema"].get("required", [])), required)
+
 
 class Filters(unittest.TestCase):
     def setUp(self):

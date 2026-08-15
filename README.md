@@ -9,8 +9,8 @@ Rust services behind.**
 The pillars:
 
 - **bforge** — a deterministic headless-Blender asset forge for AI agents:
-  137 whitelisted, typed operations with a quality gate that rejects output
-  below the bar, byte-identical regeneration, and 205 bforge tests, 166 in suites that start a real Blender daemon.
+  138 whitelisted, typed operations with a quality gate that rejects output
+  below the bar, byte-identical regeneration, and 217 bforge tests, 174 in suites that start a real Blender daemon.
 - **Verification** — GLB budget gates, pixel-diff captures, provenance, and
   render probes, so agent output is measured rather than trusted.
 - **Engine-neutral assets, standardized runtime** — the forge outputs portable
@@ -51,9 +51,9 @@ reproduction path. Other implementations may exist; this one you can audit.
 [Play it in your browser](https://lxsolutions.github.io/studio-foundation/).
 
 **🔨 A deterministic, quality-gated Blender forge for AI agents.**
-bforge is 137 typed, whitelisted operations driven into a persistent headless
+bforge is 138 typed, whitelisted operations driven into a persistent headless
 Blender daemon — LODs, collision, budgets, rigs, gaits, baking, validation —
-with byte-identical output run to run and 205 tests, 166 of them in suites that start a real Blender daemon.
+with byte-identical output run to run and 217 tests, 174 of them in suites that start a real Blender daemon.
 No GUI remote-control, no arbitrary code execution, no "same
 prompt, different mesh." We know of nothing else public that does all four of those.
 
@@ -107,7 +107,7 @@ open.
 Most Blender-AI integrations are remote controls for a GUI Blender: arbitrary
 code into a live session, a different mesh every run, nothing CI can test.
 **bforge inverts that** — a persistent headless Blender daemon driven through
-137 whitelisted, typed, deterministic operations. Same params + same seed →
+138 whitelisted, typed, deterministic operations. Same params + same seed →
 byte-identical GLB, forever. It is how this toolkit's games get their art, and
 it works identically on a laptop, in CI, and on a headless build box.
 
@@ -142,9 +142,10 @@ it works identically on a laptop, in CI, and on a headless build box.
   are verified by parsing the file, not by trusting the log.
 - **The agent can see and prove what it made.** Six-panel contact sheets
   (hero/front/side/top/wireframe/UV-checker), luminance and palette
-  measurement, silhouette scoring, impostor sprite sheets for distant LOD,
-  and concept-image → extruded-mesh with a silhouette-IoU fidelity score.
-- **205 tests, 166 of them in suites that start a real Blender daemon.** Schema,
+  measurement, silhouette scoring, silhouette-fitted and supersampled inventory
+  icons plus directional sprite sheets, impostor sprite sheets for distant
+  LOD, and concept-image → extruded-mesh with a silhouette-IoU fidelity score.
+- **217 tests, 174 of them in suites that start a real Blender daemon.** Schema,
   MCP protocol, and per-op integration — including byte-determinism asserted
   on exports.
 
