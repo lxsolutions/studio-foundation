@@ -17,10 +17,14 @@ from __future__ import annotations
 
 import json
 import math
+import os
+import tempfile
+from pathlib import Path
 
 import bpy
 from lib import mesh as mesh_lib
 from lib import scene as scene_lib
+from lib import sprite_budget
 from mathutils import Euler, Vector
 from registry import REQUIRED, OpError, op
 
@@ -1226,39 +1230,85 @@ def _camera_basis(view_dir):
     return right, up, forward
 
 
-def _fit_subject(meshes, view_dir, lens, aspect, fill, sensor=36.0):
-    """Frame the subject to occupy `fill` of the frame, whatever shape it is.
+def _fit_sprite_views(meshes, view_dirs, lens, aspect, fill, sensor=36.0):
+    """Return one target, distance, and ground anchor safe for every yaw.
 
-    Bounding-sphere framing is why generated icon sets look untidy: a sword and
-    a shield with the same bounding radius fill wildly different fractions of
-    the frame, so in a grid one floats and the other crowds. Project the real
-    corners onto the camera's own axes instead and fit that rectangle, which
-    also recentres a subject whose pivot is not its visual centre.
+    Refitting each yaw makes an asymmetric subject pulse larger and smaller in
+    a directional sheet. A common world-space target and the worst-case
+    perspective fit keep metres-per-pixel fixed. The target sits directly
+    above the world-AABB ground anchor, so that anchor also projects to the same
+    pixel at every yaw when distance and elevation are shared.
     """
     bpy.context.view_layer.update()
     corners = [o.matrix_world @ Vector(c) for o in meshes for c in o.bound_box]
     if not corners:
         raise OpError("nothing to frame — the subject has no geometry")
-    centre = sum(corners, Vector((0.0, 0.0, 0.0))) / len(corners)
-    right, up, forward = _camera_basis(view_dir)
-
-    us = [(p - centre).dot(right) for p in corners]
-    vs = [(p - centre).dot(up) for p in corners]
-    ws = [(p - centre).dot(forward) for p in corners]
-    half_u = max(1e-4, (max(us) - min(us)) * 0.5)
-    half_v = max(1e-4, (max(vs) - min(vs)) * 0.5)
-    # Aim at the middle of the projected rectangle, not at the pivot.
-    target = centre + right * ((max(us) + min(us)) * 0.5) + up * ((max(vs) + min(vs)) * 0.5)
-
+    lo = Vector((min(point[axis] for point in corners) for axis in range(3)))
+    hi = Vector((max(point[axis] for point in corners) for axis in range(3)))
+    target = (lo + hi) * 0.5
+    ground_anchor = Vector((target.x, target.y, lo.z))
     half_x = math.atan(sensor / (2.0 * max(8.0, lens)))
     half_y = math.atan(math.tan(half_x) / max(0.1, aspect))
     fill = max(0.05, min(0.98, fill))
-    distance = max(half_u / (math.tan(half_x) * fill), half_v / (math.tan(half_y) * fill))
-    # The near face projects larger than the centre plane. Pushing back by the
-    # nearest corner's depth is exact, not a safety fudge.
-    distance -= min(ws)
-    radius = max(half_u, half_v, (max(ws) - min(ws)) * 0.5)
-    return target, max(distance, radius * 1.05), radius
+    tan_x = math.tan(half_x) * fill
+    tan_y = math.tan(half_y) * fill
+    radius = max((point - target).length for point in corners) or 1.0
+    distance = radius * 1.05
+    bases = []
+    for view_dir in view_dirs:
+        right, up, forward = _camera_basis(view_dir)
+        bases.append((right, up, forward))
+        for point in corners:
+            delta = point - target
+            depth_offset = delta.dot(forward)
+            # Solve the perspective inequalities per corner. This is exact:
+            # abs(axis) / (distance + depth_offset) <= tan(fov/2) * fill.
+            distance = max(
+                distance,
+                abs(delta.dot(right)) / max(1e-6, tan_x) - depth_offset,
+                abs(delta.dot(up)) / max(1e-6, tan_y) - depth_offset,
+            )
+    return target, max(distance, radius * 1.05), radius, ground_anchor, bases
+
+
+def _project_sprite_point(point, target, distance, basis, lens, aspect, size, sensor=36.0):
+    """Project a world point into top-down, frame-local pixel coordinates."""
+    right, up, forward = basis
+    delta = point - target
+    depth = max(1e-6, distance + delta.dot(forward))
+    half_x = math.atan(sensor / (2.0 * max(8.0, lens)))
+    half_y = math.atan(math.tan(half_x) / max(0.1, aspect))
+    ndc_x = delta.dot(right) / (depth * math.tan(half_x))
+    ndc_y = delta.dot(up) / (depth * math.tan(half_y))
+    extent = max(1, size - 1)
+    return [
+        round((0.5 + ndc_x * 0.5) * extent, 4),
+        round((0.5 - ndc_y * 0.5) * extent, 4),
+    ]
+
+
+def _atomic_write_text(path, text):
+    """Durably write beside path and atomically replace the destination."""
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            newline="\n",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            temporary = Path(handle.name)
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+        temporary = None
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
 
 
 def _icon_lights(
@@ -1346,7 +1396,7 @@ def _shadow_catcher(meshes, radius):
 
 @op(
     "render.sprite",
-    summary="Render a GAME ICON, not a screenshot: a silhouette-fitted three-quarter hero angle on a long lens, a warm-key/cool-fill/bright-kicker rig anchored to the camera so a whole set matches, a real contact shadow, supersampled edges, a radial backdrop or clean alpha, and a linear-light post chain (highlight bloom, ACES tonemap, grade, vignette). Pass views>1 for a directional sprite sheet lit identically at every angle.",
+    summary="Render a GAME ICON, not a screenshot: silhouette-safe shared framing on a long lens, a warm-key/cool-fill/bright-kicker rig anchored to the camera so a whole set matches, a real contact shadow, supersampled edges, a radial backdrop or clean alpha, and a linear-light post chain (highlight bloom, ACES tonemap, grade, vignette). Pass views>1 for a directional sheet with stable world scale and ground anchor at every angle.",
     params={
         "name": (
             "str",
@@ -1361,17 +1411,17 @@ def _shadow_catcher(meshes, radius):
         "size": (
             "int",
             512,
-            "Output size in pixels per frame (square). 256-1024 is the useful icon range",
+            "Output size in pixels per square frame, clamped to 32-2048. Sheet dimensions participate in the aggregate resource preflight; 256-1024 is the useful icon range",
         ),
         "supersample": (
             "int",
             2,
-            "Render each axis at 1-4x then area-downsample in premultiplied linear light for cleaner silhouette edges. The internal render is capped at 4096 px per axis",
+            "Render each axis at 1-4x then area-downsample in premultiplied linear light for cleaner silhouette edges. The internal render is capped at 4096 px per axis and all supersampled pixels participate in the resource preflight",
         ),
         "views": (
             "int",
             1,
-            "How many yaw angles to shoot. 1 is an icon; 8 or 16 packs a directional sprite sheet for a 2D game",
+            "How many yaw angles to shoot, clamped to 1-64. 1 is an icon; 8 or 16 packs a stable-scale directional sheet. Every view participates in the aggregate resource preflight",
         ),
         "azimuth": (
             "num",
@@ -1457,7 +1507,7 @@ def _shadow_catcher(meshes, radius):
         "samples": (
             "int",
             96,
-            "Path-tracing samples. Icons are small and seen close; 96-256 is the honest range",
+            "Path-tracing samples, clamped to 8-256 and charged per supersampled pixel/view by the aggregate resource preflight. Icons are small and seen close; 96-256 is the honest range",
         ),
     },
     tags=["render"],
@@ -1492,6 +1542,23 @@ def render_sprite(
     shadow,
     samples,
 ):
+    try:
+        resource_plan = sprite_budget.plan_sprite_request(
+            size=size,
+            supersample=supersample,
+            views=views,
+            samples=samples,
+        )
+    except sprite_budget.SpriteBudgetError as exc:
+        raise OpError(str(exc)) from exc
+    size = resource_plan["frame_px"]
+    render_size = resource_plan["render_px"]
+    supersample = resource_plan["supersample"]
+    views = resource_plan["views"]
+    samples = resource_plan["samples"]
+    cols = resource_plan["cols"]
+    rows = resource_plan["rows"]
+
     from lib import mat as mat_lib
     from lib import post
 
@@ -1527,17 +1594,10 @@ def render_sprite(
     except ValueError as exc:
         raise OpError(str(exc)) from exc
 
-    size = max(32, min(2048, size))
-    supersample = max(1, min(4, supersample, 4096 // size))
-    render_size = size * supersample
-    views = max(1, min(64, views))
     elevation = max(-85.0, min(85.0, elevation))
     lens = max(8.0, lens)
     fill = max(0.05, min(0.98, fill))
     exposure = max(-16.0, min(16.0, exposure))
-    samples = max(8, samples)
-    cols = math.ceil(math.sqrt(views))
-    rows = math.ceil(views / cols)
     el = math.radians(elevation)
     az = math.radians(azimuth)
 
@@ -1552,13 +1612,16 @@ def render_sprite(
         )
 
     yaws = [az + (math.tau * index / views if views > 1 else 0.0) for index in range(views)]
-    rigs = []
-    for yaw in yaws:
-        direction = _view_dir(yaw)
-        target, distance, frame_radius = _fit_subject(meshes, direction, lens, 1.0, fill)
-        right, up, forward = _camera_basis(direction)
-        rigs.append((yaw, direction, target, distance, frame_radius, right, up, forward))
+    directions = [_view_dir(yaw) for yaw in yaws]
+    target, distance, frame_radius, ground_anchor, bases = _fit_sprite_views(
+        meshes, directions, lens, 1.0, fill
+    )
+    rigs = [
+        (yaw, direction, right, up, forward)
+        for yaw, direction, (right, up, forward) in zip(yaws, directions, bases, strict=True)
+    ]
     _subject_centre, subject_radius = _bounding_sphere(meshes)
+    scale_px_per_m = size / (2.0 * distance * math.tan(math.atan(36.0 / (2.0 * lens))))
 
     scene = bpy.context.scene
     settings = scene.render.image_settings
@@ -1585,6 +1648,7 @@ def render_sprite(
 
     hidden = _hide_others(meshes)
     path = ctx.out_path(out, ".png")
+    sidecar = path.with_suffix(".json")
     scratch = ctx.out_dir / "_sprite"
     scratch.mkdir(parents=True, exist_ok=True)
     sheet = numpy.zeros((rows * size, cols * size, 4), dtype=numpy.float32)
@@ -1650,7 +1714,7 @@ def render_sprite(
         view.gamma = 1.0
 
         for index, rig_data in enumerate(rigs):
-            yaw, direction, target, distance, frame_radius, right, up, forward = rig_data
+            yaw, direction, right, up, forward = rig_data
             camera.location = target - direction * distance
             camera.rotation_euler = direction.to_track_quat("-Z", "Y").to_euler()
             nearest = max(1e-5, distance - subject_radius * 1.1)
@@ -1676,7 +1740,7 @@ def render_sprite(
             exr = scratch / f"frame_{index:03d}.exr"
             _render_to(exr)
             raw = post.load(exr)
-            frame = _compose_sprite(
+            frame, foreground_alpha = _compose_sprite(
                 post,
                 numpy,
                 raw,
@@ -1694,15 +1758,26 @@ def render_sprite(
             )
             row, column = divmod(index, cols)
             sheet[row * size : (row + 1) * size, column * size : (column + 1) * size] = frame
-            frame_metrics.append(
-                {
-                    "index": index,
-                    "yaw_degrees": round(math.degrees(yaw) % 360.0, 6),
-                    "target_m": [round(value, 5) for value in target],
-                    "distance_m": round(distance, 5),
-                    "frame_radius_m": round(frame_radius, 5),
-                }
-            )
+            record = {
+                "index": index,
+                "yaw_degrees": round(math.degrees(yaw) % 360.0, 6),
+                "target_m": [round(value, 5) for value in target],
+                "distance_m": round(distance, 5),
+                "frame_radius_m": round(frame_radius, 5),
+                "ground_anchor_m": [round(value, 5) for value in ground_anchor],
+                "ground_anchor_px": _project_sprite_point(
+                    ground_anchor,
+                    target,
+                    distance,
+                    (right, up, forward),
+                    lens,
+                    1.0,
+                    size,
+                ),
+                "scale_px_per_m": round(scale_px_per_m, 5),
+            }
+            record.update(_foreground_alpha_metrics(numpy, foreground_alpha))
+            frame_metrics.append(record)
 
         post.save(
             sheet,
@@ -1710,15 +1785,14 @@ def render_sprite(
             name="_bforge_sprite_out",
             premultiplied=background == "alpha",
         )
-        saved = post.load(path)
-        for record in frame_metrics:
-            row, column = divmod(record["index"], cols)
-            frame = saved[
-                row * size : (row + 1) * size,
-                column * size : (column + 1) * size,
-            ]
-            record.update(_alpha_metrics(numpy, frame))
     finally:
+        if scratch.exists():
+            for exr in scratch.glob("*.exr"):
+                exr.unlink(missing_ok=True)
+            try:
+                scratch.rmdir()
+            except OSError:
+                pass
         _cleanup_rig(lights + [camera] + ([floor] if floor is not None else []))
         for obj in hidden:
             obj.hide_render = False
@@ -1734,6 +1808,14 @@ def render_sprite(
         for key, value in previous_render.items():
             setattr(scene.render, key, value)
 
+    framing = {
+        "target_m": [round(value, 5) for value in target],
+        "distance_m": round(distance, 5),
+        "ground_anchor_m": [round(value, 5) for value in ground_anchor],
+        "ground_anchor_px": frame_metrics[0]["ground_anchor_px"],
+        "scale_px_per_m": round(scale_px_per_m, 5),
+    }
+
     result = {
         "path": str(path),
         "rel": ctx.rel(path),
@@ -1747,6 +1829,8 @@ def render_sprite(
         "samples": samples,
         "fill_target": round(fill, 4),
         "subject_radius_m": round(subject_radius, 5),
+        "budget": resource_plan["budget"],
+        "framing": framing,
         "camera": {
             "azimuth": azimuth,
             "elevation": elevation,
@@ -1759,31 +1843,33 @@ def render_sprite(
         "bytes": path.stat().st_size,
     }
     if views > 1:
-        sidecar = path.with_suffix(".json")
-        sidecar.write_text(
-            json.dumps(
-                {
-                    "frames": views,
-                    "cols": cols,
-                    "rows": rows,
-                    "frame_px": size,
-                    "render_px": render_size,
-                    "supersample": supersample,
-                    "samples": samples,
-                    "fill_target": round(fill, 4),
-                    "background": background,
-                    "exposure": exposure,
-                    "elevation": elevation,
-                    "lens_mm": lens,
-                    "object": object_name,
-                    "camera_frames": frame_metrics,
-                },
-                indent=2,
-            )
-            + "\n",
-            encoding="utf-8",
+        sidecar_payload = {
+            "frames": views,
+            "cols": cols,
+            "rows": rows,
+            "frame_px": size,
+            "render_px": render_size,
+            "supersample": supersample,
+            "samples": samples,
+            "fill_target": round(fill, 4),
+            "background": background,
+            "exposure": exposure,
+            "elevation": elevation,
+            "lens_mm": lens,
+            "object": object_name,
+            "budget": resource_plan["budget"],
+            "framing": framing,
+            "camera_frames": frame_metrics,
+        }
+        _atomic_write_text(
+            sidecar,
+            json.dumps(sidecar_payload, indent=2) + "\n",
         )
         result["sidecar"] = ctx.rel(sidecar)
+    else:
+        # A successful single-view replacement must not leave the old
+        # directional contract beside the new, non-sheet PNG.
+        sidecar.unlink(missing_ok=True)
     result["analysis"] = _analyse(ctx, path)
     return result
 
@@ -1814,6 +1900,7 @@ def _compose_sprite(
         radius=0.045,
         premultiplied=True,
     )
+    foreground_alpha = frame[..., 3].copy()
 
     # Colour curves are nonlinear, so apply them to straight RGB and then
     # premultiply again. Applying ACES directly to premultiplied antialiasing
@@ -1823,7 +1910,10 @@ def _compose_sprite(
 
     if background == "alpha":
         straight[..., :3] = post.saturate(post.contrast(straight[..., :3], contrast), saturation)
-        return numpy.clip(post.premultiply(straight), 0.0, 1.0)
+        return (
+            numpy.clip(post.premultiply(straight), 0.0, 1.0),
+            foreground_alpha,
+        )
 
     frame = post.premultiply(straight)
     height, width = frame.shape[:2]
@@ -1836,16 +1926,41 @@ def _compose_sprite(
     composed = post.over(frame, backdrop, premultiplied=True)
     composed[..., :3] = post.saturate(post.contrast(composed[..., :3], contrast), saturation)
     composed[..., :3] = post.vignette(composed[..., :3], vignette)
-    return numpy.clip(composed, 0.0, 1.0)
+    return numpy.clip(composed, 0.0, 1.0), foreground_alpha
 
 
-def _alpha_metrics(numpy, frame):
-    """Small saved-file proof that transparency survived the PNG path."""
-    alpha = frame[..., 3]
+def _foreground_alpha_metrics(numpy, alpha):
+    """Content bounds from foreground alpha, independent of the backdrop."""
+    height, width = alpha.shape
+    threshold = 1.0 / 255.0
     edge = numpy.concatenate((alpha[0, :], alpha[-1, :], alpha[:, 0], alpha[:, -1]))
-    return {
+    metrics = {
         "alpha_min": round(float(alpha.min()), 5),
         "alpha_max": round(float(alpha.max()), 5),
-        "alpha_coverage": round(float((alpha > (1.0 / 255.0)).mean()), 5),
+        "alpha_coverage": round(float((alpha > threshold).mean()), 5),
         "edge_alpha_max": round(float(edge.max()), 5),
+        "clipped": bool((edge > threshold).any()),
     }
+    ys, xs = numpy.nonzero(alpha > threshold)
+    if not len(xs):
+        metrics.update(
+            {
+                "content_bounds_px": None,
+                "clearance_px": None,
+                "bottom_center_px": None,
+            }
+        )
+        return metrics
+    left = int(xs.min())
+    top = int(ys.min())
+    right = int(xs.max()) + 1
+    bottom = int(ys.max()) + 1
+    metrics.update(
+        {
+            # right/bottom are exclusive, matching Python image slices.
+            "content_bounds_px": [left, top, right, bottom],
+            "clearance_px": [left, top, width - right, height - bottom],
+            "bottom_center_px": [round((left + right - 1) * 0.5, 4), bottom - 1],
+        }
+    )
+    return metrics

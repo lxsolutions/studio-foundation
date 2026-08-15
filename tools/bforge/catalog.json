@@ -7447,7 +7447,7 @@
     },
     {
       "name": "render.sprite",
-      "summary": "Render a GAME ICON, not a screenshot: a silhouette-fitted three-quarter hero angle on a long lens, a warm-key/cool-fill/bright-kicker rig anchored to the camera so a whole set matches, a real contact shadow, supersampled edges, a radial backdrop or clean alpha, and a linear-light post chain (highlight bloom, ACES tonemap, grade, vignette). Pass views>1 for a directional sprite sheet lit identically at every angle.",
+      "summary": "Render a GAME ICON, not a screenshot: silhouette-safe shared framing on a long lens, a warm-key/cool-fill/bright-kicker rig anchored to the camera so a whole set matches, a real contact shadow, supersampled edges, a radial backdrop or clean alpha, and a linear-light post chain (highlight bloom, ACES tonemap, grade, vignette). Pass views>1 for a directional sheet with stable world scale and ground anchor at every angle.",
       "tags": [
         "render"
       ],
@@ -7467,17 +7467,17 @@
           },
           "size": {
             "type": "integer",
-            "description": "Output size in pixels per frame (square). 256-1024 is the useful icon range",
+            "description": "Output size in pixels per square frame, clamped to 32-2048. Sheet dimensions participate in the aggregate resource preflight; 256-1024 is the useful icon range",
             "default": 512
           },
           "supersample": {
             "type": "integer",
-            "description": "Render each axis at 1-4x then area-downsample in premultiplied linear light for cleaner silhouette edges. The internal render is capped at 4096 px per axis",
+            "description": "Render each axis at 1-4x then area-downsample in premultiplied linear light for cleaner silhouette edges. The internal render is capped at 4096 px per axis and all supersampled pixels participate in the resource preflight",
             "default": 2
           },
           "views": {
             "type": "integer",
-            "description": "How many yaw angles to shoot. 1 is an icon; 8 or 16 packs a directional sprite sheet for a 2D game",
+            "description": "How many yaw angles to shoot, clamped to 1-64. 1 is an icon; 8 or 16 packs a stable-scale directional sheet. Every view participates in the aggregate resource preflight",
             "default": 1
           },
           "azimuth": {
@@ -7657,7 +7657,7 @@
           },
           "samples": {
             "type": "integer",
-            "description": "Path-tracing samples. Icons are small and seen close; 96-256 is the honest range",
+            "description": "Path-tracing samples, clamped to 8-256 and charged per supersampled pixel/view by the aggregate resource preflight. Icons are small and seen close; 96-256 is the honest range",
             "default": 96
           }
         },

@@ -88,3 +88,9 @@ masters belong in `assets-source/` per ADR 0006. `export.asset` writes the
   `session.reset`; `bforge_session action='restart'` gets a fresh process.
 - `render.contact_sheet` costs a few seconds. Use `tile=300, samples=16` while
   iterating and raise them only for a final review image.
+- `render.sprite` preflights sheet size, views, supersampling, float buffers,
+  and samples before Blender allocates or renders. The 16-view
+  `size=512, supersample=2, samples=96` profile is the exact work ceiling;
+  reduce any of those controls if the budget rejects a call. Directional views
+  share one camera distance, world target, ground anchor, and pixels-per-metre
+  scale; use the returned `framing`/sidecar contract instead of per-frame crop.

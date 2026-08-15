@@ -10,7 +10,7 @@ The pillars:
 
 - **bforge** — a deterministic headless-Blender asset forge for AI agents:
   138 whitelisted, typed operations with a quality gate that rejects output
-  below the bar, byte-identical regeneration, and 217 bforge tests, 174 in suites that start a real Blender daemon.
+  below the bar, byte-identical regeneration, and 225 bforge tests, 178 in suites that start a real Blender daemon.
 - **Verification** — GLB budget gates, pixel-diff captures, provenance, and
   render probes, so agent output is measured rather than trusted.
 - **Engine-neutral assets, standardized runtime** — the forge outputs portable
@@ -53,7 +53,7 @@ reproduction path. Other implementations may exist; this one you can audit.
 **🔨 A deterministic, quality-gated Blender forge for AI agents.**
 bforge is 138 typed, whitelisted operations driven into a persistent headless
 Blender daemon — LODs, collision, budgets, rigs, gaits, baking, validation —
-with byte-identical output run to run and 217 tests, 174 of them in suites that start a real Blender daemon.
+with byte-identical output run to run and 225 tests, 178 of them in suites that start a real Blender daemon.
 No GUI remote-control, no arbitrary code execution, no "same
 prompt, different mesh." We know of nothing else public that does all four of those.
 
@@ -142,10 +142,10 @@ it works identically on a laptop, in CI, and on a headless build box.
   are verified by parsing the file, not by trusting the log.
 - **The agent can see and prove what it made.** Six-panel contact sheets
   (hero/front/side/top/wireframe/UV-checker), luminance and palette
-  measurement, silhouette scoring, silhouette-fitted and supersampled inventory
-  icons plus directional sprite sheets, impostor sprite sheets for distant
+  measurement, silhouette scoring, shared-scale and supersampled inventory
+  icons plus ground-anchored directional sprite sheets, impostor sheets for distant
   LOD, and concept-image → extruded-mesh with a silhouette-IoU fidelity score.
-- **217 tests, 174 of them in suites that start a real Blender daemon.** Schema,
+- **225 tests, 178 of them in suites that start a real Blender daemon.** Schema,
   MCP protocol, and per-op integration — including byte-determinism asserted
   on exports.
 

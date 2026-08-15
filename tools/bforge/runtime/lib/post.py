@@ -53,18 +53,116 @@ def premultiply(rgba):
     return out
 
 
-def unpremultiply(rgba, epsilon=1e-6):
-    """Return straight-alpha RGBA without NaNs or colour in empty pixels."""
+def unpremultiply(rgba, epsilon=1e-6, copy=True):
+    """Return straight-alpha RGBA without NaNs or colour in empty pixels.
+
+    ``copy=False`` consumes a writable float array. The sheet save path uses
+    that form so its peak memory does not grow by another full RGBA sheet.
+    """
     numpy = require_numpy()
-    out = rgba.copy()
-    alpha = out[..., 3:4]
-    out[..., :3] = numpy.divide(
+    out = rgba.copy() if copy else rgba
+    alpha = out[..., 3]
+    visible = alpha > epsilon
+    numpy.divide(
         out[..., :3],
-        alpha,
-        out=numpy.zeros_like(out[..., :3]),
-        where=alpha > epsilon,
+        alpha[..., None],
+        out=out[..., :3],
+        where=visible[..., None],
     )
+    out[..., :3][~visible] = 0.0
     return out
+
+
+def bleed_transparent_rgb(rgba, radius=8, epsilon=1.0 / 255.0, copy=True):
+    """Dilate straight RGB through transparent pixels without changing alpha.
+
+    Straight-alpha PNGs whose hidden RGB is black acquire a dark seam when a
+    GPU filters or builds ordinary mipmaps across the silhouette. Eight local
+    dilation steps preserve nearby edge colour; the remaining empty field gets
+    the visible mean so even the smallest mip never averages against black.
+
+    ``copy=False`` updates the input and reuses one accumulator/count pair
+    across every pass, which keeps the sheet save path within its memory model.
+    """
+    numpy = require_numpy()
+    out = rgba.copy() if copy else rgba
+    alpha = out[..., 3]
+    known = alpha > epsilon
+    if not known.any():
+        return out
+
+    rgb = out[..., :3]
+    accumulated = numpy.zeros_like(rgb)
+    counts = numpy.zeros(alpha.shape, dtype=numpy.float32)
+    for _ in range(max(0, int(radius))):
+        accumulated.fill(0.0)
+        counts.fill(0.0)
+        numpy.add(
+            accumulated[1:],
+            rgb[:-1],
+            out=accumulated[1:],
+            where=known[:-1, :, None],
+        )
+        numpy.add(counts[1:], 1.0, out=counts[1:], where=known[:-1])
+        numpy.add(
+            accumulated[:-1],
+            rgb[1:],
+            out=accumulated[:-1],
+            where=known[1:, :, None],
+        )
+        numpy.add(counts[:-1], 1.0, out=counts[:-1], where=known[1:])
+        numpy.add(
+            accumulated[:, 1:],
+            rgb[:, :-1],
+            out=accumulated[:, 1:],
+            where=known[:, :-1, None],
+        )
+        numpy.add(counts[:, 1:], 1.0, out=counts[:, 1:], where=known[:, :-1])
+        numpy.add(
+            accumulated[:, :-1],
+            rgb[:, 1:],
+            out=accumulated[:, :-1],
+            where=known[:, 1:, None],
+        )
+        numpy.add(counts[:, :-1], 1.0, out=counts[:, :-1], where=known[:, 1:])
+
+        has_neighbours = counts > 0.0
+        fill = (~known) & has_neighbours
+        if not fill.any():
+            break
+        numpy.divide(
+            accumulated,
+            counts[..., None],
+            out=accumulated,
+            where=has_neighbours[..., None],
+        )
+        numpy.copyto(rgb, accumulated, where=fill[..., None])
+        known |= fill
+
+    # Distant transparent pixels only matter in coarse mip levels. A visible
+    # mean is deterministic, non-black, and avoids inventing a directional
+    # colour gradient where no nearest edge exists. ``where`` avoids the
+    # sheet-sized advanced-indexing copy made by ``rgb[visible]``.
+    visible = alpha > epsilon
+    visible_count = int(visible.sum())
+    fallback = numpy.array(
+        [numpy.sum(rgb[..., channel], where=visible, dtype=numpy.float64) for channel in range(3)],
+        dtype=numpy.float32,
+    ) / max(1, visible_count)
+    numpy.copyto(rgb, fallback, where=(~known)[..., None])
+    return out
+
+
+def _flip_vertical_in_place(numpy, array):
+    """Convert top-down pixels to Blender order with one scanline of scratch."""
+    if array.shape[0] < 2:
+        return
+    row = numpy.empty_like(array[0])
+    for top in range(array.shape[0] // 2):
+        bottom = array.shape[0] - top - 1
+        row[...] = array[top]
+        array[top] = array[bottom]
+        array[bottom] = row
 
 
 def save(array, path, name="_bforge_post", premultiplied=False):
@@ -72,16 +170,28 @@ def save(array, path, name="_bforge_post", premultiplied=False):
 
     Blender applies the sRGB transfer on save. PNG stores straight alpha while
     Cycles EXR returns premultiplied alpha, so callers carrying render data must
-    opt into the conversion or antialiased edges are saved with dark fringes.
+    opt into conversion. Transparent RGB is then dilated from the silhouette so
+    filtered/mipmapped straight-alpha textures do not acquire dark fringes.
+
+    This function consumes its writable C-contiguous float32 input. Conversion,
+    dilation, clipping and the top-down flip happen in place, then Blender's
+    buffer API receives the numpy storage directly. In particular, never use
+    ``.tolist()`` here: one Python float per channel makes a 2048-square sheet
+    consume almost a gigabyte beyond Blender's baseline.
     """
     numpy = require_numpy()
-    pixels = unpremultiply(array) if premultiplied else array
+    if array.dtype != numpy.float32 or not array.flags.c_contiguous or not array.flags.writeable:
+        raise ValueError("post.save requires a writable C-contiguous float32 RGBA array")
+    pixels = unpremultiply(array, copy=False) if premultiplied else array
+    if premultiplied:
+        pixels = bleed_transparent_rgb(pixels, copy=False)
+    numpy.clip(pixels, 0.0, 1.0, out=pixels)
+    _flip_vertical_in_place(numpy, pixels)
     height, width = pixels.shape[:2]
     image = bpy.data.images.new(name, width=width, height=height, alpha=True)
     try:
         image.alpha_mode = "STRAIGHT"
-        # Blender images are bottom-up; ours are top-down.
-        image.pixels = numpy.flipud(numpy.clip(pixels, 0.0, 1.0)).ravel().tolist()
+        image.pixels.foreach_set(pixels.reshape(-1))
         image.filepath_raw = str(path)
         image.file_format = "PNG"
         image.save()
