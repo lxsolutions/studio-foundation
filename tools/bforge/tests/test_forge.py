@@ -417,6 +417,12 @@ class ExplicitCamera(ForgeCase):
         with self.assertRaises(ForgeError):
             self.forge.call("render.camera", out="x.png", position=[1, 1, 1], samples=1)
 
+    def test_camera_position_is_required_with_a_clear_error(self):
+        self.forge.call("build.box", name="subject")
+        with self.assertRaises(ForgeError) as ctx:
+            self.forge.call("render.camera", out="x.png", samples=1)
+        self.assertIn("missing required parameter 'position'", str(ctx.exception))
+
 
 class UVs(ForgeCase):
     def test_unwrap_creates_usable_uvs(self):
@@ -619,6 +625,52 @@ class Rendering(ForgeCase):
         with self.assertRaises(ForgeError) as ctx:
             self.forge.call("render.view", out="empty.png", resolution=64, samples=1)
         self.assertIn("no mesh objects", str(ctx.exception))
+
+    def test_cinematic_defaults_frame_an_off_origin_tall_subject(self):
+        location = [12.0, -7.0, 3.0]
+        self.forge.call(
+            "build.box",
+            name="off_origin_subject",
+            size=[0.2, 0.4, 1.8],
+            location=location,
+            bevel=0.0,
+        )
+        result = self.forge.call(
+            "render.cinematic",
+            out="auto_cinematic.png",
+            resolution=128,
+            aspect=2.39,
+            samples=1,
+            bounces=2,
+            look="standard",
+            _timeout=900,
+        )
+        path = Path(result["path"])
+        self.assertTrue(path.is_file())
+        self.assertGreater(path.stat().st_size, 1000)
+        self.assertTrue(result["auto_framed"])
+        for actual, expected in zip(result["target"], location, strict=True):
+            self.assertAlmostEqual(actual, expected, places=4)
+        self.assertGreater(result["subject_radius_m"], 0.9)
+        self.assertGreater(result["analysis"]["subject_coverage"], 0.01)
+
+    def test_cinematic_explicit_position_keeps_the_world_origin_target(self):
+        self.forge.call("build.box", name="subject", bevel=0.0)
+        position = [4.0, -4.0, 3.0]
+        result = self.forge.call(
+            "render.cinematic",
+            out="explicit_cinematic.png",
+            position=position,
+            resolution=96,
+            aspect=1.78,
+            samples=1,
+            bounces=2,
+            look="standard",
+            _timeout=900,
+        )
+        self.assertFalse(result["auto_framed"])
+        self.assertEqual(result["position"], position)
+        self.assertEqual(result["target"], [0.0, 0.0, 0.0])
 
 
 if __name__ == "__main__":

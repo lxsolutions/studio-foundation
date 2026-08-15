@@ -5,7 +5,7 @@ description: Build game-ready 3D assets with Blender — props, modular kits, te
 
 # bforge — headless Blender asset forge
 
-`bforge` drives a persistent background Blender session through 127 typed
+`bforge` drives a persistent background Blender session through 138 typed
 operations. It never needs the Blender GUI, it is deterministic (same params +
 same seed → same mesh, forever), and every generated asset comes out chamfered,
 UV'd, materialled, pivoted and validated against the studio's ADR 0006 rules.

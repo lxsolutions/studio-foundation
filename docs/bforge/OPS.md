@@ -1,6 +1,6 @@
 # bforge op reference
 
-137 operations.
+138 operations.
 
 ## `arch.*`
 
@@ -1366,8 +1366,8 @@ Bake 'dirt in the crevices' or 'edge wear' without textures: a deterministic geo
 
 | parameter | type | default | description |
 | --- | --- | --- | --- |
-| `name` | string | None | Mesh object to paint — needs real surface relief; a flat quad has no curvature to find |
-| `color` | any | None | Colour blended into the crevices/edges: palette name, #rrggbb, or linear [r,g,b]. Dark browns read as grime, light greys as worn edges |
+| `name` | string | **required** | Mesh object to paint — needs real surface relief; a flat quad has no curvature to find |
+| `color` | any | **required** | Colour blended into the crevices/edges: palette name, #rrggbb, or linear [r,g,b]. Dark browns read as grime, light greys as worn edges |
 | `mode` | cavity \| edge | 'cavity' | cavity paints concave spots (dirt), edge paints convex ridges (wear) |
 | `strength` | number | 1.0 | Blend strength multiplier; the deepest cavity gets the full colour at 1.0 |
 | `invert` | boolean | False | Flip the result — paint everything EXCEPT the crevices/edges |
@@ -1379,8 +1379,8 @@ Set every loop of a mesh to one vertex colour. The base coat for the other paint
 
 | parameter | type | default | description |
 | --- | --- | --- | --- |
-| `name` | string | None | Mesh object to paint |
-| `color` | any | None | Colour: palette name, #rrggbb, or linear [r,g,b]. White leaves the material unchanged when the engine multiplies COLOR_0 in |
+| `name` | string | **required** | Mesh object to paint |
+| `color` | any | **required** | Colour: palette name, #rrggbb, or linear [r,g,b]. White leaves the material unchanged when the engine multiplies COLOR_0 in |
 | `layer` | string | 'color' | Colour attribute name; the glTF exporter ships the active one as COLOR_0 |
 
 ### `paint.height`
@@ -1389,9 +1389,9 @@ Paint a two-colour gradient along an axis — dust at the base of a wall, a snow
 
 | parameter | type | default | description |
 | --- | --- | --- | --- |
-| `name` | string | None | Mesh object to paint |
-| `low` | any | None | Colour at the bottom of the range: palette name, #rrggbb, or linear [r,g,b] |
-| `high` | any | None | Colour at the top of the range |
+| `name` | string | **required** | Mesh object to paint |
+| `low` | any | **required** | Colour at the bottom of the range: palette name, #rrggbb, or linear [r,g,b] |
+| `high` | any | **required** | Colour at the top of the range |
 | `axis` | x \| y \| z | 'z' | Axis the gradient runs along (z is up). Measured in the mesh's LOCAL space, like material.face_assign |
 | `min` | number | None | Axis value for 100% `low`; omit to use the mesh's own lower bound. Set both min and max to share one gradient across several objects |
 | `max` | number | None | Axis value for 100% `high`; omit to use the mesh's upper bound |
@@ -1404,9 +1404,9 @@ Blend two colours by deterministic fBm noise sampled at vertex positions — mot
 
 | parameter | type | default | description |
 | --- | --- | --- | --- |
-| `name` | string | None | Mesh object to paint |
-| `color_a` | any | None | Colour where the noise is low: palette name, #rrggbb, or linear [r,g,b] |
-| `color_b` | any | None | Colour where the noise is high |
+| `name` | string | **required** | Mesh object to paint |
+| `color_a` | any | **required** | Colour where the noise is low: palette name, #rrggbb, or linear [r,g,b] |
+| `color_b` | any | **required** | Colour where the noise is high |
 | `scale` | number | 2.0 | Noise frequency in 1/metres — higher gives smaller, busier patches |
 | `seed` | integer | 0 | Random seed; same seed gives the same pattern forever |
 | `octaves` | integer | 3 | Fractal detail levels; more octaves, finer grain |
@@ -1658,7 +1658,7 @@ Render from an explicit camera position and target. Auto-framing always fits the
 | parameter | type | default | description |
 | --- | --- | --- | --- |
 | `out` | string | 'shot.png' | PNG output path |
-| `position` | array | None | Camera position in metres |
+| `position` | array | **required** | Camera position in metres. This op exists to place the camera by hand; use render.cinematic or render.view when you want the framing fitted for you |
 | `target` | array | [0.0, 0.0, 0.0] | Point to look at |
 | `lens` | number | 50.0 | Focal length in mm — 24 is wide, 50 neutral, 105 compressed |
 | `resolution` | integer | 640 | Width in pixels |
@@ -1675,8 +1675,8 @@ A film-grade beauty render: physical sun and sky, global illumination, atmospher
 | parameter | type | default | description |
 | --- | --- | --- | --- |
 | `out` | string | 'hero.png' | PNG output path |
-| `position` | array | None | Camera position in metres |
-| `target` | array | [0.0, 0.0, 0.0] | Point to look at |
+| `position` | array | None | Camera position in metres. Omit it and a three-quarter beauty angle is fitted to the subject — set it for a close-up or a specific composition |
+| `target` | array | None | Point to look at. When both camera position and target are omitted, the camera aims at the subject's own centre so assets built off-origin are still framed. An explicit position with no target keeps the established world-origin target |
 | `lens` | number | 40.0 | Focal length in mm |
 | `resolution` | integer | 1280 | Width in pixels |
 | `aspect` | number | 2.39 | Width / height. 2.39 is anamorphic, 1.78 is 16:9 |
@@ -1721,6 +1721,40 @@ Bake an object into a billboard impostor sprite sheet: N orthographic views orbi
 | `normals` | boolean | False | Also write <stem>_normal.png: world-space normals packed into 0..1 colour, so the billboard can be lit instead of looking pasted on. Doubles render cost |
 | `samples` | integer | 16 | Cycles samples per frame. 16 is plenty at these sizes; raise only if the sprites look grainy |
 | `elevation` | number | 0.0 | Camera height above the horizon in degrees, the same for every view. Ground props read best at 0-15; high values waste frame area on the top face |
+
+### `render.sprite`
+
+Render a GAME ICON, not a screenshot: a silhouette-fitted three-quarter hero angle on a long lens, a warm-key/cool-fill/bright-kicker rig anchored to the camera so a whole set matches, a real contact shadow, supersampled edges, a radial backdrop or clean alpha, and a linear-light post chain (highlight bloom, ACES tonemap, grade, vignette). Pass views>1 for a directional sprite sheet lit identically at every angle.
+
+| parameter | type | default | description |
+| --- | --- | --- | --- |
+| `name` | string | None | Object to shoot; its children come with it. Omit to frame every mesh in the scene |
+| `out` | string | 'sprite.png' | PNG output path. With views>1 a <stem>.json sidecar describing the grid is written next to it |
+| `size` | integer | 512 | Output size in pixels per frame (square). 256-1024 is the useful icon range |
+| `supersample` | integer | 2 | Render each axis at 1-4x then area-downsample in premultiplied linear light for cleaner silhouette edges. The internal render is capped at 4096 px per axis |
+| `views` | integer | 1 | How many yaw angles to shoot. 1 is an icon; 8 or 16 packs a directional sprite sheet for a 2D game |
+| `azimuth` | number | -47.0 | Camera compass angle in degrees. -47 is the standard three-quarter view that shows a front and a side at once |
+| `elevation` | number | 24.0 | Camera height above the horizon in degrees. 20-30 reads as 'held up in front of you'; 45+ becomes a map marker |
+| `lens` | number | 85.0 | Focal length in mm. Long lenses flatten perspective, which is why product and icon work uses them — 85-135 keeps the far side of the object from tapering away |
+| `fill` | number | 0.86 | Fraction of the frame the subject spans at its widest. Hold this constant across a set and the icons line up; that is the whole trick |
+| `background` | gradient \| solid \| alpha | 'gradient' | gradient is a radial backdrop that separates the silhouette everywhere; alpha leaves it transparent for compositing into a UI; solid is a flat fill |
+| `bg_inner` | any | '#4a5a72' | Backdrop colour behind the subject |
+| `bg_outer` | any | '#1a2130' | Backdrop colour at the corners (gradient only) |
+| `key_color` | any | '#fff1d6' | Key light colour — warm reads as sunlight |
+| `fill_color` | any | '#b9d0f2' | Fill light colour — cool reads as sky, and the warm/cool split is most of what makes a surface look lit rather than painted |
+| `rim_color` | any | '#dcecff' | Kicker colour; the light that draws the silhouette |
+| `rim` | number | 1.0 | Kicker strength. 0 turns separation off, 1.5-2 is a hero/legendary treatment |
+| `key_energy` | number | 1.0 | Key light strength multiplier. 1.0 puts an 18% grey card near the top of the mid-tones, which is where an icon wants to sit |
+| `fill_energy` | number | 0.38 | Fill light strength multiplier. Raise it when the analysis reports crushed shadows — the shadow side of a three-quarter view is half the icon |
+| `exposure` | number | 0.0 | Exposure compensation in stops, clamped to -16..16 and applied in linear light before the tonemap |
+| `bloom` | number | 0.3 | Highlight glow strength. 0 disables it; above ~0.8 the asset starts to dissolve |
+| `bloom_threshold` | number | 0.85 | Linear luminance a pixel must exceed to bloom |
+| `contrast` | number | 1.06 | Contrast multiplier about mid-grey, applied after the tonemap |
+| `saturation` | number | 1.04 | Saturation multiplier. Stylised game icons run hot; 1.0 is neutral |
+| `vignette` | number | 0.22 | Corner darkening. Ignored when background=alpha, which must stay compositable |
+| `look` | aces \| punchy \| linear | 'aces' | Tonemap. aces is the film-style curve games ship; punchy adds saturation in the curve; linear clips, for data |
+| `shadow` | boolean | True | Cast a real contact shadow onto an invisible ground plane so the subject sits on something |
+| `samples` | integer | 96 | Path-tracing samples. Icons are small and seen close; 96-256 is the honest range |
 
 ### `render.turntable`
 
