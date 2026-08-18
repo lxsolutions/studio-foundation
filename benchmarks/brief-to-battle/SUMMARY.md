@@ -2,12 +2,13 @@
 
 agent: `python3 benchmarks/brief-to-battle/agents/scripted_world.py`
 
-verdict: **2/2 briefs passed**
+verdict: **3/3 briefs passed**
 
 | brief | validity | semantics | gameplay | determinism |
 | --- | --- | --- | --- | --- |
 | fortress_battle | ✓ | ✓ | ✓ | ✓ |
 | hold_the_gate | ✓ | ✓ | ✓ | ✓ |
+| three_gates | ✓ | ✓ | ✓ | ✓ |
 
 The world is compiled with proof (entity proofs + scenario binding),
 the scenario runs deterministically, and outcomes are scored against

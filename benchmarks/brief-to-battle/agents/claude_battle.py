@@ -39,8 +39,7 @@ PART 1 — write {workspace}/world.json in exactly this shape:
   "world_ir": "0.1",
   "world": "fortress",
   "entities": {{
-    "{entity_a}": {{ "doc": "{doc_file}" }},
-    "{entity_b}": {{ "doc": "{doc_file}" }}
+{world_entities}
   }},
   "scenario": "battle.json",
   "expect_navigation": {expect_navigation}
@@ -54,15 +53,13 @@ replay; T is an integer tick, verbs come from the affordance list below):
   "seed": 0,
   "ticks": 20,
   "entities": {{
-    "{entity_a}": {{ "contract": {contract_json}, "contract_sha256": "{contract_sha}" }},
-    "{entity_b}": {{ "contract": {contract_json}, "contract_sha256": "{contract_sha}" }}
+{replay_entities}
   }},
   "initial": {{
-    "{entity_a}": {{ "health": 100, "locked": true }},
-    "{entity_b}": {{ "health": 100, "locked": true }}
+{replay_initial}
   }},
   "events": [
-    [0, "{entity_b}", "open", null],
+    [T, "<entity>", "<verb>", <arg or null>],
     ...your scenario...
   ]
 }}
@@ -71,14 +68,29 @@ RULES:
 - Valid JSON only in both files. No commentary files. Do not modify any other file.
 - Copy the contract object and contract_sha256 EXACTLY as given (they are
   precomputed for you — do not alter a single byte).
-- {entity_a} is the MAIN gate, {entity_b} is the SIDE gate.
+- The entities in this scenario are: {entity_list}.
 - Available verbs: open, close, lock, unlock (no argument); attack, repair
   (nonnegative integer amount).
 - A locked gate ignores open/close. At health 0 a gate is destroyed and hangs
   open. openness integrates at 250 milli-units per tick toward its target.
-- Use ticks 0..20 only. Your scenario must end with: the main gate destroyed
-  or open (not blocking), the side gate intact and closed (blocking).
+- Use ticks 0..20 only. Your scenario must end with: {goal_line}
 """
+
+# A gate "blocks navigation" when it is intact and shut. The goal sentence is
+# derived from the brief's expect_navigation so the wrapper stays brief-neutral
+# — a hardcoded goal would tell the model the answer to one brief and the wrong
+# answer to every other one.
+def render_block(names, line) -> str:
+    """Comma-separated JSON object members, one per entity, indented for the
+    template. The scenario's entity count comes from the brief, not the
+    wrapper — a two-entity assumption would cap the corpus at gate pairs."""
+    return ",\n".join(f"    {line(n)}" for n in names)
+
+
+def goal_clause(name: str, blocks: bool) -> str:
+    if blocks:
+        return f"{name} intact and closed (blocking)"
+    return f"{name} destroyed or open (not blocking)"
 
 
 def main() -> int:
@@ -90,16 +102,34 @@ def main() -> int:
 
     entities = brief.get("scenario", {}).get("entities", {})
     names = sorted(entities)
-    if len(names) != 2:
-        print("this wrapper expects exactly two scenario entities", file=sys.stderr)
+    if not names:
+        print("brief has no scenario entities", file=sys.stderr)
         return 1
 
+    expect = brief["scenario"]["expect_navigation"]
+    missing = [n for n in names if n not in expect]
+    if missing:
+        print(f"brief lacks expect_navigation for {missing}", file=sys.stderr)
+        return 1
+    goal_line = ", ".join(goal_clause(n, expect[n]) for n in names)
+
     prompt = PROMPT.format(
+        goal_line=goal_line,
         workspace=workspace,
         brief_text=brief["text"],
-        expect_navigation=json.dumps(brief["scenario"]["expect_navigation"]),
-        entity_a=names[0] if "main" in names[0] else names[1],
-        entity_b=names[1] if "main" in names[0] else names[0],
+        expect_navigation=json.dumps(expect),
+        entity_list=", ".join(names),
+        world_entities=render_block(
+            names, lambda n: f'"{n}": {{ "doc": "{doc_file}" }}'
+        ),
+        replay_entities=render_block(
+            names,
+            lambda n: f'"{n}": {{ "contract": {json.dumps(contract)}, '
+            f'"contract_sha256": "{contract_sha}" }}',
+        ),
+        replay_initial=render_block(
+            names, lambda n: f'"{n}": {{ "health": 100, "locked": true }}'
+        ),
         doc_file=doc_file,
         contract_json=json.dumps(contract),
         contract_sha=contract_sha,

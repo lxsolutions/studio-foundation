@@ -26,7 +26,43 @@ Codex (`codex exec`) was unavailable for a second run: the account hit its
 usage limit (retry 2026-08-08). The codex_cli.py wrapper is committed and
 ready; rerun then.
 
-## 2026-08-06 — Claude Code, hold_the_gate (inverted defense brief)
+## 2026-08-06 — RETRACTION: both hold_the_gate failures below were our bug
+
+**The two `hold_the_gate` FAIL entries in this file are withdrawn.** They
+measured a defect in the harness, not in the model.
+
+`agents/claude_battle.py` ended its prompt with a hardcoded goal sentence:
+
+> Your scenario must end with: the main gate destroyed or open (not blocking),
+> the side gate intact and closed (blocking).
+
+That is the `fortress_battle` objective, and `hold_the_gate` is its exact
+inverse. The wrapper was instructing the model to open the gate the brief said
+to defend, and the harness then scored the model's obedience as a tactical
+reasoning failure. The "systematic, not variance" conclusion was really a
+constant: both runs matched the injected instruction, which is why they looked
+so consistent.
+
+With the goal sentence derived from each brief's `expect_navigation`
+(`goal_clause()`), the same brief and the same model **pass on the first
+attempt** (66.5s, scorecard
+`SCOREBOARD-2026-08-06-claude-code-hold-the-gate-corrected.json`): the model
+locks and closes the main gate at tick 0, unlocks and opens the side gate, and
+holds through a 12-per-tick attack/repair exchange for the full 20 ticks. The
+tactics were never the problem.
+
+`tests/test_battlebench.py::WrapperIsBriefNeutral` now fails if the prompt
+template states any outcome, or if a derived goal contradicts a brief. It fails
+against the old wrapper and passes against the fix.
+
+The lesson is the uncomfortable one for a project whose thesis is that AI
+output must be proven: **the harness needs the same adversarial scrutiny as the
+model.** A published failure that is actually your own misfiring instrument is
+worse than no benchmark, because it spends credibility to buy a false finding.
+The two entries below are kept, struck through, rather than deleted — retracted
+evidence should stay auditable.
+
+## ~~2026-08-06 — Claude Code, hold_the_gate (inverted defense brief)~~ RETRACTED
 
 **0/1 — FAIL** (scorecard: `SCOREBOARD-2026-08-06-claude-code-hold-the-gate.json`)
 
@@ -42,7 +78,7 @@ This is the finding the battle half exists for: document-level correctness
 does not imply tactical correctness, and only a deterministic outcome check
 can tell the difference.
 
-## 2026-08-06 — Claude Code, hold_the_gate, attempt 2 (variance check)
+## ~~2026-08-06 — Claude Code, hold_the_gate, attempt 2 (variance check)~~ RETRACTED
 
 **0/1 — FAIL, same systematic gap** (scorecard:
 `SCOREBOARD-2026-08-06-claude-code-hold-the-gate-attempt-2.json`)
@@ -53,3 +89,39 @@ unlocked and opened the MAIN gate at ticks 14–15. Two runs, two different
 paths, same inversion: the gate that must hold ends open, the gate that must
 open ends closed. A systematic reasoning gap on inverted/defense briefs, not
 luck.
+
+## 2026-08-06 — Claude Code, hold_the_gate, corrected harness
+
+**1/1 — PASS** (scorecard:
+`SCOREBOARD-2026-08-06-claude-code-hold-the-gate-corrected.json`)
+
+First attempt, 66.5s, all four dimensions green. The model's scenario:
+
+    [0, gate_main, lock]      [0, gate_side, open]
+    [0, gate_main, close]     [0, gate_side, unlock]
+    [2..20, gate_main, attack 12 / repair 12 alternating]
+
+It locks the defended gate so stray `open` events are absorbed, opens the
+escort route, and sustains the repair cadence the brief permits for the full
+20 ticks. Main gate ends intact and blocking; side gate ends open. That is the
+brief, exactly.
+
+## 2026-08-06 — Claude Code, three_gates (first three-entity brief)
+
+**1/1 — PASS** (scorecard:
+`SCOREBOARD-2026-08-06-claude-code-three-gates.json`)
+
+First attempt, 107.0s, 4/4. The old wrapper could not have run this brief at
+all — it rejected any scenario that was not exactly two entities, which
+silently capped the corpus at gate pairs. The model's scenario:
+
+    [1, gate_sally, unlock]   [2, gate_sally, open]
+    [6, gate_main, attack 40] [8, gate_postern, attack 25]
+    [10, gate_main, repair 40][12, gate_postern, repair 25]
+    [18, gate_main, lock]     [18, gate_postern, lock]
+
+Unlock precedes open on the sally port (the reverse order is absorbed by the
+lock), the two gates that must hold take and repair the siege, and both are
+re-locked before the horns. Two holds and one open, with distractor pressure
+from a third entity — a materially different shape from the 1-hold/1-open
+pairs, and the first evidence that the loop is not hardcoded to two gates.
