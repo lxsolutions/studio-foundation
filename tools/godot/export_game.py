@@ -109,6 +109,83 @@ def check_readiness(preset: str) -> str | None:
     return f"unknown preset {preset}"
 
 
+def dotnet_signals(project: Path) -> list[str]:
+    """Evidence that this project is a C#/.NET Godot project, named individually."""
+    signals: list[str] = []
+    for pattern in ("*.csproj", "*.sln"):
+        for found in sorted(project.glob(pattern)):
+            signals.append(found.name)
+    try:
+        settings = (project / "project.godot").read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        settings = ""
+    if "[dotnet]" in settings or "dotnet/project/assembly_name" in settings:
+        signals.append("project.godot declares a [dotnet] assembly")
+    scripts = sorted(p.relative_to(project).as_posix() for p in project.rglob("*.cs"))
+    scripts = [s for s in scripts if not s.startswith((".godot/", "obj/", "bin/"))]
+    if scripts:
+        preview = ", ".join(scripts[:3]) + (
+            f", +{len(scripts) - 3} more" if len(scripts) > 3 else ""
+        )
+        signals.append(f"{len(scripts)} C# script(s): {preview}")
+    return signals
+
+
+def dotnet_web_problem(project: Path, preset: str) -> str | None:
+    """Refuse a C#/.NET web export in the terms of the blocker that actually applies.
+
+    Godot's own answer here is `export failed: cannot combine Mono runtime with the
+    web platform`, which reads like a missing feature, a bad setting, or a template
+    that someone forgot to download. It is none of those, and the difference decides
+    what a team does next — so say the real thing before Godot says the cryptic one.
+
+    A web export is one WebAssembly *main module*: the module that owns runtime
+    initialization, the linear memory, and the JS glue the page boots. Godot's
+    Emscripten build is that module. The .NET runtime is built to be that module too.
+    Two candidates, one slot. No export preset, export template, or rendering backend
+    changes that arithmetic, which is why this repository's WebGPU patch series does
+    not help and structurally cannot: it replaces what Godot draws with, not what
+    initializes the WebAssembly binary (ADR 0019).
+
+    The way past it is not to win the slot. It is to stop needing it — compiled
+    gameplay logic ships as a zero-import reactor module that any runtime can
+    instantiate, and the Godot client stays GDScript. That path is real, checked, and
+    documented, so point at it rather than leaving a team to rediscover the ceiling.
+    """
+    if not preset.startswith("web"):
+        return None  # desktop and mobile presets export C# fine; only web has the conflict
+    signals = dotnet_signals(project)
+    if not signals:
+        return None
+    found = "\n".join(f"    - {signal}" for signal in signals)
+    return (
+        "this is a C#/.NET project, and .NET cannot be exported to the browser.\n"
+        f"  Detected:\n{found}\n"
+        "\n"
+        "  Why (not a missing template, and not something this repo can patch):\n"
+        "    A web export has exactly one WebAssembly main module -- the module that\n"
+        "    owns runtime init, linear memory, and the JS glue the page boots. Godot's\n"
+        "    Emscripten build is that module; the .NET runtime is built to be that\n"
+        "    module too. Two runtimes, one slot. Godot reports this as\n"
+        "      export failed: cannot combine Mono runtime with the web platform\n"
+        "    Studio Foundation's WebGPU series changes what Godot DRAWS with, never\n"
+        "    what initializes the binary, so it does not affect this at all.\n"
+        "\n"
+        "  What to do instead (docs/adr/0019-compiled-gameplay-on-the-web.md):\n"
+        "    - Keep C# for desktop/mobile/server presets -- they are unaffected.\n"
+        "    - For the browser, move the logic C# was carrying into the deterministic\n"
+        "      sim kernel (services/sim-kernel): compiled Rust, one shared rule set for\n"
+        "      client and server, verified identical across hosts by `just sim-parity`.\n"
+        "      It compiles to a zero-import reactor module, so it needs no main-module\n"
+        "      slot and loads from inside a Godot web export. `just sim-host-abi`\n"
+        "      enforces that.\n"
+        "    - Keep the Godot client itself in GDScript (ADR 0003), with StudioSimKernel\n"
+        "      as its view onto the kernel's state.\n"
+        "    - Or export web with the WebGL 2 / WebGPU presets from a GDScript project\n"
+        "      and leave C# out of the browser target entirely."
+    )
+
+
 def git_describe() -> tuple[str, str]:
     sha = senv.run(["git", "rev-parse", "--short=12", "HEAD"]).stdout.strip() or "unknown"
     dirty = bool(senv.run(["git", "status", "--porcelain"]).stdout.strip())
@@ -228,6 +305,11 @@ def main() -> int:
     project = game_root / "project" if (game_root / "project").is_dir() else game_root
     if not (project / "project.godot").is_file():
         raise SystemExit(f"no project.godot under {game_root}")
+
+    dotnet_problem = dotnet_web_problem(project, args.preset)
+    if dotnet_problem:
+        print(f"CANNOT EXPORT '{args.preset}': {dotnet_problem}", file=sys.stderr)
+        return 3
 
     godot = senv.find_godot()
     if not godot:

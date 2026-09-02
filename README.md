@@ -366,6 +366,7 @@ to work here.
 | WebGPU shader coverage | 199 of 205 shader modules translate to valid WGSL offline, with **0 GLSL compile failures**, measured at the engine's real target env (Vulkan 1.1 / SPIR-V 1.3 — the harness previously measured 1.0 and so did not reproduce the engine; see patch 0016). **None of the 6 remaining failures blocks Forward+ under WebGPU**: two are Forward Mobile's subpass tonemap, one is FSR's 16-bit variant (the driver reports no half-float, so the engine picks the fallback, which translates), two are the subgroup variants WebGPU does not select, one is an editor debug gizmo |
 | Renderer ceiling | **Forward+ (clustered) renders on hardware** — verified in-browser on an NVIDIA Tesla P40 with the p0033 templates: 188 objects / 2,015,266 primitives at 59 fps, 0 invalid `commandEncoder.finish` out of 10,842, 0 rejected `queue.submit`, 0 bind-group failure classes. Forward Mobile remains an export option; WebGL 2 remains the fallback. Three validation errors outside the presented-frame path and the wider hardware matrix are the open work |
 | 3D render (lit + shadowed) | **Verified in-browser on an NVIDIA Tesla P40.** Patches 0013–0014 fix per-stage sampler visibility and depth-texture sampler types. A minimal PBR + shadow scene renders at 59–60 fps / 36 draws per frame, and a full game (The Chariot Club) holds a locked 60 fps at ~490–630 draws and ~23M primitives per frame — both with 0 `GPUValidationError` |
+| Compiled gameplay in the browser | `sim_kernel.wasm` imports nothing, so it instantiates inside a page whose main module is already Godot's — checked by `just sim-host-abi`, and replayed against golden state hashes in a real browser by `just sim-browser-host` (7 valid + 19 invalid conformance fixtures) |
 | Fallback | The same template project has an official WebGL 2 export preset |
 | Template behavior | Headless GDScript tests cover the shared addon and neutral starter project |
 | Optional services | Rust and Nakama components are independently tested and are not required for client-only use |
@@ -408,6 +409,45 @@ Measured WebGPU-vs-WebGL 2 performance (same scene, same GPU) and per-game rende
 verification live in
 [docs/architecture/webgpu-performance.md](docs/architecture/webgpu-performance.md).
 
+## C# on the web: what this does not fix, and what it does
+
+A recurring question from teams arriving here: *would this have made Godot viable
+for our C# client?* The honest answer has two halves, and the first is no.
+
+```
+export failed: cannot combine Mono runtime with the web platform
+```
+
+That error is not a missing template or a setting. A web export has exactly one
+WebAssembly **main module** — the module owning runtime init, linear memory, and
+the JS glue the page boots. Godot's Emscripten build is that module; the .NET
+runtime is built to be that module too. Two runtimes, one slot.
+
+**Nothing in this repository changes that.** The 33 patches change what Godot
+*draws with*; not one touches module loading. A .NET client hits the same wall
+here as on stock Godot, and a rendering fork mistaken for a runtime fix costs a
+team weeks. `just export-browser-webgl` on a `.csproj` project now refuses with
+that explanation rather than letting Godot deliver the cryptic version.
+
+The second half: the requirement underneath C# — gameplay rules that are typed,
+compiled, and *identical on client and server* — is met, by not entering the
+argument over the slot at all. `services/sim-kernel` compiles to a **zero-import
+reactor module**: it demands nothing of its host, so a running Godot web export
+loads it beside its own module without either noticing. Godot stays GDScript and
+observes kernel state through `StudioSimKernel`.
+
+That property is enforced, not asserted — one `println!` would add a WASI import
+and silently break it months later, in a browser, in someone else's product:
+
+```sh
+just sim-host-abi        # zero imports, exact reactor ABI, no start section
+just sim-parity          # Python == native Rust == wasm, over the frozen corpus
+just sim-browser-host    # the corpus replayed in a REAL browser, golden hashes
+```
+
+Full reasoning, and what this deliberately does not claim, in
+[ADR 0019](docs/adr/0019-compiled-gameplay-on-the-web.md).
+
 ## Included components
 
 - A neutral Godot 4.7.1 project template and reusable `studio_core` addon.
@@ -446,6 +486,7 @@ deployment.
 | `just export-browser-webgl [GAME]` | Export with official WebGL 2 templates |
 | `just export-browser-webgpu [GAME]` | Export with the locally built WebGPU templates |
 | `just run-browser-smoke` | Check browser boot, console output, canvas, and renderer |
+| `just sim-host-abi` / `sim-parity` / `sim-browser-host` | Check the deterministic kernel stays host-independent, and agrees across Python, Rust, node, and a browser |
 | `just ci-local` | Run the full local acceptance suite |
 
 Run `just` to list every supported command.
