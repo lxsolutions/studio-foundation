@@ -46,7 +46,10 @@ the payload schema or gameplay semantics.
 ## Architecture in one paragraph
 
 Official Godot 4.7.1 is the pinned editor and engine; projects use GDScript,
-with native extensions reserved for measured hotspots. Browser WebGPU templates
+with native extensions reserved for measured hotspots. Gameplay rules that must be
+compiled and identical on client and server live in the deterministic sim kernel,
+which reaches the browser as a zero-import WebAssembly module rather than
+contending for the main-module slot (ADR 0019). Browser WebGPU templates
 are built from official Godot plus a checksum-pinned patch series committed in
 `engine/patches/`; official WebGL 2 templates remain the fallback. Blender is
 the master asset source and exports deterministic glTF/GLB. Generic Rust

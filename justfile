@@ -114,6 +114,7 @@ test-python:
     uv run --project tools python -m unittest discover -s tools/verification/tests -p "test_*.py" -v
     uv run --project tools python -m unittest discover -s tools/worldc/tests -p "test_*.py" -v
     uv run --project tools python -m unittest discover -s tools/sim/tests -p "test_*.py" -v
+    uv run --project tools python -m unittest discover -s tools/godot/tests -p "test_*.py" -v
 
 # Cross-language protocol golden-fixture checks (Rust side runs in test-rust too)
 test-protocol:
@@ -274,6 +275,18 @@ sim-viewer:
     cd services && cargo build -p sim-kernel --release --target wasm32-unknown-unknown
     uv run --project tools python tools/sim-viewer/serve_config.py
     uv run --project tools python -m http.server 8077
+
+# The host-independence gate (ADR 0019): the kernel must import nothing, so any
+# runtime -- including a Godot web export that already owns the main-module slot
+# -- can instantiate it. Build the wasm first (`just sim-parity`).
+sim-host-abi:
+    uv run --project tools python tools/sim/host_abi.py services/target/wasm32-unknown-unknown/release/sim_kernel.wasm
+
+# The fourth parity host: replay the conformance corpus through a REAL browser,
+# via the same host script a Godot web export injects. Needs Chrome/Edge.
+sim-browser-host:
+    cd tests/browser && {{NPM}} ci
+    node tests/browser/sim-kernel-host.mjs
 
 # The renderer-observes-only adapter test (node, no DOM, no GPU)
 sim-viewer-test:
