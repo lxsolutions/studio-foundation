@@ -1,0 +1,16 @@
+{
+  "layout_version": 1,
+  "_comment": "Scene placement for the fortress battle. This is presentation data, not simulation state and not semantics: World IR says a hinge turns about its declared axis, the kernel says how far open it is, and this file says where each gate stands and which way each leaf was hung. Keeping the swing sign here is what stops a renderer from inventing it per frame.",
+  "instances": {
+    "gate_main": {
+      "entity": "fortress_gate",
+      "offset": [-2.2, 0, 0],
+      "parts": { "leaf_l": { "sign": -1 }, "leaf_r": { "sign": 1 } }
+    },
+    "gate_side": {
+      "entity": "fortress_gate",
+      "offset": [2.2, 0, 0],
+      "parts": { "leaf_l": { "sign": -1 }, "leaf_r": { "sign": 1 } }
+    }
+  }
+}

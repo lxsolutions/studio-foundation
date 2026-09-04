@@ -2,7 +2,8 @@
 
 glTF/GLB is the only interchange format here by design (ADR 0006): it carries
 meshes, skins, animation and PBR materials in one file that Godot, Unity,
-Unreal, three.js and Babylon all read natively.
+Unreal, three.js, Babylon and PlayCanvas all read natively. That shared
+boundary is what makes the rest of the toolkit engine-neutral (ADR 0020).
 
 The per-engine presets exist because the defaults are wrong for games in
 specific, silent ways — Y-up conversion, +Z forward, whether cameras and lights
@@ -18,6 +19,16 @@ from lib import mat as mat_lib
 from lib import mesh as mesh_lib
 from lib import scene as scene_lib
 from registry import OpError, op
+
+# Shared by every browser runtime (ADR 0020); see the note at "threejs" below.
+_WEB_RUNTIME = {
+    "export_yup": True,
+    "export_apply": True,
+    "export_cameras": True,
+    "export_lights": True,
+    "export_extras": True,
+    "export_tangents": False,
+}
 
 PRESETS = {
     "godot": {
@@ -44,14 +55,17 @@ PRESETS = {
         "export_extras": False,
         "export_tangents": True,
     },
-    "threejs": {
-        "export_yup": True,
-        "export_apply": True,
-        "export_cameras": True,
-        "export_lights": True,
-        "export_extras": True,
-        "export_tangents": False,
-    },
+    # The browser runtimes share one profile, and saying so in code is the
+    # point: three.js, Babylon and PlayCanvas all consume glTF the same way —
+    # they import cameras and lights, read `extras`, and derive tangents rather
+    # than needing them baked. Naming each one separately is not decoration. It
+    # lets a caller state which runtime it is targeting, so the day one of them
+    # needs something different (PlayCanvas Draco defaults, say) there is a
+    # place to put it that does not silently change the other two. A test pins
+    # that they are identical today, so the coincidence stays deliberate.
+    "threejs": dict(_WEB_RUNTIME),
+    "babylon": dict(_WEB_RUNTIME),
+    "playcanvas": dict(_WEB_RUNTIME),
     "raw": {
         "export_yup": True,
         "export_apply": False,

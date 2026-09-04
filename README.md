@@ -10,7 +10,7 @@ The pillars:
 
 - **bforge** — a deterministic headless-Blender asset forge for AI agents:
   138 whitelisted, typed operations with a quality gate that rejects output
-  below the bar, byte-identical regeneration, and 225 bforge tests, 178 in suites that start a real Blender daemon.
+  below the bar, byte-identical regeneration, and 228 bforge tests, 178 in suites that start a real Blender daemon.
 - **Verification** — GLB budget gates, pixel-diff captures, provenance, and
   render probes, so agent output is measured rather than trusted.
 - **Engine-neutral assets, standardized runtime** — the forge outputs portable
@@ -53,7 +53,7 @@ reproduction path. Other implementations may exist; this one you can audit.
 **🔨 A deterministic, quality-gated Blender forge for AI agents.**
 bforge is 138 typed, whitelisted operations driven into a persistent headless
 Blender daemon — LODs, collision, budgets, rigs, gaits, baking, validation —
-with byte-identical output run to run and 225 tests, 178 of them in suites that start a real Blender daemon.
+with byte-identical output run to run and 228 tests, 178 of them in suites that start a real Blender daemon.
 No GUI remote-control, no arbitrary code execution, no "same
 prompt, different mesh." We know of nothing else public that does all four of those.
 
@@ -145,7 +145,7 @@ it works identically on a laptop, in CI, and on a headless build box.
   measurement, silhouette scoring, shared-scale and supersampled inventory
   icons plus ground-anchored directional sprite sheets, impostor sheets for distant
   LOD, and concept-image → extruded-mesh with a silhouette-IoU fidelity score.
-- **225 tests, 178 of them in suites that start a real Blender daemon.** Schema,
+- **228 tests, 178 of them in suites that start a real Blender daemon.** Schema,
   MCP protocol, and per-op integration — including byte-determinism asserted
   on exports.
 
@@ -367,6 +367,7 @@ to work here.
 | Renderer ceiling | **Forward+ (clustered) renders on hardware** — verified in-browser on an NVIDIA Tesla P40 with the p0033 templates: 188 objects / 2,015,266 primitives at 59 fps, 0 invalid `commandEncoder.finish` out of 10,842, 0 rejected `queue.submit`, 0 bind-group failure classes. Forward Mobile remains an export option; WebGL 2 remains the fallback. Three validation errors outside the presented-frame path and the wider hardware matrix are the open work |
 | 3D render (lit + shadowed) | **Verified in-browser on an NVIDIA Tesla P40.** Patches 0013–0014 fix per-stage sampler visibility and depth-texture sampler types. A minimal PBR + shadow scene renders at 59–60 fps / 36 draws per frame, and a full game (The Chariot Club) holds a locked 60 fps at ~490–630 draws and ~23M primitives per frame — both with 0 `GPUValidationError` |
 | Compiled gameplay in the browser | `sim_kernel.wasm` imports nothing, so it instantiates inside a page whose main module is already Godot's — checked by `just sim-host-abi`, and replayed against golden state hashes in a real browser by `just sim-browser-host` (7 valid + 19 invalid conformance fixtures) |
+| Engine-neutral presentation | The same kernel replay drives three.js, Babylon.js and PlayCanvas through one binding in `shared/runtime/`; all three must place every joint identically on every tick, headless — `just runtime-conformance` |
 | Fallback | The same template project has an official WebGL 2 export preset |
 | Template behavior | Headless GDScript tests cover the shared addon and neutral starter project |
 | Optional services | Rust and Nakama components are independently tested and are not required for client-only use |
@@ -448,6 +449,46 @@ just sim-browser-host    # the corpus replayed in a REAL browser, golden hashes
 Full reasoning, and what this deliberately does not claim, in
 [ADR 0019](docs/adr/0019-compiled-gameplay-on-the-web.md).
 
+## Beyond Godot: what is actually engine-neutral
+
+Most of the engineering here is not Godot engineering. bforge exports glTF that
+Godot, Unity, Unreal, three.js, Babylon and PlayCanvas all read natively; the
+deterministic kernel is renderer-independent by construction; World IR describes
+what an entity *is* rather than what one engine calls it. Only the WebGPU patch
+series is genuinely engine-specific.
+
+That was also, until recently, unproven — and it mattered. The repository had one
+renderer binding, in an untested HTML file, and it was wrong: it looked joints up
+by instance name in a table keyed by part name, so the derived angle was always
+exactly `0` and the gate leaves never moved through a replay in which the kernel
+opens a gate from shut to fully open. The test covering it kept its only
+assertion inside a branch that never held, and passed for two months. The binding
+also rotated about **Y** while World IR declares the hinge axis as **Z**.
+
+So presentation is now a data translation that lives in `shared/runtime/` and
+holds no engine types — renderers apply instructions, they never derive them —
+and the neutrality claim is checked by running it on more than one engine:
+
+```sh
+just runtime-contract      # the contract itself, no engine installed
+just runtime-conformance   # three.js + Babylon + PlayCanvas on the same replay
+```
+
+The conformance suite drives the real kernel and requires all three renderers to
+place every joint in the same world position on every tick, and requires hinges
+to swing exactly when the kernel says their gate opened. All three run headless
+with no GPU. Both suites fail if the rotation is forced to zero — verified by
+mutation, not by inspection.
+
+**What this does not claim:** that a whole game runs on three renderers (this is
+the state-to-transform binding, not cameras, materials, input or physics); that
+one GLB imports identically everywhere (glTF is the declared boundary, but no
+test yet loads one asset into three engines); or that Unity, Unreal — or Godot —
+implement this contract. Godot binds kernel state through GDScript instead, so
+the reference client is currently the one engine outside the engine-neutral
+layer. Reasoning and the measured engine differences are in
+[ADR 0020](docs/adr/0020-engine-neutral-presentation.md).
+
 ## Included components
 
 - A neutral Godot 4.7.1 project template and reusable `studio_core` addon.
@@ -487,6 +528,7 @@ deployment.
 | `just export-browser-webgpu [GAME]` | Export with the locally built WebGPU templates |
 | `just run-browser-smoke` | Check browser boot, console output, canvas, and renderer |
 | `just sim-host-abi` / `sim-parity` / `sim-browser-host` | Check the deterministic kernel stays host-independent, and agrees across Python, Rust, node, and a browser |
+| `just runtime-contract` / `runtime-conformance` | Check the presentation binding, and that three renderers agree about it |
 | `just ci-local` | Run the full local acceptance suite |
 
 Run `just` to list every supported command.

@@ -1,32 +1,35 @@
 // sim-viewer adapter — the renderer's only window into the simulation.
 //
 // The kernel produces per-tick world snapshots; this module maps them to
-// presentation frames. It runs identically in the browser (rendering with
-// Babylon.js) and in node (test), and it has NO way to write simulation
-// state — observation only.
+// presentation frames. It runs identically in the browser and in node (test),
+// and it has NO way to write simulation state — observation only.
 //
 // Frame shape:
-//   { tick, entities: { name: { openness, angleDeg, blocked, destroyed, locked, health } } }
+//   { tick, entities: { name: { openness, blocked, destroyed, locked, health } } }
+//
+// Frames carry simulation STATE and nothing else. They used to also carry an
+// `angleDeg`, derived here from World IR joints — which never once worked: the
+// joint table was keyed by part ("leaf_l") and looked up by instance
+// ("gate_main"), so the lookup missed on every entity and the angle was always
+// exactly 0. The gate leaves in the viewer never moved, and the test that meant
+// to cover it kept its only assertion inside `if (joint)`, which never held.
+//
+// Geometry now lives in shared/runtime/scene_binding.mjs, where the rotation
+// axis is read from World IR rather than chosen by a renderer, and where three
+// engines are held to the same answer (ADR 0020).
 
-/** Derive presentation frames from kernel snapshots and World IR joint data. */
-export function framesFromSnapshots(snapshots, joints = {}, navThresholdMilli = 700) {
+/** Derive presentation frames from kernel snapshots. State only, no geometry. */
+export function framesFromSnapshots(snapshots, navThresholdMilli = 700) {
   return snapshots.map((world, tick) => {
     const entities = {};
     for (const [name, entry] of Object.entries(world)) {
       const state = entry.state ?? {};
       const openness = state.openness ?? 0;
-      let angleDeg = 0;
-      const joint = joints[name];
-      if (joint) {
-        const [minDeg, maxDeg] = joint.range_degrees ?? [0, 110];
-        angleDeg = minDeg + (openness / 1000) * (maxDeg - minDeg);
-      }
       const destroyed = state.destroyed ?? false;
-      const blocked = destroyed ? false : openness < navThresholdMilli;
       entities[name] = {
         openness,
-        angleDeg,
-        blocked,
+        // Navigation is derived from the snapshot, never from a parallel truth.
+        blocked: destroyed ? false : openness < navThresholdMilli,
         destroyed,
         locked: state.locked ?? false,
         health: state.health ?? 0,
@@ -34,17 +37,6 @@ export function framesFromSnapshots(snapshots, joints = {}, navThresholdMilli = 
     }
     return { tick, entities };
   });
-}
-
-/** Pull joint metadata (presentation-only) out of World IR entity docs. */
-export function jointsFromEntityDocs(docs) {
-  const joints = {};
-  for (const [, doc] of Object.entries(docs)) {
-    for (const [, joint] of Object.entries(doc.joints ?? {})) {
-      joints[joint.child] = joint;
-    }
-  }
-  return joints;
 }
 
 /** Run a replay through the wasm kernel and return the parsed result. */

@@ -157,3 +157,60 @@ class Dialects(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class EngineCoverage(unittest.TestCase):
+    """glTF is the boundary that makes the toolkit engine-neutral (ADR 0020).
+
+    These read the committed catalog rather than the runtime module, because the
+    catalog is what an agent actually discovers: an engine that exists in
+    `PRESETS` but never reached `catalog.json` is invisible to every caller, and
+    the runtime rejects any value the published schema did not advertise.
+    """
+
+    RUNTIMES = ("godot", "unity", "unreal", "threejs", "babylon", "playcanvas")
+    EXPORT_OPS = ("export.gltf", "export.asset")
+
+    def setUp(self):
+        self.ops = {op["name"]: op for op in schema_mod.load_catalog()}
+
+    def _engine_enum(self, op_name: str) -> list[str]:
+        self.assertIn(op_name, self.ops, f"{op_name} is missing from the catalog")
+        engine = self.ops[op_name]["inputSchema"]["properties"].get("engine")
+        self.assertIsNotNone(engine, f"{op_name} has no engine parameter")
+        return engine["enum"]
+
+    def test_every_named_runtime_is_offered_by_every_export_op(self):
+        for op_name in self.EXPORT_OPS:
+            enum = self._engine_enum(op_name)
+            for runtime in self.RUNTIMES:
+                with self.subTest(op=op_name, runtime=runtime):
+                    self.assertIn(
+                        runtime,
+                        enum,
+                        f"{op_name} cannot target {runtime}; ADR 0020 names it a supported runtime",
+                    )
+
+    def test_the_export_ops_offer_the_same_engines(self):
+        """A preset reachable from one op and not the other is a trap."""
+        enums = {name: self._engine_enum(name) for name in self.EXPORT_OPS}
+        self.assertEqual(*enums.values(), f"engine enums diverged: {enums}")
+
+    def test_the_browser_runtimes_share_one_profile(self):
+        """three.js, Babylon and PlayCanvas coincide today — deliberately.
+
+        The presets are named separately so a caller can state intent and so a
+        future divergence has somewhere to live. This pins that they have not
+        drifted apart by accident in the meantime.
+        """
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "runtime" / "ops"))
+        source = (Path(__file__).resolve().parents[1] / "runtime" / "ops" / "export.py").read_text(
+            encoding="utf-8"
+        )
+        for runtime in ("threejs", "babylon", "playcanvas"):
+            self.assertIn(
+                f'"{runtime}": dict(_WEB_RUNTIME)',
+                source,
+                f"{runtime} no longer shares the web profile — if that is intended, "
+                "spell out the difference here and update this test",
+            )
