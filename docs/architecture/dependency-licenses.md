@@ -91,6 +91,23 @@ verified; hosted jobs may adopt them independently.
 |---|---|---|---|
 | Playwright (npm, no bundled browsers) | 1.x pinned in tests/browser/package.json | Apache-2.0 | Drives installed Chrome/Edge via `channel`; Firefox download optional |
 
+## Cross-engine conformance (tests/runtime, dev-only)
+
+Three renderers are installed *as test subjects*, not as runtime dependencies:
+ADR 0020 claims the presentation layer is engine-neutral, and the only way to
+check that is to run it on more than one engine. Nothing in `shared/` or any
+shipped artifact imports them — the adapters take the engine module as an
+argument — and the suite skips cleanly when they are absent. Alternatives
+considered: asserting neutrality in prose (what the repository did before, and
+the binding was silently inert for two months), or a single engine (proves
+nothing about neutrality).
+
+| Component | Pin | License | Notes |
+|---|---|---|---|
+| three.js | ^0.182 in tests/runtime/package.json | MIT | Reference renderer for conformance; scene graph only, no WebGL context |
+| Babylon.js | ^9.25 in tests/runtime/package.json | Apache-2.0 | `NullEngine` gives a headless device; the UMD package exports through ESM `default` |
+| PlayCanvas | ^2.22 in tests/runtime/package.json | MIT | `GraphNode` works with no Application or graphics device |
+
 ## Explicitly rejected (with reasons)
 
 - **MinIO** — AGPL relicense + community build feature removal (2025); replaced by "no

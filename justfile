@@ -276,6 +276,17 @@ sim-viewer:
     uv run --project tools python tools/sim-viewer/serve_config.py
     uv run --project tools python -m http.server 8077
 
+# The engine-neutral presentation contract (ADR 0020), with no engine installed.
+# This is the suite that fails first when the contract itself is wrong.
+runtime-contract:
+    node tests/runtime/scene_binding_test.mjs
+
+# Cross-engine conformance: the same kernel replay drives three.js, Babylon and
+# PlayCanvas, and all three must place every joint identically. Headless, no GPU.
+runtime-conformance:
+    cd tests/runtime && {{NPM}} ci
+    node tests/runtime/cross_engine.mjs
+
 # The host-independence gate (ADR 0019): the kernel must import nothing, so any
 # runtime -- including a Godot web export that already owns the main-module slot
 # -- can instantiate it. Build the wasm first (`just sim-parity`).

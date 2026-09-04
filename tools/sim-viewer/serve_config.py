@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Write tools/sim-viewer/config.json after compiling the fortress world.
 
-The viewer page fetches this to know which kernel, replay, entity doc, and
-forged GLB to observe. Run via `just sim-viewer`.
+The viewer page fetches this to know which kernel, replay, entity doc, scene
+layout, and forged GLB to observe. Run via `just sim-viewer`.
 """
 
 from __future__ import annotations
@@ -27,6 +27,11 @@ def main() -> int:
         "wasm": "/services/target/wasm32-unknown-unknown/release/sim_kernel.wasm",
         "replay": "/tools/worldc/examples/fortress_battle.json",
         "entityDoc": "/tools/worldc/examples/fortress_gate.json",
+        # The entity name the layout refers to, and the placement itself. Scene
+        # placement is data, not renderer code: it is what stops a viewer from
+        # inventing which way a leaf swings (ADR 0020).
+        "entityName": "fortress_gate",
+        "layout": "/tools/sim-viewer/fortress_layout.json",
         "glbDir": "/" + glb.parent.relative_to(REPO).as_posix() + "/",
         "glb": glb.name,
     }

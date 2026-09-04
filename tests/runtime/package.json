@@ -1,0 +1,15 @@
+{
+  "name": "studio-runtime-conformance",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Cross-engine conformance for the neutral scene-binding contract (ADR 0020). Headless: no GPU, no display.",
+  "type": "module",
+  "scripts": {
+    "test": "node cross_engine.mjs"
+  },
+  "devDependencies": {
+    "babylonjs": "^9.25.0",
+    "playcanvas": "^2.22.0",
+    "three": "^0.182.0"
+  }
+}

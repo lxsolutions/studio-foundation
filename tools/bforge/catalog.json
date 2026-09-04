@@ -3345,6 +3345,8 @@
               "unity",
               "unreal",
               "threejs",
+              "babylon",
+              "playcanvas",
               "raw"
             ],
             "description": "Target engine preset",
@@ -3460,6 +3462,8 @@
               "unity",
               "unreal",
               "threejs",
+              "babylon",
+              "playcanvas",
               "raw"
             ],
             "description": "Target engine preset",

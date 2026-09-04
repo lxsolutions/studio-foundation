@@ -760,7 +760,7 @@ One call: save the .blend master, export the GLB, write the .meta.json sidecar a
 | `asset_id` | string | None | snake_case asset identifier — names every output file |
 | `out_dir` | string | '' | Directory for the outputs (defaults to the session output dir) |
 | `objects` | array | [] | Objects to export (empty = whole scene) |
-| `engine` | godot \| unity \| unreal \| threejs \| raw | 'godot' | Target engine preset |
+| `engine` | godot \| unity \| unreal \| threejs \| babylon \| playcanvas \| raw | 'godot' | Target engine preset |
 | `category` | prop \| character \| environment \| weapon \| architecture \| vfx \| ui | 'prop' | Asset category |
 | `ai_prompt` | string | '' | What the asset was asked for — recorded in provenance |
 | `contact_sheet` | boolean | True | Also render a review contact sheet |
@@ -786,7 +786,7 @@ Export to GLB/glTF with an engine-specific preset. Checks for the things that si
 | --- | --- | --- | --- |
 | `out` | string | 'asset.glb' | Output path (.glb binary or .gltf text) |
 | `objects` | array | [] | Objects to export (empty = whole scene) |
-| `engine` | godot \| unity \| unreal \| threejs \| raw | 'godot' | Target engine preset |
+| `engine` | godot \| unity \| unreal \| threejs \| babylon \| playcanvas \| raw | 'godot' | Target engine preset |
 | `format` | glb \| gltf | 'glb' | Binary GLB (one file) or text glTF (separate assets) |
 | `animations` | boolean | True | Include armature actions |
 | `draco` | boolean | False | Draco mesh compression — smaller files, slower load, not all importers support it |
