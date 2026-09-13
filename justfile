@@ -249,6 +249,12 @@ worldc-compile:
 worldc-world:
     uv run --project tools python tools/worldc/worldc.py compile-world "{{WORLD}}"
 
+# Prove a world's declared design properties (reachable / never / live) over
+# the kernel's own state space; no geometry compile, witnesses re-run through
+# the kernel (ADR 0022). Add --out DIR to keep the witness replays.
+worldc-prove:
+    uv run --project tools python tools/worldc/worldc.py prove "{{WORLD}}"
+
 # Run a deterministic replay (spec: docs/specs/sim-replay-v0.1.md); exits non-zero on golden mismatch.
 #   just REPLAY=tools/sim/replays/gate_open_destroy.json sim-replay
 sim-replay:

@@ -152,3 +152,50 @@ battle: two gate instances from one entity document; the scenario unlocks,
 opens, and destroys the main gate while the side gate stays locked, and the
 world proof asserts `gate_main` no longer blocks navigation while `gate_side`
 still does.
+
+## Properties (v0.1, landed)
+
+A world document may declare **design properties**, and `worldc` proves them
+over the kernel's own reachable state space ([ADR 0022](../adr/0022-design-properties-are-proven.md)):
+
+```json
+"properties": {
+  "horizon": 24,              // ticks explored, default 32, max 1000
+  "budget": 100000,           // states explored, default 100000
+  "amounts": [40],            // extra amounts tried for every `count` verb
+  "assert": [
+    {"name": "...", "kind": "reachable" | "never" | "live",
+     "when": [{"entity": "gate_main", "var": "openness", "equals": 1000},
+              {"entity": "gate_side", "control": "openness_target", "equals": 0}]}
+  ]
+}
+```
+
+- `reachable`: some schedule from the scenario's initial state reaches a
+  state where every clause holds. `never`: no reachable state does. `live`:
+  from every reachable state such a state is still reachable (no soft-lock).
+- A clause reads a state `var` or a `control` of one entity and carries
+  exactly one of `equals` / `gt` / `lt` / `exists`, typed like a kernel guard
+  (`equals` compares like with like, ordering is integers only, `exists` is a
+  bool). Unknown keys, unknown entities, undeclared vars and duplicate names
+  are hard errors.
+- Verdicts are `holds`, `violated` or `inconclusive` (budget spent), each with
+  the bound it was reached under: `exhaustive`, `horizon` or `budget`. The
+  search schedules at most one event per tick and tries, for a `count` verb,
+  the amounts its semantics compare or clamp against, the parameters it reads,
+  the world's `amounts`, and 65535 — and reports what it tried.
+- A witness (for a `reachable` that holds, a `never` or `live` that is
+  violated) is an ordinary `sim_replay` written beside the world proof as
+  `witness-NN-<name>.json`, pinned by `contract_sha256` and
+  `expect_state_hash`, and re-run through the kernel before it is reported
+  (`verified`). A property true in the initial state has an empty witness.
+
+`worldc prove WORLD` checks properties without compiling geometry;
+`compile-world` runs the same prover and a `violated` or `inconclusive`
+property breaks the world contract. The capsule records
+`properties.explored` (states, depth, bound, amounts) and
+`properties.results`. The examples: `fortress_world.json` (a gate can be
+opened, destroyed, both gates open at once, a broken gate is never told to
+shut, the main gate can always still be opened) and `depot_world.json` (a
+lift reaches the top deck, never moves unpowered, can always still reach it;
+a lever can be pulled three times and can always be freed).

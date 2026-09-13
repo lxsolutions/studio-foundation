@@ -3,12 +3,86 @@
   "world": "fortress",
   "brief": "a fortress with a main gate and a side gate; the battle scenario must breach the main gate while the side gate holds",
   "entities": {
-    "gate_main": { "doc": "fortress_gate.json" },
-    "gate_side": { "doc": "fortress_gate.json" }
+    "gate_main": {
+      "doc": "fortress_gate.json"
+    },
+    "gate_side": {
+      "doc": "fortress_gate.json"
+    }
   },
   "scenario": "fortress_battle.json",
   "expect_navigation": {
     "gate_main": false,
     "gate_side": true
+  },
+  "properties": {
+    "horizon": 24,
+    "assert": [
+      {
+        "name": "the main gate can be opened fully",
+        "kind": "reachable",
+        "when": [
+          {
+            "entity": "gate_main",
+            "var": "openness",
+            "equals": 1000
+          }
+        ]
+      },
+      {
+        "name": "the main gate can be destroyed",
+        "kind": "reachable",
+        "when": [
+          {
+            "entity": "gate_main",
+            "var": "destroyed",
+            "equals": true
+          }
+        ]
+      },
+      {
+        "name": "both gates can stand open at once",
+        "kind": "reachable",
+        "when": [
+          {
+            "entity": "gate_main",
+            "var": "openness",
+            "equals": 1000
+          },
+          {
+            "entity": "gate_side",
+            "var": "openness",
+            "equals": 1000
+          }
+        ]
+      },
+      {
+        "name": "a broken gate is never told to shut",
+        "kind": "never",
+        "when": [
+          {
+            "entity": "gate_side",
+            "var": "destroyed",
+            "equals": true
+          },
+          {
+            "entity": "gate_side",
+            "control": "openness_target",
+            "equals": 0
+          }
+        ]
+      },
+      {
+        "name": "the main gate can always still be opened fully",
+        "kind": "live",
+        "when": [
+          {
+            "entity": "gate_main",
+            "var": "openness",
+            "equals": 1000
+          }
+        ]
+      }
+    ]
   }
 }

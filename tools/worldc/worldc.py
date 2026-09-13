@@ -38,6 +38,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # glb.py
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "bforge"))  # bforge
 
 import glb as glb_mod  # noqa: E402
+import prover as prover_mod  # noqa: E402
 
 from bforge import recipe as recipe_mod  # noqa: E402
 
@@ -224,6 +225,7 @@ def worldc_fingerprint() -> dict:
     return {
         "worldc_sha256": _sha(WORLDC_ROOT / "worldc.py"),
         "glb_reader_sha256": _sha(WORLDC_ROOT / "glb.py"),
+        "prover_sha256": _sha(WORLDC_ROOT / "prover.py"),
         "world_ir_spec_sha256": _sha(SPEC_PATH) if SPEC_PATH.is_file() else None,
         "python": platform.python_version(),
     }
@@ -562,6 +564,7 @@ WORLD_KEYS = {
     "entities",
     "scenario",
     "expect_navigation",
+    "properties",  # design properties the prover checks (ADR 0022)
     "extensions",
 }
 
@@ -598,6 +601,10 @@ def load_world(path: Path) -> dict:
         k not in entities or not isinstance(v, bool) for k, v in expect_nav.items()
     ):
         raise WorldIRError(f"{source}: expect_navigation maps entity names to booleans")
+    if "properties" in doc and not isinstance(doc["properties"], dict):
+        raise WorldIRError(
+            f"{source}: properties must be an object (see docs/specs/world-ir-v0.1.md)"
+        )
     return doc
 
 
@@ -637,8 +644,10 @@ def compile_world(
             f"{world_path}: scenario entities {sorted(replay_entities)} do not match "
             f"the world's {sorted(doc['entities'])}"
         )
+    contracts: dict[str, dict] = {}
     for name, rent in replay_entities.items():
         compiled = sim_contract(entity_docs[name], source=str(world_path))
+        contracts[name] = compiled
         compiled_sha = hashlib.sha256(recipe_mod.canonicalize(compiled)).hexdigest()
         inline_sha = hashlib.sha256(recipe_mod.canonicalize(rent["contract"])).hexdigest()
         if inline_sha != compiled_sha or rent["contract_sha256"] != compiled_sha:
@@ -669,7 +678,6 @@ def compile_world(
                 "detail": f"blocks_navigation == {actual}",
             }
         )
-    failures = [c["check"] for c in checks if not c["ok"]]
 
     # 5. one world proof capsule
     replay_sha = hashlib.sha256(recipe_mod.canonicalize(replay)).hexdigest()
@@ -694,6 +702,37 @@ def compile_world(
         proof_file = Path(proof["cache"]["dir"]) / "entity_proof.json"
         entity_refs[name]["entity_proof_uri"] = os.path.relpath(proof_file, start=world_dir)
 
+    staging = world_cache / "staging" / f"{key}.{os.getpid()}.{secrets.token_hex(4)}"
+    staging.mkdir(parents=True, exist_ok=False)
+
+    # 6. design properties (ADR 0022): explore the world's possibility space
+    #    from the scenario's initial state and hold every declared property to
+    #    it. Witness replays land beside the proof and are re-run through the
+    #    kernel before they are believed. A violated or inconclusive property
+    #    breaks the world contract like any other failed check.
+    properties = None
+    if doc.get("properties"):
+        try:
+            properties = prover_mod.prove(
+                doc["properties"],
+                contracts,
+                replay.get("initial", {}),
+                source=str(world_path),
+                witness_dir=staging,
+            )
+        except prover_mod.ProofError as exc:
+            shutil.rmtree(staging, ignore_errors=True)
+            raise WorldIRError(str(exc)) from exc
+        for verdict in properties["results"]:
+            checks.append(
+                {
+                    "check": f"property ({verdict['kind']}): {verdict['name']}",
+                    "ok": verdict["status"] == "holds",
+                    "detail": f"{verdict['status']} — {verdict['detail']}",
+                }
+            )
+    failures = [c["check"] for c in checks if not c["ok"]]
+
     proof = {
         "proof_version": PROOF_VERSION,
         "schema": WORLD_SCHEMA,
@@ -708,12 +747,11 @@ def compile_world(
             "fingerprints": result["fingerprints"],
         },
         "worldc_compiler": envelope["worldc_compiler"],
+        "properties": properties,
         "checks": checks,
         "status": "pass" if not failures else "fail",
     }
 
-    staging = world_cache / "staging" / f"{key}.{os.getpid()}.{secrets.token_hex(4)}"
-    staging.mkdir(parents=True, exist_ok=False)
     (staging / "world_proof.json").write_text(json.dumps(proof, indent=2) + "\n", encoding="utf-8")
     if failures:
         failure_dir = (
@@ -732,6 +770,43 @@ def compile_world(
             shutil.rmtree(staging)
     proof["cache"] = {"hit": False, "dir": str(world_dir)}
     return proof
+
+
+def prove_world(world_path, out_dir: Path | None = None) -> dict:
+    """Check a world's declared properties without compiling its geometry.
+
+    Same contracts `compile-world` would bind, same initial state (the
+    scenario's), same prover — minus bforge, so a designer gets an answer in
+    seconds. Witness replays go to `out_dir` when given, otherwise to a
+    scratch directory that is discarded after the kernel has verified them.
+    """
+    world_path = Path(world_path).resolve()
+    doc = load_world(world_path)
+    if not doc.get("properties"):
+        raise WorldIRError(f"{world_path}: the world declares no properties to prove")
+    contracts = {
+        name: sim_contract(
+            load_entity((world_path.parent / entry["doc"]).resolve()), source=str(world_path)
+        )
+        for name, entry in doc["entities"].items()
+    }
+    sim_mod = _sim_kernel()
+    replay = sim_mod.load_replay((world_path.parent / doc["scenario"]).resolve())
+    if set(replay.get("entities", {})) != set(doc["entities"]):
+        raise WorldIRError(f"{world_path}: scenario entities do not match the world's")
+    try:
+        if out_dir is not None:
+            out_dir = Path(out_dir)
+            out_dir.mkdir(parents=True, exist_ok=True)
+            return prover_mod.prove(
+                doc["properties"], contracts, replay.get("initial", {}), str(world_path), out_dir
+            )
+        with tempfile.TemporaryDirectory(prefix="worldc_prove_") as tmp:
+            return prover_mod.prove(
+                doc["properties"], contracts, replay.get("initial", {}), str(world_path), Path(tmp)
+            )
+    except prover_mod.ProofError as exc:
+        raise WorldIRError(str(exc)) from exc
 
 
 def _sim_kernel():
@@ -754,9 +829,19 @@ def main(argv=None) -> int:
     world.add_argument("file")
     world.add_argument("--cache-dir", default=None)
     world.add_argument("--no-cache", action="store_true")
+    prove = sub.add_parser(
+        "prove", help="Check a world's declared design properties (no geometry compile)"
+    )
+    prove.add_argument("file")
+    prove.add_argument("--out", default=None, help="directory to keep witness replays in")
+    prove.add_argument("--json", action="store_true", help="print the results block as JSON")
     args = parser.parse_args(argv)
 
     try:
+        if args.command == "prove":
+            report = prove_world(args.file, out_dir=args.out)
+            print(json.dumps(report, indent=2) if args.json else prover_mod.render(report))
+            return 0 if all(r["status"] == "holds" for r in report["results"]) else 1
         if args.command == "compile-world":
             proof = compile_world(
                 args.file,

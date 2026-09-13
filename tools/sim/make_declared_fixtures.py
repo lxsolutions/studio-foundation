@@ -288,6 +288,21 @@ def main() -> None:
             ],
         },
     )
+    # The same replay is the depot world's scenario (tools/worldc/examples), so
+    # the world binds exactly the contracts the fixture proves.
+    lift_and_lever = json.loads(
+        (CORPUS / "valid" / "declared_semantics_lift_and_lever.json").read_text(encoding="utf-8")
+    )
+    lift_and_lever.pop("expect")
+    lift_and_lever["comment"] = (
+        "the depot shift: the lift is charged and sent up, the lever is worked through a jam, "
+        "and the lift is brought back down"
+    )
+    (EXAMPLES / "depot_shift.json").write_text(
+        json.dumps(lift_and_lever, indent=2) + "\n", encoding="utf-8"
+    )
+    print("wrote tools/worldc/examples/depot_shift.json")
+
     write_valid(
         "declared_semantics_saturates_at_i64",
         {

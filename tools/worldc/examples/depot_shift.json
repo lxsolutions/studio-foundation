@@ -1,0 +1,265 @@
+{
+  "sim_replay": "0.1",
+  "seed": 0,
+  "ticks": 14,
+  "entities": {
+    "cargo_lift": {
+      "contract": {
+        "sim_contract": "0.2",
+        "source_world_ir_sha256": "ce60e6e5e539f2450a520908c8b35226393df59b57920070b5bf6191e5e01ceb",
+        "entity": "cargo_lift",
+        "state": {
+          "height": {
+            "storage": "milli_i64"
+          },
+          "power": {
+            "storage": "i64"
+          }
+        },
+        "affordances": [
+          "call_top",
+          "call_bottom",
+          "charge"
+        ],
+        "parameters": {
+          "open_rate_milli": 250,
+          "max_health": 100,
+          "lift_rate_milli": 200,
+          "max_power": 60,
+          "navigation": {
+            "blocks_below": [],
+            "never_blocks_when_destroyed": false
+          }
+        },
+        "semantics": {
+          "affordances": {
+            "call_top": {
+              "arg": "none",
+              "guards": [
+                {
+                  "var": "power",
+                  "gt": 0
+                }
+              ],
+              "effects": [
+                {
+                  "op": "set_control",
+                  "control": "height_target",
+                  "value": {
+                    "const": 1000
+                  }
+                }
+              ]
+            },
+            "call_bottom": {
+              "arg": "none",
+              "guards": [
+                {
+                  "var": "power",
+                  "gt": 0
+                }
+              ],
+              "effects": [
+                {
+                  "op": "set_control",
+                  "control": "height_target",
+                  "value": {
+                    "const": 0
+                  }
+                }
+              ]
+            },
+            "charge": {
+              "arg": "count",
+              "requires": [
+                "power"
+              ],
+              "effects": [
+                {
+                  "op": "add",
+                  "var": "power",
+                  "value": {
+                    "arg": true
+                  },
+                  "sign": 1,
+                  "clamp": {
+                    "max": {
+                      "param": "max_power",
+                      "default": 60
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "integrators": [
+            {
+              "var": "height",
+              "toward": "height_target",
+              "rate": {
+                "param": "lift_rate_milli",
+                "default": 200
+              }
+            }
+          ]
+        }
+      },
+      "contract_sha256": "faacc166bd50fcb87184857797c4b35aff16af2f5ecb9a1e2c5647d435120a8a"
+    },
+    "signal_lever": {
+      "contract": {
+        "sim_contract": "0.2",
+        "source_world_ir_sha256": "7b708b07854805fbdfb1d245878c47541ed58c8bcd8490e07a210f305da5d093",
+        "entity": "signal_lever",
+        "state": {
+          "on": {
+            "storage": "bool"
+          },
+          "pulls": {
+            "storage": "i64"
+          },
+          "jammed": {
+            "storage": "bool"
+          }
+        },
+        "affordances": [
+          "pull",
+          "jam",
+          "free"
+        ],
+        "parameters": {
+          "open_rate_milli": 250,
+          "max_health": 100,
+          "navigation": {
+            "blocks_below": [],
+            "never_blocks_when_destroyed": false
+          }
+        },
+        "semantics": {
+          "affordances": {
+            "pull": {
+              "arg": "none",
+              "guards": [
+                {
+                  "var": "jammed",
+                  "equals": false
+                }
+              ],
+              "effects": [
+                {
+                  "op": "toggle",
+                  "var": "on"
+                },
+                {
+                  "op": "add",
+                  "var": "pulls",
+                  "value": 1,
+                  "sign": 1
+                }
+              ]
+            },
+            "jam": {
+              "arg": "none",
+              "effects": [
+                {
+                  "op": "set",
+                  "var": "jammed",
+                  "value": true
+                }
+              ]
+            },
+            "free": {
+              "arg": "none",
+              "effects": [
+                {
+                  "op": "set",
+                  "var": "jammed",
+                  "value": false
+                }
+              ]
+            }
+          },
+          "integrators": []
+        }
+      },
+      "contract_sha256": "5fedb0ed19043bb4f75fdbe62db9cc3dc28b8e30930a0675352303d15e3d6413"
+    }
+  },
+  "initial": {
+    "cargo_lift": {
+      "power": 0
+    },
+    "signal_lever": {
+      "on": false
+    }
+  },
+  "events": [
+    [
+      0,
+      "cargo_lift",
+      "call_top",
+      null
+    ],
+    [
+      1,
+      "cargo_lift",
+      "charge",
+      25
+    ],
+    [
+      2,
+      "cargo_lift",
+      "call_top",
+      null
+    ],
+    [
+      3,
+      "signal_lever",
+      "pull",
+      null
+    ],
+    [
+      4,
+      "signal_lever",
+      "pull",
+      null
+    ],
+    [
+      5,
+      "signal_lever",
+      "jam",
+      null
+    ],
+    [
+      6,
+      "signal_lever",
+      "pull",
+      null
+    ],
+    [
+      7,
+      "signal_lever",
+      "free",
+      null
+    ],
+    [
+      8,
+      "signal_lever",
+      "pull",
+      null
+    ],
+    [
+      9,
+      "cargo_lift",
+      "charge",
+      999
+    ],
+    [
+      12,
+      "cargo_lift",
+      "call_bottom",
+      null
+    ]
+  ],
+  "comment": "the depot shift: the lift is charged and sent up, the lever is worked through a jam, and the lift is brought back down"
+}
