@@ -30,10 +30,28 @@ import { createThreeAdapter } from "../../shared/runtime/adapters/three_adapter.
 
 const REPO = path.resolve(new URL("../../", import.meta.url).pathname);
 const WASM = path.join(REPO, "services/target/wasm32-unknown-unknown/release/sim_kernel.wasm");
-const REPLAY = path.join(REPO, "tools/worldc/examples/fortress_battle.json");
-const ENTITY_DOC = path.join(REPO, "tools/worldc/examples/fortress_gate.json");
-const LAYOUT = path.join(REPO, "tools/sim-viewer/fortress_layout.json");
 const REQUIRE_ENGINES = Boolean(process.env.RUNTIME_REQUIRE_ENGINES);
+
+// Two worlds, so the suite is held to more than the door it was written for
+// (ADR 0023): the fortress (hinges driven by openness) and the depot (a slider
+// driven by a float height, a hinge driven by a bool).
+const WORLDS = [
+  {
+    name: "fortress",
+    replay: "tools/worldc/examples/fortress_battle.json",
+    docs: { fortress_gate: "tools/worldc/examples/fortress_gate.json" },
+    layout: "tools/sim-viewer/fortress_layout.json",
+  },
+  {
+    name: "depot",
+    replay: "tools/worldc/examples/depot_shift.json",
+    docs: {
+      cargo_lift: "tools/worldc/examples/cargo_lift.json",
+      signal_lever: "tools/worldc/examples/signal_lever.json",
+    },
+    layout: "tools/sim-viewer/depot_layout.json",
+  },
+];
 
 // A point off the rotation axis, so any disagreement about axis, sign, units or
 // handedness moves it. Probing the origin would agree no matter what.
@@ -53,7 +71,7 @@ const check = (ok, what) => {
   return ok;
 };
 
-async function loadAdapters() {
+async function loadEngines() {
   // The engine packages are resolved HERE, from tests/runtime/node_modules.
   // Node resolves bare specifiers relative to the importing file, so an import
   // inside shared/ would look next to shared/ and never find them — which is
@@ -65,60 +83,56 @@ async function loadAdapters() {
     ["babylon.js", async () => (await import("babylonjs")).default, createBabylonAdapter],
     ["playcanvas", () => import("playcanvas"), createPlayCanvasAdapter],
   ];
-  const adapters = [];
+  const engines = [];
   const missing = [];
   for (const [name, load, factory] of wanted) {
     try {
-      adapters.push(factory(await load()));
+      const module = await load();
+      engines.push(() => factory(module)); // a fresh adapter per world
     } catch (error) {
       missing.push(`${name} (${error.message.split("\n")[0]})`);
     }
   }
-  return { adapters, missing };
+  return { engines, missing };
 }
 
-async function main() {
-  let wasmBytes;
-  try {
-    wasmBytes = readFileSync(WASM);
-  } catch {
-    console.error(`sim_kernel.wasm not found at ${WASM}\nBuild it: just sim-parity`);
-    return 2;
+/** Per joint node: did its drive var ever change over the replay? */
+function driveChanged(frames, model) {
+  const changed = {};
+  for (const instance of Object.values(model.instances)) {
+    for (const joint of instance.joints) {
+      const instanceName = joint.node.split("/")[0];
+      const seen = new Set(frames.map((f) => JSON.stringify(f.entities[instanceName]?.[joint.drive.var])));
+      changed[joint.node] = { var: joint.drive.var, changed: seen.size > 1 };
+    }
   }
+  return changed;
+}
 
-  const { adapters, missing } = await loadAdapters();
-  if (missing.length && REQUIRE_ENGINES) {
-    console.error(`RUNTIME_REQUIRE_ENGINES=1 but engines are unavailable:\n  ${missing.join("\n  ")}`);
-    return 1;
-  }
-  if (adapters.length < 2) {
-    console.log(
-      `SKIP: cross-engine conformance needs at least two engines; missing ${missing.join(", ")}\n` +
-        "Install them: cd tests/runtime && npm ci"
-    );
-    return 0;
-  }
-
-  const result = await runReplayWasm(wasmBytes, readFileSync(REPLAY, "utf8"));
+async function runWorld(world, engines, wasmBytes) {
+  const adapters = engines.map((make) => make());
+  const replayText = readFileSync(path.join(REPO, world.replay), "utf8");
+  const result = await runReplayWasm(wasmBytes, replayText);
   if (result.error) {
-    console.error(`kernel rejected the replay: ${result.code} ${result.error}`);
-    return 1;
+    check(false, `${world.name}: kernel rejected the replay: ${result.code} ${result.error}`);
+    return null;
   }
-
-  const docs = { fortress_gate: JSON.parse(readFileSync(ENTITY_DOC, "utf8")) };
-  const layout = JSON.parse(readFileSync(LAYOUT, "utf8"));
+  const docs = Object.fromEntries(
+    Object.entries(world.docs).map(([name, file]) => [name, JSON.parse(readFileSync(path.join(REPO, file), "utf8"))])
+  );
+  const layout = JSON.parse(readFileSync(path.join(REPO, world.layout), "utf8"));
   const model = resolveModel(layout, docs);
   const nodes = nodesInModel(model);
   const jointNodes = nodes.filter((n) => n.parent !== null).map((n) => n.node);
-  check(jointNodes.length >= 4, `expected >=4 joint nodes, got ${jointNodes.length}`);
+  check(jointNodes.length >= 1, `${world.name}: expected joint nodes, got ${jointNodes.length}`);
 
   for (const adapter of adapters) adapter.build(nodes);
 
   // Frames carry simulation state only; the geometry is derived here, from the
-  // axis World IR declares — the renderer never picks one.
-  const frames = result.snapshots.map((world) => ({
+  // axis and the drive World IR declares — the renderer never picks either.
+  const frames = result.snapshots.map((snapshot) => ({
     entities: Object.fromEntries(
-      Object.entries(world).map(([name, entry]) => [name, entry.state ?? {}])
+      Object.entries(snapshot).map(([name, entry]) => [name, entry.state ?? {}])
     ),
   }));
 
@@ -127,7 +141,7 @@ async function main() {
 
   for (const [tick, frame] of frames.entries()) {
     const bindings = bindingsFromFrame(frame, model);
-    check(bindings.length === jointNodes.length, `tick ${tick}: binding count`);
+    check(bindings.length === jointNodes.length, `${world.name} tick ${tick}: binding count`);
     for (const adapter of adapters) adapter.apply(bindings);
 
     const reference = adapters[0];
@@ -140,12 +154,12 @@ async function main() {
         const drift = Math.max(...expected.map((v, i) => Math.abs(v - actual[i])));
         check(
           drift <= TOLERANCE,
-          `tick ${tick} ${node}: ${adapter.name} is ${drift.toExponential(2)} from ` +
+          `${world.name} tick ${tick} ${node}: ${adapter.name} is ${drift.toExponential(2)} from ` +
             `${reference.name} (${actual.map((n) => n.toFixed(9))} vs ${expected.map((n) => n.toFixed(9))})`
         );
         check(
           adapter.visible(node) === reference.visible(node),
-          `tick ${tick} ${node}: ${adapter.name} visibility disagrees with ${reference.name}`
+          `${world.name} tick ${tick} ${node}: ${adapter.name} visibility disagrees with ${reference.name}`
         );
       }
     }
@@ -159,34 +173,56 @@ async function main() {
   }
 
   // The anti-vacuity gate, tied to the data rather than to an assumption: a
-  // hinge must swing exactly when its entity's openness changed, and must not
-  // when it did not. Requiring every hinge to move would be wrong here — the
-  // replay opens `gate_side` while it is still locked, so it correctly stays
-  // shut for all 21 ticks, and a blunter assertion would call that a defect.
-  const opennessRange = {};
-  for (const frame of frames) {
-    for (const [name, state] of Object.entries(frame.entities)) {
-      const value = state.openness ?? 0;
-      const range = (opennessRange[name] ??= { min: value, max: value });
-      range.min = Math.min(range.min, value);
-      range.max = Math.max(range.max, value);
-    }
-  }
+  // joint must move exactly when the state var that DRIVES it changed, and
+  // must not when it did not. Requiring every joint to move would be wrong —
+  // the fortress replay opens `gate_side` while it is still locked, so it
+  // correctly stays shut for all 21 ticks, and a blunter assertion would call
+  // that a defect.
+  const drives = driveChanged(frames, model);
   let movers = 0;
   for (const [node, distance] of travel) {
-    const instance = node.split("/")[0];
-    const changed = opennessRange[instance].max > opennessRange[instance].min;
+    const { var: drive, changed } = drives[node];
     if (changed) movers += 1;
     check(
       changed ? distance > 0.1 : distance === 0,
       changed
-        ? `${node} never swung (travel ${distance.toFixed(6)}) though ${instance} opened ` +
-          `${opennessRange[instance].min}->${opennessRange[instance].max} — an inert binding is ` +
-          "the exact failure this suite exists to catch"
-        : `${node} moved ${distance.toFixed(6)} though ${instance} never changed openness`
+        ? `${world.name}: ${node} never moved (travel ${distance.toFixed(6)}) though its drive ` +
+          `'${drive}' changed — an inert binding is the exact failure this suite exists to catch`
+        : `${world.name}: ${node} moved ${distance.toFixed(6)} though its drive '${drive}' never changed`
     );
   }
-  check(movers > 0, "no hinge moved in the whole replay — the fixture proves nothing");
+  check(movers > 0, `${world.name}: no joint moved in the whole replay — the fixture proves nothing`);
+  const swept = [...travel.values()].reduce((a, b) => a + b, 0) / travel.size;
+  return { ticks: frames.length, joints: jointNodes.length, swept, adapters: adapters.map((a) => a.name) };
+}
+
+async function main() {
+  let wasmBytes;
+  try {
+    wasmBytes = readFileSync(WASM);
+  } catch {
+    console.error(`sim_kernel.wasm not found at ${WASM}\nBuild it: just sim-parity`);
+    return 2;
+  }
+
+  const { engines, missing } = await loadEngines();
+  if (missing.length && REQUIRE_ENGINES) {
+    console.error(`RUNTIME_REQUIRE_ENGINES=1 but engines are unavailable:\n  ${missing.join("\n  ")}`);
+    return 1;
+  }
+  if (engines.length < 2) {
+    console.log(
+      `SKIP: cross-engine conformance needs at least two engines; missing ${missing.join(", ")}\n` +
+        "Install them: cd tests/runtime && npm ci"
+    );
+    return 0;
+  }
+
+  const summaries = [];
+  for (const world of WORLDS) {
+    const summary = await runWorld(world, engines, wasmBytes);
+    if (summary) summaries.push(`${world.name}: ${summary.ticks} ticks x ${summary.joints} joints, mean travel ${summary.swept.toFixed(3)}`);
+  }
 
   if (failures.length) {
     console.error(`\ncross-engine conformance FAILED (${failures.length}):`);
@@ -194,11 +230,9 @@ async function main() {
     if (failures.length > 20) console.error(`  ... and ${failures.length - 20} more`);
     return 1;
   }
-  const swept = [...travel.values()].reduce((a, b) => a + b, 0) / travel.size;
   console.log(
-    `cross-engine conformance OK — ${adapters.map((a) => a.name).join(", ")} agree to within ` +
-      `${TOLERANCE.toExponential(0)} across ${frames.length} ticks x ${jointNodes.length} joints ` +
-      `(mean hinge travel ${swept.toFixed(3)} units)` +
+    `cross-engine conformance OK — ${engines.map((make) => make().name).join(", ")} agree to within ` +
+      `${TOLERANCE.toExponential(0)} on ${WORLDS.length} worlds (${summaries.join("; ")})` +
       (missing.length ? `\n  note: skipped ${missing.length} unavailable engine(s)` : "")
   );
   return 0;

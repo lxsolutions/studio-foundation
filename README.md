@@ -523,10 +523,15 @@ just runtime-conformance   # three.js + Babylon + PlayCanvas on the same replay
 ```
 
 The conformance suite drives the real kernel and requires all three renderers to
-place every joint in the same world position on every tick, and requires hinges
-to swing exactly when the kernel says their gate opened. All three run headless
+place every joint in the same world position on every tick, and requires a joint
+to move exactly when the state var that drives it changed. All three run headless
 with no GPU. Both suites fail if the rotation is forced to zero — verified by
-mutation, not by inspection.
+mutation, not by inspection. Which var drives a joint, and whether the joint is a
+hinge or a slider, is declared in World IR
+([ADR 0023](docs/adr/0023-declared-joint-drives.md)): the suite runs two worlds,
+the fortress (hinges driven by `openness`) and the depot (a lift's slider driven
+by a float `height`, a lever's hinge driven by a bool `on`), so nothing in the
+chain from document to renderer assumes a door.
 
 **What this does not claim:** that a whole game runs on three renderers (this is
 the state-to-transform binding, not cameras, materials, input or physics); that

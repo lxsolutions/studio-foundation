@@ -78,6 +78,11 @@ class WorldIRError(Exception):
 # ---------------------------------------------------------------- validation
 
 
+JOINT_TYPES = {"hinge", "slider"}
+JOINT_KEYS = {"parent", "child", "axis", "type", "range_degrees", "range_units", "drive"}
+DRIVE_KEYS = {"var", "from", "to"}
+
+
 def load_entity(path: Path) -> dict:
     try:
         doc = json.loads(Path(path).read_text(encoding="utf-8"))
@@ -126,10 +131,19 @@ def validate_entity(doc: dict, source: str = "<document>") -> dict:
                 raise WorldIRError(f"{source}: parent cycle through part {name!r}")
             seen.add(cursor)
 
-    for jname, joint in _require_obj(doc.get("joints", {}), "joints", source).items():
+    joints = _require_obj(doc.get("joints", {}), "joints", source)
+    for jname, joint in joints.items():
         if not IDENTIFIER.match(jname):
             raise WorldIRError(f"{source}: joint name {jname!r} must be a snake_case identifier")
         joint = _require_obj(joint, f"joint {jname!r}", source)
+        unknown = sorted(set(joint) - JOINT_KEYS)
+        if unknown:
+            raise WorldIRError(f"{source}: joint {jname!r} has unknown fields {unknown}")
+        jtype = joint.get("type", "hinge")
+        if jtype not in JOINT_TYPES:
+            raise WorldIRError(
+                f"{source}: joint {jname!r} type must be one of {sorted(JOINT_TYPES)}"
+            )
         parent, child = joint.get("parent"), joint.get("child")
         if parent not in parts or child not in parts:
             raise WorldIRError(f"{source}: joint {jname!r} references unknown parts")
@@ -144,7 +158,19 @@ def validate_entity(doc: dict, source: str = "<document>") -> dict:
             raise WorldIRError(f"{source}: joint {jname!r} axis must be three finite numbers")
         if all(v == 0 for v in axis):
             raise WorldIRError(f"{source}: joint {jname!r} axis must be nonzero")
-        rng = joint.get("range_degrees")
+        # A hinge sweeps degrees about its axis; a slider travels units along
+        # it. Each has exactly one range, named for what it measures, so a
+        # renderer never has to guess what a number means.
+        range_key, other_key = (
+            ("range_degrees", "range_units")
+            if jtype == "hinge"
+            else ("range_units", "range_degrees")
+        )
+        if other_key in joint:
+            raise WorldIRError(
+                f"{source}: a {jtype} joint ({jname!r}) uses {range_key}, not {other_key}"
+            )
+        rng = joint.get(range_key)
         if (
             not isinstance(rng, list)
             or len(rng) != 2
@@ -152,7 +178,7 @@ def validate_entity(doc: dict, source: str = "<document>") -> dict:
             or rng[0] > rng[1]
         ):
             raise WorldIRError(
-                f"{source}: joint {jname!r} range_degrees must be [min, max] with min <= max"
+                f"{source}: joint {jname!r} {range_key} must be [min, max] with min <= max"
             )
 
     state = _require_obj(doc.get("state", {}), "state", source)
@@ -163,6 +189,51 @@ def validate_entity(doc: dict, source: str = "<document>") -> dict:
             raise WorldIRError(
                 f"{source}: state {var!r} has unknown type {kind!r} (want one of {sorted(STATE_TYPES)})"
             )
+
+    # A joint is DRIVEN by one state var (ADR 0023): the var's range maps onto
+    # the joint's range, so a renderer derives motion from state it observes
+    # and never from a name it assumed. A joint that says nothing inherits the
+    # door's convention — `openness` over its whole travel — and only if the
+    # entity actually declares a float `openness`; otherwise it must say.
+    for jname, joint in joints.items():
+        drive = joint.get("drive")
+        if drive is None:
+            if state.get("openness") != "float":
+                raise WorldIRError(
+                    f"{source}: joint {jname!r} declares no drive and the entity has no float "
+                    "'openness' to default to"
+                )
+            continue
+        drive = _require_obj(drive, f"joint {jname!r} drive", source)
+        unknown = sorted(set(drive) - DRIVE_KEYS)
+        if unknown:
+            raise WorldIRError(f"{source}: joint {jname!r} drive has unknown fields {unknown}")
+        var = drive.get("var")
+        if var not in state:
+            raise WorldIRError(
+                f"{source}: joint {jname!r} drive reads undeclared state var {var!r}"
+            )
+        kind = state[var]
+        if kind == "bool":
+            if "from" in drive or "to" in drive:
+                raise WorldIRError(
+                    f"{source}: joint {jname!r} drive on bool {var!r} has no range: "
+                    "false is the joint's minimum, true its maximum"
+                )
+        elif kind in ("float", "int"):
+            lo, hi = drive.get("from"), drive.get("to")
+            numeric = (int,) if kind == "int" else (int, float)
+            if (
+                any(isinstance(v, bool) or not isinstance(v, numeric) for v in (lo, hi))
+                or not all(math.isfinite(v) for v in (lo, hi))
+                or lo >= hi
+            ):
+                raise WorldIRError(
+                    f"{source}: joint {jname!r} drive on {kind} {var!r} needs from < to "
+                    f"({'integers' if kind == 'int' else 'numbers'})"
+                )
+        else:
+            raise WorldIRError(f"{source}: joint {jname!r} drive cannot read {kind} var {var!r}")
 
     affordances = doc.get("affordances", [])
     if not isinstance(affordances, list) or not affordances:

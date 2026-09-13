@@ -14,6 +14,7 @@ export function createBabylonAdapter(BABYLON, options = {}) {
   // conformance suite the same code path with no GPU.
   const scene = options.scene ?? new BABYLON.Scene(new BABYLON.NullEngine());
   const nodes = new Map();
+  const bases = new Map(); // the placed position a slider translates from
   return {
     name: "babylon.js",
     build(list) {
@@ -22,16 +23,28 @@ export function createBabylonAdapter(BABYLON, options = {}) {
         node.position = new BABYLON.Vector3(...spec.offset);
         if (spec.parent) node.parent = nodes.get(spec.parent);
         nodes.set(spec.node, node);
+        bases.set(spec.node, spec.offset);
       }
     },
     apply(bindings) {
       for (const binding of bindings) {
         const node = nodes.get(binding.node);
         if (!node) continue;
-        node.rotationQuaternion = BABYLON.Quaternion.RotationAxis(
-          new BABYLON.Vector3(...binding.rotate.axis),
-          binding.rotate.radians
-        );
+        if (binding.rotate) {
+          node.rotationQuaternion = BABYLON.Quaternion.RotationAxis(
+            new BABYLON.Vector3(...binding.rotate.axis),
+            binding.rotate.radians
+          );
+        }
+        if (binding.translate) {
+          const [x, y, z] = bases.get(binding.node);
+          const { axis, units } = binding.translate;
+          node.position = new BABYLON.Vector3(
+            x + axis[0] * units,
+            y + axis[1] * units,
+            z + axis[2] * units
+          );
+        }
         node.setEnabled(!binding.hidden);
       }
       for (const node of nodes.values()) node.computeWorldMatrix(true);

@@ -1,0 +1,8 @@
+{
+  "layout_version": 1,
+  "_comment": "Scene placement for the depot. Presentation data only: World IR says the rail is a slider along Y driven by height and the pivot a hinge about X driven by on; the kernel says where each is; this file says where the lift and the lever stand.",
+  "instances": {
+    "cargo_lift": { "entity": "cargo_lift", "offset": [-2.5, 0, 0] },
+    "signal_lever": { "entity": "signal_lever", "offset": [2.5, 0, 0] }
+  }
+}

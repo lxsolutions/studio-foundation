@@ -6,7 +6,7 @@
     "signal_lever": {
       "contract": {
         "sim_contract": "0.2",
-        "source_world_ir_sha256": "7b708b07854805fbdfb1d245878c47541ed58c8bcd8490e07a210f305da5d093",
+        "source_world_ir_sha256": "8cef41cf05ab2aa1dc6f71bdcf5d123917b71639591bdb16447afe48e944c902",
         "entity": "signal_lever",
         "state": {
           "on": {
@@ -79,7 +79,7 @@
           "integrators": []
         }
       },
-      "contract_sha256": "c6888a9908c950c425492ebb3d6af91706a563b4036062e51c168abd67fc84e5"
+      "contract_sha256": "52abdc4b96990ad49550a570d2cb5cf6bce90a6d620144fccb944fb99115b477"
     }
   },
   "initial": {},

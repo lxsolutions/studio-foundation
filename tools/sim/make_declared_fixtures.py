@@ -42,7 +42,16 @@ LIFT = {
     "brief": "a powered cargo lift: charges, then travels between two decks",
     "parts": {"shaft": {"role": "static"}, "platform": {"parent": "shaft"}},
     "joints": {
-        "rail": {"parent": "shaft", "child": "platform", "axis": [0, 1, 0], "range_degrees": [0, 0]}
+        # A slider: the platform travels 3.6 units up the shaft as `height`
+        # goes 0..1 (ADR 0023). Nothing here is named openness.
+        "rail": {
+            "parent": "shaft",
+            "child": "platform",
+            "axis": [0, 1, 0],
+            "type": "slider",
+            "range_units": [0, 3.6],
+            "drive": {"var": "height", "from": 0, "to": 1},
+        }
     },
     "state": {"height": "float", "power": "int"},
     "affordances": ["call_top", "call_bottom", "charge"],
@@ -127,11 +136,14 @@ LEVER = {
     "brief": "a signal lever that can jam: pulling flips it and counts the pull",
     "parts": {"post": {"role": "static"}, "handle": {"parent": "post"}},
     "joints": {
+        # A bool drive: the handle sits at -40 degrees while `on` is false and
+        # swings to +40 when it is true (ADR 0023).
         "pivot": {
             "parent": "post",
             "child": "handle",
             "axis": [1, 0, 0],
             "range_degrees": [-40, 40],
+            "drive": {"var": "on"},
         }
     },
     "state": {"on": "bool", "pulls": "int", "jammed": "bool"},

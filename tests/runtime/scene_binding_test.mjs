@@ -15,6 +15,10 @@ const REPO = path.resolve(new URL("../../", import.meta.url).pathname);
 const DOC = JSON.parse(readFileSync(path.join(REPO, "tools/worldc/examples/fortress_gate.json"), "utf8"));
 const LAYOUT = JSON.parse(readFileSync(path.join(REPO, "tools/sim-viewer/fortress_layout.json"), "utf8"));
 const DOCS = { fortress_gate: DOC };
+const LIFT = JSON.parse(readFileSync(path.join(REPO, "tools/worldc/examples/cargo_lift.json"), "utf8"));
+const LEVER = JSON.parse(readFileSync(path.join(REPO, "tools/worldc/examples/signal_lever.json"), "utf8"));
+const DEPOT_LAYOUT = JSON.parse(readFileSync(path.join(REPO, "tools/sim-viewer/depot_layout.json"), "utf8"));
+const DEPOT = { cargo_lift: LIFT, signal_lever: LEVER };
 
 let failures = 0;
 const test = (name, fn) => {
@@ -111,6 +115,52 @@ test("the binding is pure: same input, same output", () => {
   const model = resolveModel(LAYOUT, DOCS);
   const input = frame({ gate_main: { openness: 321 }, gate_side: { openness: 654 } });
   assert.deepEqual(bindingsFromFrame(input, model), bindingsFromFrame(input, model));
+});
+
+test("a joint without a drive inherits the door convention, and only then", () => {
+  const model = resolveModel(LAYOUT, DOCS);
+  assert.deepEqual(model.instances.gate_main.joints[0].drive, {
+    var: "openness", kind: "number", from: 0, to: 1000,
+  });
+  const noOpenness = { fortress_gate: { ...DOC, state: { locked: "bool" } } };
+  assert.throws(() => resolveModel(LAYOUT, noOpenness), /no float 'openness' to default to/);
+});
+
+test("a slider translates along its axis across range_units, scaled from milli", () => {
+  // ADR 0023: the lift's rail is a slider driven by `height` (a float, held
+  // as milli-units by the kernel) — nothing here is named openness.
+  const model = resolveModel(DEPOT_LAYOUT, DEPOT);
+  const at = (height) =>
+    bindingsFromFrame(frame({ cargo_lift: { height } }), model)
+      .find((b) => b.node === "cargo_lift/platform");
+  const [minUnits, maxUnits] = LIFT.joints.rail.range_units;
+  assert.equal(at(0).translate.units, minUnits);
+  assert.ok(Math.abs(at(1000).translate.units - maxUnits) < 1e-12, "fully up reaches the top");
+  assert.ok(Math.abs(at(500).translate.units - (minUnits + maxUnits) / 2) < 1e-12, "half way");
+  assert.deepEqual(at(500).translate.axis, [0, 1, 0]);
+  assert.equal(at(500).rotate, undefined, "a slider never rotates");
+  assert.equal(at(-100).translate.units, at(0).translate.units, "clamped below");
+  assert.equal(at(5000).translate.units, at(1000).translate.units, "clamped above");
+});
+
+test("a bool drive snaps a hinge to the ends of its range", () => {
+  const model = resolveModel(DEPOT_LAYOUT, DEPOT);
+  const at = (on) =>
+    bindingsFromFrame(frame({ signal_lever: { on } }), model)
+      .find((b) => b.node === "signal_lever/handle").rotate;
+  const [minDeg, maxDeg] = LEVER.joints.pivot.range_degrees;
+  assert.ok(Math.abs(at(false).radians - (minDeg * Math.PI) / 180) < 1e-12, "off is the minimum");
+  assert.ok(Math.abs(at(true).radians - (maxDeg * Math.PI) / 180) < 1e-12, "on is the maximum");
+  assert.deepEqual(at(true).axis, [1, 0, 0], "the pivot axis comes from World IR");
+});
+
+test("a drive on an undeclared var, or a bad type, fails loudly", () => {
+  const broken = { ...LIFT, joints: { rail: { ...LIFT.joints.rail, drive: { var: "ghost", from: 0, to: 1 } } } };
+  assert.throws(() => resolveModel(DEPOT_LAYOUT, { ...DEPOT, cargo_lift: broken }), /undeclared state var/);
+  const badType = { ...LIFT, joints: { rail: { ...LIFT.joints.rail, type: "rope" } } };
+  assert.throws(() => resolveModel(DEPOT_LAYOUT, { ...DEPOT, cargo_lift: badType }), /unknown type/);
+  const noRange = { ...LIFT, joints: { rail: { ...LIFT.joints.rail, range_units: undefined } } };
+  assert.throws(() => resolveModel(DEPOT_LAYOUT, { ...DEPOT, cargo_lift: noRange }), /no usable range_units/);
 });
 
 if (failures) {

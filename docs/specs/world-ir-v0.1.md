@@ -52,8 +52,16 @@ JSON (the tooling is stdlib-only, ADR 0013). One entity per document.
 - Every part spec is an object; every `parent` reference exists; the parent
   graph has no cycles.
 - Every joint is an object naming two different existing parts, with `axis`
-  exactly three finite numbers (nonzero) and `range_degrees` `[min, max]`
-  with `min <= max`.
+  exactly three finite numbers (nonzero), a `type` of `hinge` (default) or
+  `slider`, and exactly the range its type measures — `range_degrees` for a
+  hinge, `range_units` for a slider — as `[min, max]` with `min <= max`.
+  Unknown joint fields are rejected.
+- A joint's `drive` (ADR 0023) names the state var that moves it: a float or
+  int var with `from < to` (the span of the var that maps onto the joint's
+  range; a float's span is in World IR units), or a bool var with no span
+  (`false` is the minimum, `true` the maximum). A joint with no `drive`
+  inherits `openness` over its whole travel, and only if the entity declares
+  a float `openness`; otherwise the document is refused.
 - `state` values are one of `float | int | bool | string`.
 - `network.replicated` is a duplicate-free subset of `state` keys;
   `authority` is `server | client | shared`.
