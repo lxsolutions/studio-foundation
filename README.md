@@ -497,6 +497,16 @@ failed check. The first thing the prover found was a fact nobody had written
 down: a destroyed gate repaired while locked stands ajar.
 [ADR 0022](docs/adr/0022-design-properties-are-proven.md).
 
+Entities also affect each other now. A world declares **wires** — while the
+lever is on, the gate is told to open; while it is off, to close — held every
+tick rather than pulsed, so they carry no hidden state, evaluated in the same
+place by both kernels, and restricted to affordances that merely set. The
+prover walks them unchanged, so "does pulling the lever start the gate opening" and "is an intact
+gate ever driven open while the lever is off" are questions `worldc prove`
+answers exhaustively; and the gatehouse renders through the same three engines,
+the gate swinging because the lever did.
+[ADR 0024](docs/adr/0024-wires-the-worlds-couplings.md).
+
 ## Beyond Godot: what is actually engine-neutral
 
 Most of the engineering here is not Godot engineering. bforge exports glTF that

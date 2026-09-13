@@ -636,6 +636,7 @@ WORLD_KEYS = {
     "scenario",
     "expect_navigation",
     "properties",  # design properties the prover checks (ADR 0022)
+    "wires",  # the world's couplings between entities (ADR 0024)
     "extensions",
 }
 
@@ -676,7 +677,24 @@ def load_world(path: Path) -> dict:
         raise WorldIRError(
             f"{source}: properties must be an object (see docs/specs/world-ir-v0.1.md)"
         )
+    if "wires" in doc and not isinstance(doc["wires"], list):
+        raise WorldIRError(f"{source}: wires must be a list (see docs/specs/world-ir-v0.1.md)")
     return doc
+
+
+def _validate_world_wires(doc: dict, contracts: dict, source: str) -> list:
+    """The world's wires, checked by the kernel against the compiled contracts
+    (ADR 0024) — the same questions a replay load asks, so a document with a
+    malformed wire fails at compile time in the compiler's own error."""
+    wires = doc.get("wires", [])
+    if not wires:
+        return []
+    sim_mod = _sim_kernel()
+    try:
+        sim_mod.validate_wires(wires, contracts, source)
+    except sim_mod.SimError as exc:
+        raise WorldIRError(f"{source}: {exc}") from exc
+    return wires
 
 
 def compile_world(
@@ -726,6 +744,15 @@ def compile_world(
                 f"{world_path}: scenario's contract for {name} does not match the "
                 f"world's document ({rent['contract_sha256'][:12]}… vs {compiled_sha[:12]}…)"
             )
+    # the scenario must run under exactly the world's wires (ADR 0024)
+    wires = _validate_world_wires(doc, contracts, str(world_path))
+    wires_sha = hashlib.sha256(recipe_mod.canonicalize(wires)).hexdigest()
+    replay_wires_sha = hashlib.sha256(recipe_mod.canonicalize(replay.get("wires", []))).hexdigest()
+    if replay_wires_sha != wires_sha:
+        raise WorldIRError(
+            f"{world_path}: scenario's wires do not match the world's "
+            f"({replay_wires_sha[:12]}… vs {wires_sha[:12]}…)"
+        )
 
     # 3. run the scenario deterministically (self-contained replay)
     result = sim_mod.run_replay(replay_path)
@@ -790,6 +817,7 @@ def compile_world(
                 replay.get("initial", {}),
                 source=str(world_path),
                 witness_dir=staging,
+                wires=wires,
             )
         except prover_mod.ProofError as exc:
             shutil.rmtree(staging, ignore_errors=True)
@@ -813,6 +841,7 @@ def compile_world(
         "scenario": {
             "replay": doc["scenario"],
             "replay_sha256": replay_sha,
+            "wires_sha256": wires_sha,
             "state_hash": result["state_hash"],
             "navigation": result["navigation"],
             "fingerprints": result["fingerprints"],
@@ -865,16 +894,29 @@ def prove_world(world_path, out_dir: Path | None = None) -> dict:
     replay = sim_mod.load_replay((world_path.parent / doc["scenario"]).resolve())
     if set(replay.get("entities", {})) != set(doc["entities"]):
         raise WorldIRError(f"{world_path}: scenario entities do not match the world's")
+    wires = _validate_world_wires(doc, contracts, str(world_path))
+    if recipe_mod.canonicalize(replay.get("wires", [])) != recipe_mod.canonicalize(wires):
+        raise WorldIRError(f"{world_path}: scenario's wires do not match the world's")
     try:
         if out_dir is not None:
             out_dir = Path(out_dir)
             out_dir.mkdir(parents=True, exist_ok=True)
             return prover_mod.prove(
-                doc["properties"], contracts, replay.get("initial", {}), str(world_path), out_dir
+                doc["properties"],
+                contracts,
+                replay.get("initial", {}),
+                str(world_path),
+                out_dir,
+                wires=wires,
             )
         with tempfile.TemporaryDirectory(prefix="worldc_prove_") as tmp:
             return prover_mod.prove(
-                doc["properties"], contracts, replay.get("initial", {}), str(world_path), Path(tmp)
+                doc["properties"],
+                contracts,
+                replay.get("initial", {}),
+                str(world_path),
+                Path(tmp),
+                wires=wires,
             )
     except prover_mod.ProofError as exc:
         raise WorldIRError(str(exc)) from exc

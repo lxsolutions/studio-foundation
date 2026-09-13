@@ -1,0 +1,12 @@
+{
+  "layout_version": 1,
+  "_comment": "Scene placement for the gatehouse: the fortress gate and the lever that is wired to it. Presentation data only; the wiring lives in the world document and runs in the kernel.",
+  "instances": {
+    "gate": {
+      "entity": "fortress_gate",
+      "offset": [-2.2, 0, 0],
+      "parts": { "leaf_l": { "sign": -1 }, "leaf_r": { "sign": 1 } }
+    },
+    "signal_lever": { "entity": "signal_lever", "offset": [2.5, 0, 0] }
+  }
+}

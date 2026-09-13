@@ -51,6 +51,17 @@ const WORLDS = [
     },
     layout: "tools/sim-viewer/depot_layout.json",
   },
+  // A wired world (ADR 0024): the gate moves because the lever moved. The
+  // wire runs inside the kernel; the renderers see only its consequences.
+  {
+    name: "gatehouse",
+    replay: "tools/worldc/examples/gatehouse_watch.json",
+    docs: {
+      fortress_gate: "tools/worldc/examples/fortress_gate.json",
+      signal_lever: "tools/worldc/examples/signal_lever.json",
+    },
+    layout: "tools/sim-viewer/gatehouse_layout.json",
+  },
 ];
 
 // A point off the rotation axis, so any disagreement about axis, sign, units or

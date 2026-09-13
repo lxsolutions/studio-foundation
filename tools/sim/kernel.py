@@ -61,10 +61,17 @@ REPLAY_KEYS = {
     "initial",
     "events",
     "expect_state_hash",
+    "wires",  # the world's couplings between entities (ADR 0024)
     # conformance-corpus metadata (not simulation semantics)
     "expect",
     "expect_error",
 }
+WIRE_KEYS = ("name", "when", "then")
+# A wire holds rather than pulses: it delivers its verbs every tick its
+# condition is true. So it may only target affordances whose effects merely
+# set — a wire that toggled would toggle every tick, and one that added would
+# count ticks. Both would also make the wire's timing part of the meaning.
+LEVEL_SAFE_OPS = ("set", "set_control")
 
 
 class SimError(Exception):
@@ -747,6 +754,148 @@ def validate_contract(entity: str, contract, source: str = "<contract>") -> dict
     return _validate_contract(entity, contract, source)
 
 
+# ------------------------------------------------------ clauses and wires
+#
+# A clause is a guard over the WORLD: one entity, one state var or control,
+# one test against a literal. Wires (ADR 0024) and the prover's properties
+# (ADR 0022) both speak this vocabulary, so "while the lever is on" and "the
+# gate can never be open while the lever is off" are the same sentence.
+
+
+def validate_clause(clause, label: str, contracts: dict, reject) -> None:
+    """Shape and type one clause against the compiled contracts, with the
+    kernel's own guard typing: `equals` compares like with like, `gt`/`lt`
+    need an integer var, `exists` is a bool. A control is an integer because
+    integrators read it."""
+    if not isinstance(clause, dict):
+        reject(f"{label} must be an object")
+    entity = clause.get("entity")
+    if not isinstance(entity, str) or entity not in contracts:
+        reject(f"{label} names unknown entity {entity!r}")
+    tests = [test for test in GUARD_TESTS if test in clause]
+    if len(tests) != 1:
+        reject(f"{label} needs exactly one of {GUARD_TESTS}")
+    test = tests[0]
+    if ("var" in clause) == ("control" in clause):
+        reject(f"{label} reads either a var or a control")
+    if "var" in clause:
+        var = clause["var"]
+        state = contracts[entity].get("state", {})
+        if not isinstance(var, str) or var not in state:
+            reject(f"{label} reads undeclared state var {var!r} of {entity}")
+        var_type = STORAGE_TYPE[state[var]["storage"]]
+        allowed = {"entity", "var", test}
+    else:
+        control = clause["control"]
+        if not isinstance(control, str) or not IDENTIFIER.match(control):
+            reject(f"{label} control must be a snake_case name")
+        var_type = "int"
+        allowed = {"entity", "control", test}
+    unknown = sorted(set(clause) - allowed)
+    if unknown:
+        reject(f"{label} has unknown keys {unknown}")
+    literal = clause[test]
+    if test == "exists":
+        if not isinstance(literal, bool):
+            reject(f"{label}.exists must be a bool")
+        return
+    literal_type = _literal_type(literal)
+    if literal_type is None:
+        reject(f"{label}.{test} must be a bool, i64 integer or string literal")
+    if test in ("gt", "lt") and (var_type != "int" or literal_type != "int"):
+        reject(f"{label}.{test} orders integers only")
+    if test == "equals" and literal_type != var_type:
+        reject(f"{label}.equals compares a {var_type} with a {literal_type}")
+
+
+def clause_holds(clause: dict, world: dict) -> bool:
+    """One clause against the world, with the kernel's own guard semantics
+    (type-strict equality, the typed zero for an absent control)."""
+    entry = world[clause["entity"]]
+    if "control" in clause:
+        guard = {"var": clause["control"], **{k: v for k, v in clause.items() if k in GUARD_TESTS}}
+        return _guard_holds(guard, entry["control"], {})
+    guard = {k: v for k, v in clause.items() if k != "entity"}
+    return _guard_holds(guard, entry["state"], {})
+
+
+def validate_wires(wires, contracts: dict, source: str, reject=None) -> None:
+    """Reject a malformed wiring block at load (`E_WIRE_SHAPE`).
+
+    A wire is `when` (clauses over the world) and `then` (verbs delivered to
+    entities). Everything it will read or do is checked here: entities exist,
+    vars are declared and typed, verbs are declared affordances with
+    semantics, arguments fit the verb, and — the rule that keeps wires free of
+    hidden state — every target affordance only sets.
+    """
+    if reject is None:
+
+        def reject(message: str) -> None:
+            raise SimError(f"{source}: wires {message}", code="E_WIRE_SHAPE")
+
+    if not isinstance(wires, list):
+        reject("must be a list")
+    names: set = set()
+    for i, wire in enumerate(wires):
+        label = f"[{i}]"
+        if not isinstance(wire, dict):
+            reject(f"{label} must be an object")
+        unknown = sorted(set(wire) - set(WIRE_KEYS))
+        if unknown:
+            reject(f"{label} has unknown keys {unknown}")
+        name = wire.get("name")
+        if not isinstance(name, str) or not IDENTIFIER.match(name):
+            reject(f"{label} needs a snake_case name")
+        if name in names:
+            reject(f"{label} repeats the name {name!r}")
+        names.add(name)
+        when = wire.get("when")
+        if not isinstance(when, list) or not when:
+            reject(f"{label}.when must be a non-empty list of clauses")
+        for j, clause in enumerate(when):
+            validate_clause(clause, f"{label}.when[{j}]", contracts, reject)
+        then = wire.get("then")
+        if not isinstance(then, list) or not then:
+            reject(f"{label}.then must be a non-empty list of verbs")
+        for j, act in enumerate(then):
+            lab = f"{label}.then[{j}]"
+            if not isinstance(act, dict) or set(act) != {"entity", "verb", "arg"}:
+                reject(f"{lab} needs exactly entity, verb and arg")
+            entity, verb, arg = act["entity"], act["verb"], act["arg"]
+            if not isinstance(entity, str) or entity not in contracts:
+                reject(f"{lab} targets unknown entity {entity!r}")
+            contract = contracts[entity]
+            if verb not in contract.get("affordances", []):
+                reject(f"{lab} targets undeclared affordance {verb!r} of {entity}")
+            spec = semantics(contract).get("affordances", {}).get(verb)
+            if spec is None:
+                reject(f"{lab} targets {verb!r} of {entity}, which has no semantics")
+            if any(effect["op"] not in LEVEL_SAFE_OPS for effect in spec.get("effects", [])):
+                reject(
+                    f"{lab} targets {verb!r} of {entity}, which adds or toggles; "
+                    "a wire holds, it does not pulse"
+                )
+            kind = spec.get("arg", "none")
+            if kind == "none" and arg is not None:
+                reject(f"{lab}: {verb} takes no argument")
+            if kind == "count" and not (_is_int(arg) and 0 <= arg <= MAX_EVENT_ARG):
+                reject(f"{lab}: {verb} needs an integer amount 0..{MAX_EVENT_ARG}")
+
+
+def apply_wires(wires: list, contracts: dict, declared: dict, world: dict) -> None:
+    """The world's couplings, once per tick after the tick's events and before
+    integration: each wire whose condition holds NOW delivers its verbs, in
+    declared order, and later wires see what earlier ones did. Nothing is
+    remembered between ticks, so the hashed world is still the whole world."""
+    for wire in wires:
+        if all(clause_holds(clause, world) for clause in wire["when"]):
+            for act in wire["then"]:
+                target = act["entity"]
+                apply_event(
+                    contracts[target], target, world, act["verb"], act["arg"], declared[target]
+                )
+
+
 def load_replay(path: Path) -> dict:
     source = str(path)
 
@@ -792,6 +941,8 @@ def load_replay(path: Path) -> dict:
                 "(canonical hash, lowercase hex)",
                 code="E_ENTITY_ENTRY",
             )
+    if "wires" in replay:
+        validate_wires(replay["wires"], {n: e["contract"] for n, e in entities.items()}, source)
 
     initial = replay.get("initial", {})
     if not isinstance(initial, dict):
@@ -871,12 +1022,14 @@ def run_replay(replay_path, contracts=None) -> dict:
         by_tick.setdefault(events[i][0], []).append(i)
 
     ticks = replay["ticks"]
+    wires = replay.get("wires", [])
     hash_log = []
     snapshots = []
     for tick in range(ticks + 1):
         for i in by_tick.get(tick, []):
             _, entity, verb, arg = events[i]
             apply_event(contracts[entity], entity, world, verb, arg, declared[entity])
+        apply_wires(wires, contracts, declared, world)
         for name, contract in contracts.items():
             step_entity(contract, name, world, declared[name])
         hash_log.append(state_hash(world))

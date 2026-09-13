@@ -113,70 +113,16 @@ def validate_properties(props, contracts: dict, source: str = "<world>") -> dict
         if not isinstance(when, list) or not when:
             reject(f"{label}.when must be a non-empty list of clauses")
         for j, clause in enumerate(when):
-            _validate_clause(clause, f"{label}.when[{j}]", contracts, reject)
+            kernel.validate_clause(clause, f"{label}.when[{j}]", contracts, reject)
     return {"horizon": horizon, "budget": budget, "amounts": sorted(set(amounts)), "assert": claims}
-
-
-def _validate_clause(clause, label: str, contracts: dict, reject) -> None:
-    if not isinstance(clause, dict):
-        reject(f"{label} must be an object")
-    entity = clause.get("entity")
-    if entity not in contracts:
-        reject(f"{label} names unknown entity {entity!r}")
-    tests = [t for t in TESTS if t in clause]
-    if len(tests) != 1:
-        reject(f"{label} needs exactly one of {TESTS}")
-    test = tests[0]
-    if "var" in clause and "control" in clause:
-        reject(f"{label} reads either a var or a control, not both")
-    if "var" in clause:
-        allowed = {"entity", "var", test}
-        var = clause["var"]
-        state = contracts[entity].get("state", {})
-        if not isinstance(var, str) or var not in state:
-            reject(f"{label} reads undeclared state var {var!r} of {entity}")
-        var_type = STORAGE_TYPE[state[var]["storage"]]
-    elif "control" in clause:
-        allowed = {"entity", "control", test}
-        if not isinstance(clause["control"], str) or not kernel.IDENTIFIER.match(clause["control"]):
-            reject(f"{label} control must be a snake_case name")
-        var_type = "int"  # controls carry integers because integrators read them
-    else:
-        reject(f"{label} needs a var or a control")
-    unknown = sorted(set(clause) - allowed)
-    if unknown:
-        reject(f"{label} has unknown keys {unknown}")
-    literal = clause[test]
-    if test == "exists":
-        if not isinstance(literal, bool):
-            reject(f"{label}.exists must be a bool")
-        return
-    literal_type = kernel._literal_type(literal)
-    if literal_type is None:
-        reject(f"{label}.{test} must be a bool, i64 integer or string literal")
-    if test in ("gt", "lt") and (var_type != "int" or literal_type != "int"):
-        reject(f"{label}.{test} orders integers only")
-    if test == "equals" and literal_type != var_type:
-        reject(f"{label}.equals compares a {var_type} with a {literal_type}")
 
 
 # ------------------------------------------------------------ exploration
 
 
 def _holds(when: list, world: dict) -> bool:
-    """A conjunction of clauses against one world, with the kernel's own guard
-    semantics (type-strict equality, typed zero for an absent name)."""
-    for clause in when:
-        entry = world[clause["entity"]]
-        if "control" in clause:
-            guard = {"var": clause["control"], **{k: v for k, v in clause.items() if k in TESTS}}
-            table = entry["control"]
-        else:
-            guard = {k: v for k, v in clause.items() if k != "entity"}
-            table = entry["state"]
-        if not kernel._guard_holds(guard, table, {}):
-            return False
-    return True
+    """A conjunction of clauses against one world, in the kernel's vocabulary."""
+    return all(kernel.clause_holds(clause, world) for clause in when)
 
 
 def _amount_ints(spec: dict, params: dict) -> set:
@@ -244,15 +190,17 @@ def _moves(contracts: dict, declared: dict, extra_amounts: list) -> list:
     return moves, amounts
 
 
-def _step(world: dict, contracts: dict, declared: dict, move) -> dict | None:
-    """One tick: at most one event, then every entity integrates — exactly the
-    kernel's own order, so a path here is a replay there."""
+def _step(world: dict, contracts: dict, declared: dict, move, wires: list) -> dict | None:
+    """One tick: at most one event, then the world's wires, then every entity
+    integrates — exactly the kernel's own order, so a path here is a replay
+    there."""
     if move is not None:
         entity, verb, arg = move
         try:
             kernel.apply_event(contracts[entity], entity, world, verb, arg, declared[entity])
         except kernel.SimError:
             return None  # a verb this contract cannot take (e.g. a v0.1 `requires`)
+    kernel.apply_wires(wires, contracts, declared, world)
     for name, contract in contracts.items():
         kernel.step_entity(contract, name, world, declared[name])
     return world
@@ -307,7 +255,9 @@ class Graph:
         return [[tick, *move] for tick, move in enumerate(moves) if move is not None]
 
 
-def explore(contracts: dict, initial: dict, horizon: int, budget: int, extra_amounts: list):
+def explore(
+    contracts: dict, initial: dict, horizon: int, budget: int, extra_amounts: list, wires: list
+):
     """Breadth-first over one-event-per-tick schedules, deduplicated by the
     kernel's canonical world. BFS order means the first node satisfying a
     predicate is a shortest witness."""
@@ -324,7 +274,7 @@ def explore(contracts: dict, initial: dict, horizon: int, budget: int, extra_amo
             graph.open.add(node)
             continue
         for move in moves:
-            world = _step(graph.world(node), contracts, declared, move)
+            world = _step(graph.world(node), contracts, declared, move, wires)
             if world is None:
                 continue
             key = kernel.canonical(world)
@@ -447,11 +397,13 @@ def _witness(graph: Graph, node: int) -> dict:
     }
 
 
-def witness_replay(witness: dict, contracts: dict, initial: dict, comment: str) -> dict | None:
+def witness_replay(
+    witness: dict, contracts: dict, initial: dict, comment: str, wires: list | None = None
+) -> dict | None:
     """A self-contained sim replay any kernel can run to the witness state."""
     if witness["ticks"] is None:
         return None  # the property holds (or fails) in the initial state itself
-    return {
+    replay = {
         "sim_replay": "0.1",
         "seed": 0,
         "ticks": witness["ticks"],
@@ -467,6 +419,9 @@ def witness_replay(witness: dict, contracts: dict, initial: dict, comment: str) 
         "events": witness["events"],
         "expect_state_hash": witness["state_hash"],
     }
+    if wires:
+        replay["wires"] = wires
+    return replay
 
 
 def slug(name: str) -> str:
@@ -479,12 +434,18 @@ def prove(
     initial: dict,
     source: str = "<world>",
     witness_dir: Path | None = None,
+    wires: list | None = None,
 ) -> dict:
     """Validate, explore once, check every property, and re-run every witness
-    through the kernel. Returns the results block that goes into a world proof."""
+    through the kernel. Returns the results block that goes into a world proof.
+
+    `wires` are the world's couplings (ADR 0024); the search applies them
+    exactly where the kernel does, so a witness through a wired world is a
+    replay through it."""
     props = validate_properties(props, contracts, source)
+    wires = list(wires or [])
     graph, amounts = explore(
-        contracts, initial, props["horizon"], props["budget"], props["amounts"]
+        contracts, initial, props["horizon"], props["budget"], props["amounts"], wires
     )
     results = []
     for i, claim in enumerate(props["assert"]):
@@ -496,6 +457,7 @@ def prove(
                 contracts,
                 initial,
                 f"witness for {claim['kind']} property: {claim['name']}",
+                wires,
             )
             record = {
                 "events": witness["events"],
@@ -525,6 +487,7 @@ def prove(
         results.append(verdict)
     return {
         "explored": {
+            "wires": len(wires),
             "states": len(graph.keys),
             "max_depth": max(graph.depth) if graph.depth else 0,
             "horizon": props["horizon"],

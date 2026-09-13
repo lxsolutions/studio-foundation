@@ -420,6 +420,106 @@ class Bounds(unittest.TestCase):
         self.assertEqual(report["explored"]["states"], 4, "on x jammed")
 
 
+class Wired(unittest.TestCase):
+    """Wires (ADR 0024) are applied where the kernel applies them, so the
+    prover reasons about couplings and its witnesses replay through them."""
+
+    LAMP = contract(
+        "lamp",
+        {"lit": "bool"},
+        ["light", "dark"],
+        {
+            "affordances": {
+                "light": {"arg": "none", "effects": [{"op": "set", "var": "lit", "value": True}]},
+                "dark": {"arg": "none", "effects": [{"op": "set", "var": "lit", "value": False}]},
+            },
+            "integrators": [],
+        },
+    )
+    WIRES = [
+        {
+            "name": "on_lights",
+            "when": [clause("lever", var="on", equals=True)],
+            "then": [{"entity": "lamp", "verb": "light", "arg": None}],
+        },
+        {
+            "name": "off_darkens",
+            "when": [clause("lever", var="on", equals=False)],
+            "then": [{"entity": "lamp", "verb": "dark", "arg": None}],
+        },
+    ]
+
+    def prove(self, claims):
+        with tempfile.TemporaryDirectory() as tmp:
+            return prover.prove(
+                {"assert": claims},
+                {"lever": lever(counted=False), "lamp": self.LAMP},
+                {},
+                witness_dir=Path(tmp),
+                wires=self.WIRES,
+            )
+
+    def test_a_coupling_is_reachable_through_the_wire_and_the_witness_carries_it(self):
+        verdict = only(
+            self.prove(
+                [
+                    {
+                        "name": "lit by the lever",
+                        "kind": "reachable",
+                        "when": [
+                            clause("lamp", var="lit", equals=True),
+                            clause("lever", var="on", equals=True),
+                        ],
+                    }
+                ]
+            )
+        )
+        self.assertEqual(verdict["status"], "holds")
+        self.assertEqual(verdict["witness"]["events"], [[0, "lever", "pull", None]])
+        self.assertTrue(verdict["witness"]["verified"], "the kernel replayed the wire too")
+
+    def test_a_wire_that_dominates_makes_a_never_property_hold(self):
+        """`light` is a direct affordance, but the off wire darkens the lamp in
+        the same tick, so a lit lamp under an off lever is unreachable."""
+        verdict = only(
+            self.prove(
+                [
+                    {
+                        "name": "never lit while off",
+                        "kind": "never",
+                        "when": [
+                            clause("lamp", var="lit", equals=True),
+                            clause("lever", var="on", equals=False),
+                        ],
+                    }
+                ]
+            )
+        )
+        self.assertEqual((verdict["status"], verdict["bound"]), ("holds", "exhaustive"))
+
+    def test_without_the_wire_the_same_property_is_violated(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            report = prover.prove(
+                {
+                    "assert": [
+                        {
+                            "name": "never lit while off",
+                            "kind": "never",
+                            "when": [
+                                clause("lamp", var="lit", equals=True),
+                                clause("lever", var="on", equals=False),
+                            ],
+                        }
+                    ]
+                },
+                {"lever": lever(counted=False), "lamp": self.LAMP},
+                {},
+                witness_dir=Path(tmp),
+            )
+        self.assertEqual(only(report)["status"], "violated")
+        self.assertEqual(only(report)["witness"]["events"], [[0, "lamp", "light", None]])
+
+
 class Validation(unittest.TestCase):
     def refuse(self, claims, contracts=None, **options):
         with self.assertRaises(prover.ProofError):

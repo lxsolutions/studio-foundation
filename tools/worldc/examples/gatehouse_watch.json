@@ -1,0 +1,212 @@
+{
+  "sim_replay": "0.1",
+  "seed": 0,
+  "ticks": 16,
+  "comment": "the gatehouse watch: the lever opens the gate, closes it, overrules a direct open while off, opens it again, and closes it even after the gate is locked",
+  "entities": {
+    "gate": {
+      "contract": {
+        "sim_contract": "0.1",
+        "source_world_ir_sha256": "59f7fbb7ce22dc55bf76030fe9c84f46a3af6c239ceb85c6f2438d8e2fc509fa",
+        "entity": "fortress_gate",
+        "state": {
+          "openness": {
+            "storage": "milli_i64"
+          },
+          "locked": {
+            "storage": "bool"
+          },
+          "health": {
+            "storage": "i64"
+          },
+          "destroyed": {
+            "storage": "bool"
+          }
+        },
+        "affordances": [
+          "open",
+          "close",
+          "lock",
+          "unlock",
+          "attack",
+          "repair"
+        ],
+        "parameters": {
+          "open_rate_milli": 250,
+          "max_health": 100,
+          "navigation": {
+            "blocks_below": [
+              {
+                "var": "openness",
+                "threshold_milli": 700
+              }
+            ],
+            "never_blocks_when_destroyed": true
+          }
+        }
+      },
+      "contract_sha256": "5f744f0c342fd4cd535756c974f7497537d497a880dcfc9559ef0ca4667a7ce5"
+    },
+    "signal_lever": {
+      "contract": {
+        "sim_contract": "0.2",
+        "source_world_ir_sha256": "8cef41cf05ab2aa1dc6f71bdcf5d123917b71639591bdb16447afe48e944c902",
+        "entity": "signal_lever",
+        "state": {
+          "on": {
+            "storage": "bool"
+          },
+          "pulls": {
+            "storage": "i64"
+          },
+          "jammed": {
+            "storage": "bool"
+          }
+        },
+        "affordances": [
+          "pull",
+          "jam",
+          "free"
+        ],
+        "parameters": {
+          "open_rate_milli": 250,
+          "max_health": 100,
+          "navigation": {
+            "blocks_below": [],
+            "never_blocks_when_destroyed": false
+          }
+        },
+        "semantics": {
+          "affordances": {
+            "pull": {
+              "arg": "none",
+              "guards": [
+                {
+                  "var": "jammed",
+                  "equals": false
+                }
+              ],
+              "effects": [
+                {
+                  "op": "toggle",
+                  "var": "on"
+                },
+                {
+                  "op": "add",
+                  "var": "pulls",
+                  "value": 1,
+                  "sign": 1
+                }
+              ]
+            },
+            "jam": {
+              "arg": "none",
+              "effects": [
+                {
+                  "op": "set",
+                  "var": "jammed",
+                  "value": true
+                }
+              ]
+            },
+            "free": {
+              "arg": "none",
+              "effects": [
+                {
+                  "op": "set",
+                  "var": "jammed",
+                  "value": false
+                }
+              ]
+            }
+          },
+          "integrators": []
+        }
+      },
+      "contract_sha256": "8fdefbcbf8c28b32ab1d18ea8e20a93f1110aee40add1dc3fa30ebf12b2502e5"
+    }
+  },
+  "initial": {
+    "gate": {
+      "health": 100,
+      "locked": false
+    },
+    "signal_lever": {
+      "on": false
+    }
+  },
+  "wires": [
+    {
+      "name": "lever_opens_gate",
+      "when": [
+        {
+          "entity": "signal_lever",
+          "var": "on",
+          "equals": true
+        }
+      ],
+      "then": [
+        {
+          "entity": "gate",
+          "verb": "open",
+          "arg": null
+        }
+      ]
+    },
+    {
+      "name": "lever_closes_gate",
+      "when": [
+        {
+          "entity": "signal_lever",
+          "var": "on",
+          "equals": false
+        }
+      ],
+      "then": [
+        {
+          "entity": "gate",
+          "verb": "close",
+          "arg": null
+        }
+      ]
+    }
+  ],
+  "events": [
+    [
+      1,
+      "signal_lever",
+      "pull",
+      null
+    ],
+    [
+      6,
+      "signal_lever",
+      "pull",
+      null
+    ],
+    [
+      8,
+      "gate",
+      "open",
+      null
+    ],
+    [
+      10,
+      "signal_lever",
+      "pull",
+      null
+    ],
+    [
+      12,
+      "gate",
+      "lock",
+      null
+    ],
+    [
+      14,
+      "signal_lever",
+      "pull",
+      null
+    ]
+  ]
+}
