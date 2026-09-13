@@ -59,6 +59,10 @@ def base_entity() -> dict:
 
 
 class Validation(unittest.TestCase):
+    def check_error(self, doc: dict) -> None:
+        with self.assertRaises(worldc.WorldIRError):
+            worldc.validate_entity(doc)
+
     def test_valid_document_passes(self):
         self.assertEqual(worldc.validate_entity(base_entity())["entity"], "widget_door")
 
@@ -114,6 +118,66 @@ class Validation(unittest.TestCase):
         doc["joints"]["hinge"]["range_degrees"] = [90, 0]
         with self.assertRaises(worldc.WorldIRError):
             worldc.validate_entity(doc)
+
+    def test_slider_joints_travel_in_units_and_hinges_in_degrees(self):
+        doc = base_entity()
+        doc["joints"]["hinge"]["type"] = "slider"  # still carries range_degrees
+        self.check_error(doc)
+        doc["joints"]["hinge"] = {
+            "parent": "frame",
+            "child": "leaf",
+            "axis": [0, 1, 0],
+            "type": "slider",
+            "range_units": [0, 2.5],
+        }
+        worldc.validate_entity(doc)
+        doc["joints"]["hinge"]["range_units"] = [3, 1]
+        self.check_error(doc)
+        doc["joints"]["hinge"]["type"] = "lever"
+        self.check_error(doc)
+
+    def test_unknown_joint_fields_rejected(self):
+        doc = base_entity()
+        doc["joints"]["hinge"]["swing"] = 1
+        self.check_error(doc)
+
+    def test_a_joint_drive_names_a_declared_var_of_a_usable_type(self):
+        doc = base_entity()
+        doc["joints"]["hinge"]["drive"] = {"var": "ghost", "from": 0, "to": 1}
+        self.check_error(doc)
+        doc["state"]["label"] = "string"
+        doc["joints"]["hinge"]["drive"] = {"var": "label"}
+        self.check_error(doc)
+        doc["joints"]["hinge"]["drive"] = {"var": "openness", "from": 0, "to": 1, "gain": 2}
+        self.check_error(doc)
+
+    def test_a_numeric_drive_needs_an_ordered_range_and_a_bool_drive_none(self):
+        doc = base_entity()
+        doc["joints"]["hinge"]["drive"] = {"var": "openness", "from": 1, "to": 0}
+        self.check_error(doc)
+        doc["joints"]["hinge"]["drive"] = {"var": "openness", "from": 0}
+        self.check_error(doc)
+        doc["joints"]["hinge"]["drive"] = {"var": "locked", "from": 0, "to": 1}
+        self.check_error(doc)
+        doc["joints"]["hinge"]["drive"] = {"var": "locked"}
+        worldc.validate_entity(doc)
+        doc["state"]["steps"] = "int"
+        doc["joints"]["hinge"]["drive"] = {
+            "var": "steps",
+            "from": 0,
+            "to": 2.5,
+        }  # int var, float bound
+        self.check_error(doc)
+
+    def test_a_joint_without_a_drive_needs_a_float_openness_to_default_to(self):
+        doc = base_entity()
+        worldc.validate_entity(doc)  # openness is float: the door convention applies
+        doc["state"] = {"height": "float", "locked": "bool"}
+        doc["navigation"] = {}
+        doc["network"]["replicated"] = ["height"]
+        self.check_error(doc)
+        doc["joints"]["hinge"]["drive"] = {"var": "height", "from": 0, "to": 1}
+        worldc.validate_entity(doc)
 
     def test_duplicate_affordances_rejected(self):
         doc = base_entity()

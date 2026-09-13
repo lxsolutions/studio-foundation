@@ -22,7 +22,10 @@
       "range_degrees": [
         -40,
         40
-      ]
+      ],
+      "drive": {
+        "var": "on"
+      }
     }
   },
   "state": {

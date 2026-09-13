@@ -10,6 +10,7 @@
 // loaded — importing a second copy here would be a second copy at runtime.
 export function createPlayCanvasAdapter(pc) {
   const nodes = new Map();
+  const bases = new Map(); // the placed position a slider translates from
   const root = new pc.GraphNode("root");
   return {
     name: "playcanvas",
@@ -19,17 +20,25 @@ export function createPlayCanvasAdapter(pc) {
         node.setLocalPosition(...spec.offset);
         (spec.parent ? nodes.get(spec.parent) : root).addChild(node);
         nodes.set(spec.node, node);
+        bases.set(spec.node, spec.offset);
       }
     },
     apply(bindings) {
       for (const binding of bindings) {
         const node = nodes.get(binding.node);
         if (!node) continue;
-        const quaternion = new pc.Quat().setFromAxisAngle(
-          new pc.Vec3(...binding.rotate.axis),
-          (binding.rotate.radians * 180) / Math.PI
-        );
-        node.setLocalRotation(quaternion);
+        if (binding.rotate) {
+          const quaternion = new pc.Quat().setFromAxisAngle(
+            new pc.Vec3(...binding.rotate.axis),
+            (binding.rotate.radians * 180) / Math.PI
+          );
+          node.setLocalRotation(quaternion);
+        }
+        if (binding.translate) {
+          const [x, y, z] = bases.get(binding.node);
+          const { axis, units } = binding.translate;
+          node.setLocalPosition(x + axis[0] * units, y + axis[1] * units, z + axis[2] * units);
+        }
         node.enabled = !binding.hidden;
       }
     },

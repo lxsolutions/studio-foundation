@@ -1,4 +1,4 @@
-// The engine-neutral presentation contract (ADR 0020).
+// The engine-neutral presentation contract (ADR 0020, drives ADR 0023).
 //
 // The kernel produces snapshots. A renderer must turn them into scene motion
 // without inventing anything — and "without inventing anything" has to mean
@@ -11,17 +11,20 @@
 // is what makes "engine-neutral" a property that can be tested rather than a
 // claim in a README.
 //
-// The instruction shape is deliberately narrow:
+// The instruction shape is deliberately narrow — one of two:
 //
-//   { node: "gate_main/leaf_l", rotate: { axis: [0,0,1], radians: -1.91 }, hidden: false }
+//   { node: "gate_main/leaf_l", rotate:    { axis: [0,0,1], radians: -1.91 }, hidden: false }
+//   { node: "cargo_lift/platform", translate: { axis: [0,1,0], units: 1.8 },  hidden: false }
 //
-// Axis-angle, because it is the one rotation form all of three.js, Babylon and
-// PlayCanvas accept without argument about Euler order or handedness. The axis
-// is READ FROM WORLD IR, never chosen here: the semantic layer already declares
-// which way a hinge turns, and a renderer that picks its own axis has silently
-// become a second, unverified source of truth.
+// Axis-angle for a hinge, because it is the one rotation form all of three.js,
+// Babylon and PlayCanvas accept without argument about Euler order or
+// handedness; a signed distance along the axis for a slider. The axis is READ
+// FROM WORLD IR, never chosen here — and so is WHICH STATE VAR moves the joint:
+// a joint declares its `drive`, and the binding this replaced hardcoded
+// `openness`, which is why a lift and a lever simulated for weeks without a
+// renderer able to show them.
 
-/** milli-units are the kernel's fixed-point scale for openness (0..1000). */
+/** milli-units are the kernel's fixed-point scale for World IR floats. */
 const MILLI = 1000;
 
 /**
@@ -45,13 +48,20 @@ export function resolveModel(layout, docs) {
     }
     const joints = [];
     for (const [jointName, joint] of Object.entries(doc.joints ?? {})) {
+      const where = `${placement.entity}.${jointName}`;
       const part = placement.parts?.[joint.child] ?? {};
+      const type = joint.type ?? "hinge";
+      if (type !== "hinge" && type !== "slider") {
+        throw new Error(`World IR joint ${where} has unknown type '${type}'`);
+      }
       joints.push({
         joint: jointName,
         part: joint.child,
         node: `${instanceName}/${joint.child}`,
-        axis: normalizeAxis(joint.axis, `${placement.entity}.${jointName}`),
-        rangeDegrees: joint.range_degrees ?? [0, 110],
+        type,
+        axis: normalizeAxis(joint.axis, where),
+        range: normalizeRange(type === "hinge" ? joint.range_degrees : joint.range_units, type, where),
+        drive: resolveDrive(doc, joint, where),
         // Which way THIS leaf swings is placement, not simulation and not
         // semantics: a double door mirrors because of how it was hung. Declaring
         // it in the layout keeps the renderer from inventing the sign per frame.
@@ -72,6 +82,46 @@ function normalizeAxis(axis, where) {
   return axis.map((n) => n / length);
 }
 
+function normalizeRange(range, type, where) {
+  const key = type === "hinge" ? "range_degrees" : "range_units";
+  if (!Array.isArray(range) || range.length !== 2 || !range.every((n) => Number.isFinite(n))) {
+    throw new Error(`World IR ${type} joint ${where} has no usable ${key}: ${JSON.stringify(range)}`);
+  }
+  return range;
+}
+
+/**
+ * Which state var moves a joint, in KERNEL units. A World IR float is held by
+ * the kernel as integer milli-units, so a drive declared as `from 0 to 1` on a
+ * float var spans 0..1000 in the snapshot; an int var is what it says; a bool
+ * var has no range — false is the joint's minimum, true its maximum. A joint
+ * that declares no drive inherits the door convention (`openness` over the
+ * whole travel), and only if the entity actually has a float `openness`.
+ */
+function resolveDrive(doc, joint, where) {
+  const state = doc.state ?? {};
+  let drive = joint.drive;
+  if (!drive) {
+    if (state.openness !== "float") {
+      throw new Error(
+        `World IR joint ${where} declares no drive and the entity has no float 'openness' to default to`
+      );
+    }
+    drive = { var: "openness", from: 0, to: 1 };
+  }
+  const kind = state[drive.var];
+  if (!kind) throw new Error(`World IR joint ${where} drive reads undeclared state var '${drive.var}'`);
+  if (kind === "bool") return { var: drive.var, kind: "bool" };
+  if (kind !== "float" && kind !== "int") {
+    throw new Error(`World IR joint ${where} drive cannot read ${kind} var '${drive.var}'`);
+  }
+  const scale = kind === "float" ? MILLI : 1;
+  if (!Number.isFinite(drive.from) || !Number.isFinite(drive.to) || drive.from >= drive.to) {
+    throw new Error(`World IR joint ${where} drive needs from < to`);
+  }
+  return { var: drive.var, kind: "number", from: drive.from * scale, to: drive.to * scale };
+}
+
 /**
  * One frame of kernel state -> the scene instructions that represent it.
  * Pure: same frame and model in, same instructions out, no engine loaded.
@@ -82,17 +132,27 @@ export function bindingsFromFrame(frame, model) {
     const instance = model.instances[instanceName];
     if (!instance) continue; // simulated but not placed in this scene
     for (const joint of instance.joints) {
-      const [minDeg, maxDeg] = joint.rangeDegrees;
-      const openness = clamp(entity.openness ?? 0, 0, MILLI);
-      const degrees = minDeg + (openness / MILLI) * (maxDeg - minDeg);
-      bindings.push({
-        node: joint.node,
-        rotate: { axis: joint.axis, radians: (degrees * Math.PI * joint.sign) / 180 },
-        hidden: entity.destroyed === true,
-      });
+      const fraction = driveFraction(joint.drive, entity);
+      const [low, high] = joint.range;
+      const amount = (low + fraction * (high - low)) * joint.sign;
+      const binding = { node: joint.node, hidden: entity.destroyed === true };
+      if (joint.type === "hinge") {
+        binding.rotate = { axis: joint.axis, radians: (amount * Math.PI) / 180 };
+      } else {
+        binding.translate = { axis: joint.axis, units: amount };
+      }
+      bindings.push(binding);
     }
   }
   return bindings;
+}
+
+/** Where the drive var sits in its declared range, clamped to 0..1. */
+function driveFraction(drive, entity) {
+  const value = entity[drive.var];
+  if (drive.kind === "bool") return value === true ? 1 : 0;
+  const v = typeof value === "number" ? value : drive.from;
+  return clamp((v - drive.from) / (drive.to - drive.from), 0, 1);
 }
 
 function clamp(value, low, high) {

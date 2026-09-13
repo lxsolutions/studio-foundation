@@ -6,7 +6,7 @@
     "cargo_lift": {
       "contract": {
         "sim_contract": "0.2",
-        "source_world_ir_sha256": "ce60e6e5e539f2450a520908c8b35226393df59b57920070b5bf6191e5e01ceb",
+        "source_world_ir_sha256": "9f2bd0014650db3fdbb2f13711b06929664746955f7929fe3770f4636a4dd899",
         "entity": "cargo_lift",
         "state": {
           "height": {
@@ -104,12 +104,12 @@
           ]
         }
       },
-      "contract_sha256": "faacc166bd50fcb87184857797c4b35aff16af2f5ecb9a1e2c5647d435120a8a"
+      "contract_sha256": "449d77728df5a18fc20d6c338ffa42119ac7d202793546d7092db4534cf1e2f5"
     },
     "signal_lever": {
       "contract": {
         "sim_contract": "0.2",
-        "source_world_ir_sha256": "7b708b07854805fbdfb1d245878c47541ed58c8bcd8490e07a210f305da5d093",
+        "source_world_ir_sha256": "8cef41cf05ab2aa1dc6f71bdcf5d123917b71639591bdb16447afe48e944c902",
         "entity": "signal_lever",
         "state": {
           "on": {
@@ -182,7 +182,7 @@
           "integrators": []
         }
       },
-      "contract_sha256": "5fedb0ed19043bb4f75fdbe62db9cc3dc28b8e30930a0675352303d15e3d6413"
+      "contract_sha256": "8fdefbcbf8c28b32ab1d18ea8e20a93f1110aee40add1dc3fa30ebf12b2502e5"
     }
   },
   "initial": {

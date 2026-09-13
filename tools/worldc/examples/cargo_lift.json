@@ -19,10 +19,16 @@
         1,
         0
       ],
-      "range_degrees": [
+      "type": "slider",
+      "range_units": [
         0,
-        0
-      ]
+        3.6
+      ],
+      "drive": {
+        "var": "height",
+        "from": 0,
+        "to": 1
+      }
     }
   },
   "state": {
