@@ -1,0 +1,49 @@
+{
+  "sim_replay": "0.1",
+  "seed": 0,
+  "ticks": 3,
+  "entities": {
+    "signal_lever": {
+      "contract": {
+        "sim_contract": "0.2",
+        "source_world_ir_sha256": "7b708b07854805fbdfb1d245878c47541ed58c8bcd8490e07a210f305da5d093",
+        "entity": "signal_lever",
+        "state": {
+          "on": {
+            "storage": "bool"
+          },
+          "pulls": {
+            "storage": "i64"
+          },
+          "jammed": {
+            "storage": "bool"
+          }
+        },
+        "affordances": [
+          "pull",
+          "jam",
+          "free"
+        ],
+        "parameters": {
+          "open_rate_milli": 250,
+          "max_health": 100,
+          "navigation": {
+            "blocks_below": [],
+            "never_blocks_when_destroyed": false
+          }
+        }
+      },
+      "contract_sha256": "814acb9a87049f2517d09274274462dd42c31aa717b1642e84cbe353fc7decf1"
+    }
+  },
+  "initial": {},
+  "events": [
+    [
+      0,
+      "signal_lever",
+      "pull",
+      null
+    ]
+  ],
+  "expect_error": "E_CONTRACT_SHAPE"
+}

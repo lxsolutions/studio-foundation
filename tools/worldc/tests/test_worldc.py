@@ -26,6 +26,7 @@ from bforge import recipe as recipe_mod  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[3]
 EXAMPLE = REPO / "tools" / "worldc" / "examples" / "fortress_gate.json"
+EXAMPLES = EXAMPLE.parent
 
 
 def base_entity() -> dict:
@@ -175,6 +176,41 @@ def write_glb(path: Path, nodes: list[dict]) -> Path:
     )
     path.write_bytes(blob)
     return path
+
+
+class DeclaredSemantics(unittest.TestCase):
+    """World IR documents that say what their affordances DO compile to a 0.2
+    contract, and the compiler refuses a malformed one itself (ADR 0021)."""
+
+    def test_the_non_door_examples_compile_to_declared_contracts(self):
+        for name in ("cargo_lift", "signal_lever"):
+            doc = worldc.load_entity(EXAMPLES / f"{name}.json")
+            compiled = worldc.sim_contract(doc)
+            self.assertEqual(compiled["sim_contract"], "0.2", name)
+            self.assertEqual(set(compiled["semantics"]["affordances"]), set(doc["affordances"]))
+
+    def test_the_door_still_compiles_to_v01_without_semantics(self):
+        compiled = worldc.sim_contract(worldc.load_entity(EXAMPLE))
+        self.assertEqual(compiled["sim_contract"], "0.1")
+        self.assertNotIn("semantics", compiled)
+
+    def test_declared_documents_name_their_own_parameters(self):
+        compiled = worldc.sim_contract(worldc.load_entity(EXAMPLES / "cargo_lift.json"))
+        self.assertEqual(compiled["parameters"]["lift_rate_milli"], 200)
+        self.assertEqual(compiled["parameters"]["max_power"], 60)
+
+    def test_a_door_document_still_cannot_invent_parameters(self):
+        doc = worldc.load_entity(EXAMPLE)
+        doc["sim"] = {"lift_rate_milli": 200}
+        with self.assertRaises(worldc.WorldIRError):
+            worldc.sim_contract(doc)
+
+    def test_malformed_semantics_fail_at_compile_time(self):
+        doc = worldc.load_entity(EXAMPLES / "signal_lever.json")
+        doc["semantics"]["affordances"]["jam"]["effects"][0]["value"] = 1  # int into a bool
+        with self.assertRaises(worldc.WorldIRError) as ctx:
+            worldc.sim_contract(doc)
+        self.assertIn("E_SEMANTICS_SHAPE", str(ctx.exception))
 
 
 class ArtifactVerification(unittest.TestCase):

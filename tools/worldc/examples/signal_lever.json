@@ -1,0 +1,159 @@
+{
+  "world_ir": "0.1",
+  "entity": "signal_lever",
+  "brief": "a signal lever that can jam: pulling flips it and counts the pull",
+  "parts": {
+    "post": {
+      "role": "static"
+    },
+    "handle": {
+      "parent": "post"
+    }
+  },
+  "joints": {
+    "pivot": {
+      "parent": "post",
+      "child": "handle",
+      "axis": [
+        1,
+        0,
+        0
+      ],
+      "range_degrees": [
+        -40,
+        40
+      ]
+    }
+  },
+  "state": {
+    "on": "bool",
+    "pulls": "int",
+    "jammed": "bool"
+  },
+  "affordances": [
+    "pull",
+    "jam",
+    "free"
+  ],
+  "sim": {},
+  "semantics": {
+    "affordances": {
+      "pull": {
+        "arg": "none",
+        "guards": [
+          {
+            "var": "jammed",
+            "equals": false
+          }
+        ],
+        "effects": [
+          {
+            "op": "toggle",
+            "var": "on"
+          },
+          {
+            "op": "add",
+            "var": "pulls",
+            "value": 1,
+            "sign": 1
+          }
+        ]
+      },
+      "jam": {
+        "arg": "none",
+        "effects": [
+          {
+            "op": "set",
+            "var": "jammed",
+            "value": true
+          }
+        ]
+      },
+      "free": {
+        "arg": "none",
+        "effects": [
+          {
+            "op": "set",
+            "var": "jammed",
+            "value": false
+          }
+        ]
+      }
+    },
+    "integrators": []
+  },
+  "navigation": {},
+  "network": {
+    "authority": "server",
+    "replicated": [
+      "on",
+      "pulls",
+      "jammed"
+    ]
+  },
+  "requirements": {
+    "max_triangles": 2000,
+    "require_collision": "post",
+    "payload_kb_max": 400,
+    "platform": "browser_webgpu",
+    "asset_class": "prop"
+  },
+  "recipe": {
+    "recipe_version": 1,
+    "asset_id": "signal_lever",
+    "brief": "a signal lever: a post with a pivoting handle and collision",
+    "steps": [
+      {
+        "op": "build.box",
+        "args": {
+          "name": "post",
+          "size": [
+            0.3,
+            0.3,
+            1.2
+          ]
+        }
+      },
+      {
+        "op": "build.box",
+        "args": {
+          "name": "handle",
+          "size": [
+            0.12,
+            0.12,
+            0.8
+          ],
+          "location": [
+            0,
+            0,
+            0.6
+          ]
+        }
+      },
+      {
+        "op": "object.parent",
+        "args": {
+          "name": "handle",
+          "parent": "post"
+        }
+      },
+      {
+        "op": "gameready.collision",
+        "args": {
+          "name": "post",
+          "mode": "convex"
+        }
+      }
+    ],
+    "requirements": {
+      "max_triangles": 2000,
+      "require_collision": true,
+      "platform": "browser_webgpu",
+      "asset_class": "prop"
+    },
+    "export": {
+      "engine": "babylon",
+      "category": "prop"
+    }
+  }
+}

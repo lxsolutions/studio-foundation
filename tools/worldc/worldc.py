@@ -64,6 +64,7 @@ TOP_LEVEL_KEYS = {
     "network",
     "requirements",
     "sim",
+    "semantics",  # declared affordance/integrator semantics (ADR 0021)
     "recipe",
     "extensions",  # the only place nonstandard fields may live
 }
@@ -299,8 +300,15 @@ def verify_artifact(doc: dict, glb_path: Path) -> list[dict]:
 
 # ------------------------------------------------------ simulation contracts
 
+# 0.1 lists affordance names and leans on the kernel's built-in door; 0.2 says
+# what its own affordances DO. A document declaring semantics compiles to 0.2.
 SIM_CONTRACT_VERSION = "0.1"
+SIM_CONTRACT_VERSION_DECLARED = "0.2"
 SIM_STORAGE = {"float": "milli_i64", "int": "i64", "bool": "bool", "string": "string"}
+# The door's own parameters, kept as defaults so v0.1 documents are unchanged.
+# A document with declared semantics may name any parameter its effects read —
+# restricting the set to two was a door assumption, not a safety property, and
+# the kernel validates that every parameter reference resolves anyway.
 SIM_PARAM_KEYS = {"open_rate_milli", "max_health"}
 
 
@@ -318,8 +326,11 @@ def sim_contract(doc: dict, source: str = "<document>") -> dict:
     sim = doc.get("sim", {})
     if not isinstance(sim, dict):
         raise WorldIRError(f"{source}: sim must be an object")
+    declared = doc.get("semantics")
+    if declared is not None and not isinstance(declared, dict):
+        raise WorldIRError(f"{source}: semantics must be an object")
     unknown = sorted(set(sim) - SIM_PARAM_KEYS)
-    if unknown:
+    if unknown and declared is None:
         raise WorldIRError(f"{source}: unknown sim parameters {unknown}")
     parameters = {"open_rate_milli": 250, "max_health": 100}
     for key_name, value in sim.items():
@@ -338,8 +349,8 @@ def sim_contract(doc: dict, source: str = "<document>") -> dict:
         "never_blocks_when_destroyed": bool(nav.get("never_blocks_when_destroyed", False)),
     }
 
-    return {
-        "sim_contract": SIM_CONTRACT_VERSION,
+    contract = {
+        "sim_contract": SIM_CONTRACT_VERSION if declared is None else SIM_CONTRACT_VERSION_DECLARED,
         "source_world_ir_sha256": hashlib.sha256(recipe_mod.canonicalize(doc)).hexdigest(),
         "entity": doc["entity"],
         "state": {
@@ -348,6 +359,17 @@ def sim_contract(doc: dict, source: str = "<document>") -> dict:
         "affordances": list(doc.get("affordances", [])),
         "parameters": {**parameters, "navigation": navigation},
     }
+    if declared is not None:
+        contract["semantics"] = declared
+    # The kernel is the authority on what a contract may say. Asking it here
+    # means a document with malformed semantics fails at COMPILE time, in the
+    # compiler's own error type, rather than at the first replay that loads it.
+    sim_mod = _sim_kernel()
+    try:
+        sim_mod.validate_contract(doc["entity"], contract, source)
+    except sim_mod.SimError as exc:
+        raise WorldIRError(f"{source}: {exc}") from exc
+    return contract
 
 
 # ------------------------------------------------------------------ compile

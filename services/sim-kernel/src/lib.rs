@@ -18,6 +18,9 @@ use std::collections::BTreeMap;
 pub const MAX_EVENT_ARG: i64 = 65_535;
 pub const MAX_TICKS: i64 = 1_000_000;
 pub const QUANTUM: i64 = 1000;
+/// 0.1 lists affordance names and relies on the built-in door; 0.2 declares its
+/// own semantics. Both run through the same interpreter (ADR 0021).
+pub const SUPPORTED_CONTRACTS: [&str; 2] = ["0.1", "0.2"];
 
 #[derive(Debug)]
 pub struct SimError {
@@ -140,12 +143,6 @@ fn params(contract: &Value) -> &Map<String, Value> {
         .expect("contract parameters present (validated)")
 }
 
-fn param_i64(contract: &Value, key: &str, default: i64) -> i64 {
-    params(contract)
-        .get(key)
-        .and_then(Value::as_i64)
-        .unwrap_or(default)
-}
 
 fn affordances(contract: &Value) -> Vec<&str> {
     contract
@@ -216,8 +213,277 @@ fn get_i64(map: &Map<String, Value>, key: &str) -> i64 {
     map.get(key).and_then(Value::as_i64).unwrap_or(0)
 }
 
+// ------------------------------------------------------- declared semantics
+//
+// A line-for-line mirror of tools/sim/kernel.py's interpreter (ADR 0021). The
+// kernel used to hardcode a door: six verbs, four state vars, one integrator,
+// and E_NO_SEMANTICS for everything else — while World IR let an author
+// declare any state schema and any affordance. Semantics are now DECLARED in a
+// closed vocabulary: guards plus an ordered list of effects, no loops, no
+// expressions, no escape hatch (ADR 0018 rules out model-emitted executable
+// code reaching production state).
+//
+// The door is written in that vocabulary below and a v0.1 contract desugars
+// into it, so there is one execution path and the frozen conformance corpus
+// re-derives byte-identical golden hashes through the general interpreter.
+//
+// Divergence between this and the Python twin is the failure mode that matters,
+// so the structure is kept deliberately parallel even where Rust would prefer
+// something else.
+
+fn door_profile() -> &'static Value {
+    static PROFILE: std::sync::OnceLock<Value> = std::sync::OnceLock::new();
+    PROFILE.get_or_init(|| {
+        serde_json::json!({
+            "affordances": {
+                "open": {
+                    "arg": "none",
+                    // A destroyed gate hangs open; a locked one absorbs the
+                    // command. A guard that does not hold is a no-op.
+                    "guards": [
+                        {"var": "destroyed", "equals": false},
+                        {"var": "locked", "equals": false}
+                    ],
+                    "effects": [
+                        {"op": "set_control", "control": "openness_target",
+                         "value": {"const": QUANTUM}}
+                    ]
+                },
+                "close": {
+                    "arg": "none",
+                    "guards": [{"var": "destroyed", "equals": false}],
+                    "effects": [
+                        {"op": "set_control", "control": "openness_target",
+                         "value": {"const": 0}}
+                    ]
+                },
+                "lock": {
+                    "arg": "none",
+                    "effects": [{"op": "set", "var": "locked", "value": {"const": true}}]
+                },
+                "unlock": {
+                    "arg": "none",
+                    "effects": [{"op": "set", "var": "locked", "value": {"const": false}}]
+                },
+                "attack": {
+                    "arg": "count",
+                    "requires": ["health"],
+                    "effects": [
+                        {"op": "add", "var": "health", "value": {"arg": true}, "sign": -1,
+                         "clamp": {"min": {"const": 0}}},
+                        // Effects apply in order and read what the previous one
+                        // left, so these see the health just written.
+                        {"op": "set", "var": "destroyed", "value": {"const": true},
+                         "when": [{"var": "health", "equals": 0},
+                                  {"var": "destroyed", "exists": true}]},
+                        {"op": "set_control", "control": "openness_target",
+                         "value": {"const": QUANTUM},
+                         "when": [{"var": "health", "equals": 0},
+                                  {"var": "destroyed", "exists": true}]}
+                    ]
+                },
+                "repair": {
+                    "arg": "count",
+                    "requires": ["health"],
+                    "effects": [
+                        {"op": "add", "var": "health", "value": {"arg": true}, "sign": 1,
+                         "clamp": {"max": {"param": "max_health", "default": 100}}},
+                        {"op": "set", "var": "destroyed", "value": {"const": false},
+                         "when": [{"var": "health", "gt": {"const": 0}},
+                                  {"var": "destroyed", "exists": true}]}
+                    ]
+                }
+            },
+            "integrators": [
+                {"var": "openness", "toward": "openness_target",
+                 "rate": {"param": "open_rate_milli", "default": 250}}
+            ]
+        })
+    })
+}
+
+pub const EFFECT_OPS: [&str; 4] = ["set", "set_control", "add", "toggle"];
+pub const ARG_KINDS: [&str; 2] = ["none", "count"];
+pub const GUARD_TESTS: [&str; 4] = ["equals", "exists", "gt", "lt"];
+pub const VALUE_SOURCES: [&str; 4] = ["const", "arg", "param", "var"];
+
+/// Storage says how a value is held; the TYPE says what may be written to it
+/// and compared against it. Mirrors `STORAGE_TYPE` in kernel.py.
+fn storage_type(storage: &str) -> Option<&'static str> {
+    match storage {
+        "milli_i64" | "i64" => Some("int"),
+        "bool" => Some("bool"),
+        "string" => Some("string"),
+        _ => None,
+    }
+}
+
+/// A JSON integer in i64 range. serde_json parses anything wider as u64 or
+/// f64 and `as_i64` refuses both, which is exactly Python's `_is_int`.
+fn is_int(value: &Value) -> bool {
+    value.as_i64().is_some()
+}
+
+/// The type of a bare literal, or None when it is not one the kernel holds.
+fn literal_type(value: &Value) -> Option<&'static str> {
+    match value {
+        Value::Bool(_) => Some("bool"),
+        Value::Number(_) if is_int(value) => Some("int"),
+        Value::String(_) => Some("string"),
+        _ => None,
+    }
+}
+
+/// The contract's declared semantics, or the door profile it desugars to.
+/// Resolved once per run by `run_replay_value`, never per tick.
+fn semantics(contract: &Value) -> Value {
+    if let Some(declared) = contract.get("semantics") {
+        return declared.clone();
+    }
+    let names = affordances(contract);
+    let mut chosen = Map::new();
+    if let Some(profile) = door_profile()["affordances"].as_object() {
+        for (verb, spec) in profile {
+            if names.contains(&verb.as_str()) {
+                chosen.insert(verb.clone(), spec.clone());
+            }
+        }
+    }
+    serde_json::json!({
+        "affordances": Value::Object(chosen),
+        "integrators": door_profile()["integrators"].clone(),
+    })
+}
+
+/// What an absent state var compares as: the zero of the literal's type. Only
+/// the v0.1 door can reach this (a v0.2 contract declares every var it names
+/// and `initial_state` seeds them all), but both kernels must agree here —
+/// Python says `True == 1` and serde_json does not.
+fn typed_zero(like: &Value) -> Value {
+    match like {
+        Value::Bool(_) => Value::Bool(false),
+        Value::Number(_) => Value::from(0),
+        Value::String(_) => Value::String(String::new()),
+        _ => Value::Null,
+    }
+}
+
+/// A declared value: a bare literal, or one of {const, arg, param, var}.
+/// Shapes are validated at load, so nothing here has to guess.
+fn resolve(
+    source: &Value,
+    arg: Option<i64>,
+    state: &Map<String, Value>,
+    params: &Map<String, Value>,
+) -> Value {
+    let Some(obj) = source.as_object() else {
+        return source.clone(); // bare literal
+    };
+    if let Some(constant) = obj.get("const") {
+        return constant.clone();
+    }
+    if obj.contains_key("arg") {
+        return Value::from(arg.unwrap_or(0));
+    }
+    if let Some(name) = obj.get("param").and_then(Value::as_str) {
+        let default = obj.get("default").and_then(Value::as_i64).unwrap_or(0);
+        return Value::from(params.get(name).and_then(Value::as_i64).unwrap_or(default));
+    }
+    if let Some(name) = obj.get("var").and_then(Value::as_str) {
+        return state.get(name).cloned().unwrap_or_else(|| Value::from(0));
+    }
+    Value::Null
+}
+
+fn guard_holds(guard: &Value, state: &Map<String, Value>, params: &Map<String, Value>) -> bool {
+    let Some(obj) = guard.as_object() else { return true };
+    let Some(var) = obj.get("var").and_then(Value::as_str) else { return true };
+    if let Some(expected) = obj.get("exists").and_then(Value::as_bool) {
+        return state.contains_key(var) == expected;
+    }
+    for test in ["equals", "gt", "lt"] {
+        let Some(spec) = obj.get(test) else { continue };
+        let wanted = resolve(spec, None, state, params);
+        let actual = state.get(var).cloned().unwrap_or_else(|| typed_zero(&wanted));
+        if test == "equals" {
+            return actual == wanted; // serde_json equality is type-strict
+        }
+        if actual.is_boolean() || wanted.is_boolean() {
+            return false; // ordering on booleans is not a question with an answer
+        }
+        let (a, b) = (actual.as_i64().unwrap_or(0), wanted.as_i64().unwrap_or(0));
+        return if test == "gt" { a > b } else { a < b };
+    }
+    true
+}
+
+fn guards_hold(
+    guards: Option<&Value>,
+    state: &Map<String, Value>,
+    params: &Map<String, Value>,
+) -> bool {
+    let Some(list) = guards.and_then(Value::as_array) else { return true };
+    list.iter().all(|guard| guard_holds(guard, state, params))
+}
+
+fn apply_effect(
+    effect: &Value,
+    arg: Option<i64>,
+    state: &mut Map<String, Value>,
+    control: &mut Map<String, Value>,
+    params: &Map<String, Value>,
+) {
+    if !guards_hold(effect.get("when"), state, params) {
+        return;
+    }
+    let op = effect.get("op").and_then(Value::as_str).unwrap_or("");
+    let value_spec = effect.get("value").unwrap_or(&Value::Null);
+    match op {
+        "set" => {
+            if let Some(var) = effect.get("var").and_then(Value::as_str) {
+                let value = resolve(value_spec, arg, state, params);
+                state.insert(var.to_string(), value);
+            }
+        }
+        "set_control" => {
+            if let Some(name) = effect.get("control").and_then(Value::as_str) {
+                let value = resolve(value_spec, arg, state, params);
+                control.insert(name.to_string(), value);
+            }
+        }
+        "toggle" => {
+            if let Some(var) = effect.get("var").and_then(Value::as_str) {
+                let current = state.get(var).and_then(Value::as_bool).unwrap_or(false);
+                state.insert(var.to_string(), Value::Bool(!current));
+            }
+        }
+        "add" => {
+            let Some(var) = effect.get("var").and_then(Value::as_str) else { return };
+            let sign = effect.get("sign").and_then(Value::as_i64).unwrap_or(1);
+            // Saturating, and the Python kernel saturates in the same two
+            // places, so the two cannot drift apart at the edge of i64.
+            let delta = resolve(value_spec, arg, state, params)
+                .as_i64()
+                .unwrap_or(0)
+                .saturating_mul(sign);
+            let mut next = get_i64(state, var).saturating_add(delta);
+            if let Some(clamp) = effect.get("clamp").and_then(Value::as_object) {
+                if let Some(low) = clamp.get("min") {
+                    next = next.max(resolve(low, arg, state, params).as_i64().unwrap_or(0));
+                }
+                if let Some(high) = clamp.get("max") {
+                    next = next.min(resolve(high, arg, state, params).as_i64().unwrap_or(0));
+                }
+            }
+            state.insert(var.to_string(), Value::from(next));
+        }
+        _ => {}
+    }
+}
+
 fn apply_event(
     contract: &Value,
+    declared: &Value,
     entity: &str,
     sim: &mut EntitySim,
     verb: &str,
@@ -229,21 +495,28 @@ fn apply_event(
             format!("{entity}: event verb {verb:?} is not a declared affordance"),
         ));
     }
-    match verb {
-        "open" | "close" | "lock" | "unlock" => {
-            if !arg.is_null() {
-                return Err(SimError::new(
-                    "E_ARGUMENT_DOMAIN",
-                    format!("{entity}: {verb} takes no argument"),
-                ));
-            }
-        }
-        "attack" | "repair" => match arg.as_i64() {
-            Some(n) if (0..=MAX_EVENT_ARG).contains(&n) => {}
+    let Some(spec) = declared.get("affordances").and_then(|a| a.get(verb)) else {
+        return Err(SimError::new(
+            "E_NO_SEMANTICS",
+            format!("{entity}: affordance {verb:?} is declared but has no semantics"),
+        ));
+    };
+
+    let kind = spec.get("arg").and_then(Value::as_str).unwrap_or("none");
+    if kind == "none" && !arg.is_null() {
+        return Err(SimError::new(
+            "E_ARGUMENT_DOMAIN",
+            format!("{entity}: {verb} takes no argument"),
+        ));
+    }
+    let mut amount: Option<i64> = None;
+    if kind == "count" {
+        match arg.as_i64() {
+            Some(n) if (0..=MAX_EVENT_ARG).contains(&n) => amount = Some(n),
             Some(_) => {
                 return Err(SimError::new(
                     "E_ARGUMENT_RANGE",
-                    format!("{entity}: {verb} amount out of range 0..{MAX_EVENT_ARG}"),
+                    format!("{entity}: {verb} amount outside 0..{MAX_EVENT_ARG}"),
                 ))
             }
             None => {
@@ -252,89 +525,527 @@ fn apply_event(
                     format!("{entity}: {verb} needs a nonnegative integer amount"),
                 ))
             }
-        },
-        other => {
-            return Err(SimError::new(
-                "E_NO_SEMANTICS",
-                format!("{entity}: no semantics for affordance {other:?} in kernel v0.1"),
-            ))
         }
     }
 
-    let max_health = param_i64(contract, "max_health", 100);
-    let destroyed = sim.state.get("destroyed").and_then(Value::as_bool).unwrap_or(false);
-    let locked = sim.state.get("locked").and_then(Value::as_bool).unwrap_or(false);
-
-    match verb {
-        "open" => {
-            if !destroyed && !locked {
-                sim.control.insert("openness_target".into(), Value::from(QUANTUM));
-            }
-        }
-        "close" => {
-            if !destroyed {
-                sim.control.insert("openness_target".into(), Value::from(0));
-            }
-        }
-        "lock" => {
-            sim.state.insert("locked".into(), Value::from(true));
-        }
-        "unlock" => {
-            sim.state.insert("locked".into(), Value::from(false));
-        }
-        "attack" => {
-            if !sim.state.contains_key("health") {
+    let parameters = params(contract);
+    if let Some(required) = spec.get("requires").and_then(Value::as_array) {
+        for var in required.iter().filter_map(Value::as_str) {
+            if !sim.state.contains_key(var) {
                 return Err(SimError::new(
                     "E_NO_SEMANTICS",
-                    format!("{entity}: attack needs a 'health' state var"),
+                    format!("{entity}: {verb} needs a {var:?} state var"),
                 ));
             }
-            let damage = arg.as_i64().unwrap_or(0);
-            let health = get_i64(&sim.state, "health").saturating_sub(damage).max(0);
-            sim.state.insert("health".into(), Value::from(health));
-            if health == 0 && sim.state.contains_key("destroyed") {
-                sim.state.insert("destroyed".into(), Value::from(true));
-                sim.control.insert("openness_target".into(), Value::from(QUANTUM));
-            }
         }
-        "repair" => {
-            if !sim.state.contains_key("health") {
-                return Err(SimError::new(
-                    "E_NO_SEMANTICS",
-                    format!("{entity}: repair needs a 'health' state var"),
-                ));
-            }
-            let amount = arg.as_i64().unwrap_or(0);
-            let health = get_i64(&sim.state, "health").saturating_add(amount).min(max_health);
-            sim.state.insert("health".into(), Value::from(health));
-            if health > 0 && sim.state.contains_key("destroyed") {
-                sim.state.insert("destroyed".into(), Value::from(false));
-            }
+    }
+    if !guards_hold(spec.get("guards"), &sim.state, parameters) {
+        return Ok(()); // a guard that does not hold is a no-op, not a failure
+    }
+    if let Some(effects) = spec.get("effects").and_then(Value::as_array) {
+        for effect in effects {
+            apply_effect(effect, amount, &mut sim.state, &mut sim.control, parameters);
         }
-        _ => unreachable!(),
     }
     Ok(())
 }
 
-fn step_entity(contract: &Value, sim: &mut EntitySim) {
-    if !sim.state.contains_key("openness") {
+fn step_entity(contract: &Value, declared: &Value, sim: &mut EntitySim) {
+    let Some(integrators) = declared.get("integrators").and_then(Value::as_array) else {
         return;
-    }
-    let rate = param_i64(contract, "open_rate_milli", 250);
-    let current = get_i64(&sim.state, "openness");
-    let target = sim
-        .control
-        .get("openness_target")
-        .and_then(Value::as_i64)
-        .unwrap_or(current);
-    let next = if current < target {
-        (current + rate).min(target)
-    } else if current > target {
-        (current - rate).max(target)
-    } else {
-        current
     };
-    sim.state.insert("openness".into(), Value::from(next));
+    let parameters = params(contract);
+    for integrator in integrators {
+        let Some(var) = integrator.get("var").and_then(Value::as_str) else { continue };
+        if !sim.state.contains_key(var) {
+            continue; // nothing to integrate on an entity without the variable
+        }
+        let current = get_i64(&sim.state, var);
+        let target = integrator
+            .get("toward")
+            .and_then(Value::as_str)
+            .and_then(|name| sim.control.get(name))
+            .and_then(Value::as_i64)
+            .unwrap_or(current);
+        let rate = integrator
+            .get("rate")
+            .map(|spec| resolve(spec, None, &sim.state, parameters))
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0);
+        let next = if current < target {
+            current.saturating_add(rate).min(target)
+        } else if current > target {
+            current.saturating_sub(rate).max(target)
+        } else {
+            current
+        };
+        sim.state.insert(var.to_string(), Value::from(next));
+    }
+}
+
+/// Shape the contract before either kernel reads a value from it.
+///
+/// Mirrors `_validate_contract` in kernel.py. Everything here is a place the
+/// two kernels used to be able to disagree on malformed input — a float
+/// parameter Python truncates and this kernel ignores, a storage type one
+/// knows and the other does not. Each is refused up front with a stable code,
+/// so parity holds for rejections too.
+fn validate_contract(entity: &str, contract: &Map<String, Value>) -> Result<(), SimError> {
+    let version = contract.get("sim_contract").and_then(Value::as_str).unwrap_or("");
+    if !SUPPORTED_CONTRACTS.contains(&version) {
+        return Err(SimError::new(
+            "E_CONTRACT_VERSION",
+            format!("entity {entity:?}: unsupported sim_contract version"),
+        ));
+    }
+    let reject = |message: String| {
+        SimError::new("E_CONTRACT_SHAPE", format!("entity {entity:?} {message}"))
+    };
+    for field in ["state", "affordances", "parameters"] {
+        if !contract.contains_key(field) {
+            return Err(reject(format!("contract is missing {field}")));
+        }
+    }
+
+    let Some(state) = contract["state"].as_object() else {
+        return Err(reject("state must be an object".into()));
+    };
+    for (var, spec) in state {
+        let known = spec
+            .get("storage")
+            .and_then(Value::as_str)
+            .and_then(storage_type)
+            .is_some();
+        if !known {
+            return Err(reject(format!(
+                "state var {var:?} needs a storage of [milli_i64, i64, bool, string]"
+            )));
+        }
+    }
+
+    let identifiers = contract["affordances"]
+        .as_array()
+        .map(|list| list.iter().all(|v| v.as_str().map(is_identifier).unwrap_or(false)))
+        .unwrap_or(false);
+    if !identifiers {
+        return Err(reject("affordances must be a list of snake_case identifiers".into()));
+    }
+
+    let Some(parameters) = contract["parameters"].as_object() else {
+        return Err(reject("parameters must be an object".into()));
+    };
+    for (name, value) in parameters {
+        if name != "navigation" && !is_int(value) {
+            return Err(reject(format!("parameter {name:?} must be an i64 integer")));
+        }
+    }
+    if let Some(nav) = parameters.get("navigation") {
+        let Some(nav) = nav.as_object() else {
+            return Err(reject("parameters.navigation must be an object".into()));
+        };
+        if let Some(flag) = nav.get("never_blocks_when_destroyed") {
+            if !flag.is_boolean() {
+                return Err(reject(
+                    "parameters.navigation.never_blocks_when_destroyed must be a bool".into(),
+                ));
+            }
+        }
+        if let Some(rules) = nav.get("blocks_below") {
+            let Some(rules) = rules.as_array() else {
+                return Err(reject("parameters.navigation.blocks_below must be a list".into()));
+            };
+            for rule in rules {
+                let shaped = rule
+                    .as_object()
+                    .map(|r| {
+                        r.get("var").and_then(Value::as_str).is_some()
+                            && r.get("threshold_milli").map(is_int).unwrap_or(false)
+                    })
+                    .unwrap_or(false);
+                if !shaped {
+                    return Err(reject(
+                        "parameters.navigation.blocks_below entries need a var and an i64 threshold_milli".into(),
+                    ));
+                }
+            }
+        }
+    }
+
+    // The version says where meaning comes from: 0.1 inherits the door, 0.2
+    // declares its own. A contract that says one and does the other is a
+    // contract two readers can interpret differently.
+    let has_semantics = contract.contains_key("semantics");
+    if version == "0.1" && has_semantics {
+        return Err(reject(
+            "a 0.1 contract inherits the door and cannot carry semantics; declare sim_contract 0.2".into(),
+        ));
+    }
+    if version == "0.2" && !has_semantics {
+        return Err(reject("a 0.2 contract must declare a semantics block".into()));
+    }
+    validate_semantics(entity, contract)
+}
+
+/// The state schema a semantics block is typed against (ADR 0021). A
+/// line-for-line mirror of the closures inside `_validate_semantics` in
+/// kernel.py: same checks, same order, same stable code.
+struct SemanticsSchema<'a> {
+    entity: &'a str,
+    var_types: BTreeMap<&'a str, &'static str>,
+    int_params: Vec<&'a str>,
+    listed: Vec<&'a str>,
+}
+
+impl<'a> SemanticsSchema<'a> {
+    fn reject(&self, message: String) -> SimError {
+        SimError::new("E_SEMANTICS_SHAPE", format!("entity {:?} {message}", self.entity))
+    }
+
+    fn only_keys(
+        &self,
+        obj: &Map<String, Value>,
+        allowed: &[&str],
+        what: &str,
+    ) -> Result<(), SimError> {
+        let unknown: Vec<&String> =
+            obj.keys().filter(|key| !allowed.contains(&key.as_str())).collect();
+        if unknown.is_empty() {
+            Ok(())
+        } else {
+            Err(self.reject(format!("{what} has unknown keys {unknown:?}")))
+        }
+    }
+
+    /// A value source of the expected type: a bare literal or one of VALUE_SOURCES.
+    fn check_value(
+        &self,
+        value: Option<&Value>,
+        what: &str,
+        expected: &str,
+        arg_kind: &str,
+    ) -> Result<(), SimError> {
+        let not_a_source = || {
+            self.reject(format!(
+                "{what} must be a bool, i64 integer or string literal, or a value source"
+            ))
+        };
+        let Some(value) = value else { return Err(not_a_source()) };
+        let actual: &str = match value.as_object() {
+            None => literal_type(value).ok_or_else(not_a_source)?,
+            Some(obj) => {
+                let sources: Vec<&str> =
+                    VALUE_SOURCES.iter().copied().filter(|key| obj.contains_key(*key)).collect();
+                if sources.len() != 1 {
+                    return Err(self.reject(format!("{what} needs exactly one of {VALUE_SOURCES:?}")));
+                }
+                let kind = sources[0];
+                let allowed: &[&str] =
+                    if kind == "param" { &["param", "default"] } else { std::slice::from_ref(&kind) };
+                self.only_keys(obj, allowed, what)?;
+                match kind {
+                    "const" => literal_type(&obj["const"]).ok_or_else(|| {
+                        self.reject(format!("{what}.const must be a bool, an i64 integer or a string"))
+                    })?,
+                    "arg" => {
+                        if obj["arg"] != Value::Bool(true) {
+                            return Err(self.reject(format!("{what}.arg must be true")));
+                        }
+                        if arg_kind != "count" {
+                            return Err(self.reject(format!(
+                                "{what} reads the event argument, but the affordance takes none"
+                            )));
+                        }
+                        "int"
+                    }
+                    "param" => {
+                        let Some(name) = obj["param"].as_str() else {
+                            return Err(self.reject(format!("{what}.param must name a parameter")));
+                        };
+                        if let Some(default) = obj.get("default") {
+                            if !is_int(default) {
+                                return Err(self.reject(format!("{what}.default must be an i64 integer")));
+                            }
+                        }
+                        if !self.int_params.contains(&name) && !obj.contains_key("default") {
+                            return Err(self.reject(format!(
+                                "{what} reads parameter {name:?}, which is not set and has no default"
+                            )));
+                        }
+                        "int"
+                    }
+                    _ => {
+                        let name = obj["var"].as_str();
+                        match name.and_then(|n| self.var_types.get(n)) {
+                            Some(var_type) => var_type,
+                            None => {
+                                return Err(self.reject(format!(
+                                    "{what} reads undeclared state var {:?}",
+                                    obj["var"]
+                                )))
+                            }
+                        }
+                    }
+                }
+            }
+        };
+        if actual != expected {
+            return Err(self.reject(format!("{what} must be {expected}, not {actual}")));
+        }
+        Ok(())
+    }
+
+    fn check_guards(
+        &self,
+        guards: Option<&Value>,
+        what: &str,
+        arg_kind: &str,
+    ) -> Result<(), SimError> {
+        let Some(guards) = guards else { return Ok(()) };
+        let Some(list) = guards.as_array() else {
+            return Err(self.reject(format!("{what} must be a list")));
+        };
+        for (i, guard) in list.iter().enumerate() {
+            let label = format!("{what}[{i}]");
+            let var = guard.as_object().and_then(|g| g.get("var")).and_then(Value::as_str);
+            let (Some(obj), Some(var)) = (guard.as_object(), var) else {
+                return Err(self.reject(format!("{label} needs a var")));
+            };
+            let Some(var_type) = self.var_types.get(var).copied() else {
+                return Err(self.reject(format!("{label} tests undeclared state var {var:?}")));
+            };
+            let tests: Vec<&str> =
+                GUARD_TESTS.iter().copied().filter(|test| obj.contains_key(*test)).collect();
+            if tests.len() != 1 {
+                return Err(self.reject(format!("{label} needs exactly one of {GUARD_TESTS:?}")));
+            }
+            let test = tests[0];
+            self.only_keys(obj, &["var", test], &label)?;
+            match test {
+                "exists" => {
+                    if !obj["exists"].is_boolean() {
+                        return Err(self.reject(format!("{label}.exists must be a bool")));
+                    }
+                }
+                "equals" => {
+                    self.check_value(obj.get("equals"), &format!("{label}.equals"), var_type, arg_kind)?
+                }
+                _ => {
+                    if var_type != "int" {
+                        return Err(self.reject(format!(
+                            "{label}.{test} orders state var {var:?}, which is not an integer"
+                        )));
+                    }
+                    self.check_value(obj.get(test), &format!("{label}.{test}"), "int", arg_kind)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn check_effect(&self, effect: &Value, label: &str, arg_kind: &str) -> Result<(), SimError> {
+        let op = effect.as_object().and_then(|e| e.get("op")).and_then(Value::as_str).unwrap_or("");
+        let (Some(obj), true) = (effect.as_object(), EFFECT_OPS.contains(&op)) else {
+            return Err(self.reject(format!("{label}.op must be one of {EFFECT_OPS:?}")));
+        };
+        let keys: &[&str] = match op {
+            "set" => &["op", "var", "value", "when"],
+            "set_control" => &["op", "control", "value", "when"],
+            "add" => &["op", "var", "value", "sign", "clamp", "when"],
+            _ => &["op", "var", "when"],
+        };
+        self.only_keys(obj, keys, label)?;
+        self.check_guards(obj.get("when"), &format!("{label}.when"), arg_kind)?;
+        if op == "set_control" {
+            let control = obj.get("control").and_then(Value::as_str).unwrap_or("");
+            if !is_identifier(control) {
+                return Err(self.reject(format!("{label} needs a snake_case control name")));
+            }
+            return self.check_value(obj.get("value"), &format!("{label}.value"), "int", arg_kind);
+        }
+        let var = obj.get("var").and_then(Value::as_str).unwrap_or("");
+        let Some(var_type) = self.var_types.get(var).copied() else {
+            return Err(self.reject(format!("{label} writes undeclared state var {:?}", obj.get("var"))));
+        };
+        match op {
+            "toggle" => {
+                if var_type != "bool" {
+                    return Err(self.reject(format!(
+                        "{label} toggles state var {var:?}, which is not a bool"
+                    )));
+                }
+                Ok(())
+            }
+            "set" => self.check_value(obj.get("value"), &format!("{label}.value"), var_type, arg_kind),
+            _ => {
+                if var_type != "int" {
+                    return Err(self.reject(format!(
+                        "{label} adds to state var {var:?}, which is not an integer"
+                    )));
+                }
+                self.check_value(obj.get("value"), &format!("{label}.value"), "int", arg_kind)?;
+                let sign = obj.get("sign").map(Value::as_i64).unwrap_or(Some(1));
+                if !matches!(sign, Some(1) | Some(-1)) {
+                    return Err(self.reject(format!("{label}.sign must be 1 or -1")));
+                }
+                if let Some(clamp) = obj.get("clamp") {
+                    let Some(clamp) = clamp.as_object() else {
+                        return Err(self.reject(format!("{label}.clamp must be an object")));
+                    };
+                    self.only_keys(clamp, &["min", "max"], &format!("{label}.clamp"))?;
+                    for bound in ["min", "max"] {
+                        if clamp.contains_key(bound) {
+                            self.check_value(
+                                clamp.get(bound),
+                                &format!("{label}.clamp.{bound}"),
+                                "int",
+                                arg_kind,
+                            )?;
+                        }
+                    }
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+/// Reject a malformed semantics block at load, not mid-replay.
+///
+/// Mirrors `_validate_semantics` in tools/sim/kernel.py. Everything the
+/// interpreter reads is checked here, so effect evaluation can assume
+/// well-formedness: a replay that fails halfway leaves a partial world and a
+/// hash nobody can reproduce, which is the one outcome a deterministic kernel
+/// must never produce. The block is TYPED against the state schema, and
+/// unknown keys are refused everywhere — a `guard` where `guards` was meant
+/// would otherwise vanish silently.
+fn validate_semantics(entity: &str, contract: &Map<String, Value>) -> Result<(), SimError> {
+    let Some(declared) = contract.get("semantics") else { return Ok(()) };
+    let schema = SemanticsSchema {
+        entity,
+        var_types: contract["state"]
+            .as_object()
+            .map(|state| {
+                state
+                    .iter()
+                    .filter_map(|(var, spec)| {
+                        spec.get("storage")
+                            .and_then(Value::as_str)
+                            .and_then(storage_type)
+                            .map(|t| (var.as_str(), t))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default(),
+        int_params: contract["parameters"]
+            .as_object()
+            .map(|p| p.keys().map(String::as_str).filter(|k| *k != "navigation").collect())
+            .unwrap_or_default(),
+        listed: contract["affordances"]
+            .as_array()
+            .map(|a| a.iter().filter_map(Value::as_str).collect())
+            .unwrap_or_default(),
+    };
+
+    let Some(declared) = declared.as_object() else {
+        return Err(schema.reject("semantics must be an object".into()));
+    };
+    schema.only_keys(declared, &["affordances", "integrators"], "semantics")?;
+    let empty_map = Map::new();
+    let empty_list: Vec<Value> = Vec::new();
+    let affordances = match declared.get("affordances") {
+        None => &empty_map,
+        Some(a) => a
+            .as_object()
+            .ok_or_else(|| schema.reject("semantics.affordances must be an object".into()))?,
+    };
+    let integrators = match declared.get("integrators") {
+        None => &empty_list,
+        Some(i) => i
+            .as_array()
+            .ok_or_else(|| schema.reject("semantics.integrators must be a list".into()))?,
+    };
+
+    for (verb, spec) in affordances {
+        let what = format!("semantics.affordances.{verb}");
+        if !schema.listed.contains(&verb.as_str()) {
+            return Err(schema.reject(format!("{what} is not in the contract's affordance list")));
+        }
+        let Some(spec) = spec.as_object() else {
+            return Err(schema.reject(format!("{what} must be an object")));
+        };
+        schema.only_keys(spec, &["arg", "guards", "requires", "effects"], &what)?;
+        let arg_kind = match spec.get("arg") {
+            None => "none",
+            Some(kind) => kind.as_str().unwrap_or(""),
+        };
+        if !ARG_KINDS.contains(&arg_kind) {
+            return Err(schema.reject(format!("{what}.arg must be one of {ARG_KINDS:?}")));
+        }
+        if let Some(requires) = spec.get("requires") {
+            let Some(list) = requires.as_array() else {
+                return Err(schema.reject(format!("{what}.requires must be a list")));
+            };
+            for required in list {
+                let declared_var = required
+                    .as_str()
+                    .map(|name| schema.var_types.contains_key(name))
+                    .unwrap_or(false);
+                if !declared_var {
+                    return Err(schema.reject(format!(
+                        "{what} requires undeclared state var {required:?}"
+                    )));
+                }
+            }
+        }
+        schema.check_guards(spec.get("guards"), &format!("{what}.guards"), arg_kind)?;
+        if let Some(effects) = spec.get("effects") {
+            let Some(list) = effects.as_array() else {
+                return Err(schema.reject(format!("{what}.effects must be a list")));
+            };
+            for (i, effect) in list.iter().enumerate() {
+                schema.check_effect(effect, &format!("{what}.effects[{i}]"), arg_kind)?;
+            }
+        }
+    }
+    let missing: Vec<&str> = schema
+        .listed
+        .iter()
+        .copied()
+        .filter(|verb| !affordances.contains_key(*verb))
+        .collect();
+    if !missing.is_empty() {
+        return Err(schema.reject(format!(
+            "semantics.affordances must cover every listed affordance; missing {missing:?}"
+        )));
+    }
+
+    for (i, integrator) in integrators.iter().enumerate() {
+        let label = format!("semantics.integrators[{i}]");
+        let Some(obj) = integrator.as_object() else {
+            return Err(schema.reject(format!("{label} must be an object")));
+        };
+        schema.only_keys(obj, &["var", "toward", "rate"], &label)?;
+        let var = obj.get("var").and_then(Value::as_str).unwrap_or("");
+        let Some(var_type) = schema.var_types.get(var).copied() else {
+            return Err(schema.reject(format!(
+                "{label} integrates undeclared state var {:?}",
+                obj.get("var")
+            )));
+        };
+        if var_type != "int" {
+            return Err(schema.reject(format!(
+                "{label} integrates state var {var:?}, which is not an integer"
+            )));
+        }
+        let toward = obj.get("toward").and_then(Value::as_str).unwrap_or("");
+        if !is_identifier(toward) {
+            return Err(schema.reject(format!(
+                "{label} needs a snake_case control name to move toward"
+            )));
+        }
+        schema.check_value(obj.get("rate"), &format!("{label}.rate"), "int", "none")?;
+    }
+    Ok(())
 }
 
 pub fn blocks_navigation(contract: &Value, state: &Map<String, Value>) -> bool {
@@ -446,30 +1157,14 @@ fn validate_replay(replay: &Value) -> Result<(i64, &Map<String, Value>), SimErro
         let Some(entry) = entry.as_object() else {
             return Err(SimError::new("E_ENTITY_ENTRY", format!("entity {name:?} needs an object")));
         };
-        let contract = entry.get("contract").and_then(Value::as_object);
-        match contract {
+        match entry.get("contract").and_then(Value::as_object) {
             None => {
                 return Err(SimError::new(
                     "E_ENTITY_ENTRY",
                     format!("entity {name:?} needs an inline contract object"),
                 ))
             }
-            Some(contract) => {
-                if contract.get("sim_contract").and_then(Value::as_str) != Some("0.1") {
-                    return Err(SimError::new(
-                        "E_CONTRACT_VERSION",
-                        format!("entity {name:?}: unsupported sim_contract version"),
-                    ));
-                }
-                for field in ["state", "affordances", "parameters"] {
-                    if !contract.contains_key(field) {
-                        return Err(SimError::new(
-                            "E_CONTRACT_SHAPE",
-                            format!("entity {name:?} contract is missing {field}"),
-                        ));
-                    }
-                }
-            }
+            Some(contract) => validate_contract(name, contract)?,
         }
         let pinned = entry.get("contract_sha256").and_then(Value::as_str);
         if !pinned.map(is_lower_hex_64).unwrap_or(false) {
@@ -571,6 +1266,11 @@ pub fn run_replay_value(replay: &Value) -> Result<RunOutput, SimError> {
         world.insert(name.clone(), sim);
     }
 
+    // Resolved once per run: the declared block, or the door profile a v0.1
+    // contract desugars to. The Python kernel does this in the same place.
+    let declared: BTreeMap<String, Value> =
+        contracts.iter().map(|(name, contract)| (name.clone(), semantics(contract))).collect();
+
     let empty: Vec<Value> = Vec::new();
     let events = replay.get("events").and_then(Value::as_array).unwrap_or(&empty);
     let mut order: Vec<usize> = (0..events.len()).collect();
@@ -591,11 +1291,11 @@ pub fn run_replay_value(replay: &Value) -> Result<RunOutput, SimError> {
                 let arg = &event[3];
                 let contract = contracts.get(entity).unwrap();
                 let sim = world.get_mut(entity).unwrap();
-                apply_event(contract, entity, sim, verb, arg)?;
+                apply_event(contract, &declared[entity], entity, sim, verb, arg)?;
             }
         }
         for (name, sim) in world.iter_mut() {
-            step_entity(&contracts[name], sim);
+            step_entity(&contracts[name], &declared[name], sim);
         }
         hash_log.push(world_hash(&world));
         snapshots.push(world_value(&world));
