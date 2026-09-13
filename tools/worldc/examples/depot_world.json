@@ -1,0 +1,83 @@
+{
+  "world_ir": "0.1",
+  "world": "depot",
+  "brief": "a cargo depot: a powered lift between two decks and a signal lever that can jam; the shift scenario charges the lift, runs it up, works the lever through a jam, and brings the lift back down",
+  "entities": {
+    "cargo_lift": {
+      "doc": "cargo_lift.json"
+    },
+    "signal_lever": {
+      "doc": "signal_lever.json"
+    }
+  },
+  "scenario": "depot_shift.json",
+  "expect_navigation": {
+    "cargo_lift": false,
+    "signal_lever": false
+  },
+  "properties": {
+    "horizon": 24,
+    "assert": [
+      {
+        "name": "the lift can reach the top deck",
+        "kind": "reachable",
+        "when": [
+          {
+            "entity": "cargo_lift",
+            "var": "height",
+            "equals": 1000
+          }
+        ]
+      },
+      {
+        "name": "the lift never moves without power",
+        "kind": "never",
+        "when": [
+          {
+            "entity": "cargo_lift",
+            "var": "height",
+            "gt": 0
+          },
+          {
+            "entity": "cargo_lift",
+            "var": "power",
+            "equals": 0
+          }
+        ]
+      },
+      {
+        "name": "the lift can always still reach the top deck",
+        "kind": "live",
+        "when": [
+          {
+            "entity": "cargo_lift",
+            "var": "height",
+            "equals": 1000
+          }
+        ]
+      },
+      {
+        "name": "the lever can be pulled three times",
+        "kind": "reachable",
+        "when": [
+          {
+            "entity": "signal_lever",
+            "var": "pulls",
+            "gt": 2
+          }
+        ]
+      },
+      {
+        "name": "a jammed lever can always be freed",
+        "kind": "live",
+        "when": [
+          {
+            "entity": "signal_lever",
+            "var": "jammed",
+            "equals": false
+          }
+        ]
+      }
+    ]
+  }
+}

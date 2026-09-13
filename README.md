@@ -463,6 +463,40 @@ browser — to the same hashes. A malformed block is refused at load, and at
 compile time by `worldc`, with one stable code.
 [ADR 0021](docs/adr/0021-declared-affordance-semantics.md).
 
+## Worlds ship with proof of what they can and cannot do
+
+A world proof used to say one thing: this scripted replay produced this hash.
+That is reproducibility, not design. The questions a designer has are about the
+possibility space — can the gate be opened at all, can a broken gate be shut
+again, is there a state from which the level can no longer be finished — and
+today they are answered by playtesting, which is sampling. Because the kernel's
+entities are small integer state machines in a closed vocabulary, their
+reachable state space is finite, and a machine can walk all of it:
+
+```sh
+just worldc-prove WORLD=tools/worldc/examples/fortress_world.json
+```
+
+```text
+explored 576 states to depth 7 (horizon 24, budget 100000, bound: exhaustive)
+PASS  reachable the main gate can be opened fully — reached in 4 tick(s)
+        witness: [[0, "gate_main", "attack", 65535]]
+        replay:  witness-00-the-main-gate-can-be-opened-fully.json (kernel reproduced: True)
+PASS  never     a broken gate is never told to shut — no reachable state satisfies it (exhaustive: 576 states)
+PASS  live      the main gate can always still be opened fully — every explored state keeps the goal reachable
+```
+
+A world declares properties — `reachable`, `never`, `live` (no soft-lock) —
+and `worldc` proves them with the canonical kernel itself, not a model of it.
+Every witness is an ordinary replay, run back through the kernel before it is
+reported and reproducible by the native and wasm kernels. Every verdict names
+its bound (one event per tick, the amounts the semantics themselves name, a
+horizon, a budget); a spent budget is `inconclusive`, never a pass. In
+`compile-world` a violated property breaks the world contract like any other
+failed check. The first thing the prover found was a fact nobody had written
+down: a destroyed gate repaired while locked stands ajar.
+[ADR 0022](docs/adr/0022-design-properties-are-proven.md).
+
 ## Beyond Godot: what is actually engine-neutral
 
 Most of the engineering here is not Godot engineering. bforge exports glTF that
