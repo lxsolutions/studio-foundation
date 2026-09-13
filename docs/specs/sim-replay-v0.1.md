@@ -42,12 +42,19 @@ before that tick's integration step. Everything is validated fail-closed:
 - `ticks` is an integer 0..1,000,000; every event tick must be inside it.
 - `entity` must be declared in `entities`; `verb` a snake_case identifier that
   is a declared affordance of the target.
-- `open`/`close`/`lock`/`unlock` take no argument; `attack`/`repair` take a
-  nonnegative integer ≤ 65535.
+- The argument shape is per affordance (`arg: none | count`); a `count` is a
+  nonnegative integer ≤ 65535. The door's `open`/`close`/`lock`/`unlock` take
+  none; `attack`/`repair` take a count.
+- Every integer the kernel holds is an **i64**: initial values, parameters and
+  literals outside that range are refused, and the two places arithmetic
+  happens (`add`, integrators) saturate rather than wrap or grow.
 - Unknown replay fields, non-finite constants (NaN/Infinity), mistyped
   initial values, and undeclared state vars are all hard errors.
 
-### Standard verb semantics (v0.1)
+### Standard verb semantics (contract v0.1 — the door)
+
+A `sim_contract` of `"0.1"` lists affordance *names* and inherits the built-in
+door profile:
 
 | verb | contract |
 | --- | --- |
@@ -59,6 +66,76 @@ before that tick's integration step. Everything is validated fail-closed:
 
 Integration: `openness` tracks its target at `sim.open_rate` milli per tick
 (default 250), clamped.
+
+### Declared semantics (contract v0.2)
+
+A `sim_contract` of `"0.2"` carries a `semantics` block and says what its own
+affordances do, so the kernel is not limited to doors ([ADR 0021](../adr/0021-declared-affordance-semantics.md)).
+The door above is itself written in this vocabulary and v0.1 desugars into it —
+there is one interpreter, and the frozen golden hashes are what proves the
+desugaring exact. A `0.1` contract must not carry `semantics`; a `0.2` contract
+must (`E_CONTRACT_SHAPE` otherwise).
+
+| kind | forms |
+| --- | --- |
+| argument | `none`, `count` (integer `0..65535`) |
+| guard | `equals`, `exists`, `gt`, `lt` — against a literal, `param` or `var` |
+| effect | `set`, `set_control`, `add` (with `sign` and `min`/`max` clamp), `toggle` |
+| value | a bare literal, or `{const}`, `{arg: true}`, `{param, default}`, `{var}` |
+| integrator | `{var, toward, rate}` |
+
+```json
+"semantics": {
+  "affordances": {
+    "call_top": {
+      "arg": "none",
+      "guards": [{"var": "power", "gt": 0}],
+      "effects": [{"op": "set_control", "control": "height_target", "value": 1000}]
+    }
+  },
+  "integrators": [
+    {"var": "height", "toward": "height_target", "rate": {"param": "lift_rate_milli"}}
+  ]
+}
+```
+
+Rules that hold everywhere:
+
+- **A guard that does not hold is a no-op, not an error** — a locked gate
+  absorbing `open`, generalized.
+- **Effects apply in order** and each reads the state the previous one left.
+- **Equality is type-strict**: a boolean is never the number 0, because Python
+  and `serde_json` must agree.
+- **An absent state var** compares as the zero of the type it is compared to
+  (only the desugared door can reach this; a 0.2 contract declares every var
+  it names and every declared var is seeded).
+
+The block is validated **at load, fail-closed, with `E_SEMANTICS_SHAPE`** —
+never mid-replay, because a replay that fails halfway leaves a hash nobody can
+reproduce. Everything the interpreter will read is checked, and it is checked
+in both kernels in the same order:
+
+- **Typed against the state schema.** `milli_i64`/`i64` vars are `int`,
+  `bool` is `bool`, `string` is `string`. `set` writes a value of its var's
+  type; `add`, `gt`/`lt` and integrators need `int`; `toggle` needs `bool`;
+  a control carries an `int` because integrators read it; `equals` compares
+  like with like. A `{var}` source has its var's type, `{arg}`/`{param}` are
+  `int`, a literal has its own type, and floats are not a type the kernel has.
+- **A value has exactly one source** (`const` | `arg` | `param` | `var`);
+  `arg` is literally `true` and only legal in a `count` affordance; a `param`
+  must be set by the contract or carry an integer `default`; a `var` must be
+  declared.
+- **Unknown keys are refused everywhere** — in the block, an affordance, an
+  effect, a clamp, a guard, a value source and an integrator — because a
+  `guard` where `guards` was meant would otherwise vanish silently.
+- **Every listed affordance has semantics** and no semantics name an unlisted
+  one; `requires` lists declared vars; control names are snake_case.
+- **The contract itself is shaped first** (`E_CONTRACT_SHAPE`): state vars
+  carry a known storage, affordances are identifiers, every parameter but
+  `navigation` is an i64 integer, and navigation rules are well-formed.
+
+`worldc` asks the kernel these same questions when it compiles a document, so
+a malformed block fails at compile time in the compiler's own error.
 
 ## Navigation derivation
 
@@ -80,18 +157,19 @@ three attacks to destruction, navigation unblocked.
 
 ## Parity
 
-`services/sim-kernel` is the native + Wasm kernel for the single-entity gate
-reducer. `tools/sim/tests/test_parity.py` proves:
+`services/sim-kernel` is the native + Wasm kernel. `tools/sim/tests/test_parity.py`
+proves, over every fixture in `tools/sim/conformance/v0.1/`:
 
 ```text
-canonical Python kernel  ─┐
-native Rust kernel       ─┼─→ gate_open_destroy.json → identical hash
-wasm32 Rust kernel (node)─┘
+canonical Python kernel  ─┐   valid:   identical final state, hash log, navigation
+native Rust kernel       ─┼─→
+wasm32 Rust kernel (node)─┘   invalid: identical stable error code
 ```
 
 The wasm build exports a raw ABI (`sim_alloc`/`sim_run`/`sim_free`), so
-parity needs no wasm-bindgen layer and no new JavaScript dependencies.
-Generic multi-entity worlds remain deferred to the M3 proper milestones.
+parity needs no wasm-bindgen layer and no new JavaScript dependencies. The
+declared-semantics fixtures are generated from World IR by
+`tools/sim/make_declared_fixtures.py`, never typed by hand.
 
 ## Snapshots and observers
 

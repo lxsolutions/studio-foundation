@@ -1,0 +1,95 @@
+{
+  "sim_replay": "0.1",
+  "seed": 0,
+  "ticks": 3,
+  "entities": {
+    "signal_lever": {
+      "contract": {
+        "sim_contract": "0.2",
+        "source_world_ir_sha256": "7b708b07854805fbdfb1d245878c47541ed58c8bcd8490e07a210f305da5d093",
+        "entity": "signal_lever",
+        "state": {
+          "on": {
+            "storage": "bool"
+          },
+          "pulls": {
+            "storage": "i64"
+          },
+          "jammed": {
+            "storage": "bool"
+          }
+        },
+        "affordances": [
+          "pull",
+          "jam",
+          "free"
+        ],
+        "parameters": {
+          "open_rate_milli": 250,
+          "max_health": 100,
+          "navigation": {
+            "blocks_below": [],
+            "never_blocks_when_destroyed": false
+          }
+        },
+        "semantics": {
+          "affordances": {
+            "pull": {
+              "arg": "none",
+              "effects": [
+                {
+                  "op": "toggle",
+                  "var": "on"
+                },
+                {
+                  "op": "add",
+                  "var": "pulls",
+                  "value": 1,
+                  "sign": 1
+                }
+              ],
+              "guard": [
+                {
+                  "var": "jammed",
+                  "equals": false
+                }
+              ]
+            },
+            "jam": {
+              "arg": "none",
+              "effects": [
+                {
+                  "op": "set",
+                  "var": "jammed",
+                  "value": true
+                }
+              ]
+            },
+            "free": {
+              "arg": "none",
+              "effects": [
+                {
+                  "op": "set",
+                  "var": "jammed",
+                  "value": false
+                }
+              ]
+            }
+          },
+          "integrators": []
+        }
+      },
+      "contract_sha256": "c6888a9908c950c425492ebb3d6af91706a563b4036062e51c168abd67fc84e5"
+    }
+  },
+  "initial": {},
+  "events": [
+    [
+      0,
+      "signal_lever",
+      "pull",
+      null
+    ]
+  ],
+  "expect_error": "E_SEMANTICS_SHAPE"
+}

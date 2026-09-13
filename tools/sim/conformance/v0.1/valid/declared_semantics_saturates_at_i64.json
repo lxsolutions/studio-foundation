@@ -1,0 +1,91 @@
+{
+  "sim_replay": "0.1",
+  "seed": 0,
+  "ticks": 3,
+  "entities": {
+    "tally_counter": {
+      "contract": {
+        "sim_contract": "0.2",
+        "source_world_ir_sha256": "94faec00f2336a1e7d6986cab4e305ad6fc4e83ac46a4fe1aaf0f6258acba0bd",
+        "entity": "tally_counter",
+        "state": {
+          "count": {
+            "storage": "i64"
+          }
+        },
+        "affordances": [
+          "bump"
+        ],
+        "parameters": {
+          "open_rate_milli": 250,
+          "max_health": 100,
+          "navigation": {
+            "blocks_below": [],
+            "never_blocks_when_destroyed": false
+          }
+        },
+        "semantics": {
+          "affordances": {
+            "bump": {
+              "arg": "none",
+              "effects": [
+                {
+                  "op": "add",
+                  "var": "count",
+                  "value": 4611686018427387904
+                }
+              ]
+            }
+          },
+          "integrators": []
+        }
+      },
+      "contract_sha256": "37d82f1793ad3ce7767c6dc1ddcf21e476dfa1ccf9ebf1b0e134c1b80eb8dd0f"
+    }
+  },
+  "initial": {
+    "tally_counter": {
+      "count": 4611686018427387904
+    }
+  },
+  "events": [
+    [
+      0,
+      "tally_counter",
+      "bump",
+      null
+    ],
+    [
+      1,
+      "tally_counter",
+      "bump",
+      null
+    ],
+    [
+      2,
+      "tally_counter",
+      "bump",
+      null
+    ]
+  ],
+  "expect": {
+    "final_state": {
+      "tally_counter": {
+        "state": {
+          "count": 9223372036854775807
+        },
+        "control": {}
+      }
+    },
+    "state_hash": "8d40bc9e0699bafb988c25ee1c6b4d56cfd8d00ea822835e5d14485937799c91",
+    "hash_log": [
+      "8d40bc9e0699bafb988c25ee1c6b4d56cfd8d00ea822835e5d14485937799c91",
+      "8d40bc9e0699bafb988c25ee1c6b4d56cfd8d00ea822835e5d14485937799c91",
+      "8d40bc9e0699bafb988c25ee1c6b4d56cfd8d00ea822835e5d14485937799c91",
+      "8d40bc9e0699bafb988c25ee1c6b4d56cfd8d00ea822835e5d14485937799c91"
+    ],
+    "navigation": {
+      "tally_counter": false
+    }
+  }
+}

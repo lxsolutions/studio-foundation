@@ -449,6 +449,20 @@ just sim-browser-host    # the corpus replayed in a REAL browser, golden hashes
 Full reasoning, and what this deliberately does not claim, in
 [ADR 0019](docs/adr/0019-compiled-gameplay-on-the-web.md).
 
+Until recently that kernel could simulate exactly one thing: a door. Six verbs,
+four state variables, one integrator, and `E_NO_SEMANTICS` for everything else —
+while World IR let an author declare any state and any affordance, and `worldc`
+compiled all of it faithfully into a contract the kernel then refused to act on.
+Affordance semantics are now **declared in the contract**, in a closed, typed
+vocabulary the kernel interprets: guards plus ordered effects, one linear
+integrator per variable, no loops, no expressions, no escape hatch. The door is
+written in that vocabulary and the frozen corpus re-derives its golden hashes
+through the general interpreter, so the desugaring is exact by construction; a
+cargo lift and a signal lever run through the same three kernels — and a real
+browser — to the same hashes. A malformed block is refused at load, and at
+compile time by `worldc`, with one stable code.
+[ADR 0021](docs/adr/0021-declared-affordance-semantics.md).
+
 ## Beyond Godot: what is actually engine-neutral
 
 Most of the engineering here is not Godot engineering. bforge exports glTF that
