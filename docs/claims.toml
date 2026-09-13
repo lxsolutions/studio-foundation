@@ -74,6 +74,58 @@ patterns = [
   '(\d+) ops across (\d+) namespaces',
 ]
 
+[[surface]]
+file = "BOOTSTRAP_REPORT.md"
+key = "bforge.ops"
+patterns = [
+  '(\d+) whitelisted, typed operations across (\d+) namespaces',
+]
+
+[[surface]]
+file = "BOOTSTRAP_REPORT.md"
+key = "bforge.namespaces"
+group = 2
+patterns = [
+  '(\d+) whitelisted, typed operations across (\d+) namespaces',
+]
+
+[[surface]]
+file = "BOOTSTRAP_REPORT.md"
+key = "bforge.tests"
+patterns = [
+  '(\d+) test methods in `tools/bforge/tests` — (\d+) in suites that boot a real Blender daemon',
+]
+
+[[surface]]
+file = "BOOTSTRAP_REPORT.md"
+key = "bforge.tests_blender"
+group = 2
+patterns = [
+  '(\d+) test methods in `tools/bforge/tests` — (\d+) in suites that boot a real Blender daemon',
+]
+
+[[surface]]
+file = "BOOTSTRAP_REPORT.md"
+key = "engine.patches"
+patterns = [
+  '(\d+) ordered patches',
+  'engine/patches/0001`–`0*(\d+)`',
+]
+
+# A remote surface: prose the repository publishes but does not version. The
+# GitHub repository description quoted an op count for weeks after the catalog
+# moved on; nothing in the tree could have caught it. The checker fetches it
+# and holds it to the same derived value; when it cannot be fetched the check
+# is a notice, not a failure, unless CLAIMS_REQUIRE_REMOTE=1.
+
+[[remote]]
+kind = "github_description"
+repo = "lxsolutions/studio-foundation"
+key = "bforge.ops"
+patterns = [
+  '\((\d+) ops,',
+]
+
 # A forbidden claim: a phrase no surface may carry, because it is not
 # defensible. `files` is a repo-relative list; `phrase` is a literal string.
 
