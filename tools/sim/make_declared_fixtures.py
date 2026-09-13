@@ -230,6 +230,24 @@ COUNTER = {
 }
 
 
+# The gatehouse (ADR 0024): the fortress gate wired to the signal lever. While
+# the lever is on, the gate is told to open every tick; while it is off, to
+# close. A wire holds rather than pulses, and a direct `open` given while the
+# lever is off is overruled by the wire in the same tick.
+GATEHOUSE_WIRES = [
+    {
+        "name": "lever_opens_gate",
+        "when": [{"entity": "signal_lever", "var": "on", "equals": True}],
+        "then": [{"entity": "gate", "verb": "open", "arg": None}],
+    },
+    {
+        "name": "lever_closes_gate",
+        "when": [{"entity": "signal_lever", "var": "on", "equals": False}],
+        "then": [{"entity": "gate", "verb": "close", "arg": None}],
+    },
+]
+
+
 def pinned(contract: dict) -> dict:
     return {
         "contract": contract,
@@ -326,6 +344,49 @@ def main() -> None:
             "events": [[tick, "tally_counter", "bump", None] for tick in range(3)],
         },
     )
+
+    gatehouse = {
+        "sim_replay": "0.1",
+        "seed": 0,
+        "ticks": 16,
+        "comment": (
+            "the gatehouse watch: the lever opens the gate, closes it, overrules a direct open "
+            "while off, opens it again, and closes it even after the gate is locked"
+        ),
+        "entities": {"gate": pinned(gate), "signal_lever": pinned(lever)},
+        "initial": {"gate": {"health": 100, "locked": False}, "signal_lever": {"on": False}},
+        "wires": GATEHOUSE_WIRES,
+        "events": [
+            [1, "signal_lever", "pull", None],  # on: the wire opens the gate (fully by tick 4)
+            [6, "signal_lever", "pull", None],  # off: the wire closes it (shut by tick 9)
+            [8, "gate", "open", None],  # a direct open while off is overruled the same tick
+            [10, "signal_lever", "pull", None],  # on again
+            [12, "gate", "lock", None],  # locked while open: the open wire is absorbed, harmlessly
+            [14, "signal_lever", "pull", None],  # off: the close wire is not guarded by the lock
+        ],
+    }
+    write_valid("declared_wiring_lever_and_gate", json.loads(json.dumps(gatehouse)))
+    watch = json.loads(json.dumps(gatehouse))
+    (EXAMPLES / "gatehouse_watch.json").write_text(
+        json.dumps(watch, indent=2) + "\n", encoding="utf-8"
+    )
+    print("wrote tools/worldc/examples/gatehouse_watch.json")
+
+    def wired(mutate) -> dict:
+        replay = json.loads(json.dumps(gatehouse))
+        replay["ticks"] = 3
+        replay["events"] = [[0, "signal_lever", "pull", None]]
+        mutate(replay)
+        return replay
+
+    def targets_a_pulse(r):
+        r["wires"][0]["then"] = [{"entity": "signal_lever", "verb": "pull", "arg": None}]
+
+    def reads_undeclared(r):
+        r["wires"][0]["when"] = [{"entity": "signal_lever", "var": "power", "gt": 0}]
+
+    write_invalid("wire_targets_a_pulse", wired(targets_a_pulse), "E_WIRE_SHAPE")
+    write_invalid("wire_reads_undeclared_var", wired(reads_undeclared), "E_WIRE_SHAPE")
 
     def lever_replay(mutate) -> dict:
         contract = json.loads(json.dumps(lever))

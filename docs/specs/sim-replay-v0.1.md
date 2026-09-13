@@ -137,6 +137,30 @@ in both kernels in the same order:
 `worldc` asks the kernel these same questions when it compiles a document, so
 a malformed block fails at compile time in the compiler's own error.
 
+### Wires (the world's couplings)
+
+A replay may carry `wires` ([ADR 0024](../adr/0024-wires-the-worlds-couplings.md)):
+
+```json
+"wires": [
+  {"name": "lever_opens_gate",
+   "when": [{"entity": "signal_lever", "var": "on", "equals": true}],
+   "then": [{"entity": "gate", "verb": "open", "arg": null}]}
+]
+```
+
+- Each tick: scheduled events, then every wire in declared order, then
+  integration. A wire whose `when` clauses all hold *now* delivers each
+  `then` as an ordinary event (the target's guards still apply); later wires
+  see what earlier ones did; nothing is remembered between ticks.
+- A clause names one entity, one state `var` or `control`, and exactly one
+  of `equals` / `gt` / `lt` / `exists` against a literal, typed like a guard.
+- A wire **holds**, so its targets may only be affordances whose effects are
+  all `set` / `set_control`; `arg` must fit the verb (`null` for `none`, an
+  integer 0..65535 for `count`). Names are unique snake_case; unknown keys
+  are refused. Everything is checked at load with `E_WIRE_SHAPE`, in both
+  kernels, in the same order.
+
 ## Navigation derivation
 
 `blocks_navigation` evaluates the World IR `navigation` block from state:

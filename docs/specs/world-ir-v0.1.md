@@ -207,3 +207,18 @@ opened, destroyed, both gates open at once, a broken gate is never told to
 shut, the main gate can always still be opened) and `depot_world.json` (a
 lift reaches the top deck, never moves unpowered, can always still reach it;
 a lever can be pulled three times and can always be freed).
+
+## Wires (v0.1, landed)
+
+A world document may declare **wires**, the couplings between its entities
+([ADR 0024](../adr/0024-wires-the-worlds-couplings.md)). The shape is the
+replay's (see `docs/specs/sim-replay-v0.1.md`): `when` clauses over the
+world's entities, `then` verbs delivered to them, held every tick the
+condition is true, targets restricted to affordances that merely set.
+`worldc` validates them through the kernel against the compiled contracts,
+compiles a world only if the scenario replay carries exactly the world's
+wires (`wires_sha256` in the world proof), and proves `properties` with the
+wires in effect. The example is `gatehouse_world.json`: the fortress gate
+wired to the signal lever, with properties that pulling the lever starts the gate opening,
+that an intact gate is never driven open while the lever is off, that the gate
+can always still be opened, and that a locked gate still closes on the lever.

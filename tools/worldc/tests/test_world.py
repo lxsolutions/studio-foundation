@@ -90,7 +90,7 @@ class Properties(unittest.TestCase):
     violated one is a failed check like any other (ADR 0022)."""
 
     def test_the_example_worlds_prove_their_properties(self):
-        for world in ("fortress_world.json", "depot_world.json"):
+        for world in ("fortress_world.json", "depot_world.json", "gatehouse_world.json"):
             report = worldc.prove_world(EXAMPLES / world)
             statuses = {r["name"]: r["status"] for r in report["results"]}
             self.assertTrue(all(s == "holds" for s in statuses.values()), (world, statuses))
@@ -170,6 +170,49 @@ class Properties(unittest.TestCase):
             (tmp / "world.json").write_text(json.dumps(doc))
             with self.assertRaises(worldc.WorldIRError):
                 worldc.prove_world(tmp / "world.json")
+
+    def test_the_gatehouse_witness_goes_through_the_wire(self):
+        """The lever opens the gate: the witness is a pull, and the replay that
+        proves it carries the wires so any kernel reproduces it (ADR 0024)."""
+        tmp = Path(tempfile.mkdtemp(prefix="worldc_prove_"))
+        self.addCleanup(shutil.rmtree, tmp, True)
+        report = worldc.prove_world(EXAMPLES / "gatehouse_world.json", out_dir=tmp)
+        self.assertEqual(report["explored"]["wires"], 2)
+        opened = next(
+            r for r in report["results"] if r["name"] == "pulling the lever starts the gate opening"
+        )
+        self.assertEqual(opened["status"], "holds")
+        self.assertEqual([e[1:3] for e in opened["witness"]["events"]], [["signal_lever", "pull"]])
+        replay = json.loads((tmp / opened["witness"]["replay"]).read_text())
+        self.assertEqual(
+            [w["name"] for w in replay["wires"]], ["lever_opens_gate", "lever_closes_gate"]
+        )
+
+    def test_a_scenario_must_carry_exactly_the_worlds_wires(self):
+        tmp = Path(tempfile.mkdtemp(prefix="worldc_wires_"))
+        self.addCleanup(shutil.rmtree, tmp, True)
+        for name in ("fortress_gate.json", "signal_lever.json", "gatehouse_watch.json"):
+            shutil.copy(EXAMPLES / name, tmp / name)
+        doc = json.loads((EXAMPLES / "gatehouse_world.json").read_text())
+        doc["wires"] = doc["wires"][:1]  # the scenario still carries both
+        (tmp / "world.json").write_text(json.dumps(doc))
+        with self.assertRaises(worldc.WorldIRError) as ctx:
+            worldc.prove_world(tmp / "world.json")
+        self.assertIn("wires", str(ctx.exception))
+
+    def test_a_malformed_wire_is_a_world_error(self):
+        tmp = Path(tempfile.mkdtemp(prefix="worldc_wires_"))
+        self.addCleanup(shutil.rmtree, tmp, True)
+        for name in ("fortress_gate.json", "signal_lever.json", "gatehouse_watch.json"):
+            shutil.copy(EXAMPLES / name, tmp / name)
+        doc = json.loads((EXAMPLES / "gatehouse_world.json").read_text())
+        doc["wires"][0]["then"] = [
+            {"entity": "signal_lever", "verb": "pull", "arg": None}
+        ]  # a pulse
+        (tmp / "world.json").write_text(json.dumps(doc))
+        with self.assertRaises(worldc.WorldIRError) as ctx:
+            worldc.prove_world(tmp / "world.json")
+        self.assertIn("E_WIRE_SHAPE", str(ctx.exception))
 
     def test_a_world_without_properties_has_nothing_to_prove(self):
         tmp = Path(tempfile.mkdtemp(prefix="worldc_prove_"))

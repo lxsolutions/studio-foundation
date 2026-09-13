@@ -306,6 +306,10 @@ pub const EFFECT_OPS: [&str; 4] = ["set", "set_control", "add", "toggle"];
 pub const ARG_KINDS: [&str; 2] = ["none", "count"];
 pub const GUARD_TESTS: [&str; 4] = ["equals", "exists", "gt", "lt"];
 pub const VALUE_SOURCES: [&str; 4] = ["const", "arg", "param", "var"];
+pub const WIRE_KEYS: [&str; 3] = ["name", "when", "then"];
+/// A wire holds rather than pulses, so it may only target affordances whose
+/// effects merely set (ADR 0024). Mirrors LEVEL_SAFE_OPS in kernel.py.
+pub const LEVEL_SAFE_OPS: [&str; 2] = ["set", "set_control"];
 
 /// Storage says how a value is held; the TYPE says what may be written to it
 /// and compared against it. Mirrors `STORAGE_TYPE` in kernel.py.
@@ -1048,6 +1052,213 @@ fn validate_semantics(entity: &str, contract: &Map<String, Value>) -> Result<(),
     Ok(())
 }
 
+// ------------------------------------------------------ clauses and wires
+//
+// A clause is a guard over the WORLD: one entity, one state var or control,
+// one test against a literal. Wires (ADR 0024) speak this vocabulary, and so
+// does the Python prover's property language, so both kernels must agree on
+// exactly what a clause admits. Mirrors validate_clause / clause_holds /
+// validate_wires / apply_wires in kernel.py.
+
+fn validate_clause(
+    clause: &Value,
+    label: &str,
+    contracts: &BTreeMap<&str, &Map<String, Value>>,
+    reject: &dyn Fn(String) -> SimError,
+) -> Result<(), SimError> {
+    let Some(obj) = clause.as_object() else {
+        return Err(reject(format!("{label} must be an object")));
+    };
+    let entity = obj.get("entity").and_then(Value::as_str).unwrap_or("");
+    let Some(contract) = contracts.get(entity) else {
+        return Err(reject(format!("{label} names unknown entity {:?}", obj.get("entity"))));
+    };
+    let tests: Vec<&str> = GUARD_TESTS.iter().copied().filter(|t| obj.contains_key(*t)).collect();
+    if tests.len() != 1 {
+        return Err(reject(format!("{label} needs exactly one of {GUARD_TESTS:?}")));
+    }
+    let test = tests[0];
+    if obj.contains_key("var") == obj.contains_key("control") {
+        return Err(reject(format!("{label} reads either a var or a control")));
+    }
+    let (var_type, allowed): (&str, [&str; 3]) = if obj.contains_key("var") {
+        let var = obj["var"].as_str().unwrap_or("");
+        let declared = contract
+            .get("state")
+            .and_then(Value::as_object)
+            .and_then(|state| state.get(var))
+            .and_then(|spec| spec.get("storage"))
+            .and_then(Value::as_str)
+            .and_then(storage_type);
+        let Some(var_type) = declared else {
+            return Err(reject(format!(
+                "{label} reads undeclared state var {:?} of {entity}",
+                obj["var"]
+            )));
+        };
+        (var_type, ["entity", "var", test])
+    } else {
+        let control = obj["control"].as_str().unwrap_or("");
+        if !is_identifier(control) {
+            return Err(reject(format!("{label} control must be a snake_case name")));
+        }
+        ("int", ["entity", "control", test])
+    };
+    let unknown: Vec<&String> =
+        obj.keys().filter(|key| !allowed.contains(&key.as_str())).collect();
+    if !unknown.is_empty() {
+        return Err(reject(format!("{label} has unknown keys {unknown:?}")));
+    }
+    let literal = &obj[test];
+    if test == "exists" {
+        if !literal.is_boolean() {
+            return Err(reject(format!("{label}.exists must be a bool")));
+        }
+        return Ok(());
+    }
+    let Some(literal_type) = literal_type(literal) else {
+        return Err(reject(format!(
+            "{label}.{test} must be a bool, i64 integer or string literal"
+        )));
+    };
+    if (test == "gt" || test == "lt") && (var_type != "int" || literal_type != "int") {
+        return Err(reject(format!("{label}.{test} orders integers only")));
+    }
+    if test == "equals" && literal_type != var_type {
+        return Err(reject(format!(
+            "{label}.equals compares a {var_type} with a {literal_type}"
+        )));
+    }
+    Ok(())
+}
+
+/// One clause against the world, with the kernel's own guard semantics.
+fn clause_holds(clause: &Value, world: &BTreeMap<String, EntitySim>) -> bool {
+    let Some(obj) = clause.as_object() else { return false };
+    let entity = obj.get("entity").and_then(Value::as_str).unwrap_or("");
+    let Some(sim) = world.get(entity) else { return false };
+    let (table, var) = match obj.get("control") {
+        Some(control) => (&sim.control, control.clone()),
+        None => (&sim.state, obj.get("var").cloned().unwrap_or(Value::Null)),
+    };
+    let mut guard = Map::new();
+    guard.insert("var".into(), var);
+    for test in GUARD_TESTS {
+        if let Some(value) = obj.get(test) {
+            guard.insert(test.into(), value.clone());
+        }
+    }
+    guard_holds(&Value::Object(guard), table, &Map::new())
+}
+
+/// Reject a malformed wiring block at load (`E_WIRE_SHAPE`). Mirrors
+/// validate_wires in kernel.py: entities exist, vars are declared and typed,
+/// verbs are declared affordances with semantics, arguments fit the verb,
+/// and every target affordance only sets.
+fn validate_wires(
+    wires: &Value,
+    contracts: &BTreeMap<&str, &Map<String, Value>>,
+) -> Result<(), SimError> {
+    let reject = |message: String| SimError::new("E_WIRE_SHAPE", format!("wires {message}"));
+    let Some(list) = wires.as_array() else {
+        return Err(reject("must be a list".into()));
+    };
+    let mut names: Vec<&str> = Vec::new();
+    for (i, wire) in list.iter().enumerate() {
+        let label = format!("[{i}]");
+        let Some(obj) = wire.as_object() else {
+            return Err(reject(format!("{label} must be an object")));
+        };
+        let unknown: Vec<&String> =
+            obj.keys().filter(|key| !WIRE_KEYS.contains(&key.as_str())).collect();
+        if !unknown.is_empty() {
+            return Err(reject(format!("{label} has unknown keys {unknown:?}")));
+        }
+        let name = obj.get("name").and_then(Value::as_str).unwrap_or("");
+        if !is_identifier(name) {
+            return Err(reject(format!("{label} needs a snake_case name")));
+        }
+        if names.contains(&name) {
+            return Err(reject(format!("{label} repeats the name {name:?}")));
+        }
+        names.push(name);
+        let when = obj.get("when").and_then(Value::as_array).filter(|w| !w.is_empty());
+        let Some(when) = when else {
+            return Err(reject(format!("{label}.when must be a non-empty list of clauses")));
+        };
+        for (j, clause) in when.iter().enumerate() {
+            validate_clause(clause, &format!("{label}.when[{j}]"), contracts, &reject)?;
+        }
+        let then = obj.get("then").and_then(Value::as_array).filter(|t| !t.is_empty());
+        let Some(then) = then else {
+            return Err(reject(format!("{label}.then must be a non-empty list of verbs")));
+        };
+        for (j, act) in then.iter().enumerate() {
+            let lab = format!("{label}.then[{j}]");
+            let shaped = act
+                .as_object()
+                .map(|a| {
+                    a.len() == 3
+                        && a.contains_key("entity")
+                        && a.contains_key("verb")
+                        && a.contains_key("arg")
+                })
+                .unwrap_or(false);
+            if !shaped {
+                return Err(reject(format!("{lab} needs exactly entity, verb and arg")));
+            }
+            let act = act.as_object().unwrap();
+            let entity = act["entity"].as_str().unwrap_or("");
+            let Some(contract) = contracts.get(entity) else {
+                return Err(reject(format!("{lab} targets unknown entity {:?}", act["entity"])));
+            };
+            let verb = act["verb"].as_str().unwrap_or("");
+            let listed = contract
+                .get("affordances")
+                .and_then(Value::as_array)
+                .map(|a| a.iter().any(|v| v.as_str() == Some(verb)))
+                .unwrap_or(false);
+            if !listed {
+                return Err(reject(format!(
+                    "{lab} targets undeclared affordance {verb:?} of {entity}"
+                )));
+            }
+            let declared = semantics(&Value::Object((*contract).clone()));
+            let Some(spec) = declared.get("affordances").and_then(|a| a.get(verb)) else {
+                return Err(reject(format!(
+                    "{lab} targets {verb:?} of {entity}, which has no semantics"
+                )));
+            };
+            let pulses = spec
+                .get("effects")
+                .and_then(Value::as_array)
+                .map(|effects| {
+                    effects.iter().any(|e| {
+                        !LEVEL_SAFE_OPS.contains(&e.get("op").and_then(Value::as_str).unwrap_or(""))
+                    })
+                })
+                .unwrap_or(false);
+            if pulses {
+                return Err(reject(format!(
+                    "{lab} targets {verb:?} of {entity}, which adds or toggles; a wire holds, it does not pulse"
+                )));
+            }
+            let kind = spec.get("arg").and_then(Value::as_str).unwrap_or("none");
+            let arg = &act["arg"];
+            if kind == "none" && !arg.is_null() {
+                return Err(reject(format!("{lab}: {verb} takes no argument")));
+            }
+            let amount_ok = arg.as_i64().map(|n| (0..=MAX_EVENT_ARG).contains(&n)).unwrap_or(false);
+            if kind == "count" && !amount_ok {
+                return Err(reject(format!(
+                    "{lab}: {verb} needs an integer amount 0..{MAX_EVENT_ARG}"
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
 pub fn blocks_navigation(contract: &Value, state: &Map<String, Value>) -> bool {
     let nav = params(contract).get("navigation").and_then(Value::as_object);
     let Some(nav) = nav else { return false };
@@ -1115,9 +1326,9 @@ fn is_lower_hex_64(s: &str) -> bool {
 }
 
 fn validate_replay(replay: &Value) -> Result<(i64, &Map<String, Value>), SimError> {
-    const ALLOWED: [&str; 10] = [
+    const ALLOWED: [&str; 11] = [
         "sim_replay", "seed", "ticks", "comment", "entities", "initial", "events",
-        "expect_state_hash", "expect", "expect_error",
+        "expect_state_hash", "wires", "expect", "expect_error",
     ];
     if let Some(obj) = replay.as_object() {
         for key in obj.keys() {
@@ -1173,6 +1384,15 @@ fn validate_replay(replay: &Value) -> Result<(i64, &Map<String, Value>), SimErro
                 format!("entity {name:?} must pin contract_sha256 (lowercase hex)"),
             ));
         }
+    }
+    if let Some(wires) = replay.get("wires") {
+        let contracts: BTreeMap<&str, &Map<String, Value>> = entities
+            .iter()
+            .filter_map(|(name, entry)| {
+                entry.get("contract").and_then(Value::as_object).map(|c| (name.as_str(), c))
+            })
+            .collect();
+        validate_wires(wires, &contracts)?;
     }
 
     if let Some(initial) = replay.get("initial") {
@@ -1273,6 +1493,7 @@ pub fn run_replay_value(replay: &Value) -> Result<RunOutput, SimError> {
 
     let empty: Vec<Value> = Vec::new();
     let events = replay.get("events").and_then(Value::as_array).unwrap_or(&empty);
+    let wires: Vec<Value> = replay.get("wires").and_then(Value::as_array).cloned().unwrap_or_default();
     let mut order: Vec<usize> = (0..events.len()).collect();
     order.sort_by_key(|&i| events[i][0].as_i64().unwrap_or(0));
     let mut by_tick: BTreeMap<i64, Vec<usize>> = BTreeMap::new();
@@ -1292,6 +1513,28 @@ pub fn run_replay_value(replay: &Value) -> Result<RunOutput, SimError> {
                 let contract = contracts.get(entity).unwrap();
                 let sim = world.get_mut(entity).unwrap();
                 apply_event(contract, &declared[entity], entity, sim, verb, arg)?;
+            }
+        }
+        // The world's couplings (ADR 0024): after the tick's events, before
+        // integration, in declared order; later wires see what earlier ones did.
+        for wire in &wires {
+            let holds = wire
+                .get("when")
+                .and_then(Value::as_array)
+                .map(|when| when.iter().all(|clause| clause_holds(clause, &world)))
+                .unwrap_or(false);
+            if !holds {
+                continue;
+            }
+            if let Some(then) = wire.get("then").and_then(Value::as_array) {
+                for act in then {
+                    let target = act.get("entity").and_then(Value::as_str).unwrap_or("");
+                    let verb = act.get("verb").and_then(Value::as_str).unwrap_or("");
+                    let arg = act.get("arg").unwrap_or(&Value::Null);
+                    let contract = contracts.get(target).unwrap();
+                    let sim = world.get_mut(target).unwrap();
+                    apply_event(contract, &declared[target], target, sim, verb, arg)?;
+                }
             }
         }
         for (name, sim) in world.iter_mut() {

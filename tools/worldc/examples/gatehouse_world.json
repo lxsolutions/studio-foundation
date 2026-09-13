@@ -1,0 +1,133 @@
+{
+  "world_ir": "0.1",
+  "world": "gatehouse",
+  "brief": "a gatehouse: the fortress gate wired to a signal lever; while the lever is on the gate is told to open, while it is off to close, and the watch scenario works the lever through a lock",
+  "entities": {
+    "gate": {
+      "doc": "fortress_gate.json"
+    },
+    "signal_lever": {
+      "doc": "signal_lever.json"
+    }
+  },
+  "scenario": "gatehouse_watch.json",
+  "wires": [
+    {
+      "name": "lever_opens_gate",
+      "when": [
+        {
+          "entity": "signal_lever",
+          "var": "on",
+          "equals": true
+        }
+      ],
+      "then": [
+        {
+          "entity": "gate",
+          "verb": "open",
+          "arg": null
+        }
+      ]
+    },
+    {
+      "name": "lever_closes_gate",
+      "when": [
+        {
+          "entity": "signal_lever",
+          "var": "on",
+          "equals": false
+        }
+      ],
+      "then": [
+        {
+          "entity": "gate",
+          "verb": "close",
+          "arg": null
+        }
+      ]
+    }
+  ],
+  "expect_navigation": {
+    "gate": true,
+    "signal_lever": false
+  },
+  "properties": {
+    "horizon": 24,
+    "assert": [
+      {
+        "name": "pulling the lever starts the gate opening",
+        "kind": "reachable",
+        "when": [
+          {
+            "entity": "signal_lever",
+            "var": "on",
+            "equals": true
+          },
+          {
+            "entity": "gate",
+            "var": "openness",
+            "equals": 250
+          },
+          {
+            "entity": "gate",
+            "var": "health",
+            "equals": 100
+          }
+        ]
+      },
+      {
+        "name": "an intact gate is never driven open while the lever is off",
+        "kind": "never",
+        "when": [
+          {
+            "entity": "signal_lever",
+            "var": "on",
+            "equals": false
+          },
+          {
+            "entity": "gate",
+            "var": "destroyed",
+            "equals": false
+          },
+          {
+            "entity": "gate",
+            "control": "openness_target",
+            "equals": 1000
+          }
+        ]
+      },
+      {
+        "name": "the gate can always still be opened fully",
+        "kind": "live",
+        "when": [
+          {
+            "entity": "gate",
+            "var": "openness",
+            "equals": 1000
+          }
+        ]
+      },
+      {
+        "name": "a locked gate still closes on the lever",
+        "kind": "reachable",
+        "when": [
+          {
+            "entity": "gate",
+            "var": "locked",
+            "equals": true
+          },
+          {
+            "entity": "gate",
+            "var": "openness",
+            "equals": 0
+          },
+          {
+            "entity": "signal_lever",
+            "var": "on",
+            "equals": false
+          }
+        ]
+      }
+    ]
+  }
+}
