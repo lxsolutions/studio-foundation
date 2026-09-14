@@ -94,11 +94,16 @@ jobs:
       - name: brief-to-battle static checks
         run: uv run --project tools python -m unittest discover -s benchmarks/brief-to-battle/tests -p "test_*.py"
 
+      # Export preflight + web packaging: no Godot needed, and these catch the
+      # two failures that otherwise only appear in an exported build.
+      - name: godot tooling (export preflight, kernel host packaging)
+        run: uv run --project tools python -m unittest discover -s tools/godot/tests -p "test_*.py"
+
       - name: Protocol golden fixtures
         run: uv run --project tools python tools/asset-pipeline/check_fixtures.py
 
   parity:
-    name: sim kernel parity (native + wasm, mandatory)
+    name: sim kernel parity (native + wasm + browser, mandatory)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -127,6 +132,41 @@ jobs:
       # The renderer observes: viewer frames must equal kernel snapshots
       - name: runtime adapter (frames == snapshots)
         run: node tools/sim-viewer/adapter_test.mjs services/target/wasm32-unknown-unknown/release/sim_kernel.wasm tools/worldc/examples/fortress_battle.json tools/worldc/examples/fortress_gate.json
+
+      # ADR 0019. The kernel must import NOTHING, or it stops being loadable
+      # from inside a Godot web export -- a break that is invisible at build
+      # time and only surfaces in a browser. SIM_REQUIRE_PARITY makes the
+      # artifact check mandatory instead of skipping when it is absent.
+      - name: host independence (zero imports, reactor ABI)
+        env:
+          SIM_REQUIRE_PARITY: "1"
+        run: |
+          uv run --project tools python tools/sim/host_abi.py \
+            services/target/wasm32-unknown-unknown/release/sim_kernel.wasm
+          uv run --project tools python -m unittest discover -s tools/sim/tests -p "test_host_abi.py"
+
+      # The fourth host, and the one the argument is actually about: the frozen
+      # corpus replayed in real Chrome through the same script a Godot web
+      # export injects. ubuntu-latest ships Google Chrome stable.
+      - name: browser host (conformance corpus in real Chrome)
+        run: |
+          npm ci --prefix tests/browser
+          node tests/browser/sim-kernel-host.mjs
+
+      # ADR 0020. The contract first — it needs no engine, so it is the suite
+      # that fails first when the contract itself is wrong.
+      - name: presentation contract (no engine required)
+        run: node tests/runtime/scene_binding_test.mjs
+
+      # Then three renderers held to it. Engines are MANDATORY here: a
+      # conformance suite that skips is how the previous binding stayed inert
+      # for two months while its test reported success.
+      - name: cross-engine conformance (three.js, Babylon, PlayCanvas)
+        env:
+          RUNTIME_REQUIRE_ENGINES: "1"
+        run: |
+          npm ci --prefix tests/runtime
+          node tests/runtime/cross_engine.mjs
 
   bench:
     name: bforge bench (public number, regenerated and diffed)
